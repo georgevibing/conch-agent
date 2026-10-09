@@ -5,7 +5,7 @@
  * says the same notes. release-please itself isn't run here; its branch is
  * made the way it makes it.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -204,6 +204,38 @@ describe('the release pull request', () => {
     ).toEqual({ packages: { '.': {} } });
   });
 
+  it('says it isn’t ready to merge while the list trusts no key, and the workflow fails on it', async () => {
+    const w = await world({ trusted: false });
+    releaseBranch(w.repo, '0.1.0-alpha.1');
+    const result = await writePullRequestNotes({
+      root: w.repo,
+      git: w.git,
+      repository: REPO,
+      ai: false,
+      today,
+    });
+    expect(result.problems).toHaveLength(1);
+    const [header, notes] = result.body.split(/^---$/m);
+    expect(header).toContain('**Not ready to merge:** release/allowed_signers has no release key');
+    // Below the header release-please reads nothing of it.
+    expect(notes).not.toContain('Not ready');
+    const flag = join(w.base, 'not-ready');
+    const deps = {
+      root: w.repo,
+      say: () => {},
+      ask: async () => 'n',
+      home: w.base,
+      env: { GITHUB_REPOSITORY: REPO },
+    };
+    expect(
+      await main(
+        ['ci', 'notes', '--body-file', join(w.base, 'b.md'), '--not-ready-file', flag],
+        deps,
+      ),
+    ).toBe(0);
+    expect(readFileSync(flag, 'utf8')).toMatch(/no release key/);
+  });
+
   it('refuses a branch that isn’t release-please’s', async () => {
     const w = await world();
     await expect(
@@ -283,7 +315,7 @@ describe('the signed tag', () => {
         key: keyOf(w.other),
         sshKeygen: w.sshKeygen,
       }),
-    ).rejects.toThrow(/isn’t in release\/allowed_signers/);
+    ).rejects.toThrow(/isn’t trusted by release\/allowed_signers at this release/);
     expect(git(w.repo, 'tag', '-l')).toBe('');
     await expect(
       makeTag(w.git, {
@@ -304,6 +336,70 @@ describe('the signed tag', () => {
         sshKeygen: bare.sshKeygen,
       }),
     ).rejects.toThrow(/has no release key/);
+  });
+
+  it('passes the list installs already have, so a new key only signs once a release trusts it', async () => {
+    const w = await world();
+    const ci = keyOf(w.ci);
+    const other = keyOf(w.other);
+    const first = await merged(w);
+    await makeTag(w.git, {
+      version: '0.1.0-alpha.1',
+      commit: first,
+      key: ci,
+      sshKeygen: w.sshKeygen,
+    });
+    // The list moves to the new key alone: the release before doesn't trust it.
+    const swapped = commit(
+      w.repo,
+      { 'release/allowed_signers': `${signer('someone-else', w.other)}\n` },
+      'build(release): the new key',
+    );
+    await expect(
+      makeTag(w.git, {
+        version: '0.1.0-alpha.2',
+        commit: swapped,
+        key: other,
+        sshKeygen: w.sshKeygen,
+      }),
+    ).rejects.toThrow(/isn’t trusted by v0\.1\.0-alpha\.1, the release before/);
+    await expect(
+      makeTag(w.git, {
+        version: '0.1.0-alpha.2',
+        commit: swapped,
+        key: ci,
+        sshKeygen: w.sshKeygen,
+      }),
+    ).rejects.toThrow(/isn’t trusted by release\/allowed_signers at this release/);
+    // Rotating as ADR 0051 says: both keys, signed with the old one; then the new one may sign.
+    const both = commit(
+      w.repo,
+      {
+        'release/allowed_signers': `${signer('conch-release', w.ci)}\n${signer('someone-else', w.other)}\n`,
+      },
+      'build(release): both keys',
+    );
+    expect(
+      (
+        await makeTag(w.git, {
+          version: '0.1.0-alpha.2',
+          commit: both,
+          key: ci,
+          sshKeygen: w.sshKeygen,
+        })
+      ).kind,
+    ).toBe('made');
+    const next = commit(w.repo, { 'g.txt': '1' }, 'fix: one more');
+    expect(
+      (
+        await makeTag(w.git, {
+          version: '0.1.0-alpha.3',
+          commit: next,
+          key: other,
+          sshKeygen: w.sshKeygen,
+        })
+      ).signer,
+    ).toBe('someone-else');
   });
 
   it('is never a version Conch doesn’t release', async () => {
@@ -413,8 +509,10 @@ describe('pnpm release ci', () => {
     expect(said.at(-1)).toMatch(/RELEASE_SIGNING_KEY isn’t set/);
   });
 
-  it('changes channels in the configuration, and says what comes next', async () => {
+  it('commits a channel change, with a Release-As footer when the change alone is the release', async () => {
     const w = await world();
+    git(w.repo, 'config', 'user.email', 'ada@example.com');
+    git(w.repo, 'config', 'user.name', 'Ada');
     const said: string[] = [];
     const deps = {
       root: w.repo,
@@ -423,18 +521,75 @@ describe('pnpm release ci', () => {
       home: w.base,
       env: {},
     };
+    const head = () => git(w.repo, 'log', '-1', '--format=%B');
+    // Whatever else is staged stays staged, out of these commits.
+    writeFileSync(join(w.repo, 'other.txt'), 'mine\n');
+    git(w.repo, 'add', 'other.txt');
+
     expect(await main(['channel', 'beta'], deps)).toBe(0);
-    expect(said.at(-1)).toMatch(/^The first release will be 0\.1\.0-beta\.1\./);
-    const config = JSON.parse(readFileSync(join(w.repo, CONFIG_FILE), 'utf8')) as Record<
+    expect(said).toContain('The first release will be 0.1.0-beta.1.');
+    expect(head().trim()).toBe('chore(release): betas from now on');
+    const config = JSON.parse(git(w.repo, 'show', `HEAD:${CONFIG_FILE}`)) as Record<
       string,
       unknown
     >;
-    expect(config['prerelease-type']).toBe('beta.1');
-    expect(config['initial-version']).toBe('0.1.0-beta.1');
+    expect(config).toMatchObject({
+      'prerelease-type': 'beta.1',
+      'initial-version': '0.1.0-beta.1',
+    });
+
+    tag(w.repo, 'v0.1.0-beta.1', 'Conch 0.1.0-beta.1\n', w.ci);
+    git(w.repo, 'push', '--quiet', 'origin', 'v0.1.0-beta.1');
+    expect(await main(['channel', 'stable'], deps)).toBe(0);
+    expect(head()).toContain('Release-As: 0.1.0');
+    expect(await main(['channel', 'stable'], deps)).toBe(0);
+    expect(said.at(-1)).toMatch(/^Releases are stable ones already\./);
+
+    expect(await main(['as', '0.0.9'], deps)).toBe(1);
+    expect(await main(['as', 'v1.0.0'], deps)).toBe(0);
+    expect(head()).toBe('chore(release): release 1.0.0 next\n\nRelease-As: 1.0.0');
+    expect(git(w.repo, 'diff', '--cached', '--name-only')).toBe('other.txt');
     expect(await main(['channel', 'nightly'], deps)).toBe(1);
-    expect(await main(['as', '0.2.0'], deps)).toBe(0);
-    expect(JSON.parse(readFileSync(join(w.repo, CONFIG_FILE), 'utf8'))['release-as']).toBe('0.2.0');
-    writeFileSync(join(w.repo, 'x'), '');
     expect(await main(['nope'], deps)).toBe(1);
+  });
+});
+
+describe('pnpm release key', () => {
+  it('hands GitHub a key only once the newest release trusts it', async () => {
+    const w = await world();
+    git(w.repo, 'config', 'user.email', 'ada@example.com');
+    git(w.repo, 'config', 'user.name', 'Ada');
+    tag(w.repo, 'v0.1.0-alpha.1', 'Conch 0.1.0-alpha.1\n', w.ci);
+    git(w.repo, 'push', '--quiet', 'origin', 'v0.1.0-alpha.1');
+    const home = join(w.base, 'home');
+    mkdirSync(join(home, '.ssh'), { recursive: true });
+    const said: string[] = [];
+    const asked: string[] = [];
+    const deps = {
+      root: w.repo,
+      say: (l: string) => said.push(l),
+      ask: async (q: string) => {
+        asked.push(q);
+        return 'n';
+      },
+      home,
+      env: {},
+      gh: async () => '/bin/false',
+    };
+    // A new computer, a new key: it joins the list, and GitHub keeps the one it has.
+    expect(await main(['key'], deps)).toBe(0);
+    const list = readFileSync(join(w.repo, 'release/allowed_signers'), 'utf8');
+    expect(list).toContain('conch-release namespaces="git" ssh-ed25519');
+    expect(list.split('\n').filter((l) => l.includes('namespaces')).length).toBe(2);
+    expect(asked).toEqual([]);
+    expect(said.join('\n')).toMatch(/v0\.1\.0-alpha\.1 doesn’t trust this key yet/);
+
+    // Once a release carries the list, the same command offers to hand it over.
+    commit(w.repo, {}, 'build(release): the new key');
+    tag(w.repo, 'v0.1.0-alpha.2', 'Conch 0.1.0-alpha.2\n', w.ci);
+    git(w.repo, 'push', '--quiet', 'origin', 'main', 'v0.1.0-alpha.2');
+    expect(await main(['key'], deps)).toBe(0);
+    expect(asked).toHaveLength(1);
+    expect(said.join('\n')).toContain('Using the release key made before');
   });
 });

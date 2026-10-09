@@ -10,7 +10,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { run } from '../lib/proc';
-import { Stop } from './history';
+import type { Git } from '../updates/conch';
+import { Stop, taggedReleases } from './history';
+import { tagOf } from './semver';
 import { keyOf, SIGNERS_FILE, signerKeys, signerLine } from './signing';
 
 export const KEY_NAME = 'conch-release';
@@ -24,6 +26,8 @@ export interface KeyDeps {
   ask: (question: string) => Promise<string>;
   sshKeygen?: string;
   gh?: string;
+  /** Git in the repository, for the releases tagged so far (from upstream when it can). */
+  git?: Git;
 }
 
 const yes = (answer: string) => /^y(es)?$/i.test(answer.trim());
@@ -50,15 +54,24 @@ export async function setUpKey(deps: KeyDeps): Promise<void> {
   const list = await readFile(listPath, 'utf8').catch(() => '');
   if (signerKeys(list).includes(pub)) say(`It’s in ${SIGNERS_FILE} already.`);
   else {
-    if (signerKeys(list).length)
-      say(
-        `${SIGNERS_FILE} trusts another key too. Installs only take a list from a release signed by a key they already trust, so release once more with that one before removing it.`,
-      );
     await writeFile(
       listPath,
       `${list.trimEnd()}${list.trim() ? '\n' : ''}${signerLine(KEY_NAME, pub)}\n`,
     );
     say(`Added it to ${SIGNERS_FILE}. Commit that, so every Conch trusts releases signed with it.`);
+  }
+
+  // Installs take a release only if a key they already trust signed it: the
+  // newest release's list. Until one names this key, the old key signs.
+  const newest = deps.git ? (await taggedReleases(deps.git))[0] : undefined;
+  if (newest && deps.git) {
+    const theirs = await deps.git(['show', `${tagOf(newest.version)}^{commit}:${SIGNERS_FILE}`]);
+    if (!signerKeys(theirs.code === 0 ? theirs.stdout : '').includes(pub)) {
+      say(
+        `${tagOf(newest.version)} doesn’t trust this key yet, so GitHub keeps signing with the key it has. Commit the list, release once more (still signed with that key), then run pnpm release key again to hand GitHub this one.`,
+      );
+      return;
+    }
   }
 
   const command = `gh secret set ${SECRET} --env ${ENVIRONMENT} < ${file}`;

@@ -15,6 +15,7 @@ import { compareLink, notesFor, Stop, type ReleaseNotes } from './history';
 import { addToChangelog, changelogSection } from './notes';
 import type { PolishDeps } from './polish';
 import { parseRelease } from './semver';
+import { SIGNERS_FILE, signerKeys } from './signing';
 
 export const CONFIG_FILE = 'release-please-config.json';
 export const MANIFEST_FILE = '.release-please-manifest.json';
@@ -42,8 +43,10 @@ const text = (value: unknown) => (typeof value === 'string' ? value : '');
  * The pull request's description, in the shape release-please reads back
  * when it's merged: its header, `---`, the version's section, `---`, its footer.
  */
-export function prBody(config: Json, section: string): string {
-  return `${text(config['pull-request-header'])}\n---\n\n\n${section.trim()}\n\n---\n${text(config['pull-request-footer'])}\n`;
+export function prBody(config: Json, section: string, problems: string[] = []): string {
+  // Above the first `---`, which release-please never reads back.
+  const warning = problems.map((p) => `\n\n> **Not ready to merge:** ${p}`).join('');
+  return `${text(config['pull-request-header'])}${warning}\n---\n\n\n${section.trim()}\n\n---\n${text(config['pull-request-footer'])}\n`;
 }
 
 /**
@@ -71,6 +74,8 @@ export interface PullRequestNotes extends ReleaseNotes {
   body: string;
   /** The files changed on the branch. */
   files: string[];
+  /** Why merging it now would release nothing installs take, if anything. */
+  problems: string[];
 }
 
 /**
@@ -129,5 +134,17 @@ export async function writePullRequestNotes({
     await rm(overflow);
     files.push(OVERFLOW_FILE);
   }
-  return { ...notes, body: prBody(object(config ?? configText, CONFIG_FILE), section), files };
+  // Merged like this, the tag couldn't be signed, and the release would wait.
+  const signers = await readFile(join(root, SIGNERS_FILE), 'utf8').catch(() => '');
+  const problems = signerKeys(signers).length
+    ? []
+    : [
+        `${SIGNERS_FILE} has no release key, so no Conch could check this release. Run \`pnpm release key\` and push the list first (docs/RELEASING.md).`,
+      ];
+  return {
+    ...notes,
+    body: prBody(object(config ?? configText, CONFIG_FILE), section, problems),
+    files,
+    problems,
+  };
 }

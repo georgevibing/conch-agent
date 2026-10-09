@@ -1,15 +1,20 @@
 /**
  * Which releases come next: alphas, betas or stable ones (ADR 0127).
- * `release-please-config.json` says, and `pnpm release channel` and
- * `pnpm release as` change it, in a commit like any other:
+ * `release-please-config.json` says, and `pnpm release channel` changes it
+ * in a commit of its own:
  *
  * - `prerelease` and `prerelease-type` (`alpha.1`, `beta.1`): with them,
  *   release-please counts `0.4.0-beta.1`, `-beta.2`… and a stable release
  *   promotes the pre-releases of its version (`0.4.0-beta.3` → `0.4.0`);
- * - a one-off `release-as` for the step release-please can't take itself,
- *   from alphas to betas of the same version. The release pull request
- *   takes it out again (`pr.ts`), so it's used once.
  * - before the first release, `initial-version` is where it starts.
+ *
+ * A commit that only changes the configuration is housekeeping, which opens
+ * no release pull request by itself. So when the next release should come
+ * of the change alone (promoting betas, or alphas becoming betas, which
+ * release-please can't count to), the commit carries a `Release-As:` footer:
+ * release-please releases exactly that version next, once, since the
+ * footer's commit is behind every release after it. `pnpm release as` is the
+ * footer alone.
  */
 import type { ReleaseChannel } from '@conch/protocol';
 
@@ -24,6 +29,8 @@ export interface ChannelChange {
   text: string;
   /** What the next release will be, in a sentence. */
   next: string;
+  /** The version the commit names in its `Release-As:` footer, when there's one to name. */
+  releaseAs?: string;
 }
 
 const core = (r: Release) => `${r.major}.${r.minor}.${r.patch}`;
@@ -51,6 +58,7 @@ export function channelIn(text: string): ReleaseChannel {
 export function setChannel(text: string, channel: ReleaseChannel, latest?: string): ChannelChange {
   const config = read(text);
   const last = latest ? parseRelease(latest) : undefined;
+  // A one-off from before footers; a footer says it now.
   delete config['release-as'];
   config.versioning = 'prerelease';
   if (channel === 'stable') {
@@ -76,11 +84,18 @@ export function setChannel(text: string, channel: ReleaseChannel, latest?: strin
   if (last.pre?.kind === 'alpha' && channel === 'beta') {
     // The one step release-please can't take by itself.
     const next = `${core(last)}-beta.1`;
-    config['release-as'] = next;
-    return { text: write(config), next: `The next release will be ${next}, then betas.` };
+    return {
+      text: write(config),
+      next: `The next release will be ${next}, then betas.`,
+      releaseAs: next,
+    };
   }
   if (last.pre && channel === 'stable')
-    return { text: write(config), next: `The next release will be ${core(last)}, the stable one.` };
+    return {
+      text: write(config),
+      next: `The next release will be ${core(last)}, the stable one.`,
+      releaseAs: core(last),
+    };
   if (channel === 'stable')
     return { text: write(config), next: 'The next releases will be stable ones.' };
   return {
@@ -91,14 +106,11 @@ export function setChannel(text: string, channel: ReleaseChannel, latest?: strin
   };
 }
 
-/** Make the next release exactly `version`, once. */
-export function setReleaseAs(text: string, version: string, latest?: string): ChannelChange {
-  const wanted = parseRelease(version);
-  if (!wanted)
+/** Check `version` can be the next release, exactly, once (`pnpm release as`, a footer alone). */
+export function releaseAs(version: string, latest?: string): string {
+  if (!parseRelease(version))
     throw new Stop(`${version} isn’t a version Conch releases (like 0.4.0 or 0.4.0-beta.1).`);
   if (latest && compareVersions(version, latest) <= 0)
     throw new Stop(`${version} isn’t newer than ${latest}, the newest release.`);
-  const config = read(text);
-  config['release-as'] = version;
-  return { text: write(config), next: `The next release will be ${version}.` };
+  return version;
 }

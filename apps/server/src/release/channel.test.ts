@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { channelIn, setChannel, setReleaseAs } from './channel';
+import { channelIn, releaseAs, setChannel } from './channel';
 
 const ALPHA = JSON.stringify({
   'release-type': 'node',
@@ -35,12 +35,11 @@ describe('channels (ADR 0127)', () => {
     expect(read(stable.text)['prerelease-type']).toBeUndefined();
   });
 
-  it('takes the step from alphas to betas with a one-off release-as', () => {
+  it('takes the step from alphas to betas with a Release-As footer', () => {
     const change = setChannel(ALPHA, 'beta', '0.1.0-alpha.4');
-    expect(read(change.text)).toMatchObject({
-      'release-as': '0.1.0-beta.1',
-      'prerelease-type': 'beta.1',
-    });
+    expect(change.releaseAs).toBe('0.1.0-beta.1');
+    expect(read(change.text)).toMatchObject({ 'prerelease-type': 'beta.1' });
+    expect(read(change.text)['release-as']).toBeUndefined();
     expect(change.next).toBe('The next release will be 0.1.0-beta.1, then betas.');
   });
 
@@ -49,9 +48,12 @@ describe('channels (ADR 0127)', () => {
     expect(read(stable.text)).toMatchObject({ prerelease: false });
     expect(read(stable.text)['release-as']).toBeUndefined();
     expect(stable.next).toBe('The next release will be 0.1.0, the stable one.');
+    // A configuration change alone opens no release pull request: the footer does.
+    expect(stable.releaseAs).toBe('0.1.0');
     expect(setChannel(stable.text, 'beta', '0.1.0').next).toBe(
       'The next release will be the first beta of the version after 0.1.0.',
     );
+    expect(setChannel(stable.text, 'beta', '0.1.0').releaseAs).toBeUndefined();
     expect(setChannel(ALPHA, 'alpha', '0.1.0-alpha.2').next).toBe(
       'The next releases will be more alphas of 0.1.0.',
     );
@@ -62,8 +64,8 @@ describe('channels (ADR 0127)', () => {
   });
 
   it('sets an exact next version only when it’s newer and one Conch releases', () => {
-    expect(read(setReleaseAs(ALPHA, '1.0.0', '0.4.0').text)['release-as']).toBe('1.0.0');
-    expect(() => setReleaseAs(ALPHA, '0.3.0', '0.4.0')).toThrow(/isn’t newer/);
-    expect(() => setReleaseAs(ALPHA, '1.0', undefined)).toThrow(/isn’t a version/);
+    expect(releaseAs('1.0.0', '0.4.0')).toBe('1.0.0');
+    expect(() => releaseAs('0.3.0', '0.4.0')).toThrow(/isn’t newer/);
+    expect(() => releaseAs('1.0', undefined)).toThrow(/isn’t a version/);
   });
 });

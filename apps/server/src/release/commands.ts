@@ -14,8 +14,8 @@ import { join } from 'node:path';
 
 import { findExecutable, run } from '../lib/proc';
 import { gitIn, type Git } from '../updates/conch';
-import { channelIn, setChannel, setReleaseAs } from './channel';
-import { notesSince, Stop, taggedReleases } from './history';
+import { channelIn, releaseAs, setChannel } from './channel';
+import { must, notesSince, Stop, taggedReleases } from './history';
 import { setUpKey } from './key';
 import { notesText } from './notes';
 import { releasePage } from './page';
@@ -30,8 +30,8 @@ export const HELP = `pnpm release [command]
 
   (nothing)                   what the next release says so far, and its pull request
     --ai                      with the notes polished, as CI does
-  channel alpha|beta|stable   which releases come next (edits ${CONFIG_FILE})
-  as <version>                make the next release exactly this version, once
+  channel alpha|beta|stable   which releases come next (commits ${CONFIG_FILE})
+  as <version>                make the next release exactly this version, once (a commit)
   key                         make the release key and give it to GitHub (once)
 `;
 
@@ -93,10 +93,12 @@ export async function main(argv: string[], deps: CommandDeps): Promise<number> {
         await channel(git, deps, rest[0]);
         return 0;
       case 'as':
-        await releaseAs(git, deps, rest[0]);
+        await releaseAsNext(git, deps, rest[0]);
         return 0;
       case 'key':
+        await git(['fetch', '--quiet', '--tags', 'origin'], { timeout: 60_000 });
         await setUpKey({
+          git,
           root: deps.root,
           home: deps.home,
           say,
@@ -188,21 +190,60 @@ async function status(git: Git, deps: CommandDeps, ai: boolean): Promise<void> {
   );
 }
 
+/**
+ * A commit of the channel change (or, with no file, an empty one), with a
+ * `Release-As:` footer when it names the next version: a commit that only
+ * changes the configuration opens no release pull request by itself.
+ */
+async function commitRelease(
+  git: Git,
+  deps: CommandDeps,
+  subject: string,
+  { file, releaseAs }: { file?: string; releaseAs?: string },
+): Promise<void> {
+  const message = ['-m', subject, ...(releaseAs ? ['-m', `Release-As: ${releaseAs}`] : [])];
+  // Only this file, or nothing: whatever else is staged stays staged.
+  await must(
+    git,
+    file
+      ? ['commit', '--quiet', ...message, '--', file]
+      : ['commit', '--quiet', '--only', '--allow-empty', ...message],
+    'Committing',
+  );
+  deps.say(`Committed “${subject}”. Push it (git push): the release pull request follows.`);
+}
+
 async function channel(git: Git, deps: CommandDeps, wanted: string | undefined): Promise<void> {
   if (wanted !== 'alpha' && wanted !== 'beta' && wanted !== 'stable')
     throw new Stop('Which channel? pnpm release channel alpha, beta or stable.');
   const file = await config(deps);
   const change = setChannel(file.text, wanted, await latest(git));
+  // Already so: a footer it needed is in the commit that made it so.
+  if (change.text === file.text) {
+    deps.say(
+      `Releases are ${wanted === 'stable' ? 'stable ones' : `${wanted}s`} already. ${change.next}`,
+    );
+    return;
+  }
   await writeFile(file.path, change.text);
-  deps.say(`${change.next} Commit ${CONFIG_FILE} and push it: the release pull request follows.`);
+  deps.say(change.next);
+  await commitRelease(
+    git,
+    deps,
+    `chore(release): ${wanted === 'stable' ? 'stable releases' : `${wanted}s`} from now on`,
+    { file: CONFIG_FILE, ...(change.releaseAs && { releaseAs: change.releaseAs }) },
+  );
 }
 
-async function releaseAs(git: Git, deps: CommandDeps, version: string | undefined): Promise<void> {
+async function releaseAsNext(
+  git: Git,
+  deps: CommandDeps,
+  version: string | undefined,
+): Promise<void> {
   if (!version) throw new Stop('Which version? pnpm release as 0.4.0');
-  const file = await config(deps);
-  const change = setReleaseAs(file.text, version.replace(/^v/, ''), await latest(git));
-  await writeFile(file.path, change.text);
-  deps.say(`${change.next} Commit ${CONFIG_FILE} and push it: the release pull request follows.`);
+  const next = releaseAs(version.replace(/^v/, ''), await latest(git));
+  deps.say(`The next release will be ${next}.`);
+  await commitRelease(git, deps, `chore(release): release ${next} next`, { releaseAs: next });
 }
 
 /** The steps of .github/workflows/release.yml. */
@@ -214,6 +255,9 @@ async function ci(git: Git, deps: CommandDeps, argv: string[]): Promise<void> {
       const out = required(argv, 'body-file');
       const result = await writePullRequestNotes({ root: deps.root, git, repository });
       await writeFile(out, result.body);
+      // The workflow puts the notes up either way, then fails on this.
+      const notReady = option(argv, 'not-ready-file');
+      if (notReady && result.problems.length) await writeFile(notReady, result.problems.join('\n'));
       say(
         `Conch ${result.version}: ${result.commits.length} commits since ${result.since ? tagOf(result.since.version) : 'the beginning'}.`,
       );

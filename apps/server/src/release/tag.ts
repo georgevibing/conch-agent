@@ -14,10 +14,11 @@ import { join } from 'node:path';
 
 import { run } from '../lib/proc';
 import type { Git } from '../updates/conch';
-import { must, notesFor, Stop } from './history';
+import { compareVersions } from '../updates/version';
+import { must, notesFor, Stop, taggedReleases } from './history';
 import { changelogFor, emptyNotes, parseNotes, tagMessage, type Notes } from './notes';
 import { parseRelease, tagOf } from './semver';
-import { keyOf, SIGNERS_FILE, signerKeys, verifyTag } from './signing';
+import { keyOf, SIGNERS_FILE, signerKeys, verifyTag, type Verdict } from './signing';
 
 /** Who the tag says made it, unless the repository's variables say otherwise. */
 export const TAGGER = {
@@ -32,6 +33,34 @@ export async function notesAt(git: Git, version: string, commit: string): Promis
   const notes = section ? parseNotes(section) : undefined;
   if (notes && !emptyNotes(notes)) return notes;
   return (await notesFor(git, version, { head: commit })).notes;
+}
+
+/**
+ * The lists a new release must pass: the newest earlier release's, which is
+ * what installs already have (or, before any, what they'll take on first
+ * use), and this commit's own, which the next release is checked against.
+ */
+async function trustedLists(
+  git: Git,
+  version: string,
+  target: string,
+): Promise<{ label: string; signers: string }[]> {
+  const own = await git(['show', `${target}:${SIGNERS_FILE}`]);
+  if (own.code !== 0 || !signerKeys(own.stdout).length)
+    throw new Stop(
+      `${SIGNERS_FILE} has no release key at ${target.slice(0, 7)}, so no Conch could check this release. docs/RELEASING.md § If something goes wrong says what to do.`,
+    );
+  const lists = [{ label: `${SIGNERS_FILE} at this release`, signers: own.stdout }];
+  const before = (await taggedReleases(git)).find((r) => compareVersions(r.version, version) < 0);
+  if (before) {
+    const theirs = await git(['show', `${tagOf(before.version)}^{commit}:${SIGNERS_FILE}`]);
+    if (theirs.code === 0 && signerKeys(theirs.stdout).length)
+      lists.unshift({
+        label: `${tagOf(before.version)}, the release before`,
+        signers: theirs.stdout,
+      });
+  }
+  return lists;
 }
 
 export interface Tagged {
@@ -64,13 +93,16 @@ export async function makeTag(
   const target = (
     await must(git, ['rev-parse', '--verify', `${commit}^{commit}`], 'Finding the release commit')
   ).trim();
-  const signers = await git(['show', `${target}:${SIGNERS_FILE}`]);
-  if (signers.code !== 0 || !signerKeys(signers.stdout).length)
-    throw new Stop(
-      `${SIGNERS_FILE} has no release key at ${target.slice(0, 7)}, so no Conch could check this release. Run pnpm release key, commit the list, and merge the release again.`,
-    );
-  const check = async (object: string) =>
-    verifyTag(git, { object, name, signers: signers.stdout, sshKeygen });
+  const lists = await trustedLists(git, version, target);
+  const check = async (object: string) => {
+    let verdict: Verdict | undefined;
+    // Every list must take it: the one installs carry forward, and this release's own.
+    for (const list of lists) {
+      verdict = await verifyTag(git, { object, name, signers: list.signers, sshKeygen });
+      if (!verdict.ok) return { ...verdict, message: `${verdict.message} (by ${list.label})` };
+    }
+    return verdict as Verdict;
+  };
 
   // Made already (a run tried before): fine if it's this commit's and it checks out.
   const there = (
@@ -93,9 +125,10 @@ export async function makeTag(
     const pub = await run(sshKeygen, ['-y', '-f', keyFile], { timeout: 30_000 });
     const own = pub.code === 0 ? keyOf(pub.stdout) : undefined;
     if (!own) throw new Stop('RELEASE_SIGNING_KEY isn’t an SSH private key without a passphrase.');
-    if (!signerKeys(signers.stdout).includes(own))
+    const refusing = lists.find((list) => !signerKeys(list.signers).includes(own));
+    if (refusing)
       throw new Stop(
-        `The release key isn’t in ${SIGNERS_FILE}, so installs would refuse this release. To change keys, add the new one to the list in a release signed with the old one (docs/RELEASING.md).`,
+        `The release key isn’t trusted by ${refusing.label}, so installs would refuse this release. Sign with a key it trusts; to change keys, add the new one to the list in a release signed with the old one (docs/RELEASING.md).`,
       );
     const messageFile = join(dir, 'message');
     await writeFile(messageFile, tagMessage(version, await notesAt(git, version, target)));
