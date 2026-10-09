@@ -15,6 +15,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
+import type { LookModel } from '../memory/guard';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager, type AskRequest, type TurnIntegrationsProvider } from './manager';
@@ -66,6 +67,8 @@ async function setup({
   destructive = false,
   host,
   home: given,
+  look,
+  parallel = 1,
 }: {
   transport?: 'native' | 'bridge';
   mode?: PermissionMode;
@@ -75,6 +78,10 @@ async function setup({
   host?: Partial<AskRequest>;
   /** The same Conch again, as after a restart. */
   home?: string;
+  /** What the small model behind the second look answers (ADR 0118); none: no model. */
+  look?: string;
+  /** How many of the host tool's calls run at once. */
+  parallel?: number;
 } = {}) {
   const home = given ?? (await mkdtemp(join(tmpdir(), 'conch-app-permissions-')));
   const engine = new AppEngine(transport);
@@ -126,6 +133,9 @@ async function setup({
     memory: new MemoryStore(join(home, 'memory')),
     engine: () => engine,
     integrations,
+    ...(look !== undefined && {
+      riskLook: async () => ({ complete: async () => ({ text: look }) }) as unknown as LookModel,
+    }),
     ...(host && {
       tools: (ctx) => [
         {
@@ -149,7 +159,8 @@ async function setup({
   });
   engine.script = async function* (input) {
     if (host) {
-      await input.tools.find((t) => t.name === 'app_change')?.run({});
+      const tool = input.tools.find((t) => t.name === 'app_change');
+      await Promise.all(Array.from({ length: parallel }, () => tool?.run({})));
     } else {
       const guarded = await input.guard?.(REQUEST);
       if (guarded?.decision !== 'deny') {
@@ -472,6 +483,159 @@ describe('steps in your own apps, after reading (ADR 0117)', () => {
     expect(again.call).toHaveBeenCalledOnce();
   });
 });
+
+describe('steps in someone else’s app, after reading, in Auto (ADR 0118)', () => {
+  const READ = 'This chat read evil.example, which could be trying to steer me.';
+  const stranger = (
+    toolName: string,
+    access: 'read' | 'write',
+    input: Record<string, unknown> = {},
+    allowed = false,
+  ) => ({
+    toolName,
+    input,
+    taint: `${READ} So I’m checking before I ${access === 'read' ? 'send what it asks for to api.example.com' : 'change things in Weather'}.`,
+    appStep: {
+      access,
+      own: false,
+      app: 'Weather',
+      tool: toolName,
+      ...(allowed && { allowed: true }),
+    },
+  });
+  const SAFE = '{"risky": false, "kind": "none"}';
+  const read = { kind: 'web' as const, label: 'evil.example' };
+
+  /** Runs one turn in a chat that read evil.example; the questions it asked, answered no. */
+  async function run(options: Parameters<typeof setup>[0]) {
+    const { manager, call } = await setup({ mode: 'auto', ...options });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'do it', untrusted: read });
+    await vi.waitFor(async () => {
+      const { events } = await manager.detail(convo.id);
+      const waiting = events.filter((e) => e.type === 'permission.requested');
+      for (const e of waiting)
+        if (
+          e.type === 'permission.requested' &&
+          !events.some((r) => r.type === 'permission.resolved' && r.permissionId === e.permissionId)
+        )
+          await manager.respond(convo.id, e.permissionId, 'deny');
+      expect(events.some((e) => e.type === 'turn.completed')).toBe(true);
+    });
+    const { events } = await manager.detail(convo.id);
+    return { call, asked: events.filter((e) => e.type === 'permission.requested') };
+  }
+
+  it('a lookup that sends no more than a lookup goes by itself, without a model', async () => {
+    const { call, asked } = await run({
+      host: stranger('app_weather__forecast', 'read', { city: 'Berlin' }),
+    });
+    expect(asked).toEqual([]);
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it('a lookup that sends more, or a change, gets a second look: it goes when the look sees nothing', async () => {
+    const long = { note: 'my week of meals '.repeat(10) };
+    for (const host of [
+      stranger('app_weather__forecast', 'read', long),
+      stranger('app_weather__save_city', 'write', { city: 'Berlin' }),
+    ]) {
+      const quiet = await run({ host, look: SAFE });
+      expect(quiet.asked).toEqual([]);
+      expect(quiet.call).toHaveBeenCalledOnce();
+      // No model to look: its own question stands, as before.
+      const asked = await run({ host });
+      expect(asked.asked).toHaveLength(1);
+      expect(asked.call).not.toHaveBeenCalled();
+    }
+  });
+
+  it('asks with the look’s reason when the look sees a risk', async () => {
+    const { call, asked } = await run({
+      host: stranger('app_weather__save_city', 'write', { city: 'Berlin' }),
+      look: '{"risky": true, "kind": "speak"}',
+    });
+    expect(asked[0]).toMatchObject({
+      taint: expect.stringContaining('speak for you to other people'),
+    });
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('the person’s Allow for that tool is their answer: no look needed', async () => {
+    const { call, asked } = await run({
+      host: stranger('app_weather__save_city', 'write', { city: 'Berlin' }, true),
+    });
+    expect(asked).toEqual([]);
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it('what the rules mark asks whatever the look or Allow say: a key sent to an app', async () => {
+    const key = `${'gh' + 'p_'}${'Z9y8X7w6'.repeat(5)}`;
+    const { call, asked } = await run({
+      host: stranger('app_weather__forecast', 'read', { city: key }, true),
+      look: SAFE,
+    });
+    expect(asked[0]).toMatchObject({ taint: expect.stringContaining('looks like a key or token') });
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('a batch of lookups asked at once is one card, and its answer is theirs', async () => {
+    const host = stranger('app_weather__forecast', 'read', {
+      note: 'what to wear in the rain '.repeat(7),
+    });
+    const { manager, call } = await setup({ mode: 'auto', host, parallel: 5 });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'look them up',
+      untrusted: read,
+    });
+    const events = await eventsUntil(manager, convo.id, 'permission.requested');
+    const request = events.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('No question');
+    await manager.respond(convo.id, request.permissionId, 'allow');
+    const done = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(done.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+    expect(call).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe.each(['native', 'bridge'] as const)(
+  'a change in a connected app, after reading, in Auto over %s (ADR 0118)',
+  (transport) => {
+    const read = { kind: 'web' as const, label: 'evil.example' };
+    async function after(options: Parameters<typeof setup>[0]) {
+      const { manager, call } = await setup({ transport, mode: 'auto', ...options });
+      const convo = await manager.send({
+        clientMessageId: 'u1',
+        text: 'create an issue',
+        untrusted: read,
+      });
+      return { manager, call, convo };
+    }
+
+    it('goes when the second look sees nothing, or when you set the tool to Allow', async () => {
+      for (const options of [
+        { look: '{"risky": false, "kind": "none"}' },
+        { toolPolicy: 'allow' as const },
+      ]) {
+        const { manager, call, convo } = await after(options);
+        const events = await eventsUntil(manager, convo.id, 'turn.completed');
+        expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+        expect(call).toHaveBeenCalledOnce();
+      }
+    });
+
+    it('asks with the look’s reason when it sees a risk', async () => {
+      const { manager, call, convo } = await after({ look: '{"risky": true, "kind": "speak"}' });
+      const events = await eventsUntil(manager, convo.id, 'permission.requested');
+      expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
+        taint: expect.stringContaining('speak for you to other people'),
+      });
+      await answer(manager, convo.id);
+      await eventsUntil(manager, convo.id, 'turn.completed');
+      expect(call).not.toHaveBeenCalled();
+    });
+  },
+);
 
 describe('an email the person changes before allowing it', () => {
   const change = { to: ['kim@example.org'], subject: 'Lunch on Friday', body: 'Noon works.' };

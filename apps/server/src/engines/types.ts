@@ -239,12 +239,6 @@ export interface PermissionRequest {
   toolName: string;
   toolUseId?: string;
   input: Record<string, unknown>;
-  /**
-   * The provider's own safety check wants a person for this (Claude Code's
-   * auto-mode classifier giving up after its blocks): Auto doesn't answer it
-   * by itself, the person does (ADR 0100).
-   */
-  escalated?: boolean;
 }
 
 export type PermissionDecision = 'allow' | 'allow-always' | 'deny';

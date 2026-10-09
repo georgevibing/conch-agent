@@ -319,19 +319,15 @@ export class ClaudeCodeEngine implements Engine {
   }
 
   /**
-   * The mode Claude Code itself runs in. Auto is its own classifier where the
-   * model has one (`supportsAutoMode`), on top of Conch's risk policy in the
-   * PreToolUse hook; for a model without it, Claude Code asks as in Ask first
-   * and Conch answers every question itself (`requestPermission`), so the
-   * person sees only what the risk policy stops (ADR 0100).
+   * The mode Claude Code itself runs in. Auto runs as Ask first, and Conch
+   * answers every question itself (`requestPermission`) with its one risk
+   * policy, so the person sees only what that policy stops (ADR 0100, ADR
+   * 0118). Claude Code's own auto classifier isn't used: it blocked and asked
+   * about everyday work (a read-only `grep`) that the policy lets through, and
+   * two judges disagreeing is a question the person can't make sense of.
    */
-  #sdkMode(mode: PermissionMode, model: string | undefined): PermissionMode {
-    if (mode !== 'auto') return mode;
-    const models = this.#capabilities?.value.models ?? [];
-    const chosen =
-      models.find((m) => m.id === (model ?? 'default')) ??
-      (!model || model === 'default' ? models[0] : undefined);
-    return chosen?.supportsAutoMode ? 'auto' : 'default';
+  #sdkMode(mode: PermissionMode): PermissionMode {
+    return mode === 'auto' ? 'default' : mode;
   }
 
   async #probe(): Promise<Capabilities> {
@@ -675,8 +671,8 @@ export class ClaudeCodeEngine implements Engine {
     }
 
     const translator = new Translator();
-    /** The mode Claude Code runs in right now (it follows a mode picked mid-turn). */
-    let sdkMode = this.#sdkMode(input.options.permissionMode, input.options.model);
+    /** The mode Claude Code starts in (it follows a mode picked mid-turn). */
+    const sdkMode = this.#sdkMode(input.options.permissionMode);
     const asksItself = input.tools.some((t) => t.name === 'ask');
     // Where work runs (ADR 0106): its Bash, handed to the place through this turn's relay.
     const place = input.place;
@@ -853,9 +849,6 @@ export class ClaudeCodeEngine implements Engine {
                 toolName,
                 toolUseId: toolUseID,
                 input: route?.shown ?? toolInput,
-                // In its own auto mode Claude Code asks only when its classifier wants a person;
-                // a command sent elsewhere was asked about by Conch, so its mode answers.
-                ...(sdkMode === 'auto' && !route && { escalated: true }),
               },
               signal,
             );
@@ -884,10 +877,7 @@ export class ClaudeCodeEngine implements Engine {
       const startedTrusted = input.options.permissionMode === 'bypassPermissions';
       input.onModeChange?.((mode) => {
         const next =
-          mode === 'bypassPermissions' && !startedTrusted
-            ? 'default'
-            : this.#sdkMode(mode, input.options.model);
-        sdkMode = next;
+          mode === 'bypassPermissions' && !startedTrusted ? 'default' : this.#sdkMode(mode);
         void q.setPermissionMode(next).catch(() => undefined);
       });
 

@@ -359,6 +359,27 @@ export const ROUTINE: Step[] = [
   ['mcp__conch__file_unzip', { source: 'att_zip1' }],
   ['mcp__conch__process_start', { command: 'pnpm dev' }],
   ['mcp__conch__process_start', { command: 'git pull --ff-only', dangerouslyDisableSandbox: true }],
+  // Steps in apps, with ids, dates, foods and notes (ADR 0118): nothing a lookup or a change
+  // needs looks like a key or a blob.
+  ['mcp__conch__app_yazio__get_product', { id: 'e51efae8-7929-4445-9a03-3f6dadd60a4a' }],
+  ['mcp__conch__app_yazio__read_diary', { section: 'foods', date: '2026-10-08' }],
+  [
+    'mcp__conch__app_yazio__add_food',
+    {
+      entry_id: '3f2b9c1e-8d4a-4e7b-9f6a-2c1d0e9b8a7f',
+      product_id: 'c5a9abb9-4660-4f9e-afaf-cc4e2dd04bbf',
+      amount: 125,
+      daytime: 'dinner',
+    },
+  ],
+  [
+    'mcp__notion__update_page',
+    {
+      id: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
+      text: 'Met with the design team. We agreed to ship the new onboarding on Friday, and to keep the old flow behind a switch for a week.',
+    },
+  ],
+  ['mcp__github__search_code', { q: 'useState repo:georgevibing/conch-agent' }],
 ];
 
 /**
@@ -425,6 +446,25 @@ export const AFTER_READING: Step[] = [
   ['Write', { file_path: `${workspace}/.github/workflows/ci.yml`, content: 'on: push' }],
   ['Write', { file_path: `${home}/Library/LaunchAgents/com.x.plist`, content: '<plist/>' }],
   ['Write', { file_path: `${workspace}/.claude/settings.json`, content: '{}' }],
+  // An app's step that carries a key, a token or an encoded blob (ADR 0118), read or change.
+  [
+    'mcp__conch__app_notes__save_note',
+    { text: `deploy key: ${'sk-' + 'proj-'}${'a1B2c3D4'.repeat(4)}` },
+  ],
+  ['mcp__conch__app_weather__find_city', { name: `${'ghp_'}${'x7Y8z9W0'.repeat(5)}` }],
+  [
+    'mcp__linear__create_issue',
+    {
+      title: 'Bug',
+      body: `${'eyJhbGciOiJIUzI1NiJ9'}.${'eyJzdWIiOiIxMjM0NTY3ODkwIn0'}.${'SflKxwRJSMeKKF2QT4fwpMeJf36P'}`,
+    },
+  ],
+  [
+    'mcp__notion__update_page',
+    { id: 'p1', text: `notes ${'QWxhZGRpbjpvcGVuIHNlc2FtZTEyMzQ1Njc4OTBBQkNERUY'.repeat(2)}` },
+  ],
+  // Code it wrote, run in one of your apps: whatever the code says, it does.
+  ['mcp__cloudflare__execute', { code: 'async () => cloudflare.dns.records.list()' }],
 ];
 
 /** Serious whoever asked: Auto stops for every one, with or without reading. */

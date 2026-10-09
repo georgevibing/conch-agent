@@ -1131,6 +1131,70 @@ export function wordsSent(args: Record<string, unknown>): number {
 }
 /** More text than a lookup sends (a food, a city, a date): it could carry what the chat read. */
 export const HEAVY_READ = 600;
+/**
+ * An app's change that gives someone access or changes who can reach the person's things
+ * (ADR 0118): a collaborator, a role, a token, a webhook. Lasting, and a classic way to keep
+ * a foothold, so it asks after reading.
+ */
+export const GRANTS =
+  /(?:^|_|-)(?:grant|grants|permission|permissions|role|roles|collaborator|collaborators|member|members|access|token|tokens|apikey|api_key|secret|secrets|webhook|webhooks|deploy_key|ssh_key|oauth)(?:_|-|$)/i;
+/** An app's step that runs code it's given (ADR 0118): whatever the code says, it does. */
+export const RUNS =
+  /(?:^|_|-)(?:execute|exec|eval|run_code|run_script|run_sql|query_sql|sql)(?:_|-|$)/i;
+
+/** Shapes keys and tokens have, whatever they're called (ADR 0118). */
+const SECRET_SHAPES = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  /\b(?:sk|rk)-(?:[a-z]+-)?[A-Za-z0-9_-]{20,}/,
+  /\bgh[pousr]_[A-Za-z0-9]{30,}/,
+  /\bgithub_pat_[A-Za-z0-9_]{40,}/,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/,
+  /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
+  /\bAIza[0-9A-Za-z_-]{35}\b/,
+  /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+];
+
+/** Every string a call sends, walked as `wordsSent` does. */
+function stringsOf(args: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 4 || out.length > 500) return;
+    if (typeof value === 'string') out.push(value);
+    else if (Array.isArray(value)) for (const v of value) walk(v, depth + 1);
+    else if (value && typeof value === 'object')
+      for (const v of Object.values(value)) walk(v, depth + 1);
+  };
+  walk(args, 0);
+  return out;
+}
+
+/**
+ * What an app's step would send that no lookup or ordinary change needs (ADR 0118): a key or
+ * token by its shape, or a long encoded blob (base64 with mixed case and digits, or long hex).
+ * Ids, UUIDs, dates, names, sentences and notes don't: their pieces are short or plain words.
+ */
+export function carriesSecrets(args: Record<string, unknown>): 'key' | 'blob' | undefined {
+  const strings = stringsOf(args);
+  if (strings.some((s) => SECRET_SHAPES.some((shape) => shape.test(s)))) return 'key';
+  const blob = (token: string) =>
+    (token.length >= 48 &&
+      /^[A-Za-z0-9+/=_-]+$/.test(token) &&
+      /\d/.test(token) &&
+      /[A-Z]/.test(token) &&
+      /[a-z]/.test(token)) ||
+    /^[0-9a-f]{80,}$/i.test(token);
+  return strings.some((s) => s.split(/[\s"'`,;:.()[\]{}<>|&]+/).some(blob)) ? 'blob' : undefined;
+}
+
+/**
+ * Whether an app's step sends more than a short lookup (ADR 0118): any one value over 100
+ * characters, or over 200 in all. Only then is a step in someone else's app worth a second
+ * look; a food, a date, an id or a city never is.
+ */
+export function sendsMoreThanALookup(args: Record<string, unknown>): boolean {
+  const strings = stringsOf(args);
+  return strings.some((s) => s.length > 100) || wordsSent(args) > 200;
+}
 
 /**
  * What one step could do, at its worst, or undefined when it's routine.
@@ -1196,6 +1260,18 @@ export function assessRisk(
     return severe('spend', 'spend money in one of your apps');
   if (context.access === 'write' && step && SPEAKS.test(tool))
     return moderate('egress', 'send something to other people from one of your apps');
+  // Who can reach the person's things, and code run as they say (ADR 0118): after reading.
+  if (context.access === 'write' && step && GRANTS.test(tool))
+    return moderate('privilege', 'change who can reach something in one of your apps');
+  if (step && RUNS.test(tool))
+    return moderate('remote-code', 'run code it wrote in one of your apps');
+  // A key, a token or an encoded blob sent to an app, read or change (ADR 0118): nothing a
+  // lookup or an ordinary change needs, and the shape of a chat's secrets leaving it.
+  const carried = step ? carriesSecrets(args) : undefined;
+  if (carried === 'key')
+    return severe('exfiltration', 'send something that looks like a key or token to an app', false);
+  if (carried === 'blob')
+    return severe('exfiltration', 'send a long block of encoded data to an app', false);
   // A read that sends pages of text to the app's site: it could carry what was read.
   if (context.access === 'read' && step && wordsSent(args) > HEAVY_READ)
     return moderate('egress', 'send a lot of text from this chat to an app’s website');

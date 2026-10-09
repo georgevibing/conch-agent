@@ -384,6 +384,16 @@ export type ConchAppSource = z.infer<typeof ConchAppSource>;
 export const madeHere = (source: ConchAppSource): boolean =>
   source.kind === 'made' && !source.afterReading?.length && !source.basedOn;
 
+/**
+ * Made here and added by the person, whatever its chat had read (ADR 0118):
+ * the sites it reaches are the ones its card showed them, with what that chat
+ * had read, when they pressed Add. So the guard after reading treats its steps
+ * as theirs. Its words are still fenced where they reach the model
+ * (`madeHere`), and an app changed from someone else's stays theirs.
+ */
+export const ownedHere = (source: ConchAppSource): boolean =>
+  source.kind === 'made' && !source.basedOn;
+
 /** One thing the check found, in words a person (and a model) can act on. */
 export const AppCheckItem = z.object({
   message: z.string().max(500),

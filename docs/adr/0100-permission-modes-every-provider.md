@@ -1,6 +1,7 @@
 # 0100 — Permission modes that mean the same with every provider
 
-- Status: accepted
+- Status: accepted; Claude Code's row amended by [ADR 0118](./0118-auto-judges-every-app-step.md)
+  (Auto runs as `default`, answered by Conch)
 - Date: 2026-10-07
 - Builds on: [ADR 0028](./0028-safe-hands.md) (the guard after reading, the sealed box),
   [ADR 0031](./0031-skill-trust.md) (skill holds), [ADR 0033](./0033-hand-it-off.md)

@@ -1,6 +1,7 @@
 # 0117 — Auto asks about what matters, and watches what a chat does
 
-- Status: accepted
+- Status: accepted; a stranger's app and apps over MCP amended by
+  [ADR 0118](./0118-auto-judges-every-app-step.md) (judged by what each step does)
 - Date: 2026-10-08
 - Builds on: [ADR 0100](./0100-permission-modes-every-provider.md) (the ladder, Auto's
   risk policy, Full trust's irreducible list), [ADR 0028](./0028-safe-hands.md) (the guard

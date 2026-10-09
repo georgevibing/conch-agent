@@ -591,10 +591,15 @@ threat model. Hold every change to the bar of a thorough professional security r
     - Add the new everyday steps to the benign half of `test/riskCorpus.ts`
       (they must pass silently, before and after reading) alongside any new
       risky ones. Making Auto stricter needs an ADR saying why.
-    - A step in an app the person made here is their own work: it carries
-      `appStep` on its question, and in Auto only what the risk policy marks
-      (paying, speaking for them, deleting, pages of text) asks after reading
-      (ADR 0117). Volume and patterns across steps (a crowd of recipients, a run
+    - A step in an app the person made here (`ownedHere`, after reading too) is
+      their own work: it carries `appStep` on its question, and in Auto only what
+      the risk policy marks (paying, speaking for them, deleting, granting access,
+      a key or pages of text) asks after reading (ADR 0117). A step in anyone
+      else's app (a Conch app from outside, an MCP app) is judged the same way,
+      plus a second look for a change or a lookup that sends more than a lookup;
+      only when nothing can judge it does it ask as before (ADR 0118).
+    - Auto is Conch's on every provider: an engine runs it as its own Ask mode
+      and Conch answers (Claude Code's own classifier isn't used, ADR 0118). Volume and patterns across steps (a crowd of recipients, a run
       of deletes, a loop) are `conversations/behaviour.ts`'s, counted from the
       chat's log, never a new question in a tool.
 

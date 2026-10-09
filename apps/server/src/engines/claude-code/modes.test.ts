@@ -95,65 +95,45 @@ describe('Claude Code’s permission modes (ADR 0100)', () => {
     nativeAuto = true;
   });
 
-  it('runs Auto as its own auto mode where the model has it, and says when its classifier wants a person', async () => {
-    nativeAuto = true;
-    const engine = engineFor();
-    await engine.capabilities({ force: true });
-    const asked: PermissionRequest[] = [];
-    const options = await run(
-      engine,
-      turn({
-        requestPermission: async (request) => {
-          asked.push(request);
-          return 'allow';
+  it('runs Auto as Ask first, answered by Conch, even where the model has its own classifier (ADR 0118)', async () => {
+    for (const model of [undefined, 'haiku']) {
+      nativeAuto = true;
+      const engine = engineFor();
+      await engine.capabilities({ force: true });
+      const asked: PermissionRequest[] = [];
+      const options = await run(
+        engine,
+        turn({
+          options: {
+            effort: 'auto',
+            fastMode: false,
+            permissionMode: 'auto',
+            ...(model && { model }),
+          },
+          requestPermission: async (request) => {
+            asked.push(request);
+            return 'allow';
+          },
+        }),
+      );
+      expect(options?.permissionMode).toBe('default');
+      expect(options?.allowDangerouslySkipPermissions).toBeUndefined();
+      await options?.canUseTool?.(
+        'Bash',
+        { command: 'ls' },
+        {
+          signal: new AbortController().signal,
+          toolUseID: 't1',
         },
-      }),
-    );
-    expect(options?.permissionMode).toBe('auto');
-    expect(options?.allowDangerouslySkipPermissions).toBeUndefined();
-    await options?.canUseTool?.(
-      'Bash',
-      { command: 'ls' },
-      {
-        signal: new AbortController().signal,
-        toolUseID: 't1',
-      },
-    );
-    expect(asked).toEqual([
-      { toolName: 'Bash', toolUseId: 't1', input: { command: 'ls' }, escalated: true },
-    ]);
-  });
-
-  it('runs Auto as Ask first, answered by Conch, for a model without it', async () => {
-    nativeAuto = true;
-    const engine = engineFor();
-    await engine.capabilities({ force: true });
-    const asked: PermissionRequest[] = [];
-    const options = await run(
-      engine,
-      turn({
-        options: { effort: 'auto', fastMode: false, permissionMode: 'auto', model: 'haiku' },
-        requestPermission: async (request) => {
-          asked.push(request);
-          return 'allow';
-        },
-      }),
-    );
-    expect(options?.permissionMode).toBe('default');
-    await options?.canUseTool?.(
-      'Bash',
-      { command: 'ls' },
-      {
-        signal: new AbortController().signal,
-        toolUseID: 't1',
-      },
-    );
-    expect(asked[0]?.escalated).toBeUndefined();
-    // Not probed yet: Conch's own Auto, never a mode Claude Code might not have.
+      );
+      // Conch's one policy answers: no word from a classifier of Claude Code's own.
+      expect(asked).toEqual([{ toolName: 'Bash', toolUseId: 't1', input: { command: 'ls' } }]);
+    }
+    // Not probed yet: the same.
     expect((await run(engineFor(), turn()))?.permissionMode).toBe('default');
   });
 
-  it('Full trust is bypassPermissions; Auto picked mid-turn follows the model', async () => {
+  it('Full trust is bypassPermissions; Auto picked mid-turn runs as Ask first', async () => {
     nativeAuto = true;
     const engine = engineFor();
     await engine.capabilities({ force: true });
@@ -180,7 +160,7 @@ describe('Claude Code’s permission modes (ADR 0100)', () => {
     // Full trust picked mid-turn runs as Ask, with Conch answering (ADR 0028).
     change?.('bypassPermissions');
     await new Promise((r) => setTimeout(r, 0));
-    expect(switched).toEqual(['auto', 'default']);
+    expect(switched).toEqual(['default', 'default']);
   });
 });
 

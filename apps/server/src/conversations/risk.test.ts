@@ -4,9 +4,11 @@ import { AFTER_READING, ROUTINE, SERIOUS, type Step } from '../test/riskCorpus';
 import {
   assessRisk,
   breaksCircuit,
+  carriesSecrets,
   commandParts,
   riskAsks,
   riskScore,
+  sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
 
@@ -168,5 +170,87 @@ describe('the risk policy behind Auto (ADR 0100)', () => {
     ])
       expect(breaksCircuit('Bash', { command }, ctx), command).toBeUndefined();
     expect(breaksCircuit('Write', { file_path: '/' }, ctx)).toBeUndefined();
+  });
+});
+
+describe('steps in apps, judged by what they send and do (ADR 0118)', () => {
+  const step = (tool: string, input: Record<string, unknown>, access: 'read' | 'write') =>
+    assessRisk(tool, input, { ...ctx, access });
+
+  it('lets lookups and ordinary changes through, before and after reading', () => {
+    const everyday: [string, Record<string, unknown>, 'read' | 'write'][] = [
+      ['app_yazio__get_product', { id: 'e51efae8-7929-4445-9a03-3f6dadd60a4a' }, 'read'],
+      [
+        'app_yazio__add_food',
+        { product_id: 'c5a9abb9-4660-4f9e-afaf-cc4e2dd04bbf', amount: 125 },
+        'write',
+      ],
+      [
+        'mcp__github__create_issue',
+        { title: 'Bug', body: 'Steps to reproduce: '.repeat(60) },
+        'write',
+      ],
+      ['mcp__github__list_members', { org: 'acme' }, 'read'],
+      [
+        'mcp__notion__update_page',
+        { id: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d', text: 'Agreed: ship Friday.' },
+        'write',
+      ],
+    ];
+    for (const [tool, input, access] of everyday)
+      expect(riskAsks(step(tool, input, access), true), tool).toBe(false);
+  });
+
+  it('asks after reading before it grants access, runs code, or sends a key or a blob', () => {
+    const key = `${'sk-' + 'ant-'}${'Q1w2E3r4'.repeat(4)}`;
+    const ways: [string, Record<string, unknown>, 'read' | 'write', string][] = [
+      ['mcp__github__add_collaborator', { user: 'mallory' }, 'write', 'change who can reach'],
+      [
+        'mcp__github__create_webhook',
+        { url: 'https://hook.example' },
+        'write',
+        'change who can reach',
+      ],
+      ['mcp__cloudflare__execute', { code: 'x' }, 'write', 'run code'],
+      ['app_weather__find_city', { name: key }, 'read', 'looks like a key'],
+      [
+        'mcp__notion__update_page',
+        { text: 'QWxhZGRpbjpvcGVuIHNlc2FtZTEyMzQ1Njc4OTBBQkNERUY'.repeat(2) },
+        'write',
+        'encoded data',
+      ],
+    ];
+    for (const [tool, input, access, words] of ways) {
+      const risk = step(tool, input, access);
+      expect(riskAsks(risk, false), tool).toBe(false);
+      expect(riskAsks(risk, true), tool).toBe(true);
+      expect(risk?.reason, tool).toContain(words);
+    }
+    // Only a change grants: listing who's a member only looks.
+    expect(step('mcp__github__list_members', {}, 'read')).toBeUndefined();
+  });
+
+  it('knows a key by its shape and a blob by its look, and an id or a note by theirs', () => {
+    expect(carriesSecrets({ token: `${'xox' + 'b-'}123456789012-abcdefghij` })).toBe('key');
+    expect(carriesSecrets({ nested: { list: [`AKIA${'ABCDEFGH12345678'}`] } })).toBe('key');
+    expect(carriesSecrets({ pem: '-----BEGIN RSA PRIVATE KEY-----\nabc' })).toBe('key');
+    expect(carriesSecrets({ data: 'f'.repeat(80) })).toBe('blob');
+    for (const plain of [
+      { id: 'e51efae8-7929-4445-9a03-3f6dadd60a4a' },
+      { hash: '9e107d9d372bb6826bd81d3542a419d6' },
+      { note: 'Lunch: 200 g Greek yoghurt with honey, then a walk.' },
+      { url: 'https://www.otto.de/suche/gant%20t-shirt/?sortiertnach=preis-aufsteigend' },
+    ])
+      expect(carriesSecrets(plain), JSON.stringify(plain)).toBeUndefined();
+  });
+
+  it('tells a lookup from a step that sends more', () => {
+    expect(
+      sendsMoreThanALookup({ id: 'e51efae8-7929-4445-9a03-3f6dadd60a4a', date: '2026-10-08' }),
+    ).toBe(false);
+    expect(sendsMoreThanALookup({ query: 'x'.repeat(101) })).toBe(true);
+    expect(sendsMoreThanALookup({ a: 'x'.repeat(90), b: 'y'.repeat(90), c: 'z'.repeat(30) })).toBe(
+      true,
+    );
   });
 });

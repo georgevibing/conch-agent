@@ -898,7 +898,13 @@ describe('its tools, for every model', () => {
     expect(asked[0]?.taint).toBe(
       'This chat read evil.example, which could be trying to steer me. So I’m checking before I send what it asks for to api.example.com.',
     );
-    expect(asked[0]?.appStep).toEqual({ access: 'read', own: false });
+    // Set to Allow by the person, so in Auto no second look (ADR 0118).
+    expect(asked[0]?.appStep).toMatchObject({
+      access: 'read',
+      own: false,
+      allowed: true,
+      app: 'Tally',
+    });
     expect(taints).toContainEqual({ kind: 'app', label: 'Tally content' });
     await tools.find((t) => t.name === 'app_tally__count')?.run({});
     expect(asked[1]?.taint).toBe(
@@ -974,6 +980,71 @@ describe('its tools, for every model', () => {
       appStep: { access: 'read', own: true },
       taint: expect.stringContaining('send a lot of text to api.yazio.example'),
     });
+  });
+
+  it('an app made in a chat that had read something is still yours to the guard (ADR 0118)', async () => {
+    // The Yazio case again: made while the chat read the GitHub page it was built from. Its
+    // card said so when it was added, so its sites are the person's choice; its looks go by
+    // themselves, and neither its own answers nor its provenance hold its next step.
+    const h = await harness();
+    const making = h.chat();
+    making.append({ type: 'taint', source: { kind: 'web', label: 'github.com' } });
+    const files = tallyFiles();
+    const manifest = JSON.parse(files['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.reaches = ['api.yazio.example'];
+    files['conch-app.json'] = JSON.stringify(manifest);
+    const { draft } = await h.service.newDraft(making.conversationId, {
+      name: 'Tally',
+      id: 'tally',
+    });
+    for (const [path, content] of Object.entries(files))
+      await h.service.write(draft.id, path, content);
+    await h.service.check(draft.id);
+    await h.service.tryTool(draft.id, 'count', {});
+    await h.service.tryTool(draft.id, 'read_count', {});
+    await h.service.check(draft.id);
+    const offer = await h.service.present(making, draft.id, 'Tally.');
+    expect(offer.source).toMatchObject({ afterReading: ['github.com'] });
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    const read: TaintSource[] = [{ kind: 'web', label: 'github.com' }];
+    const asked: AskRequest[] = [];
+    const ctx = {
+      conversationId: 'c_chat',
+      append: () => undefined,
+      engine: {} as ToolContext['engine'],
+      permissionMode: 'auto',
+      ask: async (request: AskRequest) => {
+        asked.push(request);
+        return 'allow';
+      },
+      signal: new AbortController().signal,
+      untrusted: (besides?: (source: TaintSource) => boolean) => {
+        const left = read.filter((source) => !besides?.(source));
+        return left.length ? describeTaint(left) : undefined;
+      },
+      taints: () => read,
+      taint: (source: TaintSource) => void read.push(source),
+    } as unknown as ToolContext;
+    const tools = h.service.hosted.tools(ctx);
+    const look = tools.find((t) => t.name === 'app_tally__read_count');
+    await look?.run({});
+    await look?.run({});
+    // Only its policy's own Ask (from outside: Ask every time), which Auto answers by itself:
+    // nothing about what the chat read.
+    expect(asked).toHaveLength(2);
+    for (const question of asked)
+      expect(question).toMatchObject({ chosen: true, appStep: { access: 'read', own: true } });
+    expect(asked.some((question) => question.taint)).toBe(false);
+    // Its answers still mark the chat, with where it came from, for every other way out.
+    expect(read).toContainEqual({ kind: 'app', label: 'Tally content' });
+    expect(read).toContainEqual({ kind: 'app', label: 'Tally (from a chat that read github.com)' });
+    // A change is a step in your own app, held only by what the chat read before.
+    await tools.find((t) => t.name === 'app_tally__count')?.run({ by: 1 });
+    expect(asked).toHaveLength(3);
+    expect(asked[2]).toMatchObject({ appStep: { access: 'write', own: true } });
+    expect(asked[2]?.taint).toContain('github.com');
+    expect(asked[2]?.taint).not.toContain('Tally content');
+    expect(asked[2]?.taint).not.toContain('from a chat that read');
   });
 
   it('lists the apps for the prompt, with what they’re for in their maker’s words', async () => {

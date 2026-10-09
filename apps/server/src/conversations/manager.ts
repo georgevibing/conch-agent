@@ -77,8 +77,15 @@ import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
-import { assessRisk, breaksCircuit, riskAsks, riskWords, wantsSecondLook } from './risk';
-import { lookAtCommand } from './risk-look';
+import {
+  assessRisk,
+  breaksCircuit,
+  riskAsks,
+  riskWords,
+  sendsMoreThanALookup,
+  wantsSecondLook,
+} from './risk';
+import { lookAtAppStep, lookAtCommand } from './risk-look';
 import {
   carriesData,
   describeTaint,
@@ -235,17 +242,23 @@ export interface AskRequest {
   /** The person set this one tool to Ask in Apps: Auto keeps asking (Full trust doesn't). */
   explicit?: boolean;
   /**
-   * A step in one of the person's Conch apps (ADR 0117). `own`: made in this
-   * Conch, so what it sends goes only to the sites the person added it with.
-   * In Auto, after reading, such a step goes ahead unless the risk policy marks
-   * it (it pays, speaks for the person to others, deletes, or sends pages of
-   * text). `marks`: what the app itself brought into the chat; its own next
-   * step isn't held by its own answers.
+   * A step in one of the person's Conch apps (ADR 0117, ADR 0118). `own`: made
+   * in this Conch, so what it sends goes only to the sites the person added it
+   * with. In Auto, after reading, a step goes ahead unless the risk policy marks
+   * it (it pays, speaks for the person to others, deletes, grants access, sends
+   * a key or pages of text); in someone else's app, a step that sends more than
+   * a lookup, or changes things, also gets a second look. `marks`: what the app
+   * itself brought into the chat; its own next step isn't held by its own
+   * answers. `allowed`: the person set this tool to Allow, so no second look.
    */
   appStep?: {
     access: 'read' | 'write';
     own: boolean;
     marks?: (source: TaintSource) => boolean;
+    allowed?: boolean;
+    /** The app's name and the tool's title, for the second look. */
+    app?: string;
+    tool?: string;
   };
   /**
    * The person may change it before allowing it (an email's words and who it
@@ -2713,6 +2726,25 @@ export class ConversationManager {
      * keep their own, words going to other people are shown each time, and
      * someone else's words in the chat or a skill's list ask every time.
      */
+    /**
+     * Looks in an app asked at the same moment, for the same reason (ADR 0118): a batch of
+     * parallel lookups is one card, and its answer is theirs. Only looks: each change is
+     * shown on its own card, since what it does is in its arguments.
+     */
+    const asking = new Map<string, Promise<PermissionDecision>>();
+    const together = (
+      request: AskRequest,
+      ask: () => Promise<PermissionDecision>,
+    ): Promise<PermissionDecision> => {
+      if (request.appStep?.access !== 'read') return ask();
+      const key = `${request.toolName}\n${request.taint ?? ''}`;
+      const waiting = asking.get(key);
+      if (waiting) return waiting;
+      const answer = ask().finally(() => asking.delete(key));
+      asking.set(key, answer);
+      return answer;
+    };
+
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
       if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
       // The call asking, so its row can carry the answer; and what it read, as the tools see it.
@@ -2752,26 +2784,26 @@ export class ConversationManager {
         }
         if (request.once) return askUser({ ...request, remember: false }, abort.signal);
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
-        return askUser({ ...request, remember: true }, abort.signal);
+        return together(request, () => askUser({ ...request, remember: true }, abort.signal));
       }
       const lifts =
         this.#tainted(live).every((source) => source.kind !== 'person') &&
         ![...limitsSaid].some((limit) => request.taint?.includes(limit));
       if (!lifts) return askUser({ ...request, remember: false }, abort.signal);
       // Auto after reading, a person here (ADR 0100): Conch's own commands and pictures on
-      // the person's own plan are routine work, and so is a step in an app the person made
-      // here (ADR 0117). Only what the risk policy or the second look marks asks; spending
-      // money and words going to other people asked above or still ask.
+      // the person's own plan are routine work, and so is a step in any Conch app (ADR 0117,
+      // ADR 0118): only what the risk policy or a second look marks asks. Spending money
+      // and words going to other people asked above or still ask.
       if (
         resolved.permissionMode === 'auto' &&
         personTrusts &&
         !request.cost &&
         !request.explicit &&
-        (AUTO_AFTER_READING.test(request.toolName) || request.appStep?.own)
+        (AUTO_AFTER_READING.test(request.toolName) || request.appStep)
       ) {
         const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
-        const why = riskAsks(risk, true)
+        let why = riskAsks(risk, true)
           ? risk?.reason
           : command
             ? await secondLook(
@@ -2780,19 +2812,40 @@ export class ConversationManager {
                 this.#tainted(live),
               )
             : undefined;
-        if (!why) return 'allow';
-        return askUser(
-          {
-            ...request,
-            taint: `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`,
-            remember: false,
-          },
-          abort.signal,
-        );
+        // Someone else's app: judged by what this step sends and does (ADR 0118). When nothing
+        // could judge it (no small model to look), its own question stands, as before.
+        const step = request.appStep;
+        let judged = true;
+        if (!why && step && !step.own) {
+          const look = await judgeStep(
+            {
+              app: step.app ?? request.toolName,
+              tool: step.tool ?? request.toolName,
+              access: step.access,
+              ...(step.allowed && { allowed: true }),
+            },
+            request.toolName,
+            request.input,
+            read,
+          );
+          if (look === undefined) judged = false;
+          else if (look) why = look;
+        }
+        if (judged) {
+          if (!why) return 'allow';
+          return askUser(
+            {
+              ...request,
+              taint: `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`,
+              remember: false,
+            },
+            abort.signal,
+          );
+        }
       }
       const waive = `read:${request.toolName}`;
       if (live.waived.has(waive)) return Promise.resolve('allow');
-      return askUser({ ...request, remember: true, waive }, abort.signal);
+      return together(request, () => askUser({ ...request, remember: true, waive }, abort.signal));
     };
 
     // Plan mode (`/plan`) for an engine that can't ask to start by itself: Conch's
@@ -3064,6 +3117,37 @@ export class ConversationManager {
     };
 
     /**
+     * A step in someone else's app, after reading, in Auto (ADR 0118): the rules found nothing,
+     * so it's judged by what it sends and does, not by whose it is. A look that sends no more
+     * than a lookup goes; one that sends more, and any change, gets a second look, unless the
+     * person set that tool to Allow. The card's words when it should ask; `null` when it goes;
+     * undefined when nothing could judge it, so the question it came with stands.
+     */
+    const lookedSteps = new Map<string, Promise<string | null | undefined>>();
+    const judgeStep = async (
+      step: { app: string; tool: string; access: 'read' | 'write'; allowed?: boolean },
+      toolName: string,
+      args: Record<string, unknown>,
+      read: readonly TaintSource[],
+    ): Promise<string | null | undefined> => {
+      if (step.allowed) return null;
+      if (step.access === 'read' && !sendsMoreThanALookup(args)) return null;
+      if (!this.deps.riskLook) return undefined;
+      const key = `${toolName}\n${JSON.stringify(args)}`;
+      let look = lookedSteps.get(key);
+      if (!look) {
+        look = lookAtAppStep(
+          { ...step, args, asked: this.#yourWords(live).slice(-2).join('\n') },
+          read,
+          this.deps.riskLook,
+          { signal: abort.signal },
+        );
+        lookedSteps.set(key, look);
+      }
+      return look;
+    };
+
+    /**
      * What this step looks like beside what the chat did before it (ADR 0117): a thousand
      * emails, fifty deletes, the same change again and again. Judged once per call, where
      * every call passes first (`guard`), and remembered for the question that follows.
@@ -3177,6 +3261,8 @@ export class ConversationManager {
         const risk = assessRisk(request.toolName, request.input, {
           workspace,
           ...(app?.destructive && { destructive: true }),
+          // What its change does with money is read for a tool known to change things.
+          ...(app?.access && { access: app.access }),
         });
         const allowed =
           risk?.kind === 'app-delete' &&
@@ -3239,6 +3325,7 @@ export class ConversationManager {
         const risk = assessRisk(request.toolName, request.input, {
           workspace,
           ...(described?.destructive && { destructive: true }),
+          ...(described?.access && { access: described.access }),
         });
         const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =
@@ -3251,10 +3338,32 @@ export class ConversationManager {
           (/(?:WebFetch|web_fetch)$/.test(request.toolName) &&
             typeof request.input.url === 'string' &&
             !carriesData(request.input.url));
-        sink = riskAsks(risk, true) ? risk?.reason : routine ? undefined : sink;
+        const flagged = riskAsks(risk, true) ? risk?.reason : undefined;
+        sink = flagged ?? (routine ? undefined : sink);
         // Nothing the rules know, but unusual and able to reach out: a small model looks too.
         if (!sink && command && typeof request.input.command === 'string')
           sink = await secondLook(request.input.command, unsealed, tainted);
+        // A change in one of your connected apps (ADR 0118): judged by what it sends and does,
+        // with a second look; the person's Allow for that tool is their answer. When nothing
+        // could judge it, it asks as before.
+        const server = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(request.toolName);
+        if (!flagged && sink && server && server[1] !== 'conch') {
+          const allowed =
+            (await integrations?.decide(request.toolName).catch(() => undefined)) === 'allow';
+          const look = await judgeStep(
+            {
+              app: described?.integration ?? server[1] ?? 'an app',
+              tool: described?.tool ?? server[2] ?? request.toolName,
+              access: described?.access === 'read' ? 'read' : 'write',
+              ...(allowed && { allowed: true }),
+            },
+            request.toolName,
+            request.input,
+            tainted,
+          );
+          if (look === null) sink = undefined;
+          else if (look) sink = look;
+        }
       }
       return sink
         ? {
@@ -3271,7 +3380,6 @@ export class ConversationManager {
         toolName: string;
         toolUseId?: string;
         input: Record<string, unknown>;
-        escalated?: boolean;
       },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
@@ -3295,11 +3403,7 @@ export class ConversationManager {
         // Full trust picked mid-turn, for an engine still running the mode it started in.
         if (trustAllows(resolved.permissionMode, request.toolName)) return 'allow';
         // Auto: an ordinary step goes ahead; a tool you set to Ask in Apps still asks.
-        if (
-          !request.escalated &&
-          autoAllows(resolved.permissionMode, request.toolName, described?.asks)
-        )
-          return 'allow';
+        if (autoAllows(resolved.permissionMode, request.toolName, described?.asks)) return 'allow';
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
       }
       return askUser(
@@ -3316,7 +3420,7 @@ export class ConversationManager {
           ...(asked?.waive && { waive: asked.waive }),
           ...(taint && { taint }),
           ...(asked?.sources && { sources: asked.sources }),
-          ...((described?.asks || request.escalated) && { explicit: true }),
+          ...(described?.asks && { explicit: true }),
         },
         signal,
       );

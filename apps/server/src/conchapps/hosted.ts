@@ -13,6 +13,7 @@
 import {
   appToolName,
   madeHere,
+  ownedHere,
   type Integration,
   type IntegrationHealth,
   type IntegrationTool,
@@ -242,12 +243,13 @@ export class ConchApps implements HostedApps {
         text: 'The user turned this off in Apps (or its app isn’t set up). Nothing was done; say so if it matters.',
         effect: 'not-executed',
       };
-    // The guard after reading (ADR 0028, ADR 0117). Once the chat has read something from
-    // outside, a change asks (in Auto, an app made here goes ahead unless the risk policy
-    // marks it). A look sends what it's asked for to the app's sites: for an app made here
-    // those are the person's own choice, so a look goes by itself unless it sends pages of
-    // text; a stranger's sites are its maker's, so a look there asks.
-    const made = madeHere(app.source);
+    // The guard after reading (ADR 0028, ADR 0117, ADR 0118). Once the chat has read something
+    // from outside, a change asks; in Auto, any app's step goes ahead unless the risk policy or
+    // a second look marks it. A look sends what it's asked for to the app's sites: for an app
+    // made here (whatever its chat had read) those are the ones the person added it with, so
+    // a look goes by itself unless it sends pages of text; a stranger's sites are its maker's,
+    // so outside Auto a look there asks.
+    const made = ownedHere(app.source);
     const reaches = app.manifest.reaches;
     const heavy = wordsSent(args) > HEAVY_READ;
     const sink = tool.changes
@@ -256,10 +258,13 @@ export class ConchApps implements HostedApps {
         ? `send ${made ? 'a lot of text' : 'what it asks for'} to ${reaches.join(', ')}`
         : undefined;
     // What this app itself answered came from the sites its next step goes back to: an app
-    // made here isn't held by its own answers. A stranger's could steer its own way out.
+    // made here isn't held by its own answers, nor by the mark its chat's reading left on
+    // them (ADR 0118). A stranger's could steer its own way out.
     const label = `${plainLine(app.manifest.name, 60)} content`;
+    const provenance = `${plainLine(app.manifest.name, 60)} (from ${sourceName(app.source)})`;
     const marks = made
-      ? (source: TaintSource) => source.kind === 'app' && source.label === label
+      ? (source: TaintSource) =>
+          source.kind === 'app' && (source.label === label || source.label === provenance)
       : undefined;
     const untrusted = sink ? ctx.untrusted?.(marks) : undefined;
     const tainted = untrusted && `${untrusted} So I’m checking before I ${sink}.`;
@@ -278,6 +283,10 @@ export class ConchApps implements HostedApps {
           access: tool.changes ? 'write' : 'read',
           own: made,
           ...(marks && { marks }),
+          // The person's own Allow for this tool: their answer, so no second look (ADR 0118).
+          ...(decision === 'allow' && { allowed: true }),
+          app: plainLine(app.manifest.name, 60),
+          tool: plainLine(tool.title || tool.name, 80),
         },
         // This one tool set to Ask by the person: Auto keeps asking (ADR 0100).
         ...(decision === 'ask' && own(app.toolPolicies, tool.name) === 'ask' && { explicit: true }),
@@ -294,12 +303,9 @@ export class ConchApps implements HostedApps {
     // app that reaches the web can bring anyone's words back (a food someone named in a
     // shared database), ADR 0117.
     if (reaches.length) ctx.taint?.({ kind: 'app', label });
-    // A stranger's app: what it answers is its maker's, wherever it got it.
-    if (!madeHere(app.source))
-      ctx.taint?.({
-        kind: 'app',
-        label: `${plainLine(app.manifest.name, 60)} (from ${sourceName(app.source)})`,
-      });
+    // An app from outside, or made after reading: what it answers is in part someone else's,
+    // wherever it got it, so it marks the chat for every other way out.
+    if (!madeHere(app.source)) ctx.taint?.({ kind: 'app', label: provenance });
     await this.host.used(id).catch(() => undefined);
     if (outcome.ok) return outcome.text;
     return `${plainLine(app.manifest.name, 40)} couldn’t do that: ${outcome.text}`;
