@@ -1,6 +1,6 @@
 # 0023 — Offline and at a limit: answer, or wait
 
-- Status: accepted
+- Status: accepted; amended by [ADR 0126](./0126-the-next-one-with-room.md): at a limit, Automatic (the next plan or key with room) is the default, not waiting
 - Date: 2026-09-30
 
 ## Context

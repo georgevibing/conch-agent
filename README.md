@@ -58,6 +58,9 @@ your desktop and the chat apps you already use.
   OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more; or your company's
   Amazon Bedrock, Google Vertex AI or Azure OpenAI, picked from the sign-ins already on
   your computer. A chat can switch models without losing its thread. [Providers](./apps/docs/content/providers)
+- **A limit never stops a chat.** When a plan runs out, the next plan or key with room
+  carries on, yours first and then the cheapest, in an order you can change. It comes
+  back once the limit resets. [Offline and at a limit](./apps/docs/content/care/offline.md)
 - **`/` commands that work everywhere.** Autocomplete for commands and their choices,
   on a phone too: `/clear` (with Undo), `/goal`, `/plan` and the rest, with every
   provider and in every chat app. [Slash commands](./apps/docs/content/reference/slash-commands.md)
