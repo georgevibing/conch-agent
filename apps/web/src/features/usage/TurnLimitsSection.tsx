@@ -84,7 +84,7 @@ function Body({ initial }: { initial: TurnLimits }) {
             )}
           </Field>
           <Field invalid={tokensOk === undefined}>
-            <Field.Label>Fresh tokens (millions)</Field.Label>
+            <Field.Label>Tokens used, in millions</Field.Label>
             <Input
               inputMode="decimal"
               value={tokens}
@@ -128,7 +128,7 @@ function Body({ initial }: { initial: TurnLimits }) {
 }
 
 /**
- * Settings → Usage → Long turns: for people who want a message to check in
+ * Settings → Usage → Limits → Long turns: for people who want a message to check in
  * before it runs on. Off unless chosen (ADR 0085); routines and tasks keep
  * their own limits.
  */

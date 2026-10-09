@@ -1,15 +1,29 @@
 import type { EngineId, UsageSnapshot } from '@conch/protocol';
-import { Field, Input, ProviderLogo, Stack, Text, UsagePanel } from '@conch/nacre';
+import {
+  Field,
+  Input,
+  ProviderLogo,
+  SettingsRow,
+  SettingsSubpages,
+  Skeleton,
+  Stack,
+  Text,
+  UsagePanel,
+} from '@conch/nacre';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { Gauge } from 'lucide-react';
 import { useState } from 'react';
 
 import { api } from '../../api/client';
-import { keys, useUsage } from '../../api/queries';
+import { keys, useAppState, useUsage } from '../../api/queries';
+import { useLearning } from '../learning/api';
 import { providerLogo } from '../models/catalog';
 import { useProviders } from '../providers/queries';
 import { LearningSpendSection } from '../learning/LearningSpendSection';
+import { useRoutineSpending } from '../routines/queries';
 import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
+import { useSubpage } from '../settings/subpages';
 import { useAutosave } from '../settings/useAutosave';
 import { TurnLimitsSection } from './TurnLimitsSection';
 import styles from './Usage.module.css';
@@ -90,11 +104,53 @@ function ProviderUsage({ engine, name }: { engine: EngineId; name: string }) {
 const limitsOf = (u: UsageSnapshot) =>
   JSON.stringify([u.source, u.kind, u.windows, u.extra, u.blocked]);
 
+/** One provider's limits while they load: its name, and the panel's room. */
+function ProviderUsageSkeleton() {
+  return (
+    <Stack gap={2}>
+      <Skeleton width="8rem" />
+      <Skeleton shape="block" height="6.5rem" className={styles.inline} />
+    </Stack>
+  );
+}
+
+/**
+ * The limits a person sets, as the Limits row says them: how many are on.
+ * `undefined` until every one has answered, so the row arrives finished.
+ */
+function useLimitsSummary() {
+  const turns = useAppState().data?.preferences.turnLimits;
+  const routines = useRoutineSpending();
+  const learning = useLearning();
+  if (turns === undefined || routines.isPending || learning.isPending) return undefined;
+  const on = [
+    turns.on,
+    Boolean(routines.data && routines.data.limitUsd !== null),
+    Boolean(learning.data && learning.data.spending.limitUsd !== null),
+  ].filter(Boolean).length;
+  return on === 0 ? 'None on' : `${on} on`;
+}
+
 /**
  * Settings → Usage: what's left with every provider you've connected (each
- * chat's header shows its own), plus a budget for pay-as-you-go sign-ins.
+ * chat's header shows its own), a budget for pay-as-you-go sign-ins, and one
+ * row to the limits a person sets — Limits, a page of its own
+ * (`/settings/usage/limits`).
+ *
+ * Nothing pops in: the page waits for every provider's numbers and the
+ * limits, keeping their room with skeletons the shape of what comes, then
+ * shows it all at once.
  */
 export function UsageTab() {
+  const { page, open } = useSubpage('usage');
+  return (
+    <SettingsSubpages page={page}>
+      {page === 'limits' ? <LimitsPage /> : <UsageMain onOpenLimits={() => open('limits')} />}
+    </SettingsSubpages>
+  );
+}
+
+function UsageMain({ onOpenLimits }: { onOpenLimits: () => void }) {
   const { data: list } = useProviders();
   const ready = (list?.providers ?? []).filter((p) => p.ready);
   const usages = useQueries({
@@ -104,7 +160,24 @@ export function UsageTab() {
       staleTime: 60_000,
     })),
   });
-  if (!list) return null;
+  const limits = useLimitsSummary();
+  if (!list || usages.some((u) => u.isPending) || limits === undefined) {
+    // The same sections in the same order, each keeping the room of what comes.
+    const expected = list ? ready.length : 1;
+    return (
+      <Stack gap={6} aria-busy>
+        <Section title="What’s left">
+          <Stack gap={5}>
+            {Array.from({ length: Math.max(expected, 1) }, (_, i) => (
+              <ProviderUsageSkeleton key={i} />
+            ))}
+          </Stack>
+        </Section>
+        {expected > 0 && <Skeleton shape="block" height="9.5rem" />}
+        <Skeleton shape="block" height="3.75rem" />
+      </Stack>
+    );
+  }
   // Spend is Conch-wide: any provider's numbers carry it.
   const spend = usages.find((u) => u.data)?.data?.spend;
   // Codex and Codex CLI are one ChatGPT plan: when their limits read the same, show Codex once.
@@ -128,9 +201,37 @@ export function UsageTab() {
       </Section>
       {/* Every chat on a key you pay as you go counts, whichever provider answers it (ADR 0079). */}
       {spend && <BudgetField initial={spend.budget} />}
+      <SettingsRow
+        page="limits"
+        icon={<Gauge />}
+        label="Limits"
+        description="Pausing long turns, and what routines and learning may spend"
+        value={limits}
+        onClick={onOpenLimits}
+      />
+    </Stack>
+  );
+}
+
+/**
+ * Usage → Limits: pausing long turns to check in, and what routines and
+ * learning may spend each month. It waits for all three, then shows them
+ * together.
+ */
+function LimitsPage() {
+  if (useLimitsSummary() === undefined)
+    return (
+      <Stack gap={6} aria-busy>
+        <Skeleton shape="block" height="7rem" />
+        <Skeleton shape="block" height="14rem" />
+        <Skeleton shape="block" height="12rem" />
+      </Stack>
+    );
+  return (
+    <Stack gap={6}>
+      <TurnLimitsSection />
       <SpendingSection />
       <LearningSpendSection />
-      <TurnLimitsSection />
     </Stack>
   );
 }
