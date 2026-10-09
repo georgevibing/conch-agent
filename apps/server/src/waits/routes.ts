@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import type { WaitService } from './service';
 
 /**
- * Check now and Stop waiting, from a waiting row (ADR 0124). Under `/api`,
+ * Check now and Stop waiting, from a waiting row (ADR 0125). Under `/api`,
  * behind the gateway's host, origin and sign-in checks. Neither can start
  * anything: one looks sooner, the other ends the wait.
  */

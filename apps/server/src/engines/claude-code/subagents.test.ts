@@ -87,7 +87,7 @@ describe('Claude Code’s own sub-agents', () => {
 });
 
 /**
- * Waiting goes through Conch's `wait_for` (ADR 0124): Claude Code's own
+ * Waiting goes through Conch's `wait_for` (ADR 0125): Claude Code's own
  * wake-ups would fire inside a session whose turn has already ended.
  */
 describe('Claude Code’s own wake-ups', () => {

@@ -4302,7 +4302,7 @@ export class ConversationManager {
   }
 
   /**
-   * Something the assistant was waiting for ended (ADR 0124): its next turn
+   * Something the assistant was waiting for ended (ADR 0125): its next turn
    * starts by itself with what changed, now if the chat is free, else the
    * moment the running turn ends. Never a message of yours; the waiting row
    * says why it carried on.

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 /**
- * Waiting without polling (ADR 0124). The mock asks Conch's own `wait_for`
+ * Waiting without polling (ADR 0125). The mock asks Conch's own `wait_for`
  * to wait 30 minutes: the call lets go of the turn, the chat is free, and
  * one calm row says what it waits for. Nothing calls the model while it
  * waits. Stop waiting ends it, and nobody is woken.

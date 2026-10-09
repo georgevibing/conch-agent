@@ -1,5 +1,5 @@
 /**
- * Waiting for something until it changes (ADR 0124). `wait_for` is a tool
+ * Waiting for something until it changes (ADR 0125). `wait_for` is a tool
  * every provider gets: the assistant names what it waits for (a command of
  * this chat, CI on GitHub, a page, a time) and Conch watches it by itself, at
  * a pace that slows while nothing changes. No model is called while it waits.

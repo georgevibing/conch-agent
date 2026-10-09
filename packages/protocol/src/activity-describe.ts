@@ -1174,7 +1174,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   process_read: (input) => processDraft('read', input),
   process_write: (input) => processDraft('write', input),
   process_stop: (input) => processDraft('stop', input),
-  // Waiting until something changes, Conch watching (ADR 0124): its own row shows the rest.
+  // Waiting until something changes, Conch watching (ADR 0125): its own row shows the rest.
   wait_for: (input) => {
     const kind = str(input, 'kind');
     const what =

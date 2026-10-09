@@ -18,7 +18,7 @@ import type { HostTool } from '../engines/types';
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { touchesProtected, PROTECTED_MESSAGE } from '../lib/protect';
 
-/** A managed command as a wait sees it (ADR 0124). */
+/** A managed command as a wait sees it (ADR 0125). */
 export interface ProcessPeek {
   command: string;
   status: 'queued' | 'running' | 'exited' | 'stopped' | 'timed-out';
@@ -51,7 +51,7 @@ interface Session {
 
 export class ProcessService {
   readonly #sessions = new Map<string, Session>();
-  /** Who waits on a command (ADR 0124): told when it prints or ends, never polled by a model. */
+  /** Who waits on a command (ADR 0125): told when it prints or ends, never polled by a model. */
   readonly #listeners = new Map<string, Set<() => void>>();
   #monitor?: NodeJS.Timeout;
   #pumping = false;
@@ -306,7 +306,7 @@ export class ProcessService {
     };
   }
   /**
-   * A command of this chat as it stands, for a wait (ADR 0124): its status and
+   * A command of this chat as it stands, for a wait (ADR 0125): its status and
    * everything kept of its output. Undefined when it isn't this chat's.
    */
   peek(owner: string, id: string): ProcessPeek | undefined {

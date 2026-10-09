@@ -137,7 +137,7 @@ describe('transcript reducer', () => {
     });
   });
 
-  it('keeps one row per wait, brought up to date where it first appeared (ADR 0124)', () => {
+  it('keeps one row per wait, brought up to date where it first appeared (ADR 0125)', () => {
     const wait = {
       waitId: 'w1',
       kind: 'ci',

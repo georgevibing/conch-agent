@@ -417,7 +417,7 @@ export class Services {
   readonly wake: WakeWord;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
-  /** Waiting for CI, a command, a page or a time without calling a model (ADR 0124). */
+  /** Waiting for CI, a command, a page or a time without calling a model (ADR 0125). */
   readonly waits: WaitService;
   /** Other apps using Conch through its MCP door (ADR 0073). */
   readonly mcp: McpService;
@@ -1098,7 +1098,7 @@ export class Services {
       },
     });
     this.doctor.register(this.telemetry.doctorCheck());
-    // Waiting for something until it changes (ADR 0124): Conch watches; the model sleeps.
+    // Waiting for something until it changes (ADR 0125): Conch watches; the model sleeps.
     let ghSignedIn: { at: number; path?: string } | undefined;
     this.waits = new WaitService({
       home: config.CONCH_HOME,
@@ -2974,7 +2974,7 @@ export class Services {
     this.conchApps.start();
     this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
-    // Waits that let go of their turn carry on after a restart (ADR 0124).
+    // Waits that let go of their turn carry on after a restart (ADR 0125).
     void this.waits.start().catch((error: unknown) => console.error('[waits]', error));
     // Apps paired with Conch still find it: its launcher, and their settings (ADR 0073).
     void this.mcpPairing.heal().catch((error: unknown) => console.error('[mcp]', error));

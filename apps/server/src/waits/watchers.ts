@@ -1,5 +1,5 @@
 /**
- * The things a wait can watch (ADR 0124), each as a `Watcher`: one cheap look
+ * The things a wait can watch (ADR 0125), each as a `Watcher`: one cheap look
  * that says where it stands. None of them calls a model. The service decides
  * when to look (`pace.ts`), what to show, and when to wake the assistant.
  */

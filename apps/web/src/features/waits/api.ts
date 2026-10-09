@@ -5,7 +5,7 @@ import { request } from '../../api/client';
 
 const Ok = z.object({ ok: z.boolean() });
 
-/** What a chat waits for (ADR 0124): look sooner, or stop waiting. */
+/** What a chat waits for (ADR 0125): look sooner, or stop waiting. */
 export const waitsApi = {
   act: (conversationId: string, waitId: string, action: WaitActionBody['action']) =>
     request(

@@ -117,7 +117,7 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'waits.json',
     class: 'derived',
-    why: 'What chats are waiting for right now (CI, a page, a time: ADR 0124), so a restart carries on watching. About this run, not something to move.',
+    why: 'What chats are waiting for right now (CI, a page, a time: ADR 0125), so a restart carries on watching. About this run, not something to move.',
   },
   {
     match: 'healed.json',

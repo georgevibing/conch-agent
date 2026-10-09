@@ -70,7 +70,7 @@ async function chat() {
 
 const prompt = '[Conch] A wait you started has ended: CI for conch #482 is done.';
 
-/** What a wait brings back (ADR 0124): the chat carries on by itself, never as your message. */
+/** What a wait brings back (ADR 0125): the chat carries on by itself, never as your message. */
 describe('waking a chat when its wait ends', () => {
   it('starts the next turn with what changed', async () => {
     const { manager, engine, idle } = await chat();

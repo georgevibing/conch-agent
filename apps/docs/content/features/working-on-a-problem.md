@@ -34,6 +34,25 @@ Some things only you can do. Your assistant stops and asks when the next step ne
 
 If you say no, it doesn't look for another way to do the same thing. In **Read only**, it looks into the problem just as hard, and changes nothing until you press **Start**.
 
+## When it has to wait
+
+Some jobs mean waiting: for CI to finish after a push, for a long test run, for a page to change, or until a time. Say "watch CI and fix it if it fails", or "tell me when CI is green".
+
+Your assistant doesn't keep checking. Conch watches for it, and your assistant isn't called again until something has happened.
+
+- **One row in the chat** says what it's waiting for and how it stands. For CI, each check is a small dot that fills in green or red as it finishes. The row also shows how long it's been and when Conch looks next.
+- **The chat is still yours.** For CI, a page or a time, your assistant's reply ends, and the message box says "you can keep chatting". Ask something else in the meantime. When the wait is over, your assistant carries on by itself, starting from what changed, like "CI finished: 2 failed — e2e, server unit".
+- **Check now** looks straight away. **Stop waiting** ends the wait, and your assistant isn't woken.
+- **You can be told when it's done.** If you asked to be told, it reaches your phone and your chat app.
+
+Conch looks soon at first, then less often while nothing changes. It reads only how the checks stand, never your code, and leaves the logs for your assistant. It uses GitHub's own program when you're signed in to it, otherwise the GitHub app you connected in [Apps](apps.md). A public repository works with neither, just checked less often.
+
+A wait gives up after an hour unless your assistant asks for longer. When it gives up, your assistant decides whether to wait again or tell you. Waits carry on after Conch restarts.
+
+A wait for one of your assistant's own commands works a little differently: the reply stays open while Conch watches the command, because the command stops when the reply does. You can still write your next message, and it's sent once the wait is over.
+
+If a provider checks on a command again and again anyway, the chat says so calmly: "Still running · checked 4 times in 2 minutes, nothing new yet".
+
 ## When it's stuck
 
 It tells you plainly, in a few lines: what it tried, what's in the way, and the one thing you can do next. It never says something worked when it didn't, and never makes up a result.

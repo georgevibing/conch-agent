@@ -20,7 +20,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Something Conch waits for on the assistant’s behalf (ADR 0124): CI, a command, a page, a time. One calm row: what it waits for, how it stands now (a CI run’s jobs as small dots that fill in as they finish, read from GitHub’s cheap status API), how long it’s been and when Conch looks next, with Check now and Stop waiting. No model is called while it waits, and the chat stays free when it “wakes” the chat. Once over, it says how it went in words, and the assistant carries on from there.',
+          'Something Conch waits for on the assistant’s behalf (ADR 0125): CI, a command, a page, a time. One calm row: what it waits for, how it stands now (a CI run’s jobs as small dots that fill in as they finish, read from GitHub’s cheap status API), how long it’s been and when Conch looks next, with Check now and Stop waiting. No model is called while it waits, and the chat stays free when it “wakes” the chat. Once over, it says how it went in words, and the assistant carries on from there.',
       },
     },
   },

@@ -1,5 +1,5 @@
 /**
- * Reading CI on GitHub for a wait (ADR 0124), the cheapest way there is:
+ * Reading CI on GitHub for a wait (ADR 0125), the cheapest way there is:
  *
  * - GitHub's own program (`gh api`), when it's installed and signed in: the
  *   person's own sign-in, which Conch never sees;

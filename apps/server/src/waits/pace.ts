@@ -1,5 +1,5 @@
 /**
- * How far apart Conch looks at something it waits for (ADR 0124): soon at
+ * How far apart Conch looks at something it waits for (ADR 0125): soon at
  * first, then further apart while nothing changes, back to soon when
  * something does. A little jitter keeps many waits from looking in step
  * (the AWS Architecture Blog's "Exponential Backoff And Jitter"), and a

@@ -380,7 +380,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const busy = running || pending.length > 0;
   // A question waits (ADR 0060): what's typed here answers it.
   const asking = running && Boolean(pendingQuestion(view));
-  // Something Conch waits for here (ADR 0124): the box says so, and that the chat is yours meanwhile.
+  // Something Conch waits for here (ADR 0125): the box says so, and that the chat is yours meanwhile.
   const waitingOn = waitingFor(view.items);
   const isEmpty = view.items.length === 0 && pending.length === 0;
   // A chat this tab hasn't seen yet: its log is on its way, and it shows whole when it's here.

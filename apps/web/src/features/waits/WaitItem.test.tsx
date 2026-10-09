@@ -47,7 +47,7 @@ function show(note: WaitNote) {
   return calls;
 }
 
-describe('a waiting row in the chat (ADR 0124)', () => {
+describe('a waiting row in the chat (ADR 0125)', () => {
   it('shows what it waits for, and Check now and Stop waiting reach Conch', async () => {
     const user = userEvent.setup();
     const calls = show(wait);

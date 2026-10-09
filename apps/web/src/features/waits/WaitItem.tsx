@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { waitsApi } from './api';
 
 /**
- * Something the assistant waits for in this chat (ADR 0124), as its one row:
+ * Something the assistant waits for in this chat (ADR 0125), as its one row:
  * Check now looks sooner, Stop waiting ends it. Conch watches by itself; no
  * model is called until it ends.
  */

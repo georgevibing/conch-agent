@@ -89,7 +89,7 @@ function nextIn(at: number, now: number): string {
 }
 
 /**
- * Something Conch waits for on the assistant's behalf (ADR 0124), in one
+ * Something Conch waits for on the assistant's behalf (ADR 0125), in one
  * calm row: what it waits for, how it stands now (a CI run's jobs as small
  * dots that fill in), how long it's been, when Conch looks next, and Check now
  * and Stop waiting. No model is called while it waits. Once over it says how

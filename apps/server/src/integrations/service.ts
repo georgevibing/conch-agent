@@ -1635,7 +1635,7 @@ export class IntegrationService {
   /**
    * The token of a connected catalog app that signs in with one (GitHub's),
    * for Conch's own quiet reads on the person's behalf (a wait watching CI,
-   * ADR 0124). Never handed to the model, a tool's result or a log.
+   * ADR 0125). Never handed to the model, a tool's result or a log.
    */
   async tokenOf(catalogId: string): Promise<string | undefined> {
     const items = await this.store.all();

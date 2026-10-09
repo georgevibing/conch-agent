@@ -861,7 +861,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     group: z.string().optional(),
   }),
   /**
-   * Something Conch is waiting for on the assistant's behalf (ADR 0124): CI, a
+   * Something Conch is waiting for on the assistant's behalf (ADR 0125): CI, a
    * command, a page, a time. Appended again when it changes; the row shows the latest.
    */
   z.object({ ...logged, type: z.literal('wait'), wait: WaitNote }),

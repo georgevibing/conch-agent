@@ -281,7 +281,7 @@ export type TranscriptItem =
       tasks: TaskNote[];
     }
   | {
-      /** Something Conch waits for on the assistant's behalf (ADR 0124): one row, kept current. */
+      /** Something Conch waits for on the assistant's behalf (ADR 0125): one row, kept current. */
       kind: 'wait';
       id: string;
       wait: WaitNote;

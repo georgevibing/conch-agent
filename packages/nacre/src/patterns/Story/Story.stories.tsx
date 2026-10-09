@@ -250,7 +250,7 @@ export const Stuck: S = {
 
 /**
  * A provider waiting the slow way, checking on a command again and again
- * (Conch's `wait_for` is the quick way, ADR 0124): said calmly, in the row's
+ * (Conch's `wait_for` is the quick way, ADR 0125): said calmly, in the row's
  * own ink, never as a warning.
  */
 export const WaitingTheSlowWay: S = {

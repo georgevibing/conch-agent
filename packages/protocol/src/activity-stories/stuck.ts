@@ -98,7 +98,7 @@ export function stuckOf(steps: readonly StoryStep[]): string | undefined {
 
 /**
  * The same, with how it should look. Checking on a running command again and
- * again is a provider waiting the slow way (ADR 0124: `wait_for` is the quick
+ * again is a provider waiting the slow way (ADR 0125: `wait_for` is the quick
  * one), not something going wrong: it's said calmly. Failing or undoing is a
  * warning.
  */

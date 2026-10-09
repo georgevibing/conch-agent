@@ -1,5 +1,5 @@
 /**
- * Waiting for something until it changes (ADR 0124): CI, a command, a page, a
+ * Waiting for something until it changes (ADR 0125): CI, a command, a page, a
  * time. Conch watches by itself at a sensible pace and wakes the assistant
  * only when there's something to say; the model is never called to learn
  * "still running". A chat shows one waiting row per wait, kept current: these

@@ -1133,7 +1133,7 @@ export class MockEngine implements Engine {
         yield* speak(found.reply);
         return;
       }
-      // Waiting without polling (ADR 0124): Conch's wait_for, for real; a long one lets go of the turn.
+      // Waiting without polling (ADR 0125): Conch's wait_for, for real; a long one lets go of the turn.
       const minutes = /\bwait (\d+) minutes\b/i.exec(said)?.[1];
       if (minutes && input.tools.some((t) => t.name === 'wait_for')) {
         const out = yield* hostTool('wait_for', { kind: 'time', minutes: Number(minutes) });

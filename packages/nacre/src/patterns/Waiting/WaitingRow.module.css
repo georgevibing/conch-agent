@@ -1,6 +1,6 @@
 @layer nacre.components {
   /*
-   * A wait (ADR 0124): a story's row (the same well, words and clock), with
+   * A wait (ADR 0125): a story's row (the same well, words and clock), with
    * what a wait has beneath it: the parts as dots that fill in, how it
    * stands, when Conch looks next, and Check now / Stop waiting. Calm on
    * purpose: nothing pulses but the well, nothing is amber while it waits.

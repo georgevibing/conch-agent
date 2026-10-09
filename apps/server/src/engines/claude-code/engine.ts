@@ -144,7 +144,7 @@ async function fastModeBlocked(q: Query): Promise<boolean> {
 export const OWN_SUBAGENTS = ['Agent', 'Task', 'Workflow'] as const;
 
 /**
- * Claude Code's own ways of waiting and waking itself later (ADR 0124):
+ * Claude Code's own ways of waiting and waking itself later (ADR 0125):
  * `ScheduleWakeup` (its self-paced `/loop`), `Monitor`, and its session
  * crons. In Conch a turn ends when its reply does, so a wake-up scheduled
  * inside the session would never come, or come where nobody sees it.
