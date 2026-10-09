@@ -57,13 +57,39 @@ last run. See [ADR 0071](./docs/adr/0071-evals-on-every-model.md).
 For UI changes, look at the affected stories in light and dark mode
 (`pnpm storybook`, or `node scripts/snap.mjs <story-id>`).
 
-## Send it
+## Commits and pull requests
 
-- Use [Conventional Commits](https://www.conventionalcommits.org/):
-  `feat(web): …`, `fix(server): …`, `docs: …`. Write `feat` and `fix` subjects in
-  the words of the person using Conch: they become the release notes.
-- Put anything a person must do after updating in a `BREAKING CHANGE:` footer.
-- Keep a pull request to one logical change, and say what it changes and why.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), because
+they are how Conch is released: the types decide the next version (a `fix` is a
+patch, a `feat` a new minor version, a breaking change a new major one, or a
+minor one before 1.0), and the `feat` and `fix` subjects become the release
+notes people read in Conch.
+
+```text
+feat(web): the composer remembers what you were typing
+fix(server,web): Google sign-in from a phone finishes
+docs: how to verify a download
+```
+
+- **Types:** `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `build`,
+  `ci`, `style` and `revert`. The scope in parentheses is optional: the part of
+  Conch it touches, in lowercase (`web`, `server`, `nacre`, `desktop` …).
+- **Write `feat` and `fix` subjects in the words of the person using Conch**, saying
+  what they'll notice, not which function changed.
+- **A breaking change** gets a `!` after the type (`feat!: …`) and a
+  `BREAKING CHANGE:` footer that says what people must do after updating:
+  `BREAKING CHANGE: Sign in again after updating.`
+- **Keep a pull request to one logical change**, and say what it changes and why.
+  Its title follows the same rules, since a squash merge turns it into the commit.
+
+CI checks every commit subject and the title (`node scripts/commits.mjs` runs the
+same check on your computer). Merge commits and `fixup!` commits are left alone.
+
+## Releases
+
+Maintainers release Conch from a release pull request kept up to date by
+release-please; merging it releases Conch. How it works, and what to do the first
+time, is in [docs/RELEASING.md](./docs/RELEASING.md).
 
 By contributing, you agree that your contributions are licensed under the
 [MIT License](./LICENSE).

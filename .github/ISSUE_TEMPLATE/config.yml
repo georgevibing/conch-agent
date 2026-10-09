@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security problem
     url: https://github.com/georgevibing/conch-agent/security/advisories/new
     about: Privately, so it can be fixed before anyone else knows about it.
+  - name: How do I …?
+    url: https://conchagent.com/docs/
+    about: The documentation covers every provider, chat app and setting.
