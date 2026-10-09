@@ -64,14 +64,12 @@ export function ComposerControls({
   }));
   // Fast mode is the model's own: only one that says it has it shows the switch.
   const fastModeAvailable = Boolean(model?.supportsFastMode);
-  // One Make this my default for what's here. A mode that never asks is
-  // only ever a default when chosen as one, in Settings → Models.
-  const armed = modes.find((m) => m.value === options.permissionMode)?.tone === 'danger';
+  // One Make this my default for what's here.
   const keys: (keyof ResolvedTurnOptions)[] = [
     'model',
     'effort',
     'fastMode',
-    ...(armed ? [] : (['permissionMode'] as const)),
+    'permissionMode',
     ...(place ? (['place'] as const) : []),
   ];
 
