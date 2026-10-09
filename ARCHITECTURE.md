@@ -1011,7 +1011,7 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   words in the composer. The first agent keeps its defaults (Settings → Agents). What
   it no longer asks is offered on the new chat, under the composer, while there's
   something to do: `ConnectAppsHint`, and `features/import/BringHints` (come home,
-  past chats), each opening its place in Settings → Memory.
+  past chats), each opening its place in Settings → What Conch knows.
 - **Conch apps** (ADR 0061). **Add your own** opens on **Describe it** (Nacre `AppMaker`),
   which sends "Make me an app: …" as a new chat; **From a link** previews a package
   (`AppPreview`). The transcript draws `conch-app.offer` as `AppOffer` and
@@ -1114,12 +1114,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
 - The composer toolbar carries a `ModelPicker` (every connected provider's models,
   grouped and searchable — type anywhere in the list — plus thinking effort, fast
   mode, "make default") and a `ModePicker` (Read only · Ask first · Auto · Full
-  trust, one definition in `@conch/protocol` `modes.ts`, ADR 0100, ADR 0119; Settings →
-  Models shows the same as `ModeChoice`). A `UsageMeter` in the header shows what's left of your
+  trust, one definition in `@conch/protocol` `modes.ts`, ADR 0100, ADR 0119). A `UsageMeter` in the header shows what's left of your
   tightest limit, and a `UsageNotice` appears above the composer when it runs low.
   Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
-  pickers. Defaults live in Settings → Models; your commands in Settings →
-  Commands.
+  pickers. Defaults are set from the same panel (Make this my default); your
+  commands live on the Skills page (Your commands).
 
 ### Desktop app (`apps/desktop`)
 

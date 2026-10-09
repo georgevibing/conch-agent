@@ -66,7 +66,7 @@ Press **Connect** and connect it right there. Once it's connected, the chat carr
 On a phone, signing in opens the app's page in the same tab. When you're done it brings you back to the chat, which carries on the same way.
 
 - **Not now** puts the card away for this chat.
-- **Don't suggest**, under **⋯** on the card, stops the offers for that app everywhere. To get them back, open **Settings → Models → Advanced** and press **Suggest again**.
+- **Don't suggest**, under **⋯** on the card, stops the offers for that app everywhere. To get them back, open **Settings → General → Chats** and press **Suggest again**.
 - Send another message instead, and the offer folds to a small line. The chat won't carry on from it.
 
 Only one offer shows under a reply, and the same app isn't offered twice in a chat. Your assistant never offers anything after the chat has read a web page or an email, or when nobody's there to press it, such as in a routine.

@@ -7,8 +7,8 @@ order: 3
 ## Sign your phone in
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and your phone, and sign in to both. It's free, and nothing is opened to the internet.
-2. In Conch, choose how you sign in, in **Settings → Security**: a passkey (Touch ID, Windows Hello) or a password.
-3. In **Settings → Devices**, press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
+2. In Conch, choose how you sign in, in **Settings → Access**: a passkey (Touch ID, Windows Hello) or a password.
+3. In **Settings → Access**, press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
 4. Point your phone's camera at it. Your phone is signed in.
 
 The code works once, for ten minutes. Whoever opens it is signed in, so don't share it.
@@ -43,7 +43,7 @@ When your assistant needs your OK, the notification says what it wants to do, in
 
 A question nobody answers in 30 minutes is a no, and the chat says so.
 
-**Settings → Devices** lists every phone, tablet and browser signed in to Conch. A bell beside one means it gets notifications; press **Stop notifications** to quiet it and leave it signed in, or **Sign out** to send it away.
+**Settings → Access → Devices** lists every phone, tablet and browser signed in to Conch. A bell beside one means it gets notifications; press **Stop notifications** to quiet it and leave it signed in, or **Sign out** to send it away.
 
 ## Talk to it
 

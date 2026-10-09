@@ -54,7 +54,7 @@ Type `/` to see every command, or read the [whole list](../reference/slash-comma
 ## Settings, kept short
 
 <kbd>mod+,</kbd> opens **Settings**. Each place is one short page, with everything it
-holds in sight. A place with a lot in it (**Models**, **Security**) keeps what almost
+holds in sight. A place with a lot in it (**Access**, **Security**) keeps what almost
 nobody changes at its foot, under **Advanced**. Nothing is hidden: ⌘K finds a setting
 by name wherever it lives, and opens its place with **Advanced** already open.
 
