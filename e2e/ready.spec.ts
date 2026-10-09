@@ -44,7 +44,7 @@ test('first run to first conversation', async ({ page, request }) => {
 
   await expect(page).toHaveURL(/\/c\/c_/);
   // Remembering is a step of the run (ADR 0103), told on its story's row.
-  await expect(page.getByRole('button', { name: /[Rr]emember(ed|ing) something/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^[Rr]emember(ed|ing)\b/ })).toBeVisible();
   // A new chat is in Auto (ADR 0119): looking through the folder is routine, so nothing asks.
   await expect(page.getByText("Got it — I'll remember that.", { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: /looked through the folder/ })).toBeVisible();
