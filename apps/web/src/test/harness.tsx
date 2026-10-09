@@ -205,7 +205,8 @@ export function mockFetch(routes: Record<string, (body: unknown) => unknown>) {
     calls.push({ method, path: url.pathname + url.search, body });
     const handler = routes[`${method} ${url.pathname}`];
     if (!handler) return new Response(JSON.stringify({ error: 'not-found' }), { status: 404 });
-    const result = handler(body);
+    // A handler may answer later (a promise), to simulate a slow or out-of-order reply.
+    const result: unknown = await handler(body);
     // Handlers can return a Response to simulate errors (401, 429…).
     if (result instanceof Response) return result;
     return new Response(JSON.stringify(result), { status: 200 });

@@ -1,8 +1,10 @@
+import { Toaster } from '@conch/nacre';
 import type { ModelCatalog, UsageSnapshot } from '@conch/protocol';
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { ChatProvider } from '../engine/ChatProvider';
 import { useTurnOptions } from '../models/useTurnOptions';
@@ -344,5 +346,175 @@ describe('the chat’s provider in the header', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Connect a provider' }));
     expect(openSettings).toHaveBeenCalledWith('providers');
     useUi.setState({ openSettings: before });
+  });
+});
+
+/** The new chat, with the mode picked for it and made the default, as the composer chip does. */
+function NewChatWithModes() {
+  const turn = useTurnOptions();
+  const save = useUpdateSettings();
+  return (
+    <>
+      <UsageComposerNotice engine={turn.options.engine} />
+      <button
+        type="button"
+        onClick={() => {
+          turn.set({ permissionMode: 'bypassPermissions' });
+          save.mutate({ preferences: { permissionMode: 'bypassPermissions' } });
+        }}
+      >
+        Full trust
+      </button>
+    </>
+  );
+}
+
+/** A gateway that keeps your settings as the real one does: each save merged in, in turn. */
+function savedSettings() {
+  let preferences = appState().preferences;
+  return {
+    state: () => appState({ preferences }),
+    save: (body: unknown) => {
+      preferences = { ...preferences, ...(body as { preferences: object }).preferences };
+      return appState({ preferences });
+    },
+  };
+}
+
+const savesMode = (body: unknown) =>
+  'permissionMode' in (body as { preferences: object }).preferences;
+
+describe('the line put away, whatever else changes', () => {
+  it('stays away when the mode changes to Full trust', async () => {
+    const gateway = savedSettings();
+    const calls = routes({
+      'GET /api/state': gateway.state,
+      'GET /api/usage': () => plan(97),
+      'PATCH /api/settings': gateway.save,
+    });
+    renderApp(<NewChatWithModes />);
+    expect(await screen.findByRole('status')).toHaveTextContent(/3% of your current session/);
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await userEvent.click(screen.getByRole('button', { name: 'Full trust' }));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2));
+    act(() => FakeSocket.last?.push({ type: 'usage.changed', usage: plan(97) }));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('isn’t brought back by a settings answer that lands late, from before the ×', async () => {
+    const gateway = savedSettings();
+    let answerMode: () => void = () => undefined;
+    routes({
+      'GET /api/state': gateway.state,
+      'GET /api/usage': () => plan(97),
+      'PATCH /api/settings': (body) => {
+        // The mode is saved first, but its answer (without the ×) arrives last.
+        const answer = gateway.save(body);
+        if (!savesMode(body)) return answer;
+        return new Promise((resolve) => (answerMode = () => resolve(answer)));
+      },
+    });
+    renderApp(<NewChatWithModes />);
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Full trust' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await act(async () => answerMode());
+    await act(async () => undefined);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('isn’t brought back by another save answered while the × is on its way', async () => {
+    const gateway = savedSettings();
+    let answerPut: () => void = () => undefined;
+    let modeAnswered = false;
+    routes({
+      'GET /api/state': gateway.state,
+      'GET /api/usage': () => plan(97),
+      'PATCH /api/settings': (body) => {
+        if (savesMode(body)) {
+          modeAnswered = true;
+          // Answered from the settings as they were: the × hasn't reached the gateway yet.
+          return appState({
+            preferences: { ...appState().preferences, permissionMode: 'bypassPermissions' },
+          });
+        }
+        return new Promise((resolve) => (answerPut = () => resolve(gateway.save(body))));
+      },
+    });
+    renderApp(<NewChatWithModes />);
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Full trust' }));
+    await waitFor(() => expect(modeAnswered).toBe(true));
+    await act(async () => undefined);
+    expect(screen.queryByRole('status')).toBeNull();
+    await act(async () => answerPut());
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('comes back, and says so, when the × didn’t save', async () => {
+    routes({
+      'GET /api/usage': () => plan(97),
+      'PATCH /api/settings': () =>
+        new Response(JSON.stringify({ error: 'oops', message: 'No' }), { status: 500 }),
+    });
+    renderApp(
+      <>
+        <NewChatWithModes />
+        <Toaster />
+      </>,
+    );
+    expect(await screen.findByText(/3% of your current session/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(await screen.findByText('That didn’t save. Try again.')).toBeInTheDocument();
+    expect(screen.getByText(/3% of your current session/)).toBeInTheDocument();
+  });
+});
+
+describe('a limit at its reset', () => {
+  function resetting(at: number): UsageSnapshot {
+    const usage = plan(97);
+    return {
+      ...usage,
+      windows: usage.windows.map((w) => (w.id === 'session' ? { ...w, resetsAt: at } : w)),
+    };
+  }
+
+  it('says “in under a minute” just before, and the × holds through the reset', async () => {
+    const calls = routes({
+      'GET /api/usage': () => resetting(Date.now() + 20_000),
+      'PATCH /api/settings': (body) =>
+        appState({
+          preferences: {
+            ...appState().preferences,
+            ...(body as { preferences: object }).preferences,
+          },
+        }),
+    });
+    renderApp(<NewChatWithModes />);
+    expect(await screen.findByRole('status')).toHaveTextContent(/resets in under a minute/);
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    const saved = calls.find((c) => c.method === 'PATCH')?.body as {
+      preferences: { limitsPutAway: { resetsAt: number }[] };
+    };
+    expect(saved.preferences.limitsPutAway[0]?.resetsAt).toBeGreaterThan(Date.now() + 60_000);
+  });
+
+  it('never says “resets now”: a reading from before the reset waits for fresh numbers', async () => {
+    let read = 0;
+    const calls = routes({
+      // The gateway's cached reading is from before the reset; asked afresh, it's a new cycle.
+      'GET /api/usage': () => (read++ === 0 ? resetting(Date.now() - 60_000) : plan(5)),
+      'PATCH /api/settings': () => appState(),
+    });
+    renderApp(<NewChatWithModes />);
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path.startsWith('/api/usage'))).toHaveLength(2),
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/resets now/)).toBeNull();
   });
 });

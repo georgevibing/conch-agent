@@ -1,11 +1,12 @@
 import type { EngineId, LimitFallback, PutAwayLimit } from '@conch/protocol';
-import { UsageNotice } from '@conch/nacre';
-import { useEffect, useRef } from 'react';
+import { toast, UsageNotice } from '@conch/nacre';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 
-import { useAppState, useFallbackPlan, useUpdateSettings, useUsage } from '../../api/queries';
+import { keys, useAppState, useFallbackPlan, useUpdateSettings, useUsage } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useProviders } from '../providers/queries';
-import { isPutAway, limitInView, putAway, rearm } from './putAway';
+import { isPutAway, limitInView, putAway, readBeforeReset, rearm } from './putAway';
 
 const NONE: never[] = [];
 
@@ -26,8 +27,10 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
   const marks = app?.preferences.limitsPutAway ?? NONE;
   const forEngine = usage && usage.engine === engine ? usage : undefined;
 
+  const [now, setNow] = useClock();
+
   // A limit that reset (healthy again) gives its line back for the next cycle.
-  const next = forEngine && app ? rearm(marks, forEngine) : marks;
+  const next = forEngine && app ? rearm(marks, forEngine, now) : marks;
   const tidied = next === marks ? undefined : JSON.stringify(next);
   const { mutate } = save;
   const sent = useRef<string>(undefined);
@@ -37,8 +40,12 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
     mutate({ preferences: { limitsPutAway: JSON.parse(tidied) as PutAwayLimit[] } });
   }, [tidied, mutate]);
 
-  const limit = forEngine && forEngine.kind !== 'unknown' ? limitInView(forEngine) : undefined;
-  const shown = Boolean(limit && !isPutAway(marks, limit));
+  const limit = forEngine && forEngine.kind !== 'unknown' ? limitInView(forEngine, now) : undefined;
+  // A reading from before its reset is spent: the line waits for fresh numbers
+  // (asked for right away) rather than saying "resets now" (`putAway.ts`).
+  const spent = Boolean(limit && readBeforeReset(limit, now));
+  useFreshAtReset(engine, limit?.resetsAt, spent, setNow);
+  const shown = Boolean(limit && !spent && !isPutAway(marks, limit, now));
   // Who carries on is said only at the limit itself, so it's asked only then.
   const atLimit = Boolean(
     forEngine?.blocked || forEngine?.windows.some((w) => w.usedPercent >= 100),
@@ -50,9 +57,53 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
       value={forEngine}
       carryOn={carryOn}
       onOpen={() => setUsageOpen(true)}
-      onDismiss={() => mutate({ preferences: { limitsPutAway: putAway(marks, limit) } })}
+      // Away at once (`useUpdateSettings` is optimistic), and back if it didn't save.
+      onDismiss={() =>
+        mutate(
+          { preferences: { limitsPutAway: putAway(marks, limit) } },
+          { onError: () => toast.error('That didn’t save. Try again.') },
+        )
+      }
     />
   );
+}
+
+/** The time the line goes by, read again every half minute (and at a reset, `useFreshAtReset`). */
+function useClock(): [number, (now: number) => void] {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return [now, setNow];
+}
+
+/**
+ * Reads the clock again the moment the limit in view resets, and once a
+ * reading is from before its reset, asks the provider afresh: the line then
+ * shows the new numbers or goes, never a "resets now" left standing.
+ */
+function useFreshAtReset(
+  engine: EngineId | undefined,
+  resetsAt: number | undefined,
+  spent: boolean,
+  setNow: (now: number) => void,
+) {
+  const client = useQueryClient();
+  useEffect(() => {
+    if (resetsAt == null || spent) return;
+    const wait = resetsAt - Date.now() + 1_000;
+    // Far-off resets are met by the usage's own reads before then.
+    if (wait > 24 * 60 * 60_000) return;
+    const id = setTimeout(() => setNow(Date.now()), Math.max(0, wait));
+    return () => clearTimeout(id);
+  }, [resetsAt, spent, setNow]);
+  const asked = useRef<number>(undefined);
+  useEffect(() => {
+    if (!spent || !engine || resetsAt == null || asked.current === resetsAt) return;
+    asked.current = resetsAt;
+    void client.invalidateQueries({ queryKey: keys.usageOf(engine) });
+  }, [client, engine, resetsAt, spent]);
 }
 
 /**

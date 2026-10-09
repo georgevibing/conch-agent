@@ -14,6 +14,19 @@ import { headline } from '@conch/nacre';
 const DRIFT = 30 * 60_000;
 /** Enough for every provider's limits, and never a list that grows. */
 const KEEP = 20;
+/**
+ * How long a line put away while its reading says the reset has come (or is
+ * a moment off) stays away: long enough for the fresh numbers to arrive.
+ */
+const GRACE = 15 * 60_000;
+
+/**
+ * Whether the reading the line would speak from is from before its limit
+ * reset: its numbers are spent, so the line waits for fresh ones instead.
+ */
+export function readBeforeReset(limit: PutAwayLimit, now = Date.now()): boolean {
+  return limit.resetsAt != null && limit.resetsAt <= now;
+}
 
 /** The limit the line would speak for right now, or `undefined` when it has nothing to say. */
 export function limitInView(usage: UsageSnapshot, now = Date.now()): PutAwayLimit | undefined {
@@ -64,7 +77,11 @@ function current(marks: readonly PutAwayLimit[], now: number): PutAwayLimit[] {
   return marks.filter((mark) => mark.resetsAt == null || now < mark.resetsAt);
 }
 
-/** The list once `limit` is put away: one entry per provider and limit, old cycles dropped. */
+/**
+ * The list once `limit` is put away: one entry per provider and limit, old
+ * cycles dropped. A reset that has come (or is a moment off) is held a little
+ * longer, so the entry isn't already over the moment it's made.
+ */
 export function putAway(
   marks: readonly PutAwayLimit[],
   limit: PutAwayLimit,
@@ -73,7 +90,11 @@ export function putAway(
   const others = current(marks, now).filter(
     (mark) => mark.engine !== limit.engine || mark.window !== limit.window,
   );
-  return [...others, limit].slice(-KEEP);
+  const mark =
+    limit.resetsAt != null && limit.resetsAt < now + GRACE
+      ? { ...limit, resetsAt: now + GRACE }
+      : limit;
+  return [...others, mark].slice(-KEEP);
 }
 
 /**
