@@ -6,6 +6,7 @@ import { Collapsible } from '../../components/Collapsible';
 import { Spinner } from '../../components/Spinner';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
+import { SettingsRow } from '../Settings/SettingsSubpages';
 import styles from './Notifications.module.css';
 
 /**
@@ -37,6 +38,11 @@ export interface NotifyThisDeviceProps extends Omit<
   /** What it's told about, shown under the switch only while it's on. */
   topics?: NotifyTopic[];
   onTopicChange?: (id: string, on: boolean) => void;
+  /**
+   * Open the topics on a page of their own (`NotifyTopics`): the card then
+   * shows one Topics row, saying how many are on, in place of the list.
+   */
+  onOpenTopics?: () => void;
   /** Say what each one is about; off, only that there's something to open. */
   previews?: boolean;
   onPreviewsChange?: (on: boolean) => void;
@@ -78,6 +84,7 @@ export function NotifyThisDevice({
   onChange,
   topics,
   onTopicChange,
+  onOpenTopics,
   previews,
   onPreviewsChange,
   onTest,
@@ -135,30 +142,33 @@ export function NotifyThisDevice({
         <Collapsible open={on && (Boolean(topics) || Boolean(onTest))}>
           <Collapsible.Content>
             <div className={styles.choices}>
-              {list && (
+              {list && onOpenTopics && (
+                <SettingsRow
+                  variant="plain"
+                  page="topics"
+                  label="Topics"
+                  description="What it tells you about"
+                  value={topicCount(list)}
+                  onClick={onOpenTopics}
+                />
+              )}
+              {list && !onOpenTopics && (
                 <>
                   <p className={styles.groupLabel} id={groupId}>
                     Tell me when
                   </p>
-                  <div role="group" aria-labelledby={groupId} className={styles.rows}>
-                    {list.map((topic) => (
-                      <Switch
-                        key={topic.id}
-                        size="sm"
-                        labelPosition="start"
-                        label={topic.label}
-                        checked={topic.on}
-                        onCheckedChange={(next) => onTopicChange?.(topic.id, next)}
-                      />
-                    ))}
-                  </div>
+                  <TopicSwitches
+                    topics={list}
+                    labelledBy={groupId}
+                    {...(onTopicChange && { onTopicChange })}
+                  />
                 </>
               )}
               {list && previews !== undefined && (
                 // Only worth deciding while it's told about something.
                 <Collapsible open={anyOn}>
                   <Collapsible.Content>
-                    <div className={styles.previews}>
+                    <div className={styles.previews} data-after={onOpenTopics ? 'row' : 'list'}>
                       <Switch
                         size="sm"
                         labelPosition="start"
@@ -190,6 +200,68 @@ export function NotifyThisDevice({
       )}
 
       {children != null && <div className={styles.body}>{children}</div>}
+    </section>
+  );
+}
+
+/** “4 of 6”, “All 6”, “None”: how many it tells you about. */
+function topicCount(topics: NotifyTopic[]): string {
+  const on = topics.filter((t) => t.on).length;
+  if (on === 0) return 'None';
+  if (on === topics.length) return `All ${on}`;
+  return `${on} of ${topics.length}`;
+}
+
+function TopicSwitches({
+  topics,
+  labelledBy,
+  onTopicChange,
+}: {
+  topics: NotifyTopic[];
+  labelledBy: string;
+  onTopicChange?: (id: string, on: boolean) => void;
+}) {
+  return (
+    <div role="group" aria-labelledby={labelledBy} className={styles.rows}>
+      {topics.map((topic) => (
+        <Switch
+          key={topic.id}
+          size="sm"
+          labelPosition="start"
+          label={topic.label}
+          checked={topic.on}
+          onCheckedChange={(next) => onTopicChange?.(topic.id, next)}
+        />
+      ))}
+    </div>
+  );
+}
+
+export interface NotifyTopicsProps extends Omit<ComponentProps<'section'>, 'title'> {
+  topics: NotifyTopic[];
+  onTopicChange?: (id: string, on: boolean) => void;
+}
+
+/**
+ * What this device is told about, as a page of its own (Settings →
+ * Notifications → Topics): each finishes “Tell me when”, one switch apiece.
+ */
+export function NotifyTopics({ topics, onTopicChange, className, ...props }: NotifyTopicsProps) {
+  const groupId = useId();
+  return (
+    <section
+      aria-labelledby={groupId}
+      className={cx(styles.card, styles.topics, className)}
+      {...props}
+    >
+      <p className={styles.groupLabel} id={groupId}>
+        Tell me when
+      </p>
+      <TopicSwitches
+        topics={topics}
+        labelledBy={groupId}
+        {...(onTopicChange && { onTopicChange })}
+      />
     </section>
   );
 }

@@ -1,10 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
+import { Breadcrumb } from '../../components/Breadcrumb';
+import { SettingsSubpages } from '../Settings/SettingsSubpages';
 import { AddToHomeScreen } from './AddToHomeScreen';
 import { NotifiedDevices } from './NotifiedDevices';
-import { NotifyThisDevice, type NotifyState, type NotifyTopic } from './NotifyThisDevice';
+import {
+  NotifyThisDevice,
+  NotifyTopics,
+  type NotifyState,
+  type NotifyTopic,
+} from './NotifyThisDevice';
 
 const meta = {
   title: 'Patterns/Notifications/NotifyThisDevice',
@@ -84,6 +91,48 @@ export const On: Story = {
     await expect(within(card).getByRole('switch', { name: 'Allow notifications' })).toBeChecked();
     const running = card.getAnimations({ subtree: true }).filter((a) => a.playState === 'running');
     await expect(running).toHaveLength(0);
+  },
+};
+
+/**
+ * As Settings shows it: the topics on a page of their own. The card keeps the
+ * switch, the previews and one Topics row; the row slides the six switches in,
+ * and the trail above is the way back.
+ */
+export const TopicsOnTheirOwnPage: Story = {
+  args: { state: 'on' },
+  render: function Render(args) {
+    const choices = useChoices();
+    const [page, setPage] = useState<string | null>(null);
+    return (
+      <div style={{ display: 'grid', gap: 16 }}>
+        <Breadcrumb>
+          {page ? (
+            <>
+              <Breadcrumb.Item onClick={() => setPage(null)}>Notifications</Breadcrumb.Item>
+              <Breadcrumb.Item current>Topics</Breadcrumb.Item>
+            </>
+          ) : (
+            <Breadcrumb.Item current>Notifications</Breadcrumb.Item>
+          )}
+        </Breadcrumb>
+        <SettingsSubpages page={page}>
+          {page ? (
+            <NotifyTopics topics={choices.topics} onTopicChange={choices.onTopicChange} />
+          ) : (
+            <NotifyThisDevice {...args} {...choices} onOpenTopics={() => setPage('topics')} />
+          )}
+        </SettingsSubpages>
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Topics/ })).toHaveTextContent('5 of 6');
+    await userEvent.click(canvas.getByRole('button', { name: /Topics/ }));
+    await expect(canvas.getByRole('group', { name: 'Tell me when' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Notifications' }));
+    await expect(canvas.getByRole('button', { name: /Topics/ })).toHaveFocus();
   },
 };
 

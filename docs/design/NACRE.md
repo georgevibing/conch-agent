@@ -154,8 +154,19 @@ place in a glance and never change a thing.
   looks, which voice) is never folded. Nothing is lost: ⌘K finds what's in
   there by name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its
   Advanced already open, as a repair's fix does.
+- **A page inside a place, as a phone drills in.** When a group of choices is
+  what few people change but is too long to sit in the place (six topics,
+  three limits, how Always on runs), the place keeps one `SettingsRow` for
+  it: its name, where things stand ("4 of 6", "On") and a chevron. The row
+  opens a page with its own address (`/settings/notifications/topics`), and
+  `SettingsSubpages` slides it in from the side the chevron points to
+  (`--nc-panel-in-duration`, `--nc-spring-snappy`); stepping back slides the
+  place in from the other side, with the focus on the row again. The way back
+  is the trail (Notifications › Topics), never a back button of the page's
+  own. Arriving by an address the page is simply there, and reduced motion
+  makes every move instant.
 - **Choices under the switch they belong to.** A choice that only means
-  something while a switch is on (what notifications are about) sits beneath
+  something while a switch is on (whether a notification says what it’s about) sits beneath
   it, indented under a hairline, and opens with it (`Collapsible`) — folded
   away while it's off, never shown greyed out. Each is a short label, at most a
   few words of hint.
