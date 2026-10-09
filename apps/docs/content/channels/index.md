@@ -66,7 +66,7 @@ tap a choice; email, Signal, WhatsApp and other text-only apps show numbered
 answers. `/model`, `/effort`, `/fast` and `/mode` go straight to those choices,
 the one in use ticked. To find a model quickly, send `/model` followed by its
 name or a few words. You can also write `/effort high`, `/fast on` or
-`/mode plan`.
+`/mode read only`.
 
 **This chat** changes the current conversation and saves your choices for fresh
 conversations in this channel. **Defaults across Conch** changes the defaults
@@ -96,6 +96,6 @@ menu tells you where to find them on the computer running Conch.
 
 ## It reconnects by itself
 
-A dropped connection is retried, lightly at first and then every minute. An outage of more than a minute leaves a note under **Fixed on its own**. One channel failing never touches another.
+A dropped connection is retried, lightly at first and then every minute. An outage of more than a minute leaves a note under **Settings → Health → Fixed on its own**. One channel failing never touches another.
 
-Only one thing needs you: if the app stops accepting the key, that channel says so and asks you to **Paste the new key** (on Matrix, to **Sign in again**). A WhatsApp or Signal unlinked on your phone asks you to **Link again** instead. The public address Teams and WeChat use is checked from the outside now and then; if Tailscale forgot it, Conch turns it back on.
+Only one thing needs you: if the app stops accepting the key, that channel says so and asks you to **Paste the new key** (on Matrix, to **Sign in again**). A WhatsApp or Signal unlinked on your phone asks you to **Link again** instead. The public address that Microsoft Teams, Google Chat, WeChat, LINE and SMS use is checked from the outside now and then; if Tailscale forgot it, Conch turns it back on.

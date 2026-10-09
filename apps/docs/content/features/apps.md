@@ -45,7 +45,7 @@ Press a row to open it in the app, in a new tab. Six rows show at first, and **S
 
 ## Talk to me here
 
-**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, Microsoft Teams, Matrix and WeChat. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
+**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk and QQ. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
 
 ## Connect one
 
@@ -137,7 +137,7 @@ What you add by address or as a program starts at **Ask every time**.
 
 ## Apps a provider set up by itself
 
-A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Health → Fixed on its own** notes each one.
+A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Settings → Health → Fixed on its own** notes each one.
 
 One that needs no sign-in goes straight to **Connected**. One you have to sign in to waits in its own section, **Found in** and the provider's name, at the bottom of the page, below the gallery. It says once where the apps came from, and each has one button: **Sign in**. They aren't problems, so the sidebar doesn't count them. Hover one and press **×** to leave it out of Conch.
 
