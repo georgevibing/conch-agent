@@ -26,7 +26,7 @@ import {
   toast,
   useFileDrop,
 } from '@conch/nacre';
-import { ArrowRight, Folder, ListPlus } from 'lucide-react';
+import { Folder, ListPlus } from 'lucide-react';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
@@ -49,9 +49,7 @@ import { setChatGoal } from '../commands/context';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { useMentions } from '../agents/useMentions';
 import { ArchivedBanner } from '../archive/ArchivedBanner';
-import { ComeHomeHint, PastChatsHint } from '../import/BringHints';
 import { ChannelBanner } from '../channels/ChannelBanner';
-import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
 import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
@@ -74,6 +72,7 @@ import { ApprovalHere } from '../notifications/ApprovalHere';
 import { NewChatAgent } from '../agents/ChatAgent';
 import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
+import { NewChatTips } from './NewChatTips';
 import { attachmentUrl } from './uploads';
 import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
 
@@ -86,7 +85,6 @@ import { Transcript } from './Transcript';
 import type { TurnRecovery } from './TranscriptItems';
 import { biggerWindow } from './bigger';
 import { type Draft, useDraftAttachments } from './useDraftAttachments';
-import { useIntegrations } from '../integrations/queries';
 import { ArtifactDock } from '../artifacts/ArtifactDock';
 import { BrowserDock } from '../browser/BrowserDock';
 import { ComputerUseNowCard } from '../computer/ComputerUseNow';
@@ -108,42 +106,6 @@ const suggestions = [
   },
   { label: 'Remember something', prompt: 'Remember that I prefer short, direct answers.' },
 ];
-
-/** Until a chat app is connected, point at talking to the assistant from your phone. */
-function ChannelsHint() {
-  const { data } = useChannels();
-  const navigate = useNavigate();
-  if (!data || data.channels.length > 0) return null;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      trailingIcon={<ArrowRight />}
-      onClick={() => void navigate('/apps?show=talk')}
-      className={styles.connectHint}
-    >
-      Talk to it from your chat apps
-    </Button>
-  );
-}
-
-/** Until something is connected, point at where the assistant gets its reach. */
-function ConnectAppsHint() {
-  const { data } = useIntegrations();
-  const navigate = useNavigate();
-  if (!data || data.integrations.length > 0) return null;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      trailingIcon={<ArrowRight />}
-      onClick={() => void navigate('/apps')}
-      className={styles.connectHint}
-    >
-      Connect Gmail, Notion, GitHub and more
-    </Button>
-  );
-}
 
 function EngineIssue({ status, issue }: { status?: EngineStatus; issue?: string }) {
   const openSettings = useUi((s) => s.openSettings);
@@ -1100,13 +1062,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             </Button>
           ))}
         </div>
-        <div className={styles.hints}>
-          {/* What the welcome no longer asks: offered here while there's something to bring. */}
-          <ComeHomeHint className={styles.connectHint} />
-          <PastChatsHint className={styles.connectHint} />
-          <ConnectAppsHint />
-          <ChannelsHint />
-        </div>
+        {/* What the welcome no longer asks, one tip at a time while there's something to do. */}
+        <NewChatTips />
       </div>
     );
   }

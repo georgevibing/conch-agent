@@ -73,17 +73,6 @@
     inline-size: min(40rem, 100%);
   }
 
-  .connectHint {
-    color: var(--nc-text-muted);
-  }
-
-  .hints {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--nc-space-1) var(--nc-space-3);
-  }
-
   .suggestions {
     display: flex;
     flex-wrap: wrap;
