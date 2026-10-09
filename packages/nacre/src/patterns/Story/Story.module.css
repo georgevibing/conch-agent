@@ -579,6 +579,12 @@
   }
 
   .live {
+    /* One step to the next, quickly: the old words rise out, and a beat later the new ones rise in. */
+    --ll-in-duration: var(--nc-duration-fast);
+    --ll-in-ease: var(--nc-ease-out);
+    --ll-in-delay: var(--nc-duration-instant);
+    --ll-out-duration: var(--nc-duration-fast);
+
     margin-block-end: var(--nc-space-1-5);
   }
 

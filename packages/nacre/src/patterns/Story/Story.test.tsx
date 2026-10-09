@@ -183,6 +183,70 @@ describe('Story', () => {
     expect(screen.getByText('Still waiting for the tests to start.')).toBeInTheDocument();
   });
 
+  it('holds as it was while working between two steps of a run that goes on', () => {
+    vi.useFakeTimers();
+    try {
+      const working: StoryProps = {
+        ...tests,
+        headline: 'Running the server tests',
+        outcome: undefined,
+        status: 'running',
+        live: 'Running 241 test files',
+        startedAt: Date.now() - 5_000,
+        durationMs: undefined,
+        arriving: true,
+      };
+      const { rerender, container } = renderNacre(<Story {...working} />);
+      const root = container.querySelector<HTMLElement>('[data-family]');
+      const line = () => container.querySelector('[class*="below"]');
+      expect(line()).toHaveAttribute('data-shown');
+
+      // The step ended, the next hasn't started: the rules' words are past tense already.
+      rerender(<Story {...tests} durationMs={5_000} arriving continuing />);
+      expect(container.querySelector('[data-family]')).toBe(root);
+      expect(root).toHaveAttribute('data-status', 'running');
+      expect(line()).toHaveAttribute('data-shown');
+      // Its working words stay, no badge lands, and nothing says it's done.
+      expect(screen.getByRole('button', { name: /^Running the server tests/ })).toBeInTheDocument();
+      expect(container.querySelector('[class*="badge"]')).toBeNull();
+      expect(screen.getByRole('status')).toHaveTextContent('Started: Running the server tests');
+      act(() => vi.advanceTimersByTime(700));
+      expect(line()).toHaveTextContent('Thinking…');
+
+      // The next step starts: the same row, its line moves on.
+      rerender(<Story {...working} live="Running the type check" />);
+      act(() => vi.advanceTimersByTime(700));
+      expect(container.querySelector('[data-family]')).toBe(root);
+      expect(line()).toHaveTextContent('Running the type check');
+
+      // The run is over: it lands, and its line folds away.
+      rerender(<Story {...tests} arriving />);
+      expect(root).toHaveAttribute('data-status', 'done');
+      expect(line()).not.toHaveAttribute('data-shown');
+      expect(screen.getByRole('status')).toHaveTextContent('Done: Ran the server tests');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps its line while a step runs, even with nothing else to say', () => {
+    const { container } = renderNacre(
+      <Story
+        {...tests}
+        status="running"
+        steps={testSteps.map((s) => ({
+          ...s,
+          status: 'running',
+          text: 'Running the server tests',
+        }))}
+      />,
+    );
+    expect(container.querySelector('[class*="below"]')).toHaveAttribute('data-shown');
+    expect(container.querySelector('[class*="below"]')).toHaveTextContent(
+      'Running the server tests',
+    );
+  });
+
   it('opens only web links, in a new tab', () => {
     renderNacre(
       <Story

@@ -3,12 +3,18 @@
     --ll-color: var(--nc-text-muted);
     --ll-bright: var(--nc-text);
     --ll-rise: 0.55em;
+    /* How the words change: a knob a host can quicken (a story's line between steps). */
+    --ll-in-duration: var(--nc-spring-soft-duration);
+    --ll-in-ease: var(--nc-spring-soft);
+    --ll-in-delay: 0s;
+    --ll-out-duration: var(--nc-duration-slow);
 
     position: relative;
     display: grid;
     min-inline-size: 0;
-    /* The line's height is held, whatever it says, so nothing below it moves. */
-    block-size: 1lh;
+    /* The line's height is held, whatever it says and in whoever's voice, so
+       nothing below it moves: the narration's larger serif fits the same box. */
+    block-size: calc(var(--nc-text-xs) * var(--nc-leading-normal));
     overflow: clip;
     overflow-clip-margin: 2px;
     font-size: var(--nc-text-xs);
@@ -35,6 +41,7 @@
     font-size: calc(var(--nc-text-xs) * 1.14);
     font-style: italic;
     letter-spacing: 0.005em;
+    line-height: calc(var(--nc-leading-normal) / 1.14);
   }
 
   .text {
@@ -47,11 +54,11 @@
   }
 
   .text[data-entering] {
-    animation: ll-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation: ll-in var(--ll-in-duration) var(--ll-in-ease) var(--ll-in-delay) both;
   }
 
   .text[data-leaving] {
-    animation: ll-out var(--nc-duration-slow) var(--nc-ease-in) both;
+    animation: ll-out var(--ll-out-duration) var(--nc-ease-in) both;
   }
 
   /* While the work goes on, a band of light moves along the words. */
@@ -67,8 +74,9 @@
     background-clip: text;
     -webkit-background-clip: text;
     animation-name: ll-in, ll-sweep;
-    animation-duration: var(--nc-spring-soft-duration), 2.4s;
-    animation-timing-function: var(--nc-spring-soft), var(--nc-ease-in-out);
+    animation-duration: var(--ll-in-duration), 2.4s;
+    animation-timing-function: var(--ll-in-ease), var(--nc-ease-in-out);
+    animation-delay: var(--ll-in-delay), 0s;
     animation-iteration-count: 1, infinite;
     animation-fill-mode: both, none;
   }

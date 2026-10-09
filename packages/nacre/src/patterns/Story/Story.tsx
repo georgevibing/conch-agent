@@ -104,7 +104,17 @@ export interface StoryProps extends Omit<ComponentProps<'div'>, 'children'> {
    * are announced. History leaves it off and is drawn still.
    */
   arriving?: boolean;
+  /**
+   * The run it's part of isn't over: one step has ended and the next hasn't
+   * started yet (the assistant is thinking between them). The row holds as it
+   * was while working — its words, its clock, its line beneath, which says
+   * `live` or "Thinking…" — so nothing folds and comes back between steps.
+   */
+  continuing?: boolean;
 }
+
+/** What the line beneath says between two steps of a run that goes on. */
+const STORY_BETWEEN = 'Thinking…';
 
 /** Asked and not run: a circle with a slash, quiet gray. */
 function NotRun() {
@@ -121,6 +131,13 @@ function useLast<T>(value: T | undefined): T | undefined {
   const [last, setLast] = useState(value);
   if (value !== undefined && value !== last) setLast(value);
   return value ?? last;
+}
+
+/** What something said the last time `when` held: a row between two steps keeps its working words. */
+function useHeldWhile<T>(value: T, when: boolean): T {
+  const [held, setHeld] = useState(value);
+  if (when && value !== held) setHeld(value);
+  return when ? value : held;
 }
 
 const SPOKEN: Record<StoryStatus, string> = {
@@ -378,10 +395,11 @@ function StepRow({
  * a warm note, never a red flood.
  */
 export function Story({
-  headline,
-  outcome,
+  headline: toldHeadline,
+  outcome: toldOutcome,
   family,
-  status,
+  status: told,
+  continuing = false,
   live,
   liveSource,
   steps,
@@ -401,8 +419,20 @@ export function Story({
   className,
   ...props
 }: StoryProps) {
+  // Between two steps of a run that goes on, the row is still at work: it
+  // keeps the words it had while working, its clock ticks on, no badge lands
+  // and its line stays, so its height never folds and comes back.
+  const status: StoryStatus = continuing ? 'running' : told;
   const running = status === 'running';
-  const lineText = running ? (stuck ?? live) : undefined;
+  const fresh = told === 'running' || !continuing;
+  const headline = useHeldWhile(toldHeadline, fresh);
+  const outcome = useHeldWhile(toldOutcome, fresh);
+  // While it works the line beneath always has words, so its height is held.
+  const atHand =
+    told === 'running'
+      ? steps.findLast((s) => s.status === 'running' || s.status === 'pending')?.text
+      : undefined;
+  const lineText = running ? (stuck ?? live ?? atHand ?? STORY_BETWEEN) : undefined;
   const shownLine = useLast(lineText);
   const lineIsStuck = running && stuck !== undefined;
   const hasChips = chips !== undefined && chips.length > 0;

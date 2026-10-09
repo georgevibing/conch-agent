@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { CodeBlock } from '../CodeBlock';
 import { RememberedNote } from '../Memory';
@@ -488,6 +488,166 @@ export const Families: S = {
 export const ReducedMotion: S = {
   globals: { motion: 'reduced' },
   render: () => <LiveRun defaultOpen />,
+};
+
+/** One kind of run, two steps long, as it reads while it works and between its steps. */
+interface Between {
+  family: StoryProps['family'];
+  doing: string;
+  did: string;
+  first: [doing: string, done: string, live: string];
+  second: [doing: string, done: string, live: string];
+}
+
+const YAZIO: Between = {
+  family: 'connect',
+  doing: 'Using Yazio',
+  did: 'Used Yazio',
+  first: ['Reading the diary in Yazio', 'Read the diary in Yazio', 'Using app yazio read diary'],
+  second: ['Logging lunch in Yazio', 'Logged lunch in Yazio', 'Using app yazio log meal'],
+};
+
+const KINDS: Between[] = [
+  {
+    family: 'browse',
+    doing: 'Comparing shirts on amazon.de',
+    did: 'Compared shirts on amazon.de',
+    first: ['Searching amazon.de', 'Searched amazon.de', 'Searching amazon.de for “oxford shirt”'],
+    second: ['Opening the Oxford shirt', 'Opened the Oxford shirt', 'Reading its reviews'],
+  },
+  {
+    family: 'edit',
+    doing: 'Editing Story.tsx',
+    did: 'Edited Story.tsx',
+    first: ['Editing Story.tsx', 'Edited Story.tsx', 'Editing Story.tsx'],
+    second: ['Editing Story.module.css', 'Edited Story.module.css', 'Editing Story.module.css'],
+  },
+  {
+    family: 'research',
+    doing: 'Searching the web',
+    did: 'Searched the web',
+    first: ['Searching for “yazio api”', 'Searched for “yazio api”', 'Searching for “yazio api”'],
+    second: ['Reading yazio.com', 'Read yazio.com', 'Reading yazio.com'],
+  },
+  {
+    family: 'remember',
+    doing: 'Remembering',
+    did: 'Remembered 2 things',
+    first: ['Remembering your weight', 'Remembered your weight', 'Remembering your weight'],
+    second: ['Remembering your goal', 'Remembered your goal', 'Remembering your goal'],
+  },
+];
+
+/** A → gap → B → gap → the reply: the beats a live run goes through. */
+const BEATS = ['first', 'between', 'second', 'after', 'over'] as const;
+type Beat = (typeof BEATS)[number];
+
+function betweenProps(run: Between, beat: Beat, startedAt: number): StoryProps {
+  const step = (id: string, [doing, done]: Between['first'], running: boolean): StoryStepView => ({
+    id,
+    text: running ? doing : done,
+    status: running ? 'running' : 'success',
+    family: run.family,
+    ...(!running && { durationMs: 1_400 }),
+  });
+  const a = step(`${run.family}-a`, run.first, beat === 'first');
+  const b = step(`${run.family}-b`, run.second, beat === 'second');
+  const steps = beat === 'first' || beat === 'between' ? [a] : [a, b];
+  const working = beat === 'first' || beat === 'second';
+  return {
+    // What the rules say: past tense as soon as no step runs. The row holds it while the run goes on.
+    headline: working ? run.doing : run.did,
+    family: run.family,
+    status: working ? 'running' : 'done',
+    continuing: beat === 'between' || beat === 'after',
+    ...(beat === 'first' && { live: run.first[2] }),
+    ...(beat === 'second' && { live: run.second[2] }),
+    steps,
+    startedAt,
+    ...(!working && { durationMs: Date.now() - startedAt }),
+    arriving: true,
+  };
+}
+
+/** Plays the beats one after another, `beat` ms apart, and starts again; `data-beat` says where it is. */
+function BetweenRuns({ runs, beat = 1600 }: { runs: Between[]; beat?: number }) {
+  const [at, setAt] = useState(() => ({ n: 0, startedAt: Date.now() }));
+  useEffect(() => {
+    const id = setInterval(
+      () =>
+        setAt((was) => {
+          const n = (was.n + 1) % (BEATS.length + 1);
+          return { n, startedAt: n === 0 ? Date.now() : was.startedAt };
+        }),
+      beat,
+    );
+    return () => clearInterval(id);
+  }, [beat]);
+  const now = BEATS[Math.min(at.n, BEATS.length - 1)] as Beat;
+  return (
+    <div data-beat={now} style={{ display: 'flex', flexDirection: 'column' }}>
+      {runs.map((run) => (
+        <Story key={run.family} {...betweenProps(run, now, at.startedAt)} />
+      ))}
+      <p style={{ margin: '8px 0 0', font: 'inherit', fontSize: 14 }}>
+        {now === 'over' ? 'You had 640 kcal for lunch, 180 under your goal.' : ' '}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Asserts the rows stay the same elements, at the same height, from the first
+ * step through the pause between steps to the second and the pause after it.
+ */
+async function holdsSteady(canvasElement: HTMLElement) {
+  const root = () => canvasElement.querySelector<HTMLElement>('[data-beat]');
+  await waitFor(() => expect(root()?.dataset.beat).toBe('first'), { timeout: 15_000 });
+  const rows = [...canvasElement.querySelectorAll<HTMLElement>('div[data-family]')];
+  const tall = rows.map((r) => r.offsetHeight);
+  const resized: number[] = [];
+  const watch = new ResizeObserver((entries) => {
+    for (const e of entries) resized.push(Math.round(e.contentRect.height));
+  });
+  rows.forEach((r) => watch.observe(r));
+  for (const beat of ['between', 'second', 'after'] as const) {
+    await waitFor(() => expect(root()?.dataset.beat).toBe(beat), { timeout: 5_000 });
+    // Let anything that would move, move.
+    await wait(450);
+    const now = [...canvasElement.querySelectorAll<HTMLElement>('div[data-family]')];
+    for (const [i, r] of now.entries()) {
+      await expect(r).toBe(rows[i]);
+      await expect(r).toHaveAttribute('data-status', 'running');
+    }
+    await expect(now.map((r) => r.offsetHeight)).toEqual(tall);
+  }
+  watch.disconnect();
+  // The first callback reports the size it started at; nothing after it changed.
+  await expect(new Set(resized).size).toBeLessThanOrEqual(1);
+}
+
+/**
+ * Between two steps (the assistant thinking about what the first found), the
+ * row holds as it was while working: the same words, the clock going on, the
+ * line beneath saying “Thinking…”. Nothing folds and comes back, so nothing
+ * under it moves. Once the reply comes, it lands and folds to its line.
+ */
+export const BetweenSteps: S = {
+  render: () => <BetweenRuns runs={[YAZIO]} />,
+  play: async ({ canvasElement }) => holdsSteady(canvasElement),
+};
+
+/** The same, for each kind of step: browsing, file edits, searches, memories. */
+export const BetweenStepsKinds: S = {
+  render: () => <BetweenRuns runs={[YAZIO, ...KINDS]} />,
+  play: async ({ canvasElement }) => holdsSteady(canvasElement),
+};
+
+/** With reduced motion: the words swap at once, nothing slides, and the height still holds. */
+export const BetweenStepsReducedMotion: S = {
+  globals: { motion: 'reduced' },
+  render: () => <BetweenRuns runs={[YAZIO]} />,
+  play: async ({ canvasElement }) => holdsSteady(canvasElement),
 };
 
 const WEIGHT = 'George reported a weight of 82.4 kg on 9 October, down from 83.1 kg a week before.';
