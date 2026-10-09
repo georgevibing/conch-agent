@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { run } from '../lib/proc';
 import type { Git } from '../updates/conch';
 import { Stop, taggedReleases } from './history';
-import { tagOf } from './semver';
+import { inChannel, tagOf } from './semver';
 import { keyOf, SIGNERS_FILE, signerKeys, signerLine } from './signing';
 
 export const KEY_NAME = 'conch-release';
@@ -61,16 +61,24 @@ export async function setUpKey(deps: KeyDeps): Promise<void> {
     say(`Added it to ${SIGNERS_FILE}. Commit that, so every Conch trusts releases signed with it.`);
   }
 
-  // Installs take a release only if a key they already trust signed it: the
-  // newest release's list. Until one names this key, the old key signs.
-  const newest = deps.git ? (await taggedReleases(deps.git))[0] : undefined;
-  if (newest && deps.git) {
-    const theirs = await deps.git(['show', `${tagOf(newest.version)}^{commit}:${SIGNERS_FILE}`]);
-    if (!signerKeys(theirs.code === 0 ? theirs.stdout : '').includes(pub)) {
-      say(
-        `${tagOf(newest.version)} doesn’t trust this key yet, so GitHub keeps signing with the key it has. Commit the list, release once more (still signed with that key), then run pnpm release key again to hand GitHub this one.`,
-      );
-      return;
+  // Installs take a release only if a key they already trust signed it: on
+  // each channel, its newest release's list. Until all of them name this key,
+  // the old key signs.
+  if (deps.git) {
+    const releases = await taggedReleases(deps.git);
+    const newest = new Set(
+      (['stable', 'beta', 'alpha'] as const).flatMap(
+        (c) => releases.find((r) => inChannel(r, c)) ?? [],
+      ),
+    );
+    for (const release of newest) {
+      const theirs = await deps.git(['show', `${tagOf(release.version)}^{commit}:${SIGNERS_FILE}`]);
+      if (!signerKeys(theirs.code === 0 ? theirs.stdout : '').includes(pub)) {
+        say(
+          `${tagOf(release.version)} doesn’t trust this key yet, so GitHub keeps signing with the key it has. Commit the list and release once more on every channel people use (a stable release reaches them all), still signed with that key. Then run pnpm release key again to hand GitHub this one.`,
+        );
+        return;
+      }
     }
   }
 

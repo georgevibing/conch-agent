@@ -12,12 +12,14 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { ReleaseChannel } from '@conch/protocol';
+
 import { run } from '../lib/proc';
 import type { Git } from '../updates/conch';
 import { compareVersions } from '../updates/version';
 import { must, notesFor, Stop, taggedReleases } from './history';
 import { changelogFor, emptyNotes, parseNotes, tagMessage, type Notes } from './notes';
-import { parseRelease, tagOf } from './semver';
+import { channelOf, inChannel, parseRelease, tagOf } from './semver';
 import { keyOf, SIGNERS_FILE, signerKeys, verifyTag, type Verdict } from './signing';
 
 /** Who the tag says made it, unless the repository's variables say otherwise. */
@@ -35,12 +37,20 @@ export async function notesAt(git: Git, version: string, commit: string): Promis
   return (await notesFor(git, version, { head: commit })).notes;
 }
 
+/** The channels whose installs are offered a release on `channel`: stable reaches all three. */
+const REACHES: Record<ReleaseChannel, ReleaseChannel[]> = {
+  stable: ['stable', 'beta', 'alpha'],
+  beta: ['beta', 'alpha'],
+  alpha: ['alpha'],
+};
+
 /**
- * The lists a new release must pass: the newest earlier release's, which is
- * what installs already have (or, before any, what they'll take on first
- * use), and this commit's own, which the next release is checked against.
+ * The lists a new release must pass. For each channel it's offered on, the
+ * newest earlier release there: what that channel's installs carry (an install
+ * on stable has only ever had stable releases). And this commit's own, which
+ * the next release is checked against.
  */
-async function trustedLists(
+export async function trustedLists(
   git: Git,
   version: string,
   target: string,
@@ -50,16 +60,25 @@ async function trustedLists(
     throw new Stop(
       `${SIGNERS_FILE} has no release key at ${target.slice(0, 7)}, so no Conch could check this release. docs/RELEASING.md § If something goes wrong says what to do.`,
     );
-  const lists = [{ label: `${SIGNERS_FILE} at this release`, signers: own.stdout }];
-  const before = (await taggedReleases(git)).find((r) => compareVersions(r.version, version) < 0);
-  if (before) {
-    const theirs = await git(['show', `${tagOf(before.version)}^{commit}:${SIGNERS_FILE}`]);
+  const release = parseRelease(version);
+  const earlier = (await taggedReleases(git)).filter(
+    (r) => compareVersions(r.version, version) < 0,
+  );
+  const befores = new Map<string, ReleaseChannel[]>();
+  for (const channel of REACHES[release ? channelOf(release) : 'stable']) {
+    const before = earlier.find((r) => inChannel(r, channel));
+    if (before) befores.set(before.version, [...(befores.get(before.version) ?? []), channel]);
+  }
+  const lists = [];
+  for (const [before, channels] of befores) {
+    const theirs = await git(['show', `${tagOf(before)}^{commit}:${SIGNERS_FILE}`]);
     if (theirs.code === 0 && signerKeys(theirs.stdout).length)
-      lists.unshift({
-        label: `${tagOf(before.version)}, the release before`,
+      lists.push({
+        label: `${tagOf(before)}, the newest release on ${channels.join(' and ')} before it`,
         signers: theirs.stdout,
       });
   }
+  lists.push({ label: `${SIGNERS_FILE} at this release`, signers: own.stdout });
   return lists;
 }
 

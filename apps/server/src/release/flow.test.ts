@@ -362,7 +362,7 @@ describe('the signed tag', () => {
         key: other,
         sshKeygen: w.sshKeygen,
       }),
-    ).rejects.toThrow(/isn’t trusted by v0\.1\.0-alpha\.1, the release before/);
+    ).rejects.toThrow(/isn’t trusted by v0\.1\.0-alpha\.1, the newest release on alpha before it/);
     await expect(
       makeTag(w.git, {
         version: '0.1.0-alpha.2',
@@ -400,6 +400,68 @@ describe('the signed tag', () => {
         })
       ).signer,
     ).toBe('someone-else');
+  });
+
+  it('passes, for each channel it reaches, that channel’s newest release’s list', async () => {
+    const w = await world();
+    const ci = keyOf(w.ci);
+    const other = keyOf(w.other);
+    const at = (name: string) => commit(w.repo, { [`${name}.txt`]: name }, `fix: ${name}`);
+    await makeTag(w.git, {
+      version: '0.1.0',
+      commit: at('stable'),
+      key: ci,
+      sshKeygen: w.sshKeygen,
+    });
+    // The new key arrives in an alpha: alpha installs trust it from there; stable ones don't.
+    const both = commit(
+      w.repo,
+      {
+        'release/allowed_signers': `${signer('conch-release', w.ci)}\n${signer('someone-else', w.other)}\n`,
+      },
+      'build(release): both keys',
+    );
+    await makeTag(w.git, {
+      version: '0.2.0-alpha.1',
+      commit: both,
+      key: ci,
+      sshKeygen: w.sshKeygen,
+    });
+    await expect(
+      makeTag(w.git, {
+        version: '0.2.0',
+        commit: at('promote'),
+        key: other,
+        sshKeygen: w.sshKeygen,
+      }),
+    ).rejects.toThrow(/isn’t trusted by v0\.1\.0, the newest release on stable and beta before it/);
+    expect(
+      (
+        await makeTag(w.git, {
+          version: '0.2.0-alpha.2',
+          commit: at('alpha'),
+          key: other,
+          sshKeygen: w.sshKeygen,
+        })
+      ).kind,
+    ).toBe('made');
+    // Released on stable with the old key, the new one may sign stable releases too.
+    await makeTag(w.git, {
+      version: '0.2.0',
+      commit: at('stable2'),
+      key: ci,
+      sshKeygen: w.sshKeygen,
+    });
+    expect(
+      (
+        await makeTag(w.git, {
+          version: '0.2.1',
+          commit: at('next'),
+          key: other,
+          sshKeygen: w.sshKeygen,
+        })
+      ).kind,
+    ).toBe('made');
   });
 
   it('is never a version Conch doesn’t release', async () => {
