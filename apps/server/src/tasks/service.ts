@@ -3,8 +3,8 @@
  *
  * - **Background tasks** — "Do it in the background": you send a message
  *   away and carry on. It runs as its own conversation (you can open it,
- *   approve things in it, stop it), a few at a time, the rest waiting their
- *   turn. When it's done its result comes back to the chat it came from, and
+ *   approve things in it, stop it), as many at once as this computer and its
+ *   provider have room for (ADR 0128), the rest waiting with a reason. When it's done its result comes back to the chat it came from, and
  *   you're told (in Conch, and on your devices, ADR 0027).
  * - **Helpers** — the assistant splits a job (`delegate`): up to six parts run
  *   side by side, each in its own conversation (on a cheaper model unless the
@@ -18,6 +18,7 @@
  * with your fallback provider (ADR 0023).
  */
 import { createHash } from 'node:crypto';
+import { availableParallelism } from 'node:os';
 
 import type {
   ConversationEvent,
@@ -26,9 +27,12 @@ import type {
   PermissionMode,
   ServerEvent,
   Task,
+  TaskCapacity,
+  TaskEstimate,
   TaskKind,
   TaskList,
   TaskStatus,
+  TaskWaiting,
   TurnOptions,
 } from '@conch/protocol';
 import {
@@ -42,14 +46,24 @@ import {
 import { z } from 'zod';
 
 import type { ConversationManager, ToolContext } from '../conversations/manager';
+import { Recent } from '../conversations/stories/ask';
 import { summarizeToolUse } from '../conversations/summarize';
 import { LOCAL_LABEL } from '../engines/api/ollama';
-import type { Engine, HostTool } from '../engines/types';
+import type { Completion, Engine, HostTool } from '../engines/types';
 import { Mutex } from '../lib/fs';
 import { PROVIDER_COPY } from '../providers/catalog';
 import { heldInLog, taskArgumentHash, taskArgumentText, TaskOperations } from './operations';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
+import { planWork, ruleEstimate, type PartEstimate, type Planner } from './estimate';
+import {
+  ProviderPace,
+  schedule,
+  type Footprint,
+  type Machine,
+  type Slot,
+  type Tight,
+} from './scheduler';
 import type { TaskStore } from './store';
 import {
   createWorktree,
@@ -59,12 +73,15 @@ import {
   type Worktree,
 } from './worktree';
 
-/** Background tasks at once; the rest queue. */
-export const BACKGROUND_AT_ONCE = 3;
-/** Helpers at once, across every chat. */
-export const HELPERS_AT_ONCE = 4;
-/** Parts one `delegate` can start. */
+/**
+ * Parts one `delegate` can start: a guard on what one call may ask for, not
+ * how many run at once (that's this computer's room, ADR 0128).
+ */
 export const MAX_PARTS = 6;
+/** While anything waits, the readings are looked at again this often. */
+const LOOK_AGAIN_MS = 5_000;
+/** How many at once may only go up after it has held this long, so the number doesn't flap. */
+const RAISE_AFTER_MS = 15_000;
 const STEPS_KEPT = 12;
 
 const RUNNING: readonly TaskStatus[] = ['running', 'needs-you'];
@@ -150,10 +167,64 @@ export interface TaskDeps {
   ready?: () => Promise<Engine[]>;
   git?: Git;
   now?: () => number;
+  /** A fixed most-at-once for background tasks (tests; unset in Conch, where room decides). */
   background?: number;
   /** Automatic work waits while the gateway recovers or resources are scarce. */
   allowed?: () => boolean;
+  /** A fixed most-at-once for helpers (tests; unset in Conch). */
   helpers?: number;
+  /**
+   * This computer now (ADR 0128): the gateway's admission (`allowsWork`,
+   * `allowsPlanned`), the latest shared reading and the pace. Absent, only
+   * `allowed` and the processor count.
+   */
+  machine?: () => Machine | Promise<Machine>;
+  /**
+   * The small model that estimates a batch (`providers/small.ts`, as a title's):
+   * undefined when none may be asked now, or the person turned small-model
+   * names off. `spent` counts what it cost.
+   */
+  planner?: (
+    parentConversationId: string | undefined,
+  ) => Promise<(Planner & { spent?: (completion: Completion) => void }) | undefined>;
+}
+
+/** How a provider's work sits on this computer, from what it declares. */
+export function footprintOf(engine: Engine): Footprint {
+  if (engine.local) return 'local-model';
+  const group = PROVIDER_COPY.get(engine.id)?.group;
+  return group === 'agent' || group === 'subscription' ? 'process' : 'remote';
+}
+
+/** A part's estimate, with `after` as the ids of the tasks it waits for. */
+function estimateFor(estimate: PartEstimate, ids: readonly (string | undefined)[]): TaskEstimate {
+  const { after, ...rest } = estimate;
+  const before = (after ?? []).flatMap((i) => {
+    const id = ids[i];
+    return id ? [id] : [];
+  });
+  return { ...rest, ...(before.length && { after: before }) };
+}
+
+/** The same reason, said the same way: no need to write it again. */
+function sameWaiting(a: TaskWaiting | undefined, b: TaskWaiting): boolean {
+  if (!a) return false;
+  const near = (x?: number, y?: number) =>
+    x === y || (x !== undefined && y !== undefined && Math.abs(x - y) < 30_000);
+  return (
+    a.reason === b.reason &&
+    a.words === b.words &&
+    a.canStartNow === b.canStartNow &&
+    (a.on ?? []).join() === (b.on ?? []).join() &&
+    a.retryAt === b.retryAt &&
+    near(a.expectedAt, b.expectedAt)
+  );
+}
+
+/** "Retrying in 20s…": how long a provider asked for, when it said. */
+function retryAfter(message: string): number | undefined {
+  const seconds = Number(/retrying in (\d+)\s*s/i.exec(message)?.[1]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
 }
 
 export class TaskService {
@@ -166,8 +237,20 @@ export class TaskService {
   #wake?: NodeJS.Timeout;
   #closed = false;
   readonly #creation = new Mutex();
+  /** Each provider's pace: slower after "slow down", back one at a time (ADR 0128). */
+  readonly #pace: ProviderPace;
+  #tight: Tight = {};
+  /** The same batch is estimated once. */
+  readonly #plans = new Recent<PartEstimate[] | null>(200);
+  #capacity?: TaskCapacity;
+  /** A higher number, and since when: it's shown once it has held. */
+  #rising?: { atOnce: number; since: number };
+  /** Providers whose own limit signals are followed, and how to stop. */
+  readonly #limits = new Map<string, () => void>();
 
-  constructor(private readonly deps: TaskDeps) {}
+  constructor(private readonly deps: TaskDeps) {
+    this.#pace = new ProviderPace(() => this.#now);
+  }
 
   get #now() {
     return (this.deps.now ?? Date.now)();
@@ -248,7 +331,12 @@ export class TaskService {
     const tasks = [...(await this.deps.store.list())]
       .filter((task) => task.archivedAt === undefined)
       .sort((a, b) => b.createdAt - a.createdAt);
-    return { tasks, concurrent: this.deps.background ?? BACKGROUND_AT_ONCE };
+    const capacity = this.#capacity ?? {
+      atOnce: 1,
+      working: tasks.filter((t) => RUNNING.includes(t.status)).length,
+      waiting: tasks.filter((t) => t.status === 'queued').length,
+    };
+    return { tasks, concurrent: Math.max(1, capacity.atOnce), capacity };
   }
 
   async get(id: string): Promise<Task> {
@@ -285,10 +373,18 @@ export class TaskService {
      * (a tool's). Unset, the mode its chat is in.
      */
     ceiling?: PermissionMode;
+    /** Worked out already (a batch's, by the rules); otherwise from its words. */
+    estimate?: TaskEstimate;
+    /**
+     * `false`: the caller starts what's ready and asks the planner itself, once
+     * for a batch (`delegate`), so parts made one by one are weighed together.
+     */
+    together?: false;
   }): Promise<Task> {
     return this.#creation.run(async () => {
+      const { estimate, together, ...request } = input;
       const requestHash = createHash('sha256')
-        .update(JSON.stringify({ ...input, requestKey: undefined }))
+        .update(JSON.stringify({ ...request, requestKey: undefined }))
         .digest('hex');
       if (input.requestKey) {
         const existing = (await this.deps.store.list()).find(
@@ -333,6 +429,16 @@ export class TaskService {
         ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
         ...(input.group && { group: input.group }),
         ...(input.by && { by: input.by.slice(0, 80) }),
+        estimate:
+          estimate ??
+          estimateFor(
+            ruleEstimate({
+              title: input.title ?? '',
+              instructions: text,
+              worktree: input.worktree,
+            }),
+            [],
+          ),
       };
       if (input.worktree) {
         const workspace = task.cwd ?? (await this.deps.settings.workspace());
@@ -346,9 +452,73 @@ export class TaskService {
       }
       await this.#save(task);
       await this.#tell(task);
-      this.#pump();
+      if (together !== false) {
+        this.#pump();
+        void this.#plan([task]);
+      }
       return task;
     });
+  }
+
+  /**
+   * "Start now": a task that waits only for room goes ahead (ADR 0128). It
+   * still waits for memory, a provider that asked to slow down, and anything
+   * it mustn't run beside; and never more than a couple past the ceiling.
+   */
+  async startNow(id: string): Promise<Task> {
+    const task = await this.get(id);
+    if (task.status !== 'queued') return task;
+    if (!task.waiting?.canStartNow)
+      throw new TaskError(
+        'busy',
+        'This one waits for something other than room, so it starts by itself as soon as it can.',
+      );
+    const machine = await this.#machine();
+    if (!machine.planned)
+      throw new TaskError(
+        'busy',
+        'This computer needs a moment first. It starts by itself as soon as there’s room.',
+      );
+    const updated = await this.#mutate(id, (current) =>
+      current.status === 'queued' ? { startNow: true } : undefined,
+    );
+    this.#pump();
+    return updated;
+  }
+
+  /**
+   * One question to the small model for a batch (ADR 0128): what each part
+   * asks of the computer, what it changes, what waits for what. Never waited
+   * for; when it lands, what's still waiting is weighed again.
+   */
+  async #plan(tasks: readonly Task[]): Promise<void> {
+    try {
+      if (!tasks.length || this.#closed) return;
+      const planner = await this.deps.planner?.(tasks[0]?.parentConversationId);
+      if (!planner || this.#closed) return;
+      const parts = tasks.map((t) => ({
+        title: t.title,
+        instructions: t.prompt,
+        worktree: Boolean(t.worktree),
+      }));
+      const plan = await planWork(parts, planner, {
+        cache: this.#plans,
+        ...(planner.spent && { spent: planner.spent }),
+      });
+      if (!plan || this.#closed) return;
+      const ids = tasks.map((t) => t.id);
+      for (const [i, task] of tasks.entries()) {
+        const found = plan[i];
+        if (!found) continue;
+        const estimate = estimateFor(found, ids);
+        await this.#mutate(task.id, (current) =>
+          GOING.includes(current.status) ? { estimate } : undefined,
+        );
+      }
+      this.#pump();
+    } catch {
+      // The rules' estimates stand.
+    }
   }
 
   /** A foreground draft becomes one durable, exact-payload, approval-gated task. */
@@ -578,56 +748,188 @@ export class TaskService {
   close(): void {
     this.#closed = true;
     clearTimeout(this.#wake);
+    for (const stop of this.#limits.values()) stop();
+    this.#limits.clear();
   }
 
-  /** Start whatever has room, oldest first. One pass at a time. */
-  #pump(): void {
-    this.#pumping = this.#pumping.then(
-      async () => {
-        if (this.#closed) return;
-        if (this.deps.allowed && !this.deps.allowed()) {
-          clearTimeout(this.#wake);
-          this.#wake = setTimeout(() => this.#pump(), 5000);
-          this.#wake.unref();
-          return;
-        }
-        const tasks = await this.deps.store.list();
-        for (const kind of ['background', 'helper'] as const) {
-          const limit =
-            kind === 'background'
-              ? (this.deps.background ?? BACKGROUND_AT_ONCE)
-              : (this.deps.helpers ?? HELPERS_AT_ONCE);
-          let room =
-            limit - tasks.filter((t) => t.kind === kind && RUNNING.includes(t.status)).length;
-          for (const task of tasks
-            .filter((t) => t.kind === kind && t.status === 'queued')
-            .sort((a, b) => a.createdAt - b.createdAt)) {
-            if (this.#closed || room-- <= 0) break;
-            // Marked running before the next look, so one pass never starts it twice.
-            const claimed = await this.#mutate(task.id, (current) =>
-              !this.#closed && current.status === 'queued'
-                ? { status: 'running', startedAt: current.startedAt ?? this.#now }
-                : undefined,
-            );
-            if (!this.#closed && claimed.status === 'running')
-              void this.#run(task.id)
-                .catch(async (error: unknown) => {
-                  const current = await this.get(task.id);
-                  if (!this.#closed && RUNNING.includes(current.status))
-                    await this.#finish(current, {
-                      status: 'failed',
-                      error: tidy(
-                        error instanceof Error ? error.message : 'This task could not start.',
-                        1000,
-                      ),
-                    });
-                })
-                .catch(() => undefined);
-          }
-        }
-      },
-      () => undefined,
+  /**
+   * Something freed up outside the tasks (Conch recovered, a heavy command
+   * ended): weigh what's waiting again now, not at the next look.
+   */
+  reconsider(): void {
+    this.#pump();
+  }
+
+  /** This computer now; without a reader, only the admission switch and the processor count. */
+  async #machine(): Promise<Machine> {
+    if (this.deps.machine) return this.deps.machine();
+    const allowed = this.deps.allowed?.() ?? true;
+    return { allowed, planned: allowed, cpuCount: availableParallelism() };
+  }
+
+  /** A task as the scheduler weighs it. */
+  #slot(task: Task): Slot {
+    const engine = this.deps.engine(task.options.engine);
+    const estimate =
+      task.estimate ??
+      estimateFor(ruleEstimate({ title: task.title, instructions: task.prompt }), []);
+    // What it changes is in the folder it works in; a pair the planner set is its batch's.
+    const scope = task.worktree?.path ?? task.cwd ?? '';
+    const touches = (estimate.touches ?? []).map((touch) =>
+      touch.startsWith('pair:')
+        ? `${task.group ?? task.id}\u0000${touch}`
+        : `${scope}\u0000${touch}`,
     );
+    return {
+      id: task.id,
+      title: task.title,
+      kind: task.kind,
+      chat: task.parentConversationId ?? task.conversationId ?? task.id,
+      ...(task.group && { group: task.group }),
+      engine: engine.id,
+      provider:
+        task.by ?? (engine.label === LOCAL_LABEL ? 'The model on this computer' : engine.label),
+      footprint: footprintOf(engine),
+      estimate,
+      touches,
+      after: estimate.after ?? [],
+      createdAt: task.createdAt,
+      ...(task.startedAt !== undefined &&
+        RUNNING.includes(task.status) && { startedAt: task.startedAt }),
+      ...(task.startNow && { startNow: true }),
+    };
+  }
+
+  /**
+   * Start whatever fits now, and say why the rest waits (ADR 0128). One pass at
+   * a time; again when a task finishes or is added, when the planner answers,
+   * and every few seconds while anything waits.
+   */
+  #pump(): void {
+    this.#pumping = this.#pumping.then(async () => {
+      try {
+        await this.#pass();
+      } catch {
+        // A failed pass starts nothing; the next look tries again.
+        this.#lookAgain(LOOK_AGAIN_MS);
+      }
+    });
+  }
+
+  async #pass(): Promise<void> {
+    if (this.#closed) return;
+    const machine = await this.#machine();
+    if (this.#closed) return;
+    const tasks = await this.deps.store.list();
+    const queued = tasks.filter((t) => t.status === 'queued');
+    const plan = schedule({
+      now: this.#now,
+      machine,
+      running: tasks.filter((t) => RUNNING.includes(t.status)).map((t) => this.#slot(t)),
+      queued: queued.map((t) => this.#slot(t)),
+      provider: (slot) => this.#pace.room(slot.engine, slot.footprint),
+      caps: {
+        ...(this.deps.background !== undefined && { background: this.deps.background }),
+        ...(this.deps.helpers !== undefined && { helper: this.deps.helpers }),
+      },
+      tight: this.#tight,
+    });
+    this.#tight = plan.tight;
+    for (const id of plan.start) {
+      if (this.#closed) return;
+      // Marked running before the next look, so one pass never starts it twice.
+      const claimed = await this.#mutate(id, (current) =>
+        !this.#closed && current.status === 'queued'
+          ? {
+              status: 'running',
+              startedAt: current.startedAt ?? this.#now,
+              waiting: undefined,
+              startNow: undefined,
+            }
+          : undefined,
+      );
+      if (!this.#closed && claimed.status === 'running')
+        void this.#run(id)
+          .catch(async (error: unknown) => {
+            const current = await this.get(id);
+            if (!this.#closed && RUNNING.includes(current.status))
+              await this.#finish(current, {
+                status: 'failed',
+                error: tidy(
+                  error instanceof Error ? error.message : 'This task could not start.',
+                  1000,
+                ),
+              });
+          })
+          .catch(() => undefined);
+    }
+    // Every one still waiting says why; written only when that changed.
+    for (const [id, waiting] of plan.waiting) {
+      const task = queued.find((t) => t.id === id);
+      if (!task || sameWaiting(task.waiting, waiting)) continue;
+      await this.#mutate(id, (current) =>
+        current.status === 'queued' && !sameWaiting(current.waiting, waiting)
+          ? { waiting }
+          : undefined,
+      ).catch(() => undefined);
+    }
+    this.#publish(plan.capacity);
+    if (plan.waiting.size)
+      this.#lookAgain(
+        plan.wakeAt !== undefined
+          ? Math.max(250, Math.min(LOOK_AGAIN_MS, plan.wakeAt - this.#now))
+          : LOOK_AGAIN_MS,
+      );
+    else clearTimeout(this.#wake);
+  }
+
+  /** Look again soon: readings move, and a provider's pause ends. Never keeps Conch running. */
+  #lookAgain(ms: number): void {
+    if (this.#closed) return;
+    clearTimeout(this.#wake);
+    this.#wake = setTimeout(() => this.#pump(), ms);
+    this.#wake.unref();
+  }
+
+  /**
+   * How many at once, for the cards' header: down at once, up only once it has
+   * held a little, so the number doesn't flap with every reading.
+   */
+  #publish(next: TaskCapacity): void {
+    const before = this.#capacity;
+    let atOnce = next.atOnce;
+    if (before && atOnce > before.atOnce && atOnce > next.working) {
+      if (this.#rising?.atOnce !== atOnce) this.#rising = { atOnce, since: this.#now };
+      if (this.#now - this.#rising.since < RAISE_AFTER_MS) atOnce = before.atOnce;
+    } else this.#rising = undefined;
+    const capacity: TaskCapacity = { ...next, atOnce: Math.max(atOnce, next.working) };
+    if (
+      before &&
+      before.atOnce === capacity.atOnce &&
+      before.working === capacity.working &&
+      before.waiting === capacity.waiting &&
+      before.words === capacity.words
+    )
+      return;
+    this.#capacity = capacity;
+    this.deps.emit({ type: 'task.capacity', capacity });
+  }
+
+  /** A provider asked to slow down, or was overloaded: it gets fewer at once for a while. */
+  #slowDown(engine: Engine, retryAfterMs?: number): void {
+    this.#pace.slowDown(engine.id, footprintOf(engine), retryAfterMs);
+    this.#pump();
+  }
+
+  /** A provider's own word that it's refusing for now (a plan's window): slow down. */
+  #watchLimits(engine: Engine): void {
+    if (this.#limits.has(engine.id) || !engine.onLimits || this.#closed) return;
+    const stop = engine.onLimits((signal) => {
+      if (signal.status !== 'rejected') return;
+      const wait = signal.resetsAt !== undefined ? signal.resetsAt - this.#now : undefined;
+      this.#slowDown(engine, wait !== undefined && wait > 0 ? wait : undefined);
+    });
+    this.#limits.set(engine.id, stop);
   }
 
   async #run(id: string, fallback?: { engine: EngineId; from: string }): Promise<void> {
@@ -640,6 +942,7 @@ export class TaskService {
     }
     let options = fallback ? { ...task.options, engine: fallback.engine } : task.options;
     const engine = this.deps.engine(options.engine);
+    this.#watchLimits(engine);
     const ready = await engine.detect().catch(() => undefined);
     if (this.#closed) return;
     if (this.#stopping.has(id)) {
@@ -829,6 +1132,9 @@ export class TaskService {
       // A provider may still have an in-flight call after its turn ends or is stopped.
       operationsClosed = true;
       if (this.#closed) return;
+      // Refused or overloaded: what waits for this provider waits a little (ADR 0128).
+      if (turn.outcome === 'error' && (turn.problem === 'limit' || turn.problem === 'unavailable'))
+        this.#slowDown(engine);
       // A limit another provider can answer (ADR 0023): carry on with it, once.
       if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback && !task.toolScope) {
         const { preferences } = await this.deps.settings.get();
@@ -914,6 +1220,8 @@ export class TaskService {
       ...patch,
       current: undefined,
       asking: undefined,
+      waiting: undefined,
+      startNow: undefined,
       finishedAt: this.#now,
       ...(worktree && { worktree }),
     }));
@@ -1033,6 +1341,15 @@ export class TaskService {
           ? { asking: asks[0] }
           : undefined,
       ).catch(() => undefined);
+      return;
+    }
+    // Its provider said slow down mid-turn (it retries by itself): what waits for it waits too.
+    if (e.type === 'notice' && e.code === 'rate-limit') {
+      void this.get(id)
+        .then((task) =>
+          this.#slowDown(this.deps.engine(task.options.engine), retryAfter(e.message)),
+        )
+        .catch(() => undefined);
       return;
     }
     if (e.type === 'tool.started') {
@@ -1221,7 +1538,7 @@ export class TaskService {
       >;
     }> = {
       name: 'delegate',
-      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`provider\` hands a part to another connected provider by its id (the list is in your instructions); leave it out to use your own. \`model: "fast"\` (the default) uses that provider's quicker, cheaper model; "same" its full model (yours, on your own provider); or name one of its models. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch. Supply \`checks\` for actions and tool-based research: name each required tool, its minimum receipt count, and exact arguments when known. Checks are fixed before work starts and grant no permissions. Without checks, completion means a saved answer, not independent verification of its claims.`,
+      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Conch starts as many at once as this computer and the provider have room for; the rest wait their turn and start by themselves, so never split a job just to fit a limit. Name the files a part changes in its instructions: parts that change the same file never run at the same time. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`provider\` hands a part to another connected provider by its id (the list is in your instructions); leave it out to use your own. \`model: "fast"\` (the default) uses that provider's quicker, cheaper model; "same" its full model (yours, on your own provider); or name one of its models. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch. Supply \`checks\` for actions and tool-based research: name each required tool, its minimum receipt count, and exact arguments when known. Checks are fixed before work starts and grant no permissions. Without checks, completion means a saved answer, not independent verification of its claims.`,
       input: {
         parts: z
           .array(
@@ -1254,6 +1571,7 @@ export class TaskService {
         const expectations = args.parts.map((part) => part.checks && taskExpectations(part.checks));
         const group = this.#batchOf(ctx);
         const tasks = [];
+        // Every part is made before any starts, so the batch is weighed as one (ADR 0128).
         for (const [i, part] of args.parts.entries())
           tasks.push(
             await this.create({
@@ -1267,8 +1585,11 @@ export class TaskService {
               options: handed[i]?.options,
               by: handed[i]?.by,
               ceiling: ctx.permissionMode,
+              together: false,
             }),
           );
+        this.#pump();
+        void this.#plan(tasks);
         const done = await this.waitFor(
           tasks.map((t) => t.id),
           ctx.signal,
@@ -1351,6 +1672,7 @@ export class TaskService {
                 title: t.title,
                 status: t.status,
                 current: t.current,
+                ...(t.waiting && { waiting: t.waiting.words }),
                 error: t.error,
                 result: t.summary,
                 modelCompleted: t.modelCompleted,

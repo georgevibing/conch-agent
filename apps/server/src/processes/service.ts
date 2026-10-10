@@ -76,6 +76,10 @@ export class ProcessService {
   ) {
     this.#pace = new ResourcePace(deps.now);
   }
+  /** Managed commands running now, from every chat. */
+  get running(): number {
+    return [...this.#sessions.values()].filter((s) => s.status === 'running').length;
+  }
   get workload(): WorkloadPace {
     if (this.#admissionPaused || this.#closed)
       return { phase: 'held', cause: 'recovery', concurrency: 0, critical: false };

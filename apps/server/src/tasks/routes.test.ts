@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
 import { registerTaskRoutes } from './routes';
-import type { TaskService } from './service';
+import { TaskError, type TaskService } from './service';
 
 describe('task continuation API', () => {
   it('validates user instructions and never accepts a caller-supplied scope', async () => {
@@ -68,5 +68,21 @@ it('accepts bounded outcome checks without accepting tool authority, hashing exa
     ).statusCode,
   ).toBe(400);
   expect(create).toHaveBeenCalledTimes(1);
+  await app.close();
+});
+
+it('starts a waiting task now, and says why when it can’t (ADR 0128)', async () => {
+  const app = Fastify();
+  const startNow = vi.fn(async (id: string) => {
+    if (id === 'held') throw new TaskError('busy', 'This one waits for something other than room.');
+    return { id, status: 'queued', startNow: true };
+  });
+  registerTaskRoutes(app, { startNow } as unknown as TaskService);
+  const ok = await app.inject({ method: 'POST', url: '/api/tasks/t1/start-now', payload: {} });
+  expect(ok.statusCode).toBe(200);
+  expect(ok.json()).toMatchObject({ startNow: true });
+  const held = await app.inject({ method: 'POST', url: '/api/tasks/held/start-now', payload: {} });
+  expect(held.statusCode).toBe(409);
+  expect(held.json()).toMatchObject({ message: 'This one waits for something other than room.' });
   await app.close();
 });

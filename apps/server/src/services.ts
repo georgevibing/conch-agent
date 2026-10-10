@@ -140,7 +140,7 @@ import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
 import { RoundService } from './agents/rounds';
-import { homedir } from 'node:os';
+import { availableParallelism, homedir } from 'node:os';
 
 import { OutsideAgents } from './a2a/outside';
 import { TelemetryService } from './telemetry/service';
@@ -603,6 +603,8 @@ export class Services {
         if (process.send && process.connected) process.send(message, () => undefined);
       },
       recovered: async () => {
+        // Tasks waiting while Conch recovered are weighed again at once (ADR 0128).
+        this.tasks.reconsider();
         await this.routines.start();
         this.tidy.stop();
         this.tidy.start();
@@ -1474,7 +1476,43 @@ export class Services {
     });
     this.doctor.register(checkInCheck(this.checkins));
     this.tasks = new TaskService({
-      allowed: () => this.recovery.allowsWork,
+      // How many fit now (ADR 0128): the gateway's own admission and the shared reading,
+      // never a second sampler.
+      machine: async () => {
+        const snapshot = await this.processes.resourceSnapshot().catch(() => undefined);
+        return {
+          allowed: this.recovery.allowsWork,
+          planned: this.recovery.allowsPlanned,
+          cpuCount: snapshot?.cpuCount ?? availableParallelism(),
+          ...(snapshot && { snapshot }),
+          pace: this.processes.workload,
+          commands: this.processes.running,
+        };
+      },
+      // One question to a small model per batch, picked and counted as a title is
+      // (ADR 0103); off with the person's small-model names.
+      planner: async (parent) => {
+        if (!(await this.settings.get()).preferences.autoTitle) return undefined;
+        const picked = parent
+          ? await this.#smallFor(parent, 'plan')
+          : await this.#smallModel(this.providers.engine(), { private: true, gate: 'plan' });
+        if (!('small' in picked)) return undefined;
+        const { engine, complete, model } = picked.small;
+        return {
+          complete,
+          ...(model && { model }),
+          spent: ({ usage }) => {
+            if (usage)
+              void recordSmallSpend(
+                (u, priced) => this.usage.recordTurn(u, priced),
+                billings,
+                usage,
+                engine,
+                model,
+              ).catch(() => undefined);
+          },
+        };
+      },
       store: new TaskStore(config.CONCH_HOME, heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
