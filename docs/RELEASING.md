@@ -40,6 +40,11 @@ take a release is in [ADR 0051](./adr/0051-releases.md).
      check a download) and publishes it: as a pre-release for alpha and beta, as
      the latest release for stable. Then it updates the website.
 
+**To rehearse**, run **Actions → Release → Run workflow** with _Rehearse_ ticked.
+In the `release` environment, with the real key, it signs a throwaway tag, checks it
+as installs will and writes a release page into the run's summary. It pushes
+nothing, so it's safe any time, for example after changing the key.
+
 `pnpm release` on its own shows what the next release says so far, and its pull
 request. Add `--ai` to see the notes polished, as CI does.
 

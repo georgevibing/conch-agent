@@ -14,6 +14,10 @@ on:
         description: 'Finish releasing this version (0.3.0), if a run stopped after its tag was made. Leave empty for the usual run.'
         required: false
         default: ''
+      rehearse:
+        description: 'Rehearse: sign a throwaway tag with the release key in the runner, check it as installs do, write a release page, and push nothing.'
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -41,6 +45,7 @@ jobs:
       version: ${{ steps.find.outputs.version }}
       ref: ${{ steps.find.outputs.ref }}
       published: ${{ steps.find.outputs.published }}
+      rehearse: ${{ steps.find.outputs.rehearse }}
     steps:
       - name: Find a merged release pull request that isn't tagged yet
         id: find
@@ -48,8 +53,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RESUME: ${{ inputs.version }}
+          REHEARSE: ${{ inputs.rehearse }}
         run: |
           set -euo pipefail
+          if [ "${REHEARSE:-false}" = true ]; then
+            echo "A rehearsal: nothing is released."
+            { echo "rehearse=true"; echo "release=false"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -n "${RESUME:-}" ]; then
             version="${RESUME#v}"
             ref="v${version}"
@@ -133,12 +144,54 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: git push origin "refs/tags/v${VERSION}"
 
+  rehearse:
+    name: Rehearse the signed tag (pushes nothing)
+    needs: plan
+    if: needs.plan.outputs.rehearse == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The same environment and key as a release, so this proves both.
+    environment: release
+    permissions:
+      contents: read # the code and its tags
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @conch/server...
+      - name: Sign a throwaway tag, check it as installs will, and write its page
+        env:
+          # Below every real release, and never pushed: the runner and its tag go together.
+          VERSION: 0.0.1-alpha.1
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_TAGGER_NAME: ${{ vars.RELEASE_TAGGER_NAME }}
+          RELEASE_TAGGER_EMAIL: ${{ vars.RELEASE_TAGGER_EMAIL }}
+          MAC_SIGNED: ${{ secrets.MAC_CSC_LINK != '' }}
+          WINDOWS_SIGNED: ${{ secrets.WIN_CSC_LINK != '' }}
+        run: |
+          set -euo pipefail
+          pnpm release ci tag --version "$VERSION" --commit HEAD
+          pnpm release ci page --version "$VERSION" --out "$RUNNER_TEMP/page.md"
+          {
+            echo "## Rehearsal: v${VERSION}, signed and checked, not pushed"
+            echo '```'
+            git cat-file -p "v${VERSION}" | sed '/-----BEGIN SSH SIGNATURE-----/,$d'
+            echo '```'
+            cat "$RUNNER_TEMP/page.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release-please:
     name: Release pull request
     needs: [plan, tag]
     # Every push to main, and after the tag when there's a release: release-please
     # then makes that tag's GitHub Release (a draft) instead of an unsigned tag.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.tag.result != 'failure' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.rehearse != 'true' && needs.tag.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
