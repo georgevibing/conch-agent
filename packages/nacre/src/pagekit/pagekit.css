@@ -43,6 +43,11 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
+    /* The page sits in the middle, as the chat does, even when an app's own
+       styles take the body's margin away (`body { margin: 0 }` is common):
+       html centres it, so the body's auto margin isn't the only thing doing it. */
+    display: grid;
+    justify-items: center;
   }
 
   *,
@@ -53,6 +58,8 @@
 
   body {
     font-size: var(--nc-text-md);
+    inline-size: 100%;
+    min-inline-size: 0;
     max-inline-size: var(--nc-page-width);
     margin: 0 auto;
     padding: var(--nc-space-5) var(--nc-space-4);
