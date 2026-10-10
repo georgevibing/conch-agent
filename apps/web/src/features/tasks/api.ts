@@ -13,5 +13,8 @@ export const tasksApi = {
   continue: (id: string, text: string, requestKey: string) =>
     request(Task, `/api/tasks/${id}/continue`, { method: 'POST', body: { text, requestKey } }),
   retry: (id: string) => request(Task, `/api/tasks/${id}/retry`, { method: 'POST', body: {} }),
+  /** Waiting only for room: start it now (ADR 0129). */
+  startNow: (id: string) =>
+    request(Task, `/api/tasks/${id}/start-now`, { method: 'POST', body: {} }),
   remove: (id: string) => request(Ok, `/api/tasks/${id}`, { method: 'DELETE' }),
 };

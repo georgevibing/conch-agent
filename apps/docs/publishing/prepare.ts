@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 
 import { verifyPublication } from './verify';
-import { publications, selectPublication } from './select';
+import { describesChannel, publications, selectPublication } from './select';
 import { SitePublication } from './schema';
 
 const root = resolve(import.meta.dirname, '../../..');
@@ -74,7 +74,16 @@ const releases = await publications(all, (tag) =>
     return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
   }, tag),
 );
-const production = SitePublication.parse(selectPublication(releases, main));
+const production = SitePublication.parse(
+  selectPublication(releases, main, (release) => {
+    const schema = spawnSync('git', ['show', `${release.commit}:apps/docs/publishing/schema.ts`], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    return schema.status === 0 && describesChannel(schema.stdout, release.channel);
+  }),
+);
 const next = SitePublication.parse({ channel: 'development', commit: main, next: true, releases });
 const snapshot = { production, next };
 const folder = resolve(root, '.site');

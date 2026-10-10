@@ -26,8 +26,14 @@ take a release is in [ADR 0051](./adr/0051-releases.md).
    Heads up for a breaking change), in `CHANGELOG.md` and in the pull request's
    description. With the `ANTHROPIC_API_KEY` secret, Claude polishes them, held to
    the commits. If the polished version breaks a rule, the plain notes stand.
-4. **You merge it when you want to ship.** Read the notes there first: they're
-   what people read in the app, on GitHub and on the website.
+   Notes written ahead in `release/notes/<version>.md` on `main` take their
+   place (see [The notes](#the-notes)). Then CI runs on the pull request: GitHub
+   holds the runs of a pull request its own bot opened for approval, as it does an
+   outside contributor's, so Release approves them, or starts CI on the branch if
+   it can't. With the release app set up, CI starts as on any pull request.
+4. **You approve and merge it when you want to ship**, once `check` and `desktop`
+   pass. Read the notes there first: they're what people read in the app, on
+   GitHub and on the website. Squash is the only merge the branch rules allow.
 5. **The workflow does the rest**, in about 40 minutes:
    - **Tag.** Makes the SSH-signed tag `v0.4.0` on the merge, with the notes as
      its message, and checks it against `release/allowed_signers` the way every
@@ -61,7 +67,8 @@ Once, in this order:
 2. **Set the repository's settings** in
    [REPOSITORY-SETTINGS.md](./REPOSITORY-SETTINGS.md). Two matter for releasing:
    - _Allow GitHub Actions to create and approve pull requests_ (required);
-   - the release app (recommended), so CI runs on the release pull request.
+   - the release app (optional): the pull request is then the app's, not
+     `github-actions`', and CI starts on it without Release starting it.
 3. **Optionally, add `ANTHROPIC_API_KEY`** as a repository secret, for polished
    notes.
 4. **Merge the first release pull request.** It's `0.1.0-alpha.1`
@@ -92,7 +99,9 @@ and only once: every release after it is past that commit. Going from betas back
 to alphas of the same version is refused: installs never go back a version.
 
 People choose their channel in Settings → Health → Updates (ADR 0051 §
-Channels). Stable is the default and only takes stable releases.
+Channels). Stable only takes stable releases. Until someone chooses, an install
+follows the steadiest channel with a release: stable once there is one, before
+that beta, then alpha. The installers install the same way.
 
 ## The notes
 
@@ -106,10 +115,30 @@ by hand, with a live preview`, not what changed in the code.
   person must do: `BREAKING CHANGE: Sign in again after updating.`
 - `chore`, `test`, `docs`, `refactor`, `ci` and `build` never appear in them.
 
-**To edit them by hand**, change the newest section of `CHANGELOG.md` on the
-release pull request's branch just before you merge. The tag and the page are
-made from that section. Every push to `main` rewrites them from the commits
-again.
+**To write them yourself**, for a release worth more than its commits' lines
+(the first one, a big stable release), commit `release/notes/<version>.md` to
+`main`, for example `release/notes/0.1.0-alpha.1.md`, in a CHANGELOG section's
+shape:
+
+```md
+### Heads up
+
+- What changes for you, and what to do
+
+### New
+
+- One line each, in the person's words
+```
+
+The groups are `Heads up`, `New`, `Better` and `Fixed`; a line is at most 160
+characters and a group at most 12 lines. Words outside a group are for whoever
+edits the file, and are left out. The release pull request updates with the next
+push, and they're the notes from then on: the tag, the page and the app all read
+them. A release whose version has no file gets the notes from its commits.
+
+**Editing `CHANGELOG.md` on the release branch** works too, but lasts only until
+the next push to `main`, and as your push it needs someone else's approval
+(the branch rules ask that the last push is approved by someone else).
 
 ## If something goes wrong
 
@@ -205,8 +234,11 @@ Each app is opened once on its runner to check it starts. Every installer and
 
 [conchagent.com](https://conchagent.com) is `apps/docs`: the front page, the
 documentation, and the installers at `/install.sh` and `/install.ps1`.
-`.github/workflows/site.yml` publishes the newest verified stable release. Before
-there is one, it publishes the latest `main` commit that passed CI. The landing
+`.github/workflows/site.yml` publishes the newest verified release of the
+steadiest channel that has one: stable once there is one, before that beta, then
+alpha. Before the first release, it publishes the latest `main` commit that passed
+CI, and so it does for a release whose own site can't describe its channel (any
+before `0.1.0-alpha.2`). The landing
 page, guides, generated reference and installer scripts all come from that exact
 commit; the site shows its version and source link.
 

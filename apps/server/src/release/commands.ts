@@ -184,9 +184,11 @@ async function status(git: Git, deps: CommandDeps, ai: boolean): Promise<void> {
   for (const line of notesText(next.notes).split('\n')) say(`  ${line}`);
   say('');
   say(
-    next.polishedBy
-      ? `  Polished by ${next.polishedBy}, as CI will.`
-      : `  As written from the commits${next.plainWhy ? ` (${next.plainWhy})` : ''}. CI polishes them in the release pull request${ai ? '' : '; --ai shows how'}.`,
+    next.writtenIn
+      ? `  As written in ${next.writtenIn}.`
+      : next.polishedBy
+        ? `  Polished by ${next.polishedBy}, as CI will.`
+        : `  As written from the commits${next.plainWhy ? ` (${next.plainWhy})` : ''}. CI polishes them in the release pull request${ai ? '' : '; --ai shows how'}.`,
   );
 }
 
@@ -288,9 +290,11 @@ async function ci(git: Git, deps: CommandDeps, argv: string[]): Promise<void> {
         `Conch ${result.version}: ${result.commits.length} commits since ${result.since ? tagOf(result.since.version) : 'the beginning'}.`,
       );
       say(
-        result.polishedBy
-          ? `Polished by ${result.polishedBy}.`
-          : `As written from the commits (${result.plainWhy ?? 'not polished'}).`,
+        result.writtenIn
+          ? `As written in ${result.writtenIn}.`
+          : result.polishedBy
+            ? `Polished by ${result.polishedBy}.`
+            : `As written from the commits (${result.plainWhy ?? 'not polished'}).`,
       );
       say(notesText(result.notes));
       say(`Changed: ${result.files.join(', ')}`);

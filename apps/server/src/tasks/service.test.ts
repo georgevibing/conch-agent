@@ -18,7 +18,8 @@ import { ConversationStore } from '../conversations/store';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { merged, noMoreThan, TASKS_PROMPT, TaskService } from './service';
+import type { Machine } from './scheduler';
+import { merged, noMoreThan, TaskError, TASKS_PROMPT, TaskService, type TaskDeps } from './service';
 import { TaskStore } from './store';
 
 /**
@@ -58,11 +59,26 @@ class Scripted implements Engine {
       permissionModes: this.modes,
     };
   }
+  /** Every slow turn waiting to be let go, oldest first. */
+  readonly held: (() => void)[] = [];
+
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     this.turns.push(input);
     const said = input.prompt;
+    // The provider says slow down mid-turn, and retries by itself.
+    if (/rate limited/.test(said))
+      yield {
+        type: 'notice',
+        code: 'rate-limit',
+        message: 'Other is rate-limiting this key. Retrying in 20s…',
+      };
+    if (/overloaded/.test(said)) {
+      yield { type: 'done', outcome: 'error', error: 'It’s overloaded.', problem: 'unavailable' };
+      return;
+    }
     if (/slow/.test(said)) {
       await new Promise<void>((resolve) => {
+        this.held.push(resolve);
         this.release = resolve;
         input.signal.addEventListener('abort', () => resolve(), { once: true });
       });
@@ -120,6 +136,9 @@ async function setup(
     overBudget?: boolean;
     tools?: ToolProvider;
     integrations?: ConstructorParameters<typeof ConversationManager>[0]['integrations'];
+    machine?: () => Machine;
+    planner?: TaskDeps['planner'];
+    now?: () => number;
   } = {},
 ) {
   const home = options.home ?? mkdtempSync(join(tmpdir(), 'conch-tasks-'));
@@ -151,6 +170,15 @@ async function setup(
       background: options.background,
       allowed: options.allowed,
       helpers: options.helpers,
+      // A roomy computer, the same on every runner; a test that needs less says so.
+      machine:
+        options.machine ??
+        (() => {
+          const allowed = options.allowed?.() ?? true;
+          return { allowed, planned: allowed, cpuCount: 8 };
+        }),
+      ...(options.planner && { planner: options.planner }),
+      ...(options.now && { now: options.now }),
     });
   const tasks = make();
   conversations.events.on((event) => tasks.onEvent(event));
@@ -1898,5 +1926,335 @@ describe('declared completion contracts through task tools', () => {
       delivery: { attempt: 1, goalRevision: 0 },
       summary: 'An actual answer.',
     });
+  });
+});
+
+describe('how many run at once, and why the rest wait (ADR 0129)', () => {
+  const GiB = 1024 ** 3;
+  const helperCtx = (conversationId: string, engine: Engine, signal: AbortSignal) => ({
+    conversationId,
+    append: () => undefined,
+    engine,
+    permissionMode: 'default' as const,
+    ask: async () => 'deny' as const,
+    signal,
+  });
+  const idleChat = async (conversations: ConversationManager) => {
+    const chat = await conversations.send({ clientMessageId: 'u1', text: 'hi' });
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    return chat;
+  };
+
+  it('five parts start together on a roomy computer, where four used to be the most', async () => {
+    const { tasks, conversations, engines, events } = await setup();
+    const chat = await idleChat(conversations);
+    const abort = new AbortController();
+    const delegate = tasks
+      .tools(helperCtx(chat.id, engines.get('mock') as Engine, abort.signal))
+      .find((t) => t.name === 'delegate');
+    const pending = delegate?.run({
+      parts: Array.from({ length: 5 }, (_, i) => ({
+        title: `Part ${i + 1}`,
+        instructions: `slow look at part ${i + 1}`,
+        model: 'fast',
+        worktree: false,
+      })),
+    } as never);
+    const running = await until(
+      async () => (await tasks.list()).tasks.filter((t) => t.status === 'running'),
+      (list) => list.length === 5,
+    );
+    expect(running.every((t) => t.estimate?.by === 'rules')).toBe(true);
+    const { capacity } = await until(
+      () => tasks.list(),
+      (list) => list.capacity?.working === 5,
+    );
+    expect(capacity).toMatchObject({ working: 5, waiting: 0 });
+    expect(capacity?.atOnce).toBeGreaterThanOrEqual(5);
+    expect(events.some((e) => e.type === 'task.capacity')).toBe(true);
+    abort.abort();
+    await pending;
+  });
+
+  it('a small computer runs fewer; the rest say why, and start when one finishes', async () => {
+    const small = (): Machine => ({
+      allowed: true,
+      planned: true,
+      cpuCount: 2,
+      snapshot: { totalBytes: 4 * GiB, availableBytes: 3.5 * GiB, loadPerCpu: 0.1 },
+    });
+    const { tasks, engines } = await setup({ machine: small });
+    const first = await tasks.create({ kind: 'background', text: 'slow build of the app' });
+    const second = await tasks.create({ kind: 'background', text: 'slow build of the docs' });
+    await until(
+      () => status(tasks, first.id),
+      (s) => s === 'running',
+    );
+    const waiting = await until(
+      () => tasks.get(second.id),
+      (t) => t.waiting !== undefined,
+    );
+    expect(waiting.status).toBe('queued');
+    expect(waiting.waiting).toMatchObject({ reason: 'room', canStartNow: true });
+    expect(waiting.waiting?.words).toBe(`Starts when “${first.title}” finishes`);
+    expect((await tasks.list()).capacity?.words).toBe('1 at once on this computer right now');
+    await until(
+      async () => engines.get('mock')?.held.length,
+      (n) => n === 1,
+    );
+    engines.get('mock')?.held.shift()?.();
+    const started = await until(
+      () => tasks.get(second.id),
+      (t) => t.status !== 'queued',
+    );
+    expect(started.waiting).toBeUndefined();
+    await until(
+      async () => engines.get('mock')?.held.length,
+      (n) => n === 1,
+    );
+    engines.get('mock')?.held.shift()?.();
+    await until(
+      () => status(tasks, second.id),
+      (s) => s === 'done',
+    );
+  });
+
+  it('Start now goes ahead of room, and only of room', async () => {
+    const { tasks, engines } = await setup({ background: 1 });
+    const first = await tasks.create({ kind: 'background', text: 'slow edit of src/app.ts' });
+    const second = await tasks.create({ kind: 'background', text: 'slow update of src/app.ts' });
+    const third = await tasks.create({ kind: 'background', text: 'slow look at the notes' });
+    await until(
+      () => status(tasks, first.id),
+      (s) => s === 'running',
+    );
+    const conflicted = await until(
+      () => tasks.get(second.id),
+      (t) => t.waiting !== undefined,
+    );
+    expect(conflicted.waiting).toMatchObject({
+      reason: 'conflict',
+      canStartNow: false,
+      on: [first.id],
+    });
+    expect(conflicted.waiting?.words).toMatch(/both change app\.ts$/);
+    await expect(tasks.startNow(second.id)).rejects.toBeInstanceOf(TaskError);
+    await until(
+      () => tasks.get(third.id),
+      (t) => t.waiting?.reason === 'room',
+    );
+    await tasks.startNow(third.id);
+    await until(
+      () => status(tasks, third.id),
+      (s) => s === 'running',
+    );
+    expect(await status(tasks, second.id)).toBe('queued');
+    const mock = engines.get('mock');
+    await until(
+      async () => mock?.held.length,
+      (n) => n === 2,
+    );
+    for (const release of mock?.held.splice(0) ?? []) release();
+    await until(
+      () => status(tasks, second.id),
+      (s) => s === 'running',
+    );
+    await until(
+      async () => mock?.held.length,
+      (n) => n === 1,
+    );
+    for (const release of mock?.held.splice(0) ?? []) release();
+    await until(
+      () => status(tasks, second.id),
+      (s) => s === 'done',
+    );
+  });
+
+  it('a provider that says slow down: what waits for it says so, until when, and starts after', async () => {
+    let offset = 0;
+    const { tasks, engines } = await setup({ now: () => Date.now() + offset });
+    const first = await tasks.create({
+      kind: 'background',
+      text: 'rate limited slow work',
+      options: { engine: 'openrouter' },
+    });
+    await until(
+      () => status(tasks, first.id),
+      (s) => s === 'running',
+    );
+    await until(
+      async () => engines.get('openrouter')?.held.length,
+      (n) => n === 1,
+    );
+    const second = await tasks.create({
+      kind: 'background',
+      text: 'more work',
+      options: { engine: 'openrouter' },
+    });
+    const held = await until(
+      () => tasks.get(second.id),
+      (t) => t.waiting?.reason === 'provider',
+    );
+    expect(held.waiting?.words).toBe('Other asked Conch to slow down');
+    expect(held.waiting?.retryAt).toBeGreaterThan(Date.now() + 15_000);
+    expect(held.waiting?.canStartNow).toBe(false);
+    // Another provider isn't held up by it.
+    const elsewhere = await tasks.create({ kind: 'background', text: 'quick one' });
+    await until(
+      () => status(tasks, elsewhere.id),
+      (s) => s === 'done',
+    );
+    // The pause passes: it starts.
+    offset = 21_000;
+    tasks.reconsider();
+    await until(
+      () => status(tasks, second.id),
+      (s) => s === 'done',
+    );
+    engines.get('openrouter')?.held.shift()?.();
+    await until(
+      () => status(tasks, first.id),
+      (s) => s === 'done',
+    );
+  });
+
+  it('an overloaded provider gets a pause too', async () => {
+    const { tasks } = await setup();
+    const first = await tasks.create({
+      kind: 'background',
+      text: 'overloaded',
+      options: { engine: 'openrouter' },
+    });
+    await until(
+      () => status(tasks, first.id),
+      (s) => s === 'failed',
+    );
+    const next = await tasks.create({
+      kind: 'background',
+      text: 'next',
+      options: { engine: 'openrouter' },
+    });
+    await until(
+      () => tasks.get(next.id),
+      (t) => t.waiting?.reason === 'provider',
+    );
+  });
+
+  it('the small model’s plan decides what runs beside what; nonsense or silence never holds work up', async () => {
+    const planned = JSON.stringify({
+      tasks: [
+        { n: 1, weight: 'medium', uses: ['model'], minutes: 2 },
+        { n: 2, weight: 'medium', uses: ['model'], minutes: 2 },
+      ],
+      conflicts: [[1, 2]],
+    });
+    let answer: (text: string) => void = () => undefined;
+    const planner = vi.fn(async () => ({
+      complete: () =>
+        new Promise<{ text: string }>((resolve) => (answer = (text) => resolve({ text }))),
+    }));
+    const { tasks, conversations, engines } = await setup({ planner, helpers: 1 });
+    const chat = await idleChat(conversations);
+    const abort = new AbortController();
+    const delegate = tasks
+      .tools(helperCtx(chat.id, engines.get('mock') as Engine, abort.signal))
+      .find((t) => t.name === 'delegate');
+    const pending = delegate?.run({
+      parts: [
+        {
+          title: 'Config A',
+          instructions: 'slow work on the config',
+          model: 'fast',
+          worktree: false,
+        },
+        {
+          title: 'Config B',
+          instructions: 'slow work on the config too',
+          model: 'fast',
+          worktree: false,
+        },
+      ],
+    } as never);
+    const [a, b] = await until(
+      async () =>
+        (await tasks.list()).tasks
+          .filter((t) => t.kind === 'helper')
+          .sort((x, y) => x.createdAt - y.createdAt),
+      (list) => list.length === 2 && list[0]?.status === 'running',
+    );
+    expect(planner).toHaveBeenCalledWith(chat.id);
+    await until(
+      async () => planner.mock.results.length,
+      (n) => n === 1,
+    );
+    answer(planned);
+    const waiting = await until(
+      () => tasks.get(b?.id ?? ''),
+      (t) => t.estimate?.by === 'model' && t.waiting?.reason === 'conflict',
+    );
+    expect(waiting.waiting?.words).toBe(
+      'Starts when “Config A” finishes: both change the same files',
+    );
+    expect(waiting.estimate?.touches).toEqual(['pair:0-1']);
+    expect((await tasks.get(a?.id ?? '')).estimate?.by).toBe('model');
+    abort.abort();
+    await pending;
+
+    // Nonsense back: the rules' estimates stand.
+    const nonsense = vi.fn(async () => ({
+      complete: async () => ({ text: 'They all look light.' }),
+    }));
+    const second = await setup({ planner: nonsense });
+    const one = await second.tasks.create({ kind: 'background', text: 'tidy the README' });
+    await until(
+      () => status(second.tasks, one.id),
+      (s) => s === 'done',
+    );
+    await until(
+      async () => nonsense.mock.calls.length,
+      (calls) => calls === 1,
+    );
+    expect((await second.tasks.get(one.id)).estimate?.by).toBe('rules');
+
+    // A planner that never answers: the work starts and finishes anyway.
+    const silent = vi.fn(async () => ({
+      complete: () => new Promise<{ text: string }>(() => undefined),
+    }));
+    const third = await setup({ planner: silent });
+    const quick = await third.tasks.create({ kind: 'background', text: 'tidy the notes' });
+    await until(
+      () => status(third.tasks, quick.id),
+      (s) => s === 'done',
+    );
+  });
+
+  it('task_status tells the assistant why a task waits', async () => {
+    const { tasks, conversations, engines } = await setup({ background: 1 });
+    const chat = await idleChat(conversations);
+    const first = await tasks.create({
+      kind: 'background',
+      text: 'slow one',
+      parentConversationId: chat.id,
+    });
+    const second = await tasks.create({
+      kind: 'background',
+      text: 'next one',
+      parentConversationId: chat.id,
+    });
+    await until(
+      () => tasks.get(second.id),
+      (t) => t.waiting !== undefined,
+    );
+    const statusTool = tasks
+      .tools(helperCtx(chat.id, engines.get('mock') as Engine, new AbortController().signal))
+      .find((t) => t.name === 'task_status');
+    const out = JSON.parse(
+      String(await statusTool?.run({ id: second.id } as never, undefined as never)),
+    );
+    expect(out[0].waiting).toBe(`Starts when “${first.title}” finishes · likely in about 4 min`);
+    await tasks.stop(first.id);
   });
 });

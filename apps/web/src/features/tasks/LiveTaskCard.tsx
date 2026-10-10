@@ -1,5 +1,5 @@
 import { assessTask, taskDoubt, taskWorth, type PermissionMode, type Task } from '@conch/protocol';
-import { InlineCode, TaskCard } from '@conch/nacre';
+import { InlineCode, TaskCard, type TaskWaitingInfo } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
@@ -7,7 +7,7 @@ import { useConversations } from '../../api/queries';
 import { useLive } from '../../live/LiveProvider';
 import { modeWords } from '../models/words';
 import { useOpenTask } from './open';
-import { useRemoveTask, useRetryTask, useStopTask } from './queries';
+import { useRemoveTask, useRetryTask, useStartNowTask, useStopTask } from './queries';
 
 /** "Full trust", "Ask first": the mode a task runs in, in the words the picker uses. */
 export function modeLabel(mode: PermissionMode | undefined): string | undefined {
@@ -18,6 +18,26 @@ export function modeLabel(mode: PermissionMode | undefined): string | undefined 
 export function withCode(text: string): ReactNode {
   const parts = text.split(/`([^`]+)`/);
   return parts.map((part, i) => (i % 2 ? <InlineCode key={i}>{part}</InlineCode> : part));
+}
+
+/**
+ * Why a waiting task waits, for its card and its line (ADR 0129), with **Start
+ * now** when it waits only for room and it hasn't been pressed already.
+ */
+export function useWaiting(): (task: Task) => TaskWaitingInfo | undefined {
+  const start = useStartNowTask();
+  return (task) => {
+    const waiting = task.status === 'queued' ? task.waiting : undefined;
+    if (!waiting) return undefined;
+    const starting = start.isPending && start.variables === task.id;
+    return {
+      words: waiting.words,
+      ...(waiting.retryAt !== undefined && { retryAt: waiting.retryAt }),
+      ...(waiting.expectedAt !== undefined && { expectedAt: waiting.expectedAt }),
+      ...(waiting.canStartNow &&
+        !task.startNow && { onStartNow: () => start.mutate(task.id), starting }),
+    };
+  };
 }
 
 /** What a finished task confirmed, and what it couldn't: behind its card's "Details". */
@@ -85,6 +105,7 @@ export function LiveTaskCard({
   const stop = useStopTask();
   const retry = useRetryTask();
   const remove = useRemoveTask();
+  const waitingOf = useWaiting();
   const asking = task.status === 'needs-you' && task.asking?.here ? task.asking : undefined;
   const answer = (decision: 'allow' | 'deny') => {
     if (!asking || !task.conversationId) return;
@@ -106,6 +127,7 @@ export function LiveTaskCard({
       startedAt={task.startedAt}
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
+      waiting={waitingOf(task)}
       steps={task.steps.map((s) => s.label)}
       renderStep={withCode}
       summary={task.summary}

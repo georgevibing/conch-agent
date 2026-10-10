@@ -41,8 +41,10 @@ import {
   channelOf,
   inChannel,
   offered,
+  openChannels,
   parseRelease,
   releaseOfTag,
+  steadiest,
   type Release,
 } from '../release/semver';
 import { SIGNERS_FILE, signerKeys, verifyTag, type Verdict } from '../release/signing';
@@ -67,6 +69,7 @@ const FETCH_TIMEOUT_MS = 60_000;
 /** Releases listed at most, newest first, when several wait. */
 const SHOWN = 6;
 const NS = 'refs/conch/tags/';
+const NAMES: Record<ReleaseChannel, string> = { stable: 'stable', beta: 'beta', alpha: 'alpha' };
 
 /** The version written in a Conch folder: its root `package.json`'s `version`. */
 export function versionOf(root: string): string | undefined {
@@ -110,6 +113,12 @@ export interface ReleaseCheck {
   fetched: boolean;
   /** Releases exist upstream at all (for "Conch now follows its releases"). */
   anyReleases: boolean;
+  /** The channel looked in: the one chosen, else the steadiest with a release (`steadiest`). */
+  channel?: ReleaseChannel;
+  /** The channels with a release to follow, steadiest first. */
+  channels?: ReleaseChannel[];
+  /** It follows its branch only because no channel was chosen that has releases: choosing one moves it to releases. */
+  canFollowReleases?: boolean;
   /** Who this copy trusts was learnt from the release itself (an install from before the first one). */
   firstTrust?: string;
   /** The channel the installer chose (`CONCH_CHANNEL`, kept as `git config conch.channel`). */
@@ -203,8 +212,21 @@ export class ReleaseFollower {
    */
   async source(
     git: Git,
-    { everyChange, anyReleases }: { everyChange: boolean; anyReleases: boolean },
-  ): Promise<{ source: 'releases' | 'branch'; why?: string }> {
+    {
+      everyChange,
+      anyReleases,
+      wanted = 'stable',
+      elsewhere = [],
+    }: {
+      everyChange: boolean;
+      /** Releases this copy would follow, in its channel. */
+      anyReleases: boolean;
+      /** The channel it would follow: chosen, else stable. */
+      wanted?: ReleaseChannel;
+      /** Channels with releases it doesn't follow (yet): it could choose one. */
+      elsewhere?: ReleaseChannel[];
+    },
+  ): Promise<{ source: 'releases' | 'branch'; why?: string; canFollowReleases?: boolean }> {
     if (everyChange)
       return { source: 'branch', why: 'Every change on main is on, for developers.' };
     const follow = (await git(['config', 'conch.follow'])).stdout.trim();
@@ -233,6 +255,12 @@ export class ReleaseFollower {
       return {
         source: 'branch',
         why: 'This copy has changes of its own, so it follows main as a developer’s copy.',
+      };
+    if (!anyReleases && elsewhere.length)
+      return {
+        source: 'branch',
+        why: `There’s no ${NAMES[wanted]} release yet, so Conch follows every change on main. To follow ${elsewhere.map((c) => NAMES[c]).join(' or ')} releases instead, choose a channel.`,
+        canFollowReleases: true,
       };
     if (!anyReleases)
       return { source: 'branch', why: 'Conch has no releases yet, so it follows every change.' };
@@ -314,15 +342,20 @@ export class ReleaseFollower {
     };
   }
 
-  /** Look for releases. With `fetch`, ask upstream first. */
+  /**
+   * Look for releases. With `fetch`, ask upstream first. `channel` is the one
+   * chosen in Settings; without it, the installer's (`CONCH_CHANNEL`), else
+   * the steadiest with a release, so an install from the first alpha gets the
+   * next alpha, and stable takes over once there's a stable release.
+   */
   async check({
     fetch,
-    channel,
+    channel: chosen,
     everyChange,
     failed,
   }: {
     fetch: boolean;
-    channel: ReleaseChannel;
+    channel?: ReleaseChannel;
     everyChange: boolean;
     failed: string[];
   }): Promise<ReleaseCheck> {
@@ -333,6 +366,9 @@ export class ReleaseFollower {
       offers: [],
       fetched: false,
       anyReleases: false,
+      channel: chosen ?? 'stable',
+      channels: [],
+      canFollowReleases: false,
     };
     const git = await this.#runner();
     if (!git)
@@ -352,10 +388,18 @@ export class ReleaseFollower {
     const all = await this.#found(git);
     const installedChannel = await this.installedChannel();
     const anyReleases = all.some(({ release }) => !release.pre);
-    // Stable waits for stable; an explicitly chosen prerelease channel may migrate earlier.
-    const { source, why } = await this.source(git, {
+    const releases = all.map(({ release }) => release);
+    const channels = openChannels(releases);
+    const picked = chosen ?? installedChannel;
+    const channel = picked ?? steadiest(releases) ?? 'stable';
+    // A copy of main moves to releases once there's a stable one, or once you
+    // choose a channel that has one: never by itself to an alpha or a beta.
+    const wanted = picked ?? 'stable';
+    const { source, why, canFollowReleases } = await this.source(git, {
       everyChange,
-      anyReleases: all.some(({ release }) => inChannel(release, channel)),
+      anyReleases: releases.some((release) => inChannel(release, wanted)),
+      wanted,
+      elsewhere: channels,
     });
     const base = {
       ...none,
@@ -364,6 +408,9 @@ export class ReleaseFollower {
       ...(why && { sourceWhy: why }),
       fetched,
       anyReleases,
+      channel,
+      channels,
+      canFollowReleases: Boolean(canFollowReleases),
       ...(problem && { problem }),
     };
     if (source === 'branch') return base;

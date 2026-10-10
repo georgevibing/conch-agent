@@ -36,7 +36,3 @@
 }
 
 /* Beside the version badge, in the eyebrow's own small size. */
-.otherDocs {
-  align-self: center;
-  font-size: var(--nc-text-sm);
-}

@@ -1746,6 +1746,47 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/c/c-helper'));
   });
 
+  it('starts a task that waits only for room, by name (ADR 0129)', async () => {
+    const user = userEvent.setup();
+    const waiting = (id: string, title: string, canStartNow: boolean) => ({
+      id,
+      kind: 'helper',
+      title,
+      prompt: title,
+      status: 'queued',
+      options: {},
+      createdAt: 1,
+      steps: [],
+      rev: 1,
+      waiting: { reason: canStartNow ? 'room' : 'conflict', words: 'Waiting', canStartNow },
+    });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'POST /api/tasks/w1/start-now': () => ({ ...waiting('w1', 'Check the docs build', true) }),
+    });
+    const { client } = renderApp(<Palette />);
+    client.setQueryData(taskKeys.all, {
+      concurrent: 1,
+      tasks: [
+        waiting('w1', 'Check the docs build', true),
+        waiting('w2', 'Tidy the auth helpers', false),
+      ],
+    });
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'start now');
+    expect(
+      screen.queryByRole('option', { name: /Start “Tidy the auth helpers” now/ }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('option', { name: /Start “Check the docs build” now/ }),
+    );
+    await waitFor(() =>
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/tasks/w1/start-now'),
+    );
+  });
+
   it('finds the model on this computer by the words people use for it', async () => {
     const user = userEvent.setup();
     mockFetch({

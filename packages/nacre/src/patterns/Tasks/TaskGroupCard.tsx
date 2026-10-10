@@ -1,4 +1,4 @@
-import { Check, ChevronRight, ShieldQuestion } from 'lucide-react';
+import { Check, ChevronRight, Play, ShieldQuestion } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -15,6 +15,7 @@ import {
   type TaskCardStatus,
 } from './TaskCard';
 import styles from './TaskGroupCard.module.css';
+import { taskWaitingLine, type TaskWaitingInfo } from './waiting';
 import { META_SEP } from '../../components/MetaList';
 
 /** One task of a batch, as its line on the batch's card. */
@@ -26,6 +27,8 @@ export interface TaskGroupItem {
   worth?: ReactNode;
   /** What it's doing right now, while it works. */
   current?: ReactNode;
+  /** Still waiting: why, and when that's known; `onStartNow` offers **Start now** (ADR 0129). */
+  waiting?: TaskWaitingInfo;
   /** Its result: its first sentence or so is its line once it's done. */
   summary?: string;
   /** What went wrong: its line, first, when it didn't finish. */
@@ -43,6 +46,11 @@ export interface TaskGroupCardProps extends Omit<ComponentProps<'article'>, 'tit
   tasks: TaskGroupItem[];
   /** Open one (its sheet, over the chat). */
   onOpen?: (id: string) => void;
+  /**
+   * How many this computer takes at once right now, while some wait for room:
+   * "4 at once on this computer right now" (ADR 0129). Shown only while it's live.
+   */
+  capacity?: ReactNode;
   /** For tests and stories. */
   now?: number;
 }
@@ -85,7 +93,14 @@ function batchStatus(tasks: TaskGroupItem[]): TaskCardStatus {
  * right there. Once every one has finished, the bar folds away and the lines
  * are the result: what each did, or why it didn't. Each opens its task.
  */
-export function TaskGroupCard({ tasks, onOpen, now, className, ...props }: TaskGroupCardProps) {
+export function TaskGroupCard({
+  tasks,
+  onOpen,
+  capacity,
+  now,
+  className,
+  ...props
+}: TaskGroupCardProps) {
   const titleId = useId();
   const live = tasks.some((t) => going(t.status));
   const time = useTick(live, now);
@@ -125,6 +140,10 @@ export function TaskGroupCard({ tasks, onOpen, now, className, ...props }: TaskG
         </p>
       </div>
 
+      {live && capacity && tasks.some((t) => t.status === 'queued') && (
+        <p className={styles.capacity}>{capacity}</p>
+      )}
+
       {/* Folded away once they've all finished: the lines say it then. */}
       <div className={styles.fold} data-open={live || undefined} aria-hidden={!live || undefined}>
         <div
@@ -141,7 +160,7 @@ export function TaskGroupCard({ tasks, onOpen, now, className, ...props }: TaskG
       <ul className={styles.lines}>
         {lines.map((task) => (
           <li key={task.id} className={styles.item} data-status={task.status}>
-            <GroupLine task={task} onOpen={onOpen} />
+            <GroupLine task={task} onOpen={onOpen} now={time} />
           </li>
         ))}
       </ul>
@@ -149,18 +168,30 @@ export function TaskGroupCard({ tasks, onOpen, now, className, ...props }: TaskG
   );
 }
 
-function GroupLine({ task, onOpen }: { task: TaskGroupItem; onOpen?: (id: string) => void }) {
-  const { status, asking } = task;
+function GroupLine({
+  task,
+  onOpen,
+  now,
+}: {
+  task: TaskGroupItem;
+  onOpen?: (id: string) => void;
+  now: number;
+}) {
+  const { status, asking, waiting } = task;
   const line =
-    status === 'running' || status === 'queued'
-      ? (task.current ?? (status === 'queued' ? TASK_STATUS_LABELS.queued : undefined))
-      : status === 'needs-you'
-        ? undefined
-        : wrong(status)
-          ? (taskHeadline(task.error) ?? TASK_STATUS_LABELS[status])
-          : status === 'stopped'
-            ? TASK_STATUS_LABELS.stopped
-            : (task.worth ?? taskHeadline(task.summary));
+    status === 'queued'
+      ? waiting
+        ? taskWaitingLine(waiting, now)
+        : (task.current ?? TASK_STATUS_LABELS.queued)
+      : status === 'running'
+        ? task.current
+        : status === 'needs-you'
+          ? undefined
+          : wrong(status)
+            ? (taskHeadline(task.error) ?? TASK_STATUS_LABELS[status])
+            : status === 'stopped'
+              ? TASK_STATUS_LABELS.stopped
+              : (task.worth ?? taskHeadline(task.summary));
   const word =
     taskLook(status, task.worth) === 'check'
       ? `${TASK_STATUS_LABELS[status]}, ${TASK_WORTH_A_LOOK.toLowerCase()}`
@@ -199,6 +230,20 @@ function GroupLine({ task, onOpen }: { task: TaskGroupItem; onOpen?: (id: string
             onClick={task.onChecked}
           >
             Checked
+          </Button>
+        </div>
+      )}
+      {status === 'queued' && waiting?.onStartNow && (
+        <div className={styles.checked}>
+          <Button
+            size="sm"
+            variant="ghost"
+            leadingIcon={<Play />}
+            aria-label={`Start “${task.title}” now`}
+            loading={waiting.starting}
+            onClick={waiting.onStartNow}
+          >
+            Start now
           </Button>
         </div>
       )}

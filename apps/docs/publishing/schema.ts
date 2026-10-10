@@ -13,7 +13,8 @@ export const PublishedRelease = z.object({
 export type PublishedRelease = z.infer<typeof PublishedRelease>;
 
 export const SitePublication = z.object({
-  channel: z.enum(['stable', 'development']),
+  /** The release's channel, or `development` for validated main. */
+  channel: z.enum(['stable', 'beta', 'alpha', 'development']),
   commit: z.string().regex(/^[0-9a-f]{40,64}$/),
   tag: z.string().optional(),
   next: z.boolean(),

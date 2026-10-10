@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-import { channelOf, newestFirst, releaseOfTag } from '../../server/src/release/semver';
+import {
+  channelOf,
+  newestFirst,
+  parseRelease,
+  releaseOfTag,
+  steadiest,
+  type Release,
+} from '../../server/src/release/semver';
 import { GitHubRelease, type PublishedRelease, type SitePublication } from './schema';
 
 /** Failure is not an empty release list. Every advertised release must check out. */
@@ -36,13 +43,39 @@ export async function publications(
   return newestFirst(published);
 }
 
-export function selectPublication(releases: PublishedRelease[], main: string): SitePublication {
-  const stable = newestFirst(releases).find((release) => release.channel === 'stable');
+/**
+ * The public site describes the newest release of the steadiest channel that
+ * has one: stable once there's a stable release, before that beta, then alpha
+ * (ADR 0093). Before the first release, or when that release's own site can't
+ * describe its channel (`describes`), it's validated main.
+ */
+export function selectPublication(
+  releases: PublishedRelease[],
+  main: string,
+  describes: (release: PublishedRelease) => boolean = () => true,
+): SitePublication {
+  const channel = steadiest(
+    releases.map((release) => parseRelease(release.version)).filter((r): r is Release => !!r),
+  );
+  const chosen = newestFirst(releases).find((release) => release.channel === channel);
+  const release = chosen && describes(chosen) ? chosen : undefined;
   return {
-    channel: stable ? 'stable' : 'development',
-    commit: stable?.commit ?? main,
-    ...(stable && { tag: stable.tag }),
+    channel: release?.channel ?? 'development',
+    commit: release?.commit ?? main,
+    ...(release && { tag: release.tag }),
     next: false,
     releases,
   };
+}
+
+/**
+ * Whether a release's own site (its `publishing/schema.ts`) can describe a
+ * release on `channel`: sites from before v0.1.0-alpha.2 knew only stable
+ * releases and development, and would refuse to build as an alpha.
+ */
+export function describesChannel(schema: string, channel: PublishedRelease['channel']): boolean {
+  const known = /SitePublication = z\.object\(\{[^]*?channel: z\.enum\(\[([^\]]*)\]\)/.exec(
+    schema,
+  )?.[1];
+  return known === undefined || known.includes(`'${channel}'`);
 }

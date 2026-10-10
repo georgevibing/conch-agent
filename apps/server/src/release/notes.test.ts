@@ -19,8 +19,10 @@ import {
   inChannel,
   isBreaking,
   offered,
+  openChannels,
   parseRelease,
   releaseOfTag,
+  steadiest,
   type Commit,
 } from './semver';
 
@@ -75,6 +77,19 @@ describe('release numbers', () => {
     expect(inChannel(beta, 'beta')).toBe(true);
     expect(inChannel(alpha, 'beta')).toBe(false);
     expect(inChannel(alpha, 'alpha')).toBe(true);
+  });
+
+  it('opens a channel once it has a release, and follows the steadiest by default', () => {
+    const of = (...versions: string[]) => versions.map(must);
+    expect(openChannels(of())).toEqual([]);
+    expect(steadiest(of())).toBeUndefined();
+    // The first alpha: only alpha has something to follow.
+    expect(openChannels(of('0.1.0-alpha.1'))).toEqual(['alpha']);
+    expect(steadiest(of('0.1.0-alpha.1'))).toBe('alpha');
+    expect(steadiest(of('0.1.0-alpha.2', '0.1.0-beta.1'))).toBe('beta');
+    // A stable release is on every channel, and always comes first.
+    expect(openChannels(of('0.1.0', '0.2.0-alpha.1'))).toEqual(['stable', 'beta', 'alpha']);
+    expect(steadiest(of('0.2.0-alpha.1', '0.1.0'))).toBe('stable');
   });
 
   it('offers the newest in the channel above this one, never a failed one, never older', () => {
@@ -175,6 +190,19 @@ describe('notes from commits', () => {
       c('fix(web): a typo'),
     ]);
     expect(notes.headsUp).toEqual(['Sign in again after updating']);
+  });
+
+  it('keeps a long heads-up to whole sentences, never half of one', () => {
+    const { notes } = notesFrom([
+      c(
+        'feat(server)!: a browser is let in once Conch opened it',
+        'BREAKING CHANGE: A browser on the computer running Conch is let in once Conch has opened it. If you typed the address yourself and see "Open Conch from your apps", do that once, or run `pnpm conch open`. Scripts need this computer’s key now.',
+      ),
+    ]);
+    expect(notes.headsUp).toEqual([
+      'A browser on the computer running Conch is let in once Conch has opened it',
+    ]);
+    expect(parseNotes(releaseBody(notes)).headsUp).toEqual(notes.headsUp);
   });
 
   it('keeps each group to a few lines, and the rest in one', () => {

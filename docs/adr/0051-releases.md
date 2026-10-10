@@ -117,11 +117,11 @@ strip it), into `CHANGELOG.md` and into the GitHub Release.
 
 Settings → Health → Updates offers three channels, in plain words:
 
-| Channel | Gets                            | In the app                                                   |
-| ------- | ------------------------------- | ------------------------------------------------------------ |
-| Stable  | `vX.Y.Z` (the default)          | Tested releases. Recommended.                                |
-| Beta    | beta and stable releases        | New things a little early. Mostly finished.                  |
-| Alpha   | alpha, beta and stable releases | The newest work, as soon as it's tagged. Expect rough edges. |
+| Channel | Gets                                   | In the app                                                   |
+| ------- | -------------------------------------- | ------------------------------------------------------------ |
+| Stable  | `vX.Y.Z` (the default once one exists) | Tested releases. Recommended.                                |
+| Beta    | beta and stable releases               | New things a little early. Mostly finished.                  |
+| Alpha   | alpha, beta and stable releases        | The newest work, as soon as it's tagged. Expect rough edges. |
 
 Choosing beta or alpha needs sudo mode. Going back to stable doesn't, and
 **never downgrades**. A copy on `0.4.0-beta.2` waits for the next stable
@@ -130,6 +130,13 @@ next one after it (0.4.0 or later): it never goes back a version by itself."
 
 The installer's `CONCH_CHANNEL` is kept as `git config conch.channel`. It's
 the channel until someone chooses one in Settings.
+
+**Until someone chooses**, the channel is the steadiest with a release: stable
+once there's a stable release, before that beta, then alpha (`steadiest` in
+`release/semver.ts`). So an install from the first alpha gets the next alpha,
+and stable takes over by itself once it exists. A channel with no release yet
+can't be chosen: the picker shows it, says "None yet." and leaves it disabled.
+The installers, the desktop app and the website all follow the same rule.
 
 ### Where a copy's updates come from
 
@@ -144,7 +151,11 @@ and **every change on its branch** (ADR 0019, unchanged):
 - a branch other than `main`: branch;
 - `main` with commits or edits of its own: branch (a developer's copy);
 - `main` before the first release in the selected channel exists: branch.
-  Stable waits for stable; choosing beta or alpha explicitly may move earlier;
+  Stable waits for stable; choosing beta or alpha explicitly may move earlier.
+  With an alpha or a beta out and nothing chosen, it says so ("There's no
+  stable release yet, so Conch follows every change on main. To follow alpha
+  releases instead, choose a channel.") and shows the picker with only those
+  channels open: a copy of main never moves to a pre-release by itself;
 - otherwise: releases.
 
 **Moving over.** A clone of `main` keeps updating as before until the first
@@ -263,11 +274,13 @@ the supervisor itself runs from (`CONCH_SUPERVISOR_ROOT`).
 
 ### Installing
 
-`scripts/install.sh` and `install.ps1` install the **newest stable release**
-by default. They clone, pick the tag, check its signature against the clone's
-own list (with git ≥ 2.34 and `ssh-keygen`), and check it out detached. A tag
-signed by anyone else stops the install. `CONCH_CHANNEL=beta|alpha` widens the
-pick. With no releases yet they stay on `main`, as before. `CONCH_BRANCH`
+`scripts/install.sh` and `install.ps1` install the **newest release of the
+steadiest channel with one**: stable, else beta, else alpha. They clone, pick
+the tag, check its signature against the clone's own list (with git ≥ 2.34 and
+`ssh-keygen`), and check it out detached. A tag signed by anyone else stops the
+install. That pick isn't written as `conch.channel`, so stable takes over once
+it exists. `CONCH_CHANNEL=stable|beta|alpha` picks a channel and keeps it.
+With no releases yet they stay on `main`, as before. `CONCH_BRANCH`
 (developers) clones that branch and sets `conch.follow branch`.
 
 Running the installer again on a release install doesn't pull. It says

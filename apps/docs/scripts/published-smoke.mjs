@@ -99,9 +99,8 @@ try {
       assert.deepEqual(violations, [], `${path} in ${mode}`);
       await tab.screenshot({ path: `.artifacts/site/${path.replaceAll('/', '_')}-${mode}.png` });
     }
-    await tab.getByRole('link', { name: 'Default docs', exact: true }).click();
-    await tab.waitForURL(`${origin}/docs/`);
-    await tab.getByRole('link', { name: 'Release notes', exact: true }).click();
+    await tab.goto(`${origin}/docs/`, { waitUntil: 'networkidle' });
+    await tab.getByRole('banner').getByRole('link', { name: 'Releases', exact: true }).click();
     await tab.waitForURL(`${origin}/releases/`);
     await tab.getByRole('tab', { name: 'Beta', exact: true }).click();
     assert.equal(

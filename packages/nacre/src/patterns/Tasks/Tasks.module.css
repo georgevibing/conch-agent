@@ -195,6 +195,7 @@
   }
 
   .current,
+  .waiting,
   .steps,
   .note,
   .outcome,
@@ -274,6 +275,14 @@
   .current {
     color: var(--nc-text);
     font-size: var(--nc-text-sm);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* Why it waits (ADR 0129): quieter than what a working one is doing. */
+  .waiting {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
@@ -448,6 +457,7 @@
     }
 
     .current,
+    .waiting,
     .steps,
     .note,
     .outcome,

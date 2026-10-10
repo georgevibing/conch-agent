@@ -59,6 +59,25 @@ export function inChannel(release: Release, channel: ReleaseChannel): boolean {
   return RANK[channelOf(release)] <= RANK[channel];
 }
 
+const CHANNELS: readonly ReleaseChannel[] = ['stable', 'beta', 'alpha'];
+
+/**
+ * The channels with a release to follow, steadiest first. A stable release is
+ * on every channel, so once there's one, every channel is open.
+ */
+export function openChannels(releases: readonly Release[]): ReleaseChannel[] {
+  return CHANNELS.filter((channel) => releases.some((release) => inChannel(release, channel)));
+}
+
+/**
+ * What follows releases when nobody chose a channel: the steadiest one with a
+ * release. Stable once there's a stable release; before that beta, then alpha,
+ * so the first installs get the first releases. None before the first release.
+ */
+export function steadiest(releases: readonly Release[]): ReleaseChannel | undefined {
+  return openChannels(releases)[0];
+}
+
 /** Newest first. */
 export function newestFirst<T extends { version: string }>(list: T[]): T[] {
   return [...list].sort((a, b) => compareVersions(b.version, a.version));

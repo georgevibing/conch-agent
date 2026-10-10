@@ -150,10 +150,19 @@ maintainer prefers their own name.
 - **Commits are checked.** `scripts/commits.mjs` checks every pull request's
   commit subjects and title against Conventional Commits, since they now decide
   versions on their own.
-- **A GitHub App token**, when `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY`
-  exist, lets release-please's pull request run CI. Pull requests opened with
-  `GITHUB_TOKEN` start no workflows. The token is limited to contents, pull
-  requests and issues.
+- **CI on the release pull request.** The runs of a pull request opened with
+  `GITHUB_TOKEN` wait for approval, as an outside contributor's do (the
+  repository asks it of all of them), and a waiting run keeps the branch rules
+  from passing even when the same checks passed elsewhere. So without an app,
+  the notes job approves them; they run `main`'s code with release-please's
+  version. If there are none, or it can't, it starts CI on the branch
+  (`workflow_dispatch`, once per commit). A GitHub App token, when
+  `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` exist, makes that
+  unnecessary. The token is limited to contents, pull requests and issues.
+- **Notes written ahead.** `release/notes/<version>.md` on `main`, in a
+  CHANGELOG section's shape, replaces the notes from the commits for that
+  version, so a release can be announced in more than its commits' lines and a
+  push to `main` doesn't undo it.
 - **Supply chain.** Every action is pinned to a commit. Each job asks only for the
   permissions it uses. No job that releases restores a dependency cache. The
   release jobs install with `--ignore-scripts`, filtered to the server.
@@ -189,11 +198,10 @@ What changes from ADR 0051's table is where the key lives.
 
 ## Known limits
 
-- A release pull request opened with `GITHUB_TOKEN` runs no CI, so a branch rule
-  requiring `check` blocks it unless the release app is set up, or an admin
-  bypasses the rule.
-- Editing notes by hand on the release branch lasts only until the next push to
-  `main`, which rewrites them from the commits.
+- Without the release app, the release pull request is `github-actions`' and
+  its CI shows as started by hand (by Release) rather than by the pull request.
+- Editing `CHANGELOG.md` by hand on the release branch lasts only until the next
+  push to `main`; `release/notes/<version>.md` is the lasting way.
 - The apps aren't code-signed for macOS or Windows yet. The workflow signs as soon
   as the certificates are secrets.
 - actionlint 1.7.12 doesn't know the `$/` reference yet. zizmor and GitHub do.

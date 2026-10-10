@@ -97,6 +97,17 @@ export class ResourcePace {
   }
 }
 
+/**
+ * May work the person asked for just now go on (a chat paused for an update,
+ * a task they pressed Start now on)? Yes when all is normal, and while the
+ * processor is merely busy; not while memory is short or Conch recovers. (A
+ * normal pace says `cause: 'recovery'`, so the phase is asked first.)
+ */
+export function admitsPlanned(pace: WorkloadPace): boolean {
+  if (pace.phase === 'normal') return true;
+  return !pace.critical && pace.cause !== 'memory' && pace.cause !== 'recovery';
+}
+
 /** Only fixed host-authored words. Never interpolate tool output, commands or other chats. */
 export function paceMessage(pace: WorkloadPace): string {
   const next =

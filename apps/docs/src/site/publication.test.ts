@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { publications, selectPublication } from '../../publishing/select';
+import { describesChannel, publications, selectPublication } from '../../publishing/select';
 import { verifyPublication } from '../../publishing/verify';
 import { SitePublication } from '../../publishing/schema';
 
@@ -18,22 +18,50 @@ const release = (tag: string, overrides = {}) => ({
 });
 
 describe('the version the public site describes', () => {
-  it('uses validated main with no releases, and still does with only alphas and betas', async () => {
+  it('uses validated main before the first release', async () => {
     const verify = vi.fn().mockResolvedValue(signed);
     const empty = selectPublication(await publications([], verify), main);
     expect(empty).toEqual({ channel: 'development', commit: main, next: false, releases: [] });
     expect(verify).not.toHaveBeenCalled();
-    const pre = selectPublication(
-      await publications([release('v0.3.0-alpha.1'), release('v0.3.0-beta.1')], verify),
-      main,
-    );
-    expect(pre.channel).toBe('development');
-    expect(pre.commit).toBe(main);
-    expect(pre.releases.map((r) => r.channel)).toEqual(['beta', 'alpha']);
-    expect(SitePublication.parse(pre)).toEqual(pre);
   });
 
-  it('chooses the highest stable semver regardless of publication order or newer prereleases', async () => {
+  it('describes the newest release of the steadiest channel there is: alpha, then beta, then stable', async () => {
+    const verify = async () => signed;
+    const alphas = selectPublication(
+      await publications([release('v0.1.0-alpha.1'), release('v0.1.0-alpha.2')], verify),
+      main,
+    );
+    expect(alphas).toMatchObject({ channel: 'alpha', tag: 'v0.1.0-alpha.2', commit: signed });
+    expect(SitePublication.parse(alphas)).toEqual(alphas);
+    // A beta is steadier than a newer alpha.
+    const betas = selectPublication(
+      await publications(
+        [release('v0.2.0-alpha.1'), release('v0.1.0-beta.1'), release('v0.1.0-alpha.3')],
+        verify,
+      ),
+      main,
+    );
+    expect(betas).toMatchObject({ channel: 'beta', tag: 'v0.1.0-beta.1' });
+    expect(betas.releases.map((r) => r.channel)).toEqual(['alpha', 'beta', 'alpha']);
+  });
+
+  it('stays on validated main when the release’s own site can’t describe its channel', async () => {
+    const releases = await publications([release('v0.1.0-alpha.1')], async () => signed);
+    const selected = selectPublication(releases, main, () => false);
+    expect(selected).toMatchObject({ channel: 'development', commit: main });
+    expect(selected.tag).toBeUndefined();
+  });
+
+  it('knows which sites can describe a pre-release', () => {
+    const before = `export const SitePublication = z.object({\n  channel: z.enum(['stable', 'development']),\n`;
+    const after = `export const SitePublication = z.object({\n  /** Its channel. */\n  channel: z.enum(['stable', 'beta', 'alpha', 'development']),\n`;
+    expect(describesChannel(before, 'stable')).toBe(true);
+    expect(describesChannel(before, 'alpha')).toBe(false);
+    expect(describesChannel(after, 'alpha')).toBe(true);
+    expect(describesChannel(after, 'beta')).toBe(true);
+  });
+
+  it('chooses the highest stable semver once there is one, over newer prereleases', async () => {
     const releases = await publications(
       [
         release('v0.9.0'),

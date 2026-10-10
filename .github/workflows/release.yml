@@ -232,6 +232,7 @@ jobs:
     permissions:
       contents: write # pushes the notes to the release branch
       pull-requests: write # rewrites the pull request’s description
+      actions: write # starts CI on the release branch when no app pushed it
     steps:
       # Merged in the moment since release-please updated it: its notes are past changing.
       - name: Is the pull request still open?
@@ -273,8 +274,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           pnpm release ci notes --body-file "$RUNNER_TEMP/body.md" --not-ready-file "$RUNNER_TEMP/not-ready"
-          # As CI's format check wants them, whatever words the notes have.
-          pnpm exec prettier --write CHANGELOG.md release-please-config.json
+          # As CI's format check wants them, whatever words the notes have, and
+          # release-please's manifest, which it writes as compact JSON.
+          pnpm exec prettier --write CHANGELOG.md release-please-config.json .release-please-manifest.json
       - name: Put them on the pull request
         if: steps.open.outputs.open == 'true'
         env:
@@ -283,13 +285,55 @@ jobs:
           PR: ${{ fromJSON(needs.release-please.outputs.pr).number }}
         run: |
           set -euo pipefail
-          git add -- CHANGELOG.md release-please-config.json
+          git add -- CHANGELOG.md release-please-config.json .release-please-manifest.json
           git rm --quiet --cached --ignore-unmatch -- release-notes.md
           if ! git diff --cached --quiet; then
             git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" commit --quiet -m "chore: Conch's notes for this release"
             git push --quiet origin HEAD
           fi
           gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+      # The pull request's own runs wait for approval (GitHub counts its bot as an
+      # outside contributor), and a waiting run keeps the branch rules from passing.
+      # Approve them: they run main's code with release-please's version, nothing
+      # else. If there are none, or approving isn't allowed, start CI on the branch.
+      - name: Run CI on the release pull request
+        if: steps.open.outputs.open == 'true' && vars.RELEASE_APP_CLIENT_ID == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          held() {
+            gh api "repos/${GH_REPO}/actions/runs?head_sha=${head}&event=pull_request&status=action_required" \
+              --jq '.workflow_runs[].id'
+          }
+          # They appear a moment after the push.
+          ids=""
+          for _ in 1 2 3 4 5 6; do
+            ids=$(held)
+            [ -n "$ids" ] && break
+            sleep 10
+          done
+          approved=0
+          for id in $ids; do
+            if gh api -X POST "repos/${GH_REPO}/actions/runs/${id}/approve" >/dev/null; then
+              approved=$((approved + 1))
+            fi
+          done
+          if [ "$approved" -gt 0 ]; then
+            echo "Approved ${approved} waiting run(s) on ${head:0:8}."
+            exit
+          fi
+          # Once a commit: a push to main that leaves the branch as it was starts nothing.
+          ran=$(gh run list --workflow ci.yml --commit "$head" --json databaseId --jq length)
+          if [ "$ran" = 0 ]; then
+            gh workflow run ci.yml --ref "$BRANCH"
+            echo "Started CI on ${BRANCH} (${head:0:8})."
+          else
+            echo "CI has already run on ${head:0:8}."
+          fi
       # Merged now, it couldn't be released: say so where the merge button is.
       - name: Is it ready to merge?
         if: steps.open.outputs.open == 'true'

@@ -17,8 +17,16 @@ function json(path: string): Record<string, unknown> {
   }
 }
 
-/** No network. Source checkouts use Git; packaged copies carry the build-time result. */
-export function readBuild(root: string): ConchBuild {
+/**
+ * No network. Source checkouts use Git; packaged copies carry the build-time
+ * result. Git gets a second at start-up (display only); a build that stamps
+ * the result waits longer (`gitTimeoutMs`): on a slow computer the first
+ * `git status` of a fresh checkout takes longer than that.
+ */
+export function readBuild(
+  root: string,
+  { gitTimeoutMs = 1_000 }: { gitTimeoutMs?: number } = {},
+): ConchBuild {
   const version = json(join(root, 'package.json')).version;
   const match = typeof version === 'string' ? VERSION.exec(version) : null;
   const channel = match?.[4] === 'alpha' ? 'alpha' : match?.[4] === 'beta' ? 'beta' : 'stable';
@@ -41,7 +49,7 @@ export function readBuild(root: string): ConchBuild {
       return execFileSync('git', args, {
         cwd: root,
         encoding: 'utf8',
-        timeout: 1_000,
+        timeout: gitTimeoutMs,
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
     } catch {

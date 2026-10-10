@@ -140,6 +140,48 @@ describe('the release pull request', () => {
     expect(result.files).toEqual(['CHANGELOG.md']);
   });
 
+  it('takes the notes written ahead on main for this version, in place of the commits’ lines', async () => {
+    const w = await world();
+    commit(
+      w.repo,
+      {
+        'release/notes/0.1.0-alpha.1.md':
+          'The first alpha: these lines are what people read.\n\n### Heads up\n\n- It’s an alpha: expect rough edges\n\n### New\n\n- One calm app for every model you pay for\n',
+      },
+      'docs: the first alpha’s notes',
+    );
+    git(w.repo, 'push', '--quiet', 'origin', 'main');
+    releaseBranch(w.repo, '0.1.0-alpha.1');
+    const result = await writePullRequestNotes({
+      root: w.repo,
+      git: w.git,
+      repository: REPO,
+      ai: false,
+      today,
+    });
+    expect(result.writtenIn).toBe('release/notes/0.1.0-alpha.1.md');
+    expect(result.notes).toEqual({
+      headsUp: ['It’s an alpha: expect rough edges'],
+      new: ['One calm app for every model you pay for'],
+      better: [],
+      fixed: [],
+    });
+    const changelog = readFileSync(join(w.repo, 'CHANGELOG.md'), 'utf8');
+    expect(changelog).toContain('### New\n\n- One calm app for every model you pay for');
+    expect(changelog).not.toContain('Edit pages by hand');
+    // Another version's notes are its own.
+    git(w.repo, 'checkout', '--quiet', '--', 'CHANGELOG.md');
+    releaseBranch(w.repo, '0.1.0-alpha.2');
+    const next = await writePullRequestNotes({
+      root: w.repo,
+      git: w.git,
+      repository: REPO,
+      ai: false,
+      today,
+    });
+    expect(next.writtenIn).toBeUndefined();
+  });
+
   it('builds on main’s changelog, newest first, and since the last release its channel saw', async () => {
     const w = await world();
     releaseBranch(w.repo, '0.1.0-alpha.1');

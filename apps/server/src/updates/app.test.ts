@@ -318,3 +318,28 @@ it('does not let an unpublished desktop base version hide its first release', as
     '0.1.0-beta.1',
   ]);
 });
+
+it('with no channel chosen, an app from the first alpha follows alpha until there’s a stable release', async () => {
+  const { proc } = appChannel();
+  const app = desktopApp({ CONCH_APP: 'C:\\Conch\\Conch.exe' }, proc);
+  if (!app) throw new Error('no app');
+  const make = (list: unknown[]) =>
+    new AppReleases({
+      app,
+      repository: REPO,
+      version: '0.1.0-alpha.1',
+      platform: 'win32',
+      arch: 'x64',
+      fetch: github(list).fake,
+    });
+  const early = await make([release('0.1.0-alpha.2'), release('0.1.0-alpha.1')]).check({});
+  expect(early).toMatchObject({ channel: 'alpha', channels: ['alpha'] });
+  expect(early.offers.map((o) => o.version)).toEqual(['0.1.0-alpha.2']);
+  const later = await make([
+    release('0.2.0-alpha.1'),
+    release('0.1.0'),
+    release('0.1.0-alpha.2'),
+  ]).check({});
+  expect(later).toMatchObject({ channel: 'stable', channels: ['stable', 'beta', 'alpha'] });
+  expect(later.offers.map((o) => o.version)).toEqual(['0.1.0']);
+});

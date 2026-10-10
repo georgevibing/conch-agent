@@ -7,14 +7,13 @@ import {
   ScrollArea,
   Sheet,
   Text,
-  TextLink,
   useNacreTheme,
 } from '@conch/nacre';
 import { ArrowUpRight, Menu, Moon, Search as SearchIcon, Sun } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { DEVELOPMENT, REPO_URL } from '../site/config';
+import { REPO_URL } from '../site/config';
 import styles from './Layout.module.css';
 
 // Search and the contents know every page, so they come with the guides, not with the front page.
@@ -49,8 +48,6 @@ export function Layout() {
   const [searching, setSearching] = useState(false);
   const [wantsSearch, setWantsSearch] = useState(false);
   const [menu, setMenu] = useState(false);
-  // The front page links what it needs from the bar and its footer.
-  const front = useLocation().pathname === '/';
   useScrollToPlace();
   const dark = theme.resolvedMode === 'dark';
 
@@ -140,13 +137,6 @@ export function Layout() {
         </div>
       </header>
 
-      {/* The development docs say so on every page: a search can land anywhere in them. */}
-      {!front && DEVELOPMENT && (
-        <Text as="p" size="sm" tone="muted" className={styles.version}>
-          These are the development docs: they describe what’s on main, ahead of the newest release.{' '}
-          <TextLink href="/docs/">Read the docs for the released version</TextLink>
-        </Text>
-      )}
       <Outlet />
 
       {/* Loaded the first time it's asked for: by the button, or by ⌘K. */}

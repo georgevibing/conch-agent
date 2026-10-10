@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EngineEvent, TurnInput } from '../types';
 import { prepare } from '../../scripts/wrapper';
+import { planWork } from '../../tasks/estimate';
 import { MockEngine, TIDY_SCRIPT } from './engine';
 
 function input(signal: AbortSignal): TurnInput {
@@ -33,6 +34,25 @@ describe('the mock engine', () => {
     }
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'interrupted' });
     expect(events.some((e) => e.type === 'done' && e.outcome === 'success')).toBe(false);
+  });
+
+  it('plans a batch of tasks the way a small model would, read by the same strict reader (ADR 0129)', async () => {
+    const engine = new MockEngine({ speed: 0.001 });
+    const parts = [
+      { title: 'Read the README', instructions: 'Read README.md and say what’s missing.' },
+      { title: 'Check the tests', instructions: 'Run the tests slowly in src/app.ts.' },
+      { title: 'Fix the app', instructions: 'Change the greeting in src/app.ts.' },
+    ];
+    const plan = await planWork(parts, { complete: (i) => engine.complete(i) });
+    expect(plan?.map((p) => [p.weight, p.by])).toEqual([
+      ['light', 'model'],
+      ['heavy', 'model'],
+      ['medium', 'model'],
+    ]);
+    expect(plan?.[1]?.touches).toContain('pair:1-2');
+    expect(plan?.[2]?.touches).toContain('pair:1-2');
+    const garbled = [{ title: 'x', instructions: 'plan-garbled' }];
+    expect(await planWork(garbled, { complete: (i) => engine.complete(i) })).toBeUndefined();
   });
 });
 

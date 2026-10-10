@@ -41,6 +41,9 @@ function status(patch: Partial<UpdatesStatus> = {}, conch: Partial<UpdatesStatus
       source: 'branch',
       channel: 'stable',
       everyChange: false,
+      channels: [],
+      channelChosen: false,
+      canFollowReleases: false,
       releases: [],
       announce: false,
       failed: [],
@@ -114,6 +117,32 @@ describe('Settings → Health → Updates', () => {
     const programs = screen.getByRole('list', { name: 'Programs Conch uses' });
     expect(programs.children[0]).toHaveTextContent('Claude Code2.1.284Up to date');
     expect(within(programs).getByRole('button', { name: 'Update to 0.160.0' })).toBeInTheDocument();
+  });
+
+  it('a copy of main, once there’s an alpha: says so, and offers the alpha channel only', async () => {
+    const user = userEvent.setup();
+    const following = {
+      sourceWhy:
+        'There’s no stable release yet, so Conch follows every change on main. To follow alpha releases instead, choose a channel.',
+      channels: ['alpha' as const],
+      canFollowReleases: true,
+    };
+    const calls = mockFetch({
+      'GET /api/updates': () => status({}, following),
+      'PATCH /api/updates/settings': () => status({}, following),
+    });
+    renderApp(<UpdatesSection />);
+    expect(await screen.findByText(following.sourceWhy)).toBeInTheDocument();
+    const group = screen.getByRole('radiogroup', { name: 'Which releases Conch gets' });
+    expect(within(group).getByRole('radio', { name: 'Stable' })).toBeDisabled();
+    expect(within(group).getByRole('radio', { name: 'Beta' })).toBeDisabled();
+    expect(within(group).queryByRole('radio', { checked: true })).toBeNull();
+    await user.click(within(group).getByRole('radio', { name: 'Alpha' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/updates/settings')?.body).toEqual({
+        channel: 'alpha',
+      }),
+    );
   });
 
   it('lists apps you added with a newer version: one press, or what changed first (ADR 0061)', async () => {

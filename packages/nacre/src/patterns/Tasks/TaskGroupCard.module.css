@@ -62,6 +62,15 @@
     white-space: nowrap;
   }
 
+  /* How many at once right now, while some wait for room (ADR 0129). */
+  .capacity {
+    margin: calc(-1 * var(--nc-space-1)) 0 0;
+    padding-inline-start: var(--tg-indent);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* ── The bar ── */
 
   .fold {

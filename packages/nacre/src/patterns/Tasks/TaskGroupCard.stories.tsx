@@ -115,3 +115,82 @@ export const TenAtOnce: Story = {
 export const OnAPhone: Story = {
   decorators: [(Story) => <div style={{ maxInlineSize: 343 }}>{Story()}</div>],
 };
+
+/**
+ * Five at once, where this computer has room for four right now (ADR 0129):
+ * the header says how many fit, each waiting line says why, and the one that
+ * waits only for room offers **Start now**.
+ */
+const fiveAtOnce: TaskGroupItem[] = [
+  {
+    id: 'a',
+    title: 'Fetch the release notes',
+    status: 'running',
+    startedAt: NOW - 40_000,
+    current: 'Reading github.com',
+  },
+  {
+    id: 'b',
+    title: 'Run the test suite',
+    status: 'running',
+    startedAt: NOW - 38_000,
+    current: (
+      <>
+        Running <InlineCode>pnpm test</InlineCode>
+      </>
+    ),
+  },
+  {
+    id: 'c',
+    title: 'Fix the login',
+    status: 'running',
+    startedAt: NOW - 38_000,
+    current: 'Changing src/auth.ts',
+  },
+  {
+    id: 'd',
+    title: 'Draft the changelog',
+    status: 'done',
+    startedAt: NOW - 40_000,
+    finishedAt: NOW - 10_000,
+    summary: 'Drafted the changelog for 2.4 with the five user-facing changes.',
+  },
+  {
+    id: 'e',
+    title: 'Tidy the auth helpers',
+    status: 'queued',
+    waiting: { words: 'Starts when “Fix the login” finishes: both change auth.ts' },
+  },
+  {
+    id: 'f',
+    title: 'Check the docs build',
+    status: 'queued',
+    waiting: {
+      words: 'Starts when one of the 3 working finishes',
+      expectedAt: NOW + 4 * 60_000,
+      onStartNow: () => undefined,
+    },
+  },
+];
+export const WaitingForRoom: Story = {
+  args: { tasks: fiveAtOnce, capacity: '3 at once on this computer right now' },
+};
+export const ProviderSlowingDown: Story = {
+  args: {
+    tasks: [
+      {
+        id: 'a',
+        title: 'Summarise the issues',
+        status: 'running',
+        startedAt: NOW - 20_000,
+        current: 'Reading the issue list',
+      },
+      {
+        id: 'b',
+        title: 'Summarise the pull requests',
+        status: 'queued',
+        waiting: { words: 'Codex asked Conch to slow down', retryAt: NOW + 20_000 },
+      },
+    ],
+  },
+};

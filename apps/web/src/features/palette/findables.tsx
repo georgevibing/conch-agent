@@ -59,6 +59,7 @@ import {
   MousePointerClick,
   ListChecks,
   ListPlus,
+  Play,
   History,
   KeyRound,
   Palette as PaletteIcon,
@@ -140,6 +141,8 @@ import { useConchApps } from '../conchapps/queries';
 import { appLook, conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { going, taskKeys } from '../tasks/queries';
+import { tasksApi } from '../tasks/api';
+import { ApiError } from '../../api/client';
 import { COMMANDS_FOCUS } from '../skills/CommandsSection';
 import { listingPath } from '../skills/Discover';
 import { useMarket } from '../skills/market';
@@ -980,6 +983,29 @@ export function useFindables(query: string, conversationId: string | undefined):
     run: () => void navigate(`/c/${item.conversationId}`),
   }));
 
+  // "Start now" (ADR 0129): a task that waits only for room, started by its name.
+  const startNowItems = find(
+    (tasks?.tasks ?? []).filter(
+      (t) => t.status === 'queued' && t.waiting?.canStartNow && !t.startNow,
+    ),
+    q,
+    (t) => `Start “${t.title}” now`,
+    (t) => `start now anyway go ahead waiting queued run ${t.title}`,
+    2,
+  ).map(({ item, match }): Findable => ({
+    id: `task-start:${item.id}`,
+    label: `Start “${item.title}” now`,
+    ranges: match.ranges,
+    description: item.waiting?.words,
+    icon: <Play />,
+    run: () =>
+      void tasksApi
+        .startNow(item.id)
+        .catch((error: unknown) =>
+          toast.error(error instanceof ApiError ? error.message : 'Couldn’t start it now.'),
+        ),
+  }));
+
   const places: {
     id: string;
     label: string;
@@ -1611,6 +1637,6 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Folders', items: [...folderItems, ...newInItems, ...moveItems] },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: [...artifactItems, ...editItems] },
-    { heading: 'Tasks', items: taskItems },
+    { heading: 'Tasks', items: [...startNowItems, ...taskItems] },
   ].filter((group) => group.items.length > 0);
 }

@@ -1,4 +1,4 @@
-import { Badge, Button, DocsHero, Heading, LinkCard, Text, TextLink } from '@conch/nacre';
+import { Badge, Button, DocsHero, Heading, LinkCard, Text } from '@conch/nacre';
 import {
   ArrowRight,
   Blocks,
@@ -60,10 +60,6 @@ export function Home() {
           <>
             <Badge tone="accent">Documentation</Badge>
             <Badge tone="neutral">{VERSION_LABEL}</Badge>
-            {/* The other set of docs: what's on main, or back to the released version. */}
-            <TextLink href={DEVELOPMENT ? '/docs/' : '/docs/next/'} className={styles.otherDocs}>
-              {DEVELOPMENT ? 'Docs for the released version' : 'Development docs'}
-            </TextLink>
           </>
         }
         title={

@@ -534,8 +534,13 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   days and only ever turn them off. Routes: `/api/skills/suggestions/{work,shelf}`.
 
 - **Hand it off** ([ADR 0033](./docs/adr/0033-hand-it-off.md)). `TaskService` runs each
-  task as a conversation with origin `task` (as routines do), at most 3 background and 4
-  helpers at once, the rest `queued`. A task reports with `report_result`; its status,
+  task as a conversation with origin `task` (as routines do), as many at once as fit
+  ([ADR 0129](./docs/adr/0129-tasks-start-when-there-is-room.md)): `tasks/estimate.ts` gives
+  each an estimate (rules at once, one small-model question per batch, never waited for) and
+  the pure `tasks/scheduler.ts` admits by this computer's room (the shared sample, the pace
+  and `GatewayRecovery.allowsWork`), each provider's AIMD pace (`ProviderPace`), conflicts
+  and order, fairly across chats; the rest stay `queued` with `Task.waiting` saying why, and
+  `POST /api/tasks/:id/start-now` starts one that waits only for room. A task reports with `report_result`; its status,
   `current` activity and `steps` follow its chat's events, and the chat it came from gets
   `task` events that the transcript folds into one live card. `delegate` (a host tool)
   starts helpers in the parent turn's mode, with the parent's taint, on the small model by

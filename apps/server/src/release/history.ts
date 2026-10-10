@@ -10,7 +10,7 @@
  */
 import { compareVersions } from '../updates/version';
 import type { Git } from '../updates/conch';
-import { notesFrom, type Notes } from './notes';
+import { emptyNotes, notesFrom, parseNotes, type Notes } from './notes';
 import { polish, type PolishDeps } from './polish';
 import {
   channelOf,
@@ -75,6 +75,8 @@ export interface ReleaseNotes {
   polishedBy?: string;
   /** Why they're as written from the commits, when a model was asked and didn't. */
   plainWhy?: string;
+  /** The file they were written in ahead of the release, when someone did (`notesFile`). */
+  writtenIn?: string;
   commits: Commit[];
   /** The release they're since; none for the first. */
   since?: Release;
@@ -104,7 +106,17 @@ export async function notesFor(
   });
 }
 
-/** The notes for the commits up to `head` since the release `since` (all of them without one). */
+/**
+ * Where notes written by hand ahead of a release are, on `main`: for a release
+ * worth more than its commits' lines, like the first one. In the shape of a
+ * CHANGELOG section (`### New`, `- …`); they're read as strictly as one.
+ */
+export const notesFile = (version: string) => `release/notes/${version}.md`;
+
+/**
+ * The notes for the commits up to `head` since the release `since` (all of
+ * them without one): the ones written ahead in `notesFile` when there are.
+ */
 export async function notesSince(
   git: Git,
   version: string,
@@ -118,6 +130,10 @@ export async function notesSince(
   const commits = await commitsIn(git, since ? `${tagOf(since.version)}..${head}` : head);
   const written = notesFrom(commits);
   const result: ReleaseNotes = { version, notes: written.notes, commits, ...(since && { since }) };
+  const file = notesFile(version);
+  const ahead = await git(['show', `${head}:${file}`]);
+  const byHand = ahead.code === 0 ? parseNotes(ahead.stdout) : undefined;
+  if (byHand && !emptyNotes(byHand)) return { ...result, notes: byHand, writtenIn: file };
   if (!ai) return result;
   const polished = await polish(version, written.groups, written.notes, polishDeps);
   return polished.kind === 'polished'

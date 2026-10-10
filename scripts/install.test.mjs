@@ -298,6 +298,35 @@ const pick = (tags, channel = 'stable') =>
     encoding: 'utf8',
   }).trim();
 
+const steadiest = (tags) =>
+  execFileSync('/bin/sh', ['-c', `${releasePart}\npick_steadiest`], {
+    input: tags.join('\n') + '\n',
+    encoding: 'utf8',
+  }).trim();
+
+test(
+  'with no channel asked for, the steadiest channel that has a release',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    await t.test('only alphas: the newest alpha', () => {
+      assert.equal(steadiest(['v0.1.0-alpha.1', 'v0.1.0-alpha.2']), 'alpha v0.1.0-alpha.2');
+    });
+    await t.test('a beta over a newer alpha', () => {
+      assert.equal(
+        steadiest(['v0.2.0-alpha.1', 'v0.1.0-beta.1', 'v0.1.0-alpha.3']),
+        'beta v0.1.0-beta.1',
+      );
+    });
+    await t.test('a stable release over everything newer', () => {
+      assert.equal(steadiest(['v0.2.0-alpha.1', 'v0.2.0-beta.1', 'v0.1.0']), 'stable v0.1.0');
+    });
+    await t.test('nothing before the first release', () => {
+      assert.equal(steadiest(['nightly']), '');
+      assert.equal(steadiest([]), '');
+    });
+  },
+);
+
 test('picking the release to install', { skip: process.platform === 'win32' }, async (t) => {
   const tags = [
     'v0.2.0',
@@ -489,6 +518,43 @@ test('installing a release', { skip: process.platform === 'win32' }, async (t) =
       w.cleanup();
     }
   });
+  await t.test('only an alpha: the alpha, leaving the channel to Conch', () => {
+    const w = releaseWorld({ tags: ['v0.1.0-alpha.1'] });
+    try {
+      const { ok, output } = w.install();
+      assert.ok(ok, output);
+      assert.equal(w.at(), 'v0.1.0-alpha.1');
+      assert.match(
+        output,
+        /Conch 0\.1\.0-alpha\.1, the newest alpha: there's no stable release yet/,
+      );
+      // Not written down: Conch follows the steadiest channel, so a stable release takes over.
+      assert.throws(() => w.git(w.dir, 'config', 'conch.channel'));
+    } finally {
+      w.cleanup();
+    }
+  });
+  await t.test('a beta over a newer alpha', () => {
+    const w = releaseWorld({ tags: ['v0.1.0-beta.1', 'v0.2.0-alpha.1'] });
+    try {
+      assert.ok(w.install().ok);
+      assert.equal(w.at(), 'v0.1.0-beta.1');
+      assert.throws(() => w.git(w.dir, 'config', 'conch.channel'));
+    } finally {
+      w.cleanup();
+    }
+  });
+  await t.test('CONCH_CHANNEL=stable with only an alpha: main, and it says why', () => {
+    const w = releaseWorld({ tags: ['v0.1.0-alpha.1'] });
+    try {
+      const { ok, output } = w.install({ CONCH_CHANNEL: 'stable' });
+      assert.ok(ok, output);
+      assert.match(output, /There's no stable release yet, so Conch follows every change/);
+      assert.equal(w.git(w.dir, 'symbolic-ref', '--short', 'HEAD'), 'main');
+    } finally {
+      w.cleanup();
+    }
+  });
   await t.test('CONCH_CHANNEL=beta takes the beta, and says so to Conch', () => {
     const w = releaseWorld({ tags: ['v0.2.0', 'v0.3.0-beta.1'] });
     try {
@@ -555,6 +621,9 @@ test('the Windows installer follows the same releases', () => {
   for (const piece of [
     'conch.follow branch',
     'conch.channel',
+    'Select-Steadiest',
+    "@('stable', 'beta', 'alpha')",
+    "there's no stable release yet",
     "'versions\\current'",
     'verify-tag',
     'CONCH_CHANNEL',

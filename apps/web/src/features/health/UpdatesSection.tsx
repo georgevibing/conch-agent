@@ -439,13 +439,15 @@ export function UpdatesSection() {
             </Button>
           </Stack>
         )}
-        {releases && !conch.everyChange && (
+        {(releases || conch.canFollowReleases) && !conch.everyChange && (
           <Stack gap={2}>
             <Heading level={4} size="sm" weight="medium">
               Release channel
             </Heading>
             <ReleaseChannelPicker
-              value={conch.channel}
+              // A copy of main that hasn't chosen releases yet has no channel to show.
+              value={releases ? conch.channel : undefined}
+              available={conch.channels.length ? conch.channels : undefined}
               disabled={actions.pending === 'channel' || Boolean(conch.running)}
               onValueChange={(channel) => void actions.setChannel(channel)}
               note={conch.waiting}

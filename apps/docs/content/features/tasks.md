@@ -30,13 +30,39 @@ The card stays where it first appeared and keeps itself current: what the task i
 
 In the chat list, a chat with tasks has a badge on its row saying how many there are and how they're going. Press it for a row per task: what it's doing now, how long it's been, a press to open its own chat, and **Stop** while it works. It opens by itself while something is going.
 
-The pearl by your assistant's name, at the top of the sidebar, says what your tasks are doing across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header. Up to three tasks work at once. The rest wait their turn.
+The pearl by your assistant's name, at the top of the sidebar, says what your tasks are doing across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header.
 
 A task you start from a new chat, or that another app starts, has no chat to come back to: it shows up in your chat list as a chat of its own, with its card at the top.
 
 Tasks started together, by one reply or one job split into parts, share one card: how many, how they're going in a line and a bar, then a line each. What needs your OK rises to the top and is answered right there. When the last one finishes, the bar folds away and the lines are the result: what each did, or why it didn't.
 
 Every task is a chat of its own. Press one, on its card or under its chat in the chat list, and it opens over the chat you're in: from the bottom on a phone, from the side on a computer. Read along, answer what it asks, or **Stop** it. The tasks started with it sit along the top, a mark each: tap one, swipe sideways on a phone, or use the arrow keys. Close it, or go back, and you're where you were. **Continue in full** opens its own chat, to give it more to do.
+
+## How many at once
+
+There's no fixed number. Conch starts as many tasks as your computer and your provider have room for right now, and starts the next one by itself as soon as there's room again.
+
+- **It sizes up each task first.** From what the task says, Conch guesses whether it's light (reading, searching, writing), medium (changing a few files) or heavy (a build, a full test run, a big download), and what it changes. When it may, it also asks your provider's small, cheap model, once for all the tasks started together, and only shows it what the tasks say. Work never waits for that answer. **Name new chats automatically**, in **Settings → General**, turns this question off too.
+- **It looks at your computer as it is.** The processor, the memory that's free, and the commands already running. A busy computer takes fewer; a roomy one more. Nothing that's working is ever stopped to make room.
+- **It's fair.** One chat's six tasks can't keep another chat's one waiting. Tasks started together start together when they all fit. One that has waited a while goes next.
+- **Two that change the same file take turns.** Name the file in what you ask, and they won't trip over each other.
+- **Your provider sets a pace too.** If it asks Conch to slow down, or is overloaded, its tasks wait a little and come back gradually. Other providers carry on.
+
+A waiting task says why, on its card and its line:
+
+| It says                                                       | What it means                                                                |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Starts when “Fix the login” finishes**                      | Every place is taken. Usually with about how long that should take.          |
+| **Starts when “Fix the login” finishes: both change auth.ts** | Both change the same file, so they take turns.                               |
+| **Starts after “Read the README”**                            | It needs the other one's result first.                                       |
+| **Waiting for memory: 2 heavy tasks working**                 | Your computer is short of memory.                                            |
+| **Waiting for the processor: this computer is busy**          | Something else is using the processor. Tasks start again once it settles.    |
+| **Codex asked Conch to slow down · trying again in 20s**      | Your provider asked for a pause. It counts down, then tries again by itself. |
+| **Waiting while Conch recovers**                              | Conch is getting its breath back after a busy spell, and starts work gently. |
+
+While some wait for room, a card of several tasks says how many fit right now: **3 at once on this computer right now**.
+
+A task that waits only for room has **Start now**, on its card and its line, and in <kbd>mod+k</kbd>. It starts at once, a little past what Conch would choose. It isn't offered when memory is short, while Conch recovers, when two tasks change the same file, or when your provider asked to slow down.
 
 ## When it needs you
 
@@ -79,7 +105,7 @@ In a task that's a chat of its own, **Remove** on its card hides the finished ta
 
 When a job splits into parts that don't need each other, your assistant can run them at once, each as a task, and bring the results back together. Tasks started together share one card in the chat, a line each.
 
-- One job splits into at most six parts. Helpers can't ask you a question with choices; anything that needs your OK still asks, as above.
+- One job splits into at most six parts, and they start as there's room for them (see [How many at once](#how-many-at-once)). Helpers can't ask you a question with choices; anything that needs your OK still asks, as above.
 - They use the provider's faster model, unless a part needs the full one.
 - A task can go to another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.
 - A task that changes code can work in its own copy of the folder, on its own branch. If it changed something, its card names the branch. Conch never merges it for you.
