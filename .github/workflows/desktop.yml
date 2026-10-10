@@ -111,6 +111,9 @@ jobs:
             put CSC_KEY_PASSWORD "$WIN_CSC_KEY_PASSWORD"
           fi
       - name: Build the app
+        env:
+          # A release's build stops here if it doesn't read as that release.
+          CONCH_RELEASE_TAG: ${{ inputs.tag }}
         run: pnpm desktop:build
       - name: Check it starts
         if: runner.os != 'Linux'

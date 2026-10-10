@@ -127,7 +127,14 @@ writeFileSync(
     2,
   )}\n`,
 );
-writeFileSync(join(conch, 'conch-build.json'), `${JSON.stringify(readBuild(repo), null, 2)}\n`);
+// Stamped once, so git may take its time. A build for a release tag must be that release.
+const build = readBuild(repo, { gitTimeoutMs: 120_000 });
+const tag = process.env.CONCH_RELEASE_TAG;
+if (tag && (build.kind !== 'release' || `v${build.version}` !== tag))
+  throw new Error(
+    `Building ${tag}, but this checkout reads as ${build.kind === 'release' ? `v${build.version}` : 'a development copy'}: is it clean, and at that tag?`,
+  );
+writeFileSync(join(conch, 'conch-build.json'), `${JSON.stringify(build, null, 2)}\n`);
 mkdirSync(join(conch, 'release'), { recursive: true });
 cpSync(join(repo, 'release', 'allowed_signers'), join(conch, 'release', 'allowed_signers'));
 cpSync(join(repo, 'apps', 'web', 'dist'), join(conch, 'apps', 'web', 'dist'), { recursive: true });
