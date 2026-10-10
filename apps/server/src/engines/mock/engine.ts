@@ -452,6 +452,42 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 400, outputTokens: 160, costUsd: 0.001 },
       };
     }
+    // How a batch of tasks runs (ADR 0128), the way a small model would: heavy for tests and
+    // builds, light for reading; two that name the same file conflict. "plan-fail" fails,
+    // "plan-garbled" answers nonsense (the rules' estimates stand either way).
+    if (input.system.startsWith('You plan how Conch runs tasks')) {
+      if (/plan-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
+      if (/plan-garbled/i.test(input.prompt)) return { text: 'They all look fine to me.' };
+      const lines = (/<tasks>\n([\s\S]*?)\n<\/tasks>/.exec(input.prompt)?.[1] ?? '').split('\n');
+      const files = lines.map((line) => new Set(line.match(/[\w./-]+\.\w{1,4}\b/g) ?? []));
+      const tasks = lines.map((line, i) => {
+        const heavy = /\b(tests?|build|install)\b/i.test(line);
+        const light = /\b(read|skim|look|search|say)\b/i.test(line);
+        return {
+          n: i + 1,
+          weight: heavy ? 'heavy' : light ? 'light' : 'medium',
+          uses: heavy ? ['cpu'] : /\bweb|site|search\b/i.test(line) ? ['network'] : ['model'],
+          minutes: heavy ? 6 : light ? 1 : 3,
+          changes: [],
+          after: [],
+        };
+      });
+      const conflicts = files.flatMap((mine, i) =>
+        files
+          .slice(i + 1)
+          .flatMap((theirs, j) =>
+            [...mine].some((file) => theirs.has(file)) ? [[i + 1, i + j + 2]] : [],
+          ),
+      );
+      return {
+        text: JSON.stringify({ tasks, conflicts }),
+        usage: {
+          inputTokens: 200 + lines.length * 60,
+          outputTokens: 30 * lines.length,
+          costUsd: 0.0003,
+        },
+      };
+    }
     // A story's headline (ADR 0103): "headline-fail" fails, "headline-garbled" answers nonsense.
     if (input.system.startsWith('You write the headline for a short run of steps')) {
       if (/headline-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
