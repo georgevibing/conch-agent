@@ -1,6 +1,4 @@
 import {
-  Badge,
-  Stack,
   Button,
   Heading,
   IconButton,
@@ -9,13 +7,14 @@ import {
   ScrollArea,
   Sheet,
   Text,
+  TextLink,
   useNacreTheme,
 } from '@conch/nacre';
 import { ArrowUpRight, Menu, Moon, Search as SearchIcon, Sun } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { DEVELOPMENT, REPO_URL, REPO_BRANCH, VERSION_LABEL } from '../site/config';
+import { DEVELOPMENT, REPO_URL } from '../site/config';
 import styles from './Layout.module.css';
 
 // Search and the contents know every page, so they come with the guides, not with the front page.
@@ -108,6 +107,11 @@ export function Layout() {
             <Button variant="ghost" tone="neutral" asChild>
               <Link to="/docs">Docs</Link>
             </Button>
+            <Button variant="ghost" tone="neutral" asChild>
+              <a href="/releases/" className={styles.source}>
+                Releases
+              </a>
+            </Button>
             <Button
               variant="surface"
               tone="neutral"
@@ -136,33 +140,12 @@ export function Layout() {
         </div>
       </header>
 
-      {!front && (
-        <Stack
-          direction="row"
-          wrap
-          align="center"
-          justify="between"
-          className={styles.version}
-          as="nav"
-          aria-label="Documentation versions"
-        >
-          <Stack direction="row" wrap align="center" gap={2}>
-            <Badge tone="neutral">{VERSION_LABEL}</Badge>
-            <Button variant="ghost" tone="neutral" size="sm" asChild>
-              <a href={`${REPO_URL}/tree/${REPO_BRANCH}`}>Source</a>
-            </Button>
-          </Stack>
-          <Stack direction="row" wrap gap={1}>
-            <Button variant="ghost" tone="neutral" size="sm" asChild>
-              <a href={DEVELOPMENT ? '/docs/' : '/docs/next/'}>
-                {DEVELOPMENT ? 'Default docs' : 'Development docs'}
-              </a>
-            </Button>
-            <Button variant="ghost" tone="neutral" size="sm" asChild>
-              <a href="/releases/">Release notes</a>
-            </Button>
-          </Stack>
-        </Stack>
+      {/* The development docs say so on every page: a search can land anywhere in them. */}
+      {!front && DEVELOPMENT && (
+        <Text as="p" size="sm" tone="muted" className={styles.version}>
+          These are the development docs: they describe what’s on main, ahead of the newest release.{' '}
+          <TextLink href="/docs/">Read the docs for the released version</TextLink>
+        </Text>
       )}
       <Outlet />
 

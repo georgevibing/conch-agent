@@ -34,3 +34,9 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
   gap: var(--nc-space-3);
 }
+
+/* Beside the version badge, in the eyebrow's own small size. */
+.otherDocs {
+  align-self: center;
+  font-size: var(--nc-text-sm);
+}
