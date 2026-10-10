@@ -44,7 +44,7 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
       return fail(reply, error);
     }
   });
-  // "Start now": only a task that waits for room, and only while this computer can take it (ADR 0128).
+  // "Start now": only a task that waits for room, and only while this computer can take it (ADR 0129).
   app.post<{ Params: { id: string } }>('/api/tasks/:id/start-now', async (request, reply) => {
     try {
       return await tasks.startNow(request.params.id);

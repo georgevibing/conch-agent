@@ -1746,7 +1746,7 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/c/c-helper'));
   });
 
-  it('starts a task that waits only for room, by name (ADR 0128)', async () => {
+  it('starts a task that waits only for room, by name (ADR 0129)', async () => {
     const user = userEvent.setup();
     const waiting = (id: string, title: string, canStartNow: boolean) => ({
       id,

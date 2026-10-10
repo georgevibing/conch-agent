@@ -6,7 +6,7 @@
 - Amended: 2026-10-06 (every provider hands off through Conch's tasks; what a task
   inherits; tasks under their chat, below)
 - Amended: 2026-10-07 (what one reply starts is one batch; a task opens over its chat, below)
-- Amended: 2026-10-10 (as many at once as there is room for, ADR 0128, below)
+- Amended: 2026-10-10 (as many at once as there is room for, ADR 0129, below)
 - Builds on: [ADR 0005](./0005-usage-limits.md) (budgets that never block),
   [ADR 0006](./0006-routines.md) (a run is a conversation),
   [ADR 0023](./0023-offline-and-limits.md) (carrying on at a limit),
@@ -79,7 +79,7 @@ the chat's provider and model. It reports its result with `report_result`, a
 tool only a task has. If a turn ends without one, its last reply becomes the
 summary.
 
-**Limits.** (Replaced by ADR 0128, below.) At most 3 background tasks and 4 helpers ran at once; the rest waited
+**Limits.** (Replaced by ADR 0129, below.) At most 3 background tasks and 4 helpers ran at once; the rest waited
 their turn (`queued`).
 
 **Where you see it.**
@@ -389,7 +389,7 @@ Asking for ten things at once made ten cards and ten chats to jump between.
 
 ## Amended 2026-10-10: as many as there's room for, and why the rest wait
 
-"Limits" above is replaced by [ADR 0128](./0128-tasks-start-when-there-is-room.md). There is no
+"Limits" above is replaced by [ADR 0129](./0129-tasks-start-when-there-is-room.md). There is no
 fixed count: each task gets an estimate (rules at once, a small model's when one may be asked),
 and a scheduler starts what fits this computer and its provider now, fairly across chats, with a
 ceiling and a floor. Two that change the same thing take turns. Every waiting task says why

@@ -51,7 +51,7 @@ export const Running: Story = {};
 export const Queued: Story = {
   args: { status: 'queued', startedAt: undefined, current: undefined, steps: [] },
 };
-/** Waiting says why (ADR 0128): here, only for room, so **Start now** is offered. */
+/** Waiting says why (ADR 0129): here, only for room, so **Start now** is offered. */
 export const WaitingForRoom: Story = {
   args: {
     status: 'queued',

@@ -601,7 +601,7 @@ export class Services {
         if (process.send && process.connected) process.send(message, () => undefined);
       },
       recovered: async () => {
-        // Tasks waiting while Conch recovered are weighed again at once (ADR 0128).
+        // Tasks waiting while Conch recovered are weighed again at once (ADR 0129).
         this.tasks.reconsider();
         await this.routines.start();
         this.tidy.stop();
@@ -1474,12 +1474,15 @@ export class Services {
     });
     this.doctor.register(checkInCheck(this.checkins));
     this.tasks = new TaskService({
-      // How many fit now (ADR 0128): the gateway's own admission and the shared reading,
+      // How many fit now (ADR 0129): the gateway's own admission and the shared reading,
       // never a second sampler.
       machine: async () => {
         const snapshot = await this.processes.resourceSnapshot().catch(() => undefined);
+        // The same notion of room a provider's own shell is held by (`room()`).
+        const room = this.recovery.room();
         return {
-          allowed: this.recovery.allowsWork,
+          allowed: room.room,
+          ...(!room.room && { hold: room.reason }),
           planned: this.recovery.allowsPlanned,
           cpuCount: snapshot?.cpuCount ?? availableParallelism(),
           ...(snapshot && { snapshot }),

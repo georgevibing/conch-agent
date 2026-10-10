@@ -1428,7 +1428,7 @@ export const ServerEvent = z.discriminatedUnion('type', [
   /** A task changed (ADR 0033). */
   z.object({ type: z.literal('task.changed'), task: Task }),
   z.object({ type: z.literal('task.deleted'), taskId: z.string() }),
-  /** How many tasks this computer takes at once changed (ADR 0128). */
+  /** How many tasks this computer takes at once changed (ADR 0129). */
   z.object({ type: z.literal('task.capacity'), capacity: TaskCapacity }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),

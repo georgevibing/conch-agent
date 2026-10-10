@@ -1,4 +1,4 @@
-# 0128 — Tasks start when there's room, and say why they wait
+# 0129 — Tasks start when there's room, and say why they wait
 
 - Status: accepted
 - Date: 2026-10-10
@@ -65,8 +65,12 @@ computer adds its share of the processor). A task starts when, in this order:
 
 1. what it starts after has finished, and nothing working (or ahead of it in line) changes what
    it changes;
-2. the gateway's admission says automatic work may start (ADR 0094). This is the same signal
-   recovery uses, so a busy or short-of-memory computer, or Conch recovering, holds everything;
+2. the gateway says there's room for new work: `GatewayRecovery.room()`, checked in the same
+   order as `allowsWork` (ADR 0094). It is the one notion of room: the same one that holds a
+   provider's own shell commands, so a task never starts while a command would be refused, and
+   its reason code (`memory`, `cpu`, `easing`, `recovering`, `not-measured`…) is the one a waiting
+   task's words are made from. A busy or short-of-memory computer, or Conch recovering, holds
+   everything;
 3. its provider isn't pausing and has room (§4);
 4. fewer than the ceiling are working: twice the processors, from 2 to 12;
 5. with nothing of Conch's working, it starts, however big (the floor);
@@ -151,3 +155,9 @@ strike, never more than two minutes, so a plan that's used up still reaches the 
   that change the same file without saying so can still run together; worktrees remain the way
   to keep code-changing parts apart.
 - The GPU isn't read. A model on this computer is held to one at a time instead.
+- The managed command queue (`ProcessService`) still admits by the pace's slot count, which
+  comes back sooner than `room()` does (one slot after 30 calm seconds, while `room()` waits for
+  the pace to be fully normal). Tasks and a provider's shell share `room()`; folding the queue
+  into it too is left for its own change.
+- `admitsPlanned` (Start now, a chat paused for an update) now lets work go on when the pace is
+  normal; before, a normal pace's `cause: 'recovery'` held it exactly when all was well.

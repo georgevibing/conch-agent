@@ -36,7 +36,7 @@ describe('the mock engine', () => {
     expect(events.some((e) => e.type === 'done' && e.outcome === 'success')).toBe(false);
   });
 
-  it('plans a batch of tasks the way a small model would, read by the same strict reader (ADR 0128)', async () => {
+  it('plans a batch of tasks the way a small model would, read by the same strict reader (ADR 0129)', async () => {
     const engine = new MockEngine({ speed: 0.001 });
     const parts = [
       { title: 'Read the README', instructions: 'Read README.md and say what’s missing.' },

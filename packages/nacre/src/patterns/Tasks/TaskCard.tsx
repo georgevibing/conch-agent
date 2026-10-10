@@ -58,7 +58,7 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   /** What it's doing right now: "Running `npm test`". */
   current?: ReactNode;
   /**
-   * Still waiting: why, in a few words, and when that's known (ADR 0128). With
+   * Still waiting: why, in a few words, and when that's known (ADR 0129). With
    * `onStartNow`, it waits only for room, and **Start now** is offered.
    */
   waiting?: TaskWaitingInfo;

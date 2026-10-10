@@ -40,7 +40,7 @@ export function applyTaskEvent(
   event: Extract<ServerEvent, { type: `task.${string}` }>,
   navigate?: (to: string) => void,
 ) {
-  // How many run at once right now (ADR 0128): the header of a batch's card says it.
+  // How many run at once right now (ADR 0129): the header of a batch's card says it.
   if (event.type === 'task.capacity') {
     client.setQueryData<TaskList>(taskKeys.all, (list) =>
       list
@@ -124,7 +124,7 @@ export const useRetryTask = () =>
   useTaskMutation(tasksApi.retry, 'queued', 'Couldn’t start it again.');
 
 /**
- * "Start now" on a task that waits only for room (ADR 0128). It stays Waiting
+ * "Start now" on a task that waits only for room (ADR 0129). It stays Waiting
  * until the gateway starts it; if it can't, it says why.
  */
 export function useStartNowTask() {

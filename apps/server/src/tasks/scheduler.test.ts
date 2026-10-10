@@ -50,7 +50,7 @@ const plenty = (): ProviderRoom => ({ limit: 100 });
 const run = (input: Partial<ScheduleInput> & Pick<ScheduleInput, 'queued'>) =>
   schedule({ now: NOW, machine: roomy(), running: [], provider: plenty, ...input });
 
-describe('how many start: room, not a number (ADR 0128)', () => {
+describe('how many start: room, not a number (ADR 0129)', () => {
   it('starts all five of a batch on a roomy computer, where four used to be the most', () => {
     const queued = Array.from({ length: 5 }, () => slot({ group: 'g1' }));
     const plan = run({ queued });
@@ -169,6 +169,35 @@ describe('how many start: room, not a number (ADR 0128)', () => {
     expect(recovering.capacity).toMatchObject({ atOnce: 0, words: 'Waiting while Conch recovers' });
     const unknown = run({ queued, machine: roomy({ allowed: false, planned: false }) });
     expect(unknown.waiting.get(held.id)?.words).toBe('Checking this computer has room');
+  });
+
+  it('says the gateway’s own reason for holding, the one a shell command is held by', () => {
+    const held = slot();
+    const why = (hold: Machine['hold']) =>
+      run({ queued: [held], machine: roomy({ allowed: false, planned: false, hold }) }).waiting.get(
+        held.id,
+      );
+    expect(why('easing')).toMatchObject({
+      reason: 'recovering',
+      words: 'Easing back in: this computer was busy a moment ago',
+      canStartNow: false,
+    });
+    expect(why('memory')?.reason).toBe('memory');
+    expect(why('cpu')?.reason).toBe('cpu');
+    expect(why('stopping')?.words).toBe('Waiting while Conch stops');
+    expect(why('not-measured')?.words).toBe('Checking this computer has room');
+    // The reason wins over the pace's cause.
+    expect(
+      run({
+        queued: [held],
+        machine: roomy({
+          allowed: false,
+          planned: false,
+          hold: 'recovering',
+          pace: { phase: 'held', cause: 'cpu', critical: false },
+        }),
+      }).waiting.get(held.id)?.words,
+    ).toBe('Waiting while Conch recovers');
   });
 
   it('names what keeps the processor busy: its own tasks, or managed commands', () => {

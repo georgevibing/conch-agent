@@ -63,7 +63,7 @@ function BatchCard({
   const socket = useLive();
   const remove = useRemoveTask();
   const waitingOf = useWaiting();
-  // How many this computer takes at once right now, while some wait for room (ADR 0128).
+  // How many this computer takes at once right now, while some wait for room (ADR 0129).
   const capacity = useTasks().data?.capacity?.words;
   // The answer is on its way: its buttons wait for it to land.
   const [answered, setAnswered] = useState<string>();

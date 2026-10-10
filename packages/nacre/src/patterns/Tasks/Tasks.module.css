@@ -278,7 +278,7 @@
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
-  /* Why it waits (ADR 0128): quieter than what a working one is doing. */
+  /* Why it waits (ADR 0129): quieter than what a working one is doing. */
   .waiting {
     color: var(--nc-text-muted);
     font-size: var(--nc-text-sm);

@@ -158,7 +158,7 @@ test('more than there’s room for: the rest say why they wait, and one can star
   await composer.press('Enter');
   const card = page.getByRole('article', { name: '3 tasks' });
   await expect(card).toBeVisible();
-  // Three heavy builds don't fit this computer at once (ADR 0128): the others say why.
+  // Three heavy builds don't fit this computer at once (ADR 0129): the others say why.
   await expect(card.getByText('Starts when “Build the app” finishes').first()).toBeVisible({
     timeout: 15_000,
   });

@@ -13,7 +13,7 @@ const base = {
   createdAt: 1,
 };
 
-describe('a waiting task on the wire (ADR 0128)', () => {
+describe('a waiting task on the wire (ADR 0129)', () => {
   it('carries its estimate and why it waits, and an older copy without them still reads', () => {
     const task = Task.parse({
       ...base,

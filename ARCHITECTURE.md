@@ -535,7 +535,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
 
 - **Hand it off** ([ADR 0033](./docs/adr/0033-hand-it-off.md)). `TaskService` runs each
   task as a conversation with origin `task` (as routines do), as many at once as fit
-  ([ADR 0128](./docs/adr/0128-tasks-start-when-there-is-room.md)): `tasks/estimate.ts` gives
+  ([ADR 0129](./docs/adr/0129-tasks-start-when-there-is-room.md)): `tasks/estimate.ts` gives
   each an estimate (rules at once, one small-model question per batch, never waited for) and
   the pure `tasks/scheduler.ts` admits by this computer's room (the shared sample, the pace
   and `GatewayRecovery.allowsWork`), each provider's AIMD pace (`ProviderPace`), conflicts

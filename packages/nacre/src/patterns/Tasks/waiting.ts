@@ -1,5 +1,5 @@
 /**
- * Why a task is still waiting (ADR 0128), as its card and line say it: the
+ * Why a task is still waiting (ADR 0129), as its card and line say it: the
  * reason in a few words, then, when it's known, when it tries again or about
  * when it should start. The words come from the gateway; the time is counted
  * here, every second, so it stays true. (Mirrors `waitingWhen` in

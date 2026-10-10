@@ -452,7 +452,7 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 400, outputTokens: 160, costUsd: 0.001 },
       };
     }
-    // How a batch of tasks runs (ADR 0128), the way a small model would: heavy for tests and
+    // How a batch of tasks runs (ADR 0129), the way a small model would: heavy for tests and
     // builds, light for reading; two that name the same file conflict. "plan-fail" fails,
     // "plan-garbled" answers nonsense (the rules' estimates stand either way).
     if (input.system.startsWith('You plan how Conch runs tasks')) {
@@ -1184,7 +1184,7 @@ export class MockEngine implements Engine {
         yield* speak('The wait is over, so I’m carrying on from here.');
         return;
       }
-      // More than this computer has room for at once (ADR 0128): three heavy builds, the
+      // More than this computer has room for at once (ADR 0129): three heavy builds, the
       // first long, so the others wait for room and say so.
       if (
         /\bbuild everything\b/i.test(input.prompt) &&

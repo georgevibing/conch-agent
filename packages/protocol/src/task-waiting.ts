@@ -1,5 +1,5 @@
 /**
- * A waiting task's line, as a person reads it (ADR 0128): why it waits, then,
+ * A waiting task's line, as a person reads it (ADR 0129): why it waits, then,
  * when it's known, when it tries again ("trying again in 20s") or about when it
  * should start ("likely in about 3 min"). The words come from the gateway; the
  * time is counted here, so it stays true as the seconds pass.

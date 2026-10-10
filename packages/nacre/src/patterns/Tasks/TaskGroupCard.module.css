@@ -62,7 +62,7 @@
     white-space: nowrap;
   }
 
-  /* How many at once right now, while some wait for room (ADR 0128). */
+  /* How many at once right now, while some wait for room (ADR 0129). */
   .capacity {
     margin: calc(-1 * var(--nc-space-1)) 0 0;
     padding-inline-start: var(--tg-indent);

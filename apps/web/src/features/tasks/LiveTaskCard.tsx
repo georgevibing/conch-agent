@@ -21,7 +21,7 @@ export function withCode(text: string): ReactNode {
 }
 
 /**
- * Why a waiting task waits, for its card and its line (ADR 0128), with **Start
+ * Why a waiting task waits, for its card and its line (ADR 0129), with **Start
  * now** when it waits only for room and it hasn't been pressed already.
  */
 export function useWaiting(): (task: Task) => TaskWaitingInfo | undefined {

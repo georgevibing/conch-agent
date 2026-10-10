@@ -9,7 +9,7 @@ import { taskWaitingLine, taskWaitingWhen } from './waiting';
 
 const NOW = 1_790_000_000_000;
 
-describe('a waiting task says why (ADR 0128)', () => {
+describe('a waiting task says why (ADR 0129)', () => {
   it('its card says the reason, counts down a retry, and offers Start now only when given', async () => {
     const user = userEvent.setup();
     const onStartNow = vi.fn();

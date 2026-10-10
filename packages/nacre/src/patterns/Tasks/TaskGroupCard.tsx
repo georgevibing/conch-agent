@@ -27,7 +27,7 @@ export interface TaskGroupItem {
   worth?: ReactNode;
   /** What it's doing right now, while it works. */
   current?: ReactNode;
-  /** Still waiting: why, and when that's known; `onStartNow` offers **Start now** (ADR 0128). */
+  /** Still waiting: why, and when that's known; `onStartNow` offers **Start now** (ADR 0129). */
   waiting?: TaskWaitingInfo;
   /** Its result: its first sentence or so is its line once it's done. */
   summary?: string;
@@ -48,7 +48,7 @@ export interface TaskGroupCardProps extends Omit<ComponentProps<'article'>, 'tit
   onOpen?: (id: string) => void;
   /**
    * How many this computer takes at once right now, while some wait for room:
-   * "4 at once on this computer right now" (ADR 0128). Shown only while it's live.
+   * "4 at once on this computer right now" (ADR 0129). Shown only while it's live.
    */
   capacity?: ReactNode;
   /** For tests and stories. */

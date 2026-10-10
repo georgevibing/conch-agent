@@ -71,7 +71,7 @@ it('accepts bounded outcome checks without accepting tool authority, hashing exa
   await app.close();
 });
 
-it('starts a waiting task now, and says why when it can’t (ADR 0128)', async () => {
+it('starts a waiting task now, and says why when it can’t (ADR 0129)', async () => {
   const app = Fastify();
   const startNow = vi.fn(async (id: string) => {
     if (id === 'held') throw new TaskError('busy', 'This one waits for something other than room.');

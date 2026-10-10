@@ -4,7 +4,7 @@
  * - **Background tasks** — "Do it in the background": you send a message
  *   away and carry on. It runs as its own conversation (you can open it,
  *   approve things in it, stop it), as many at once as this computer and its
- *   provider have room for (ADR 0128), the rest waiting with a reason. When it's done its result comes back to the chat it came from, and
+ *   provider have room for (ADR 0129), the rest waiting with a reason. When it's done its result comes back to the chat it came from, and
  *   you're told (in Conch, and on your devices, ADR 0027).
  * - **Helpers** — the assistant splits a job (`delegate`): up to six parts run
  *   side by side, each in its own conversation (on a cheaper model unless the
@@ -76,7 +76,7 @@ import {
 
 /**
  * Parts one `delegate` can start: a guard on what one call may ask for, not
- * how many run at once (that's this computer's room, ADR 0128).
+ * how many run at once (that's this computer's room, ADR 0129).
  */
 export const MAX_PARTS = 6;
 /** While anything waits, the readings are looked at again this often. */
@@ -175,7 +175,7 @@ export interface TaskDeps {
   /** A fixed most-at-once for helpers (tests; unset in Conch). */
   helpers?: number;
   /**
-   * This computer now (ADR 0128): the gateway's admission (`allowsWork`,
+   * This computer now (ADR 0129): the gateway's admission (`allowsWork`,
    * `allowsPlanned`), the latest shared reading and the pace. Absent, only
    * `allowed` and the processor count.
    */
@@ -238,7 +238,7 @@ export class TaskService {
   #wake?: NodeJS.Timeout;
   #closed = false;
   readonly #creation = new Mutex();
-  /** Each provider's pace: slower after "slow down", back one at a time (ADR 0128). */
+  /** Each provider's pace: slower after "slow down", back one at a time (ADR 0129). */
   readonly #pace: ProviderPace;
   #tight: Tight = {};
   /** The same batch is estimated once. */
@@ -462,7 +462,7 @@ export class TaskService {
   }
 
   /**
-   * "Start now": a task that waits only for room goes ahead (ADR 0128). It
+   * "Start now": a task that waits only for room goes ahead (ADR 0129). It
    * still waits for memory, a provider that asked to slow down, and anything
    * it mustn't run beside; and never more than a couple past the ceiling.
    */
@@ -488,7 +488,7 @@ export class TaskService {
   }
 
   /**
-   * One question to the small model for a batch (ADR 0128): what each part
+   * One question to the small model for a batch (ADR 0129): what each part
    * asks of the computer, what it changes, what waits for what. Never waited
    * for; when it lands, what's still waiting is weighed again.
    */
@@ -802,7 +802,7 @@ export class TaskService {
   }
 
   /**
-   * Start whatever fits now, and say why the rest waits (ADR 0128). One pass at
+   * Start whatever fits now, and say why the rest waits (ADR 0129). One pass at
    * a time; again when a task finishes or is added, when the planner answers,
    * and every few seconds while anything waits.
    */
@@ -1133,7 +1133,7 @@ export class TaskService {
       // A provider may still have an in-flight call after its turn ends or is stopped.
       operationsClosed = true;
       if (this.#closed) return;
-      // Refused or overloaded: what waits for this provider waits a little (ADR 0128).
+      // Refused or overloaded: what waits for this provider waits a little (ADR 0129).
       if (turn.outcome === 'error' && (turn.problem === 'limit' || turn.problem === 'unavailable'))
         this.#slowDown(engine);
       // A limit another provider can answer (ADR 0023): carry on with it, once.
@@ -1572,7 +1572,7 @@ export class TaskService {
         const expectations = args.parts.map((part) => part.checks && taskExpectations(part.checks));
         const group = this.#batchOf(ctx);
         const tasks = [];
-        // Every part is made before any starts, so the batch is weighed as one (ADR 0128).
+        // Every part is made before any starts, so the batch is weighed as one (ADR 0129).
         for (const [i, part] of args.parts.entries())
           tasks.push(
             await this.create({

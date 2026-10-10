@@ -983,7 +983,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     run: () => void navigate(`/c/${item.conversationId}`),
   }));
 
-  // "Start now" (ADR 0128): a task that waits only for room, started by its name.
+  // "Start now" (ADR 0129): a task that waits only for room, started by its name.
   const startNowItems = find(
     (tasks?.tasks ?? []).filter(
       (t) => t.status === 'queued' && t.waiting?.canStartNow && !t.startNow,

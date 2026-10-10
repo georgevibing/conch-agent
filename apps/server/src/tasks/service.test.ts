@@ -1929,7 +1929,7 @@ describe('declared completion contracts through task tools', () => {
   });
 });
 
-describe('how many run at once, and why the rest wait (ADR 0128)', () => {
+describe('how many run at once, and why the rest wait (ADR 0129)', () => {
   const GiB = 1024 ** 3;
   const helperCtx = (conversationId: string, engine: Engine, signal: AbortSignal) => ({
     conversationId,
@@ -2254,7 +2254,7 @@ describe('how many run at once, and why the rest wait (ADR 0128)', () => {
     const out = JSON.parse(
       String(await statusTool?.run({ id: second.id } as never, undefined as never)),
     );
-    expect(out[0].waiting).toBe(`Starts when “${first.title}” finishes`);
+    expect(out[0].waiting).toBe(`Starts when “${first.title}” finishes · likely in about 4 min`);
     await tasks.stop(first.id);
   });
 });

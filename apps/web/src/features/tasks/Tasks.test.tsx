@@ -466,7 +466,7 @@ describe('Tasks', () => {
     await waitFor(() => expect(where()).toBe('/c/c1?task=t2'));
   });
 
-  it('a waiting task says why on its batch’s card, the header how many fit, and Start now asks the gateway (ADR 0128)', async () => {
+  it('a waiting task says why on its batch’s card, the header how many fit, and Start now asks the gateway (ADR 0129)', async () => {
     const user = userEvent.setup();
     const batch = [
       task({ id: 'b1', title: 'Fix the login', group: 'g', parentConversationId: 'c1' }),

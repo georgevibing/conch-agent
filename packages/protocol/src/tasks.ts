@@ -106,7 +106,7 @@ export const TaskCheck = TaskExpectation.omit({ inputHash: true }).extend({
 export type TaskCheck = z.infer<typeof TaskCheck>;
 export const TaskChecks = z.array(TaskCheck).min(1).max(100);
 
-/** How much a task asks of this computer while it works (ADR 0128). */
+/** How much a task asks of this computer while it works (ADR 0129). */
 export const TaskWeight = z.enum(['light', 'medium', 'heavy']);
 export type TaskWeight = z.infer<typeof TaskWeight>;
 
@@ -115,7 +115,7 @@ export const TaskUse = z.enum(['cpu', 'memory', 'disk', 'network', 'model']);
 export type TaskUse = z.infer<typeof TaskUse>;
 
 /**
- * What Conch expects of a task before it starts (ADR 0128): from the provider's
+ * What Conch expects of a task before it starts (ADR 0129): from the provider's
  * small model when one may be asked, else from rules. It only ever decides when
  * a task starts and what it runs beside; it never grants anything.
  */
@@ -133,7 +133,7 @@ export const TaskEstimate = z.object({
 });
 export type TaskEstimate = z.infer<typeof TaskEstimate>;
 
-/** Why a task is still waiting (ADR 0128). */
+/** Why a task is still waiting (ADR 0129). */
 export const TaskWaitReason = z.enum([
   /** Every place is taken: it starts when one finishes. */
   'room',
@@ -274,9 +274,9 @@ export const Task = z.object({
       retained: z.boolean().optional(),
     })
     .optional(),
-  /** What Conch expects of it, for deciding when it starts (ADR 0128). */
+  /** What Conch expects of it, for deciding when it starts (ADR 0129). */
   estimate: TaskEstimate.optional(),
-  /** Still `queued`: why, and until when when that's known (ADR 0128). */
+  /** Still `queued`: why, and until when when that's known (ADR 0129). */
   waiting: TaskWaiting.optional(),
   /** The person pressed "Start now": it goes ahead of what's waiting for room. */
   startNow: z.boolean().optional(),
@@ -286,7 +286,7 @@ export const Task = z.object({
 export type Task = z.infer<typeof Task>;
 
 /**
- * How many tasks this computer takes at once right now (ADR 0128): worked out
+ * How many tasks this computer takes at once right now (ADR 0129): worked out
  * from its processor and memory as they are, each task's size and each
  * provider's pace, never a fixed number.
  */
@@ -304,7 +304,7 @@ export const TaskList = z.object({
   tasks: z.array(Task),
   /** How many run at once; the rest wait their turn. */
   concurrent: z.number().int().positive(),
-  /** The same, live, and what holds the rest back (ADR 0128). */
+  /** The same, live, and what holds the rest back (ADR 0129). */
   capacity: TaskCapacity.optional(),
 });
 export type TaskList = z.infer<typeof TaskList>;

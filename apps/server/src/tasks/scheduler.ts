@@ -1,5 +1,5 @@
 /**
- * How many tasks start, and which (ADR 0128). Not a fixed count: every time
+ * How many tasks start, and which (ADR 0129). Not a fixed count: every time
  * something changes (a task finishes, one is added, the computer's readings
  * move, a provider asks to slow down), `schedule` works out what fits now.
  *
@@ -39,6 +39,7 @@ import type {
   TaskWeight,
 } from '@conch/protocol';
 
+import type { HoldReason } from '../recovery/gateway';
 import type { WorkloadPace } from '../recovery/pace';
 import { memoryReserve, type ResourceSnapshot } from '../recovery/resources';
 
@@ -115,7 +116,12 @@ export interface Machine {
   cpuCount: number;
   /** The latest reading, when there is one: none in tests, and before the first sample. */
   snapshot?: Pick<ResourceSnapshot, 'totalBytes' | 'availableBytes' | 'loadPerCpu'>;
-  /** The shared pace (ADR 0094), for why automatic work is held. */
+  /**
+   * Why the gateway holds new work, when it does (`GatewayRecovery.room()`): the
+   * one notion of room that a provider's own shell commands are held by too.
+   */
+  hold?: HoldReason;
+  /** The shared pace (ADR 0094), for why automatic work is held when `hold` isn't known. */
   pace?: Pick<WorkloadPace, 'phase' | 'cause' | 'critical'>;
   /** Managed commands running (`ProcessService`): each is held to take half a processor. */
   commands?: number;
@@ -178,6 +184,16 @@ export interface Schedule {
   /** Look again by then (a provider's pause ends). */
   wakeAt?: number;
 }
+
+/** A gateway hold that isn't memory or the processor, in a waiting task's words. */
+const HOLD_WORDS: Record<Exclude<HoldReason, 'memory' | 'cpu'>, string> = {
+  recovering: 'Waiting while Conch recovers',
+  easing: 'Easing back in: this computer was busy a moment ago',
+  stopping: 'Waiting while Conch stops',
+  'not-answering': 'Checking this computer has room',
+  'not-measured': 'Checking this computer has room',
+  held: 'Checking this computer has room',
+};
 
 const ROOM_REASONS: ReadonlySet<TaskWaitReason> = new Set(['room', 'memory', 'cpu']);
 const quoted = (title: string) => `“${title.length > 48 ? `${title.slice(0, 47)}…` : title}”`;
@@ -332,17 +348,18 @@ export function schedule(input: ScheduleInput): Schedule {
     // 3. The gateway's own admission (ADR 0094): nothing automatic starts while it says no.
     const forced = slot.startNow === true;
     if (!machine.allowed && !(forced && machine.planned)) {
-      const pace = machine.pace;
-      if (pace?.cause === 'memory') return wait(slot, 'memory', memoryWords());
-      if (pace?.cause === 'cpu')
-        return wait(slot, 'cpu', cpuWords(), { canStartNow: machine.planned });
-      return wait(
-        slot,
-        'recovering',
-        pace?.cause === 'recovery'
-          ? 'Waiting while Conch recovers'
-          : 'Checking this computer has room',
-      );
+      const hold =
+        machine.hold ??
+        (machine.pace?.cause === 'memory'
+          ? 'memory'
+          : machine.pace?.cause === 'cpu'
+            ? 'cpu'
+            : machine.pace?.cause === 'recovery'
+              ? 'recovering'
+              : 'not-measured');
+      if (hold === 'memory') return wait(slot, 'memory', memoryWords());
+      if (hold === 'cpu') return wait(slot, 'cpu', cpuWords(), { canStartNow: machine.planned });
+      return wait(slot, 'recovering', HOLD_WORDS[hold]);
     }
     // 4. Its provider's pace.
     const room = input.provider(slot);
@@ -536,7 +553,7 @@ export function schedule(input: ScheduleInput): Schedule {
   };
 }
 
-/** A provider's own pace (ADR 0128): halve on "slow down", come back one at a time. */
+/** A provider's own pace (ADR 0129): halve on "slow down", come back one at a time. */
 interface PaceState {
   limit: number;
   base: number;
