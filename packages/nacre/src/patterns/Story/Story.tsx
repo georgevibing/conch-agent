@@ -493,58 +493,62 @@ export function Story({
         data-arriving={arriving || undefined}
         {...props}
       >
-        <Collapsible.Trigger className={styles.header} data-lustre="">
-          <StoryMark family={family} status={status} arriving={arriving} />
-          <span className={styles.title}>
-            <MorphText text={headline} animate={arriving} className={styles.headline} />
-            {/* "×3" only where the line is one thing done again: beside "Read 3 pages" it
+        {/* The row and its line beneath are one surface: the wash, the rim and the
+            focus ring go round both, and the row's press reaches over the line. */}
+        <div className={styles.lead} data-lustre="" data-disabled={!expandable || undefined}>
+          <Collapsible.Trigger className={styles.header}>
+            <StoryMark family={family} status={status} arriving={arriving} />
+            <span className={styles.title}>
+              <MorphText text={headline} animate={arriving} className={styles.headline} />
+              {/* "×3" only where the line is one thing done again: beside "Read 3 pages" it
                 would say the whole story happened twice. Opened, the fold says it. */}
-            {repeats > 0 && steps.length <= 1 && (
-              <span className={styles.times} aria-hidden>
-                ×{repeats + 1}
-              </span>
-            )}
-            {outcome && ' '}
-            {outcome && (
-              <span className={styles.outcome}>
-                <span className={styles.dot} aria-hidden>
-                  ·
+              {repeats > 0 && steps.length <= 1 && (
+                <span className={styles.times} aria-hidden>
+                  ×{repeats + 1}
                 </span>
-                <MorphText text={outcome} animate={arriving} />
-              </span>
-            )}
-          </span>
-          <span className={styles.meta} aria-hidden>
-            {where && <WorkedAt kind={where.kind} name={where.name} />}
-            {faces.length > 0 && <ChipStack chips={faces} />}
-            {steps.length > 1 && <span className={styles.count}>{stepsLabel(steps.length)}</span>}
-            <Clock status={status} startedAt={startedAt} durationMs={durationMs} />
-            {expandable && <ChevronRight className={styles.chevron} />}
-          </span>
-          <span className="nc-visually-hidden">{spokenTail}</span>
-        </Collapsible.Trigger>
+              )}
+              {outcome && ' '}
+              {outcome && (
+                <span className={styles.outcome}>
+                  <span className={styles.dot} aria-hidden>
+                    ·
+                  </span>
+                  <MorphText text={outcome} animate={arriving} />
+                </span>
+              )}
+            </span>
+            <span className={styles.meta} aria-hidden>
+              {where && <WorkedAt kind={where.kind} name={where.name} />}
+              {faces.length > 0 && <ChipStack chips={faces} />}
+              {steps.length > 1 && <span className={styles.count}>{stepsLabel(steps.length)}</span>}
+              <Clock status={status} startedAt={startedAt} durationMs={durationMs} />
+              {expandable && <ChevronRight className={styles.chevron} />}
+            </span>
+            <span className="nc-visually-hidden">{spokenTail}</span>
+          </Collapsible.Trigger>
 
-        <div
-          className={styles.below}
-          data-shown={lineText !== undefined || undefined}
-          data-stuck={lineIsStuck || undefined}
-        >
-          <div className={styles.belowInner}>
-            {shownLine !== undefined &&
-              (lineIsStuck ? (
-                <p className={styles.stuck} data-tone={stuckTone}>
-                  <Hourglass aria-hidden />
-                  <span>{shownLine}</span>
-                </p>
-              ) : (
-                <LiveLine
-                  text={shownLine}
-                  source={liveSource}
-                  active={running}
-                  announce={false}
-                  className={styles.live}
-                />
-              ))}
+          <div
+            className={styles.below}
+            data-shown={lineText !== undefined || undefined}
+            data-stuck={lineIsStuck || undefined}
+          >
+            <div className={styles.belowInner}>
+              {shownLine !== undefined &&
+                (lineIsStuck ? (
+                  <p className={styles.stuck} data-tone={stuckTone}>
+                    <Hourglass aria-hidden />
+                    <span>{shownLine}</span>
+                  </p>
+                ) : (
+                  <LiveLine
+                    text={shownLine}
+                    source={liveSource}
+                    active={running}
+                    announce={false}
+                    className={styles.live}
+                  />
+                ))}
+            </div>
           </div>
         </div>
 

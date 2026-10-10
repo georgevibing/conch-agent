@@ -187,6 +187,55 @@ export const Narrated: S = {
   },
 };
 
+/** A grouped run reading code, the assistant narrating the step at hand beneath it. */
+const narratedGroup = {
+  headline: 'Reading 3 files',
+  outcome: '25 matches',
+  family: 'explore',
+  status: 'running',
+  live: 'Read guard refusal helper',
+  liveSource: 'provider',
+  steps: [...readSteps.slice(0, 3), doing(readSteps[3] as StoryStepView, 'Reading activity.ts')],
+  chips: files,
+  startedAt: Date.now() - 34_000,
+  durationMs: undefined,
+} satisfies Partial<StoryProps>;
+
+/**
+ * The row and its line beneath are one surface: hover anywhere on either and
+ * the wash, the lustre rim and the press take in both, so the line never sits
+ * half outside the row's highlight. Pressing the line opens the row.
+ */
+export const NarratedGroup: S = {
+  args: narratedGroup,
+  play: async ({ canvasElement }) => {
+    const row = within(canvasElement).getByRole('button', { name: /^Reading 3 files/ });
+    const line = within(canvasElement).getByText('Read guard refusal helper');
+    const surface = row.parentElement as HTMLElement;
+    const [s, l] = [surface.getBoundingClientRect(), line.getBoundingClientRect()];
+    // The line sits inside the surface that's washed on hover…
+    await expect(l.top).toBeGreaterThanOrEqual(s.top);
+    await expect(l.bottom).toBeLessThanOrEqual(s.bottom);
+    // …and a press on it lands on the row.
+    const hit = canvasElement.ownerDocument.elementFromPoint(
+      l.left + l.width / 2,
+      l.top + l.height / 2,
+    );
+    await expect(hit).toBe(row);
+  },
+};
+
+/** Focused from the keyboard: the ring goes round the row and its line, as the hover wash does. */
+export const NarratedGroupFocused: S = {
+  args: narratedGroup,
+  play: async ({ canvasElement }) => {
+    await userEvent.tab();
+    await expect(
+      within(canvasElement).getByRole('button', { name: /^Reading 3 files/ }),
+    ).toHaveFocus();
+  },
+};
+
 /** Didn't work: a warm note on the well and the outcome, never red. */
 export const Failed: S = {
   args: {

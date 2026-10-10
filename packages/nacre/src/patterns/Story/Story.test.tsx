@@ -183,6 +183,28 @@ describe('Story', () => {
     expect(screen.getByText('Still waiting for the tests to start.')).toBeInTheDocument();
   });
 
+  it('draws its row and the line beneath as one surface, outside the button’s name', async () => {
+    const { container } = renderNacre(
+      <Story {...tests} status="running" live="Read guard refusal helper" liveSource="provider" />,
+    );
+    const row = screen.getByRole('button', { name: /^Ran the server tests/ });
+    const line = screen.getByText('Read guard refusal helper');
+    // The hover wash, the rim and the focus ring are the surface's, round both.
+    const surface = row.parentElement;
+    expect(surface).toHaveAttribute('data-lustre');
+    expect(surface).toContainElement(line);
+    expect(surface).not.toHaveAttribute('data-disabled');
+    // The line stays out of the row's name, so a screen reader hears it once.
+    expect(row).not.toHaveAccessibleName(/Read guard refusal helper/);
+    await expectAccessible(container);
+  });
+
+  it('has no hover surface when there is nothing to open', () => {
+    renderNacre(<Story {...tests} steps={[]} />);
+    const row = screen.getByRole('button', { name: /^Ran the server tests/ });
+    expect(row.parentElement).toHaveAttribute('data-disabled');
+  });
+
   it('holds as it was while working between two steps of a run that goes on', () => {
     vi.useFakeTimers();
     try {

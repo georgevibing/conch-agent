@@ -39,49 +39,80 @@
   }
 
   /* ── The row ──────────────────────────────────────────────────────── */
-  .header {
+
+  /*
+   * The row and the line beneath it, as one surface: the hover wash, the
+   * lustre rim and the focus ring are drawn here, round both, so the line
+   * never sits half outside the row's highlight.
+   */
+  .lead {
     --nc-rim-rest: 0;
     --nc-rim-hover: 0.45;
     --nc-sheen-hover: 0.12;
     --nc-sheen-size: 180px;
 
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin-inline: calc(-1 * var(--st-bleed));
+    padding-inline: var(--st-bleed);
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .lead:not([data-disabled]):hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .lead:not([data-disabled]):has(> .header:active) {
+    background-color: var(--nc-wash-2);
+  }
+
+  /* Focus looks like hover: the same shape, ringed, its rim lit. */
+  .lead:has(> .header:focus-visible) {
+    --nc-rim-near: var(--nc-rim-hover);
+
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .header {
     appearance: none;
     display: flex;
     align-items: center;
     gap: var(--st-gap);
-    inline-size: calc(100% + 2 * var(--st-bleed));
+    inline-size: 100%;
     min-block-size: var(--nc-chat-row-height);
-    margin: 0 calc(-1 * var(--st-bleed));
-    padding: 0 var(--st-bleed);
+    margin: 0;
+    padding: 0;
     border: 0;
-    border-radius: var(--nc-chat-row-radius);
-    corner-shape: var(--nc-corner-shape);
     background: transparent;
     color: var(--nc-text);
     font: inherit;
     font-size: var(--nc-text-sm);
     text-align: start;
     cursor: pointer;
-    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* The press reaches over the whole surface, the line beneath included. */
+  .header::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
   }
 
   .header:disabled {
     cursor: default;
   }
 
-  @media (hover: hover) {
-    .header:not(:disabled):hover {
-      background-color: var(--nc-wash-1);
-    }
-  }
-
-  .header:not(:disabled):active {
-    background-color: var(--nc-wash-2);
-  }
-
   .header:focus-visible {
-    outline: 2px solid var(--nc-ring);
-    outline-offset: 0;
+    outline: none;
   }
 
   /* ── The well, its glyph, and the status badge ────────────────────── */
@@ -400,7 +431,7 @@
     transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
   }
 
-  .root[data-state='open'] > .header .chevron {
+  .header[data-state='open'] .chevron {
     transform: rotate(90deg);
   }
 
@@ -558,12 +589,9 @@
   .below {
     display: grid;
     grid-template-rows: 0fr;
-    /* Bled like the row, so the hover wash can carry on under the line. */
-    margin-inline: calc(-1 * var(--st-bleed));
-    padding-inline: calc(var(--st-indent) + var(--st-bleed)) var(--st-bleed);
-    border-end-start-radius: var(--nc-chat-row-radius);
-    border-end-end-radius: var(--nc-chat-row-radius);
-    corner-shape: var(--nc-corner-shape);
+    padding-inline-start: var(--st-indent);
+    /* Pressing the line presses the row: it's part of the same surface. */
+    pointer-events: none;
     opacity: 0;
     transition:
       grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
@@ -581,26 +609,6 @@
   .belowInner {
     min-block-size: 0;
     overflow: hidden;
-  }
-
-  /*
-   * The line is tucked up into the row's box, so the row's hover wash alone
-   * would cut through its words: the wash carries on under it, from where the
-   * row's ends, as one shape.
-   */
-  @media (hover: hover) {
-    .header:not(:disabled):hover:has(+ .below[data-shown]) {
-      border-end-start-radius: 0;
-      border-end-end-radius: 0;
-    }
-
-    .header:not(:disabled):hover + .below[data-shown] {
-      background: linear-gradient(
-        to bottom,
-        transparent var(--nc-space-1-5),
-        var(--nc-wash-1) var(--nc-space-1-5)
-      );
-    }
   }
 
   .live {
