@@ -76,15 +76,16 @@ Each says whether it's **required** (something breaks without it) or
     in this environment can read it. The optional repository variables
     **`RELEASE_TAGGER_NAME`** and **`RELEASE_TAGGER_EMAIL`** set who the release
     tags name as their tagger.
-11. **A GitHub App for release pull requests** (recommended). A pull request
-    opened with the workflow's own token doesn't run CI, so the release pull
-    request would never get its `check`. Create an app (your account's Settings →
+11. **A GitHub App for release pull requests** (optional). A pull request
+    opened with the workflow's own token doesn't run CI by itself, so without the
+    app, Release starts CI on the release pull request's branch. With it, the pull
+    request is the app's and CI starts as on any other. Create an app (your account's Settings →
     Developer settings → GitHub Apps → New GitHub App) with no webhook and
     **Contents**, **Pull requests** and **Issues** set to Read and write, then
     install it on this repository. In Settings → Secrets and variables → Actions,
     add the repository variable **`RELEASE_APP_CLIENT_ID`** (the app's Client ID)
     and the repository secret **`RELEASE_APP_PRIVATE_KEY`** (its private key). Without them,
-    release-please uses the workflow's token.
+    release-please uses the workflow's token, and Release starts CI itself.
 12. **`ANTHROPIC_API_KEY`** (optional). A repository secret, used to polish the
     release notes in the release pull request. Without it, the plain notes stand.
 13. **Release immutability** (recommended). Settings → General → Releases → tick
