@@ -51,6 +51,42 @@ export const Running: Story = {};
 export const Queued: Story = {
   args: { status: 'queued', startedAt: undefined, current: undefined, steps: [] },
 };
+/** Waiting says why (ADR 0128): here, only for room, so **Start now** is offered. */
+export const WaitingForRoom: Story = {
+  args: {
+    status: 'queued',
+    startedAt: undefined,
+    current: undefined,
+    steps: [],
+    waiting: {
+      words: 'Starts when one of the 4 working finishes',
+      expectedAt: NOW + 3 * 60_000,
+      onStartNow: () => undefined,
+    },
+  },
+};
+/** A provider asked to slow down: when it tries again, counted down. No Start now. */
+export const WaitingForProvider: Story = {
+  args: {
+    status: 'queued',
+    startedAt: undefined,
+    current: undefined,
+    steps: [],
+    by: 'Codex',
+    waiting: { words: 'Codex asked Conch to slow down', retryAt: NOW + 20_000 },
+  },
+};
+/** Two that change the same file take turns; the card says which and why. */
+export const WaitingForAnother: Story = {
+  args: {
+    title: 'Tidy the auth helpers',
+    status: 'queued',
+    startedAt: undefined,
+    current: undefined,
+    steps: [],
+    waiting: { words: 'Starts when “Fix the login” finishes: both change auth.ts' },
+  },
+};
 export const NeedsYou: Story = {
   args: {
     status: 'needs-you',

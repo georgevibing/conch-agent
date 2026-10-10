@@ -6,6 +6,7 @@ import {
   GitBranch,
   Hand,
   MessageSquare,
+  Play,
   RotateCcw,
   ShieldQuestion,
   Square,
@@ -21,6 +22,7 @@ import { cx } from '../../utils/cx';
 import { taskHeadline } from './headline';
 import { TaskSteps } from './TaskSteps';
 import styles from './Tasks.module.css';
+import { taskWaitingLine, type TaskWaitingInfo } from './waiting';
 
 export type TaskCardStatus =
   'queued' | 'running' | 'needs-you' | 'done' | 'unverified' | 'failed' | 'stopped' | 'interrupted';
@@ -55,6 +57,11 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   finishedAt?: number;
   /** What it's doing right now: "Running `npm test`". */
   current?: ReactNode;
+  /**
+   * Still waiting: why, in a few words, and when that's known (ADR 0128). With
+   * `onStartNow`, it waits only for room, and **Start now** is offered.
+   */
+  waiting?: TaskWaitingInfo;
   /** What it did, newest last: repeats and long runs of one kind are said as one line. */
   steps?: readonly string[];
   /** Draw a step's words (`code` as code, say). */
@@ -149,6 +156,7 @@ export function TaskCard({
   startedAt,
   finishedAt,
   current,
+  waiting,
   steps = [],
   renderStep,
   outcome,
@@ -198,6 +206,7 @@ export function TaskCard({
   const fullError =
     problem && typeof error === 'string' && !same(error, problem) ? error : undefined;
   const pastSteps = live ? [] : steps;
+  const startNow = status === 'queued' ? waiting?.onStartNow : undefined;
   const hidden = fullSummary || fullError || details || pastSteps.length > 0;
   // While it works: what it's doing, and the last few things (all of them on the Tasks page).
   const shown = live ? steps : [];
@@ -275,6 +284,8 @@ export function TaskCard({
               </Button>
             </div>
           </div>
+        ) : status === 'queued' && waiting ? (
+          <p className={styles.waiting}>{taskWaitingLine(waiting, time)}</p>
         ) : (
           live && current && <p className={styles.current}>{current}</p>
         )}
@@ -306,7 +317,7 @@ export function TaskCard({
           </Collapsible.Content>
         )}
 
-        {(onOpen || onStop || onRetry || onRemove) && (
+        {(onOpen || onStop || onRetry || onRemove || startNow) && (
           <div className={styles.actions}>
             {status === 'needs-you' && onOpen && !asking ? (
               <Button size="sm" onClick={onOpen} leadingIcon={<Hand />}>
@@ -323,6 +334,17 @@ export function TaskCard({
                   Open
                 </Button>
               )
+            )}
+            {startNow && (
+              <Button
+                size="sm"
+                variant="surface"
+                onClick={startNow}
+                loading={waiting?.starting}
+                leadingIcon={<Play />}
+              >
+                Start now
+              </Button>
             )}
             {live && onStop && (
               <Button size="sm" variant="ghost" onClick={onStop} leadingIcon={<X />}>

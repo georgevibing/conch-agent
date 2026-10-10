@@ -30,3 +30,4 @@ export {
   type TaskLook,
 } from './TaskCard';
 export { pulseSummary, TasksPulse, type PulseTask, type TasksPulseProps } from './TasksPulse';
+export { taskWaitingLine, taskWaitingWhen, type TaskWaitingInfo } from './waiting';
