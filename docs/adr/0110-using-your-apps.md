@@ -89,8 +89,8 @@ on, and the one thing everyone remembers is the glowing edge with Stop one press
   looks again every two seconds while a switch is off, and on focus, and the row turns **On**
   with a glint by itself. The button only appears on the computer itself (`isLocal`); another
   device is told where to do it. The switches belong to the app macOS sees: **Conch** for the
-  desktop app, otherwise the app Conch was started from (`TERM_PROGRAM`), and Settings says
-  which. Repair everything says when one is still off.
+  desktop app and for a Conch started by its host (ADR 0026, `CONCH_HOSTED`), otherwise the
+  app Conch was started from (`TERM_PROGRAM`), and Settings says which. Repair everything says when one is still off.
 
 ### The glowing edge and Stop
 

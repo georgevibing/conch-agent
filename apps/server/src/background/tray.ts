@@ -25,6 +25,7 @@ import type { DoctorCheck } from '../doctor/service';
 import { writeFileAtomic } from '../lib/fs';
 import { run, type RunResult } from '../lib/proc';
 import { serviceLabel, shellLauncher, shQuote, windowsLauncher, type LaunchSpec } from './files';
+import { hostStartLine } from './host';
 import { powershellSource, pythonSource, swiftSource, type TraySpec } from './tray-sources';
 import { icoFromPng } from './shortcut';
 import { hereAsksDir } from '../auth/here';
@@ -154,6 +155,8 @@ export interface TrayDeps {
    * built; the switch shows or hides the app's icon instead.
    */
   app?: { show: (on: boolean) => Promise<boolean> };
+  /** macOS: Conch's host (`host.ts`), so what it starts is Conch's by name. */
+  host?: string;
 }
 
 export class TrayService {
@@ -279,7 +282,11 @@ fi`;
       text: `#!/bin/sh
 # Starts Conch for the menu bar's "Start Conch". Written by Conch; changes here don't last.
 ${viaComputer}
-nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
+${
+  this.#platform === 'darwin'
+    ? hostStartLine(this.deps.host, shQuote(join(this.#dir, 'launch')))
+    : `nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &`
+}
 `,
     };
   }

@@ -116,3 +116,12 @@ describe('/api/computer-use', () => {
     expect(await check.run({ repair: false, signal })).toMatchObject([{ state: 'ok' }]);
   });
 });
+
+describe('whose switches they are', () => {
+  it('names Conch when its host started it, else the terminal it was started from', async () => {
+    const { startedFrom } = await import('./service');
+    expect(startedFrom({ CONCH_HOSTED: '1', TERM_PROGRAM: 'conch' })).toBe('Conch');
+    expect(startedFrom({ TERM_PROGRAM: 'Apple_Terminal' })).toBe('Terminal');
+    expect(startedFrom({})).toBe('node');
+  });
+});

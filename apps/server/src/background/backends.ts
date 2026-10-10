@@ -32,6 +32,8 @@ const detach: Detach = (file, args) => {
 export interface Launcher {
   /** The file the computer runs: the sh launcher, or the `.vbs` that hides the batch file. */
   path: string;
+  /** macOS: Conch's host program, which runs `path` so the Mac knows it as Conch. */
+  host?: string;
   log: string;
 }
 
@@ -83,7 +85,7 @@ export function launchdBackend(
       // launchd refuses an agent that others can write to: 0644.
       const changed = await writeIfChanged(
         plist,
-        launchdPlist(label, launcher.path, launcher.log),
+        launchdPlist(label, launcher.path, launcher.log, launcher.host),
         0o644,
       );
       // A newer file only counts once launchd reads it again: at the next login,

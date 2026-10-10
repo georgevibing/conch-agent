@@ -210,9 +210,11 @@ const xml = (value: string) =>
 /**
  * A LaunchAgent: runs at login, and again if it stops by accident (not when
  * you quit it: a clean exit stays stopped). `Interactive` keeps App Nap from
- * slowing it down, so a routine runs on the minute.
+ * slowing it down, so a routine runs on the minute. With Conch's host
+ * (`host.ts`), the host runs the launcher, so macOS knows it all as Conch.
  */
-export function launchdPlist(label: string, launcher: string, log: string): string {
+export function launchdPlist(label: string, launcher: string, log: string, host?: string): string {
+  const program = host ? [host, '/bin/sh', launcher] : [launcher];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -221,7 +223,7 @@ export function launchdPlist(label: string, launcher: string, log: string): stri
   <string>${xml(label)}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${xml(launcher)}</string>
+${program.map((arg) => `    <string>${xml(arg)}</string>`).join('\n')}
   </array>
   <key>RunAtLoad</key>
   <true/>

@@ -83,7 +83,8 @@ import { pretendBackend } from './background/backends';
 import { carriedEnv } from './background/files';
 import { backendFor, BackgroundService, runningAs } from './background/service';
 import { AfterLogout, KeepAwake, pretendLittle } from './background/little';
-import { Shortcut } from './background/shortcut';
+import { MacHost } from './background/host';
+import { iconIn, Shortcut } from './background/shortcut';
 import { askUrl, pretendTray, trayCheck, TrayService } from './background/tray';
 import { pretendTailscale } from './network/mock-tailscale';
 import { Tailscale } from './network/tailscale';
@@ -2327,6 +2328,16 @@ export class Services {
       ...(app && { app: app.exe }),
     };
     const url = `http://localhost:${config.CONCH_PORT}`;
+    // On a Mac, Conch starts through its own host, so Privacy & Security lists it
+    // as Conch rather than node. The desktop app is its own bundle already.
+    const host =
+      process.platform === 'darwin' && !mock && !app && checkout
+        ? new MacHost({
+            home: config.CONCH_HOME,
+            icon: iconIn(checkout),
+            heal: (message) => void this.healed.note('gateway', message),
+          })
+        : undefined;
     // The menu bar helper, a little computer's settings (ADR 0029). Pretend ones for the mock engine.
     this.tray = new TrayService({
       home: config.CONCH_HOME,
@@ -2337,6 +2348,7 @@ export class Services {
       wanted: async () => (await this.settings.get()).preferences.menuBar,
       setWanted: async (on) => void (await this.settings.update({ preferences: { menuBar: on } })),
       onToken: (token) => this.gate.setTrayToken(token),
+      ...(host && { host: host.app }),
       heal: (message) => void this.healed.note('gateway', message),
       ...(mock && pretendTray()),
       // The app's own icon is the menu bar.
@@ -2352,6 +2364,7 @@ export class Services {
         };
     return new BackgroundService({
       tray: this.tray,
+      ...(host && { host }),
       afterLogout: little.afterLogout,
       keepAwake: {
         service: little.keepAwake,

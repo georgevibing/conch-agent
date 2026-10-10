@@ -199,6 +199,38 @@ Gatekeeper and SmartScreen check what arrives from the internet, and nothing
 arrives. Signing and notarising would be needed for a downloaded `.app` or
 `.exe`; that is deliberately not this design.
 
+### Conch's own name
+
+macOS lists a permission (Screen Recording, Accessibility, Automation, Local
+Network) under the program _responsible_ for the process asking: the one
+launchd or the Finder started, which answers for all its children. A
+LaunchAgent that runs the launcher makes that Node, so Privacy & Security
+said "node", with no picture, and the person was asked to trust something
+they never installed.
+
+So on a Mac Conch starts through a **host** (`background/host.ts`):
+`~/.conch/host/Conch.app`, a bundle named Conch with Conch's icon
+(`LSBackgroundOnly`), whose one program starts the launcher as its child,
+passes signals on, and ends the way the child ended. The LaunchAgent runs
+`Conch.app/Contents/MacOS/Conch /bin/sh ~/.conch/background/Conch`; the app
+shortcut and the menu bar's Start Conch open the host with `open -n -g` when
+Always on is off. Everything Conch runs is then Conch's in System Settings,
+and in Login Items.
+
+- **Built here, never downloaded.** Fixed C source compiled with the Command
+  Line Tools (`xcrun clang`) and signed for this computer only
+  (`codesign -s -`), like the menu bar helper. Without the tools Conch starts
+  as Node, as before.
+- **Stable on purpose.** macOS remembers a permission by the signature, so
+  the source and Info.plist hold no path or version, and the host is rebuilt
+  only when they change. When it is, Conch says macOS may ask once more.
+- **Not `exec`.** Responsibility follows the process; after an `exec` it
+  would be Node again.
+- **It says so.** The host sets `CONCH_HOSTED=1`, and Use your apps names
+  "Conch" as the app to switch on.
+- The desktop app (ADR 0054) is its own bundle and needs no host. Windows and
+  Linux have no per-app list like this to appear in.
+
 The app icon (`apps/web/public/icons/conch.svg`, rendered to PNGs) is the
 Lustre pearl on a porcelain tile.
 

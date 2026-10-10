@@ -10,14 +10,15 @@
  * sign, nothing Gatekeeper or SmartScreen has to vouch for.
  */
 import { existsSync } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 
 import { writeFileAtomic } from '../lib/fs';
 import { run } from '../lib/proc';
 import { unitName, type Exec } from './backends';
 import { serviceLabel, shellLauncher, shQuote, windowsLauncher, type LaunchSpec } from './files';
+import { hostStartLine, macIcns } from './host';
 
 const exec: Exec = (file, args) => run(file, args, { timeout: 30_000 });
 
@@ -26,6 +27,8 @@ export interface ShortcutSpec extends LaunchSpec {
   url: string;
   /** The app icon (1024 px PNG) from Conch's web app. */
   icon: string;
+  /** macOS: Conch's host (`host.ts`), so what it starts is Conch's by name. */
+  host?: string;
 }
 
 /** The icon Conch ships, in its own folder. */
@@ -120,7 +123,7 @@ ${startViaComputer}
 if [ -z "$STARTED" ]; then
   START="$HERE/start"
   [ -f "$START" ] || START="$HERE/../Resources/start"
-  nohup /bin/sh "$START" >/dev/null 2>&1 &
+  ${platform === 'darwin' ? hostStartLine(spec.host, '"$START"') : 'nohup /bin/sh "$START" >/dev/null 2>&1 &'}
 fi
 ${notify}
 i=0
@@ -132,35 +135,6 @@ done
 ${failed}
 exit 1
 `;
-}
-
-/** Build `Conch.icns` from the 1024 px PNG with the Mac's own tools (sips, iconutil). */
-async function macIcns(png: string, out: string, runner: Exec): Promise<boolean> {
-  if (!existsSync(png)) return false;
-  const set = join(await mkdtemp(join(tmpdir(), 'conch-icon-')), 'Conch.iconset');
-  await mkdir(set);
-  try {
-    for (const size of [16, 32, 128, 256, 512]) {
-      for (const [scale, suffix] of [
-        [1, ''],
-        [2, '@2x'],
-      ] as const) {
-        const px = String(size * scale);
-        const result = await runner('sips', [
-          '-z',
-          px,
-          px,
-          png,
-          '--out',
-          join(set, `icon_${size}x${size}${suffix}.png`),
-        ]);
-        if (result.code !== 0) return false;
-      }
-    }
-    return (await runner('iconutil', ['-c', 'icns', set, '-o', out])).code === 0;
-  } finally {
-    await rm(join(set, '..'), { recursive: true, force: true });
-  }
 }
 
 // ── Windows ───────────────────────────────────────────────────────────────

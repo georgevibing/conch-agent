@@ -40,6 +40,7 @@ import {
   windowsLauncher,
   type LaunchSpec,
 } from './files';
+import type { MacHost } from './host';
 import type { AfterLogout, KeepAwake } from './little';
 import { iconIn, type Shortcut } from './shortcut';
 import type { TrayService } from './tray';
@@ -160,6 +161,8 @@ export interface BackgroundDeps {
   url: string;
   /** Conch as an app (Applications, the Start menu). Unset: none here. */
   shortcut?: Shortcut;
+  /** macOS: what Conch starts through, so the Mac knows it as Conch. Unset: Node itself. */
+  host?: MacHost;
   /** Conch in the menu bar, tray or panel (ADR 0029). */
   tray?: TrayService;
   /** Whether Conch keeps running after logging out (ADR 0029). */
@@ -198,7 +201,8 @@ export class BackgroundService {
     const path = join(dir, 'Conch');
     await writeFileAtomic(path, shellLauncher(spec), 0o700);
     await chmod(path, 0o700);
-    return { path, log: spec.log };
+    const host = await this.deps.host?.ensure();
+    return { path, log: spec.log, ...(host && { host }) };
   }
 
   async status(): Promise<BackgroundStatus> {
@@ -295,7 +299,15 @@ export class BackgroundService {
   #shortcutSpec() {
     const { home, checkout, url } = this.deps;
     if (!checkout) throw new Error('Conch can’t find its own folder.');
-    return { ...this.deps.spec, checkout, home, log: logFile(home), url, icon: iconIn(checkout) };
+    return {
+      ...this.deps.spec,
+      checkout,
+      home,
+      log: logFile(home),
+      url,
+      icon: iconIn(checkout),
+      ...(this.deps.host && { host: this.deps.host.app }),
+    };
   }
 
   /** Put Conch where people look for apps (or again, for where Conch is now). */
@@ -401,6 +413,8 @@ export class BackgroundService {
     const { checkout, running, shortcut } = this.deps;
     const backend = await this.deps.backend;
     if (!checkout || running === 'dev') return 'off';
+    // Built before anything that starts Conch through it is written.
+    await this.deps.host?.ensure();
     // The app keeps opening the Conch that's here, wherever it moved.
     if (shortcut?.installed()) {
       const changed = await shortcut

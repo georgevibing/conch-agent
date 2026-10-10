@@ -70,8 +70,13 @@ export function driverFor(platform: NodeJS.Platform = process.platform): Compute
   return platform === 'darwin' ? new MacDriver() : UNSUPPORTED;
 }
 
-/** The app the switches are listed under when Conch wasn't started by its own app. */
+/**
+ * The app the switches are listed under when Conch wasn't started by the
+ * desktop app: Conch when its host started it (`background/host.ts`), else
+ * the terminal it was started from.
+ */
 export function startedFrom(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.CONCH_HOSTED === '1') return 'Conch';
   const program = env.TERM_PROGRAM?.trim();
   const known: Record<string, string> = {
     Apple_Terminal: 'Terminal',

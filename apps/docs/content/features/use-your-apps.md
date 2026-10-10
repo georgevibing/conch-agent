@@ -18,6 +18,8 @@ Each row says **On** by itself once macOS allows it. You don't need to come back
 
 If you run Conch from a terminal instead of the Conch app, the rows say which app to turn on in the list (Terminal, for example).
 
+If you allowed **node** in these lists for an older Conch, you can take it out: Conch now shows up in them as **Conch**, with its own icon.
+
 ## While it works
 
 - A soft glowing edge goes around your screen, and a small card at the top says what it's doing.
