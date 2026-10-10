@@ -151,7 +151,14 @@ export const ConchUpdate = z.object({
   source: UpdateSource.default('branch'),
   /** Why it follows its branch, in a sentence (a developer's copy, no releases yet). */
   sourceWhy: z.string().optional(),
+  /** The channel followed: yours, else the installer's, else the steadiest with a release. */
   channel: ReleaseChannel.default('stable'),
+  /** The channels with a release to follow, steadiest first: the others can't be chosen yet. */
+  channels: z.array(ReleaseChannel).default([]),
+  /** The channel was chosen (in Settings, or by the installer), not worked out. */
+  channelChosen: z.boolean().default(false),
+  /** A copy of main that would follow releases once you choose a channel with some. */
+  canFollowReleases: z.boolean().default(false),
   /** "Every change on main" is on: a contributor's choice, hidden from everyone else. */
   everyChange: z.boolean().default(false),
   /** The release offered: the newest in the channel above this version. */

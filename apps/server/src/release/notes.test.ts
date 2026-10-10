@@ -19,8 +19,10 @@ import {
   inChannel,
   isBreaking,
   offered,
+  openChannels,
   parseRelease,
   releaseOfTag,
+  steadiest,
   type Commit,
 } from './semver';
 
@@ -75,6 +77,19 @@ describe('release numbers', () => {
     expect(inChannel(beta, 'beta')).toBe(true);
     expect(inChannel(alpha, 'beta')).toBe(false);
     expect(inChannel(alpha, 'alpha')).toBe(true);
+  });
+
+  it('opens a channel once it has a release, and follows the steadiest by default', () => {
+    const of = (...versions: string[]) => versions.map(must);
+    expect(openChannels(of())).toEqual([]);
+    expect(steadiest(of())).toBeUndefined();
+    // The first alpha: only alpha has something to follow.
+    expect(openChannels(of('0.1.0-alpha.1'))).toEqual(['alpha']);
+    expect(steadiest(of('0.1.0-alpha.1'))).toBe('alpha');
+    expect(steadiest(of('0.1.0-alpha.2', '0.1.0-beta.1'))).toBe('beta');
+    // A stable release is on every channel, and always comes first.
+    expect(openChannels(of('0.1.0', '0.2.0-alpha.1'))).toEqual(['stable', 'beta', 'alpha']);
+    expect(steadiest(of('0.2.0-alpha.1', '0.1.0'))).toBe('stable');
   });
 
   it('offers the newest in the channel above this one, never a failed one, never older', () => {

@@ -561,7 +561,7 @@ const offer = (version: string, line: string): Offer => ({
 describe('following releases (ADR 0051)', () => {
   /** Conch on a release, with a pretend follower whose answers the test sets. */
   async function releaseWorld(found: Partial<ReleaseCheck>, staged?: StagedResult) {
-    const checks: { channel: string }[] = [];
+    const checks: { channel?: string }[] = [];
     const stage = vi.fn(async () => staged ?? ({ kind: 'failed', message: 'no' } as StagedResult));
     const w = await world({
       conch: {

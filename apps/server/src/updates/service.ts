@@ -80,6 +80,12 @@ const ReleaseCache = z.object({
     .default([]),
   refused: z.string().optional(),
   firstTrust: z.string().optional(),
+  /** The channel the last look followed when none was chosen: the steadiest with a release. */
+  channel: ReleaseChannel.optional(),
+  /** The channels with a release, steadiest first. */
+  channels: z.array(ReleaseChannel).default([]),
+  /** Following its branch only for want of a chosen channel with releases. */
+  canFollowReleases: z.boolean().default(false),
 });
 
 /** What the desktop app's last look at releases found (ADR 0054). */
@@ -99,6 +105,9 @@ const AppCache = z.object({
   problem: z.string().optional(),
   /** Downloaded and handed to the installer: the next start says whether it took. */
   installing: z.string().optional(),
+  /** As for releases: the channel followed when none was chosen, and those with a release. */
+  channel: ReleaseChannel.optional(),
+  channels: z.array(ReleaseChannel).default([]),
   /** Versions that didn't install here: not offered again until a newer one. */
   failed: z.array(z.string()).default([]),
 });
@@ -378,9 +387,18 @@ export class UpdatesService {
   }
 
   /** This copy's version: what its folder says, else `SERVER_VERSION`. */
-  /** The channel followed: yours, else the installer's, else stable. */
+  /**
+   * The channel followed: yours, else the installer's, else the steadiest
+   * with a release (stable, else beta, else alpha), else stable.
+   */
   #channel(): ReleaseChannel {
-    return this.#cache.channel ?? this.#installed ?? 'stable';
+    const found = this.deps.app ? this.#cache.app.channel : this.#cache.releases.channel;
+    return this.#cache.channel ?? this.#installed ?? found ?? 'stable';
+  }
+
+  /** The channels with a release to follow, as the last look found them. */
+  #channels(): ReleaseChannel[] {
+    return this.deps.app ? this.#cache.app.channels : this.#cache.releases.channels;
   }
 
   #version(): string {
@@ -410,6 +428,9 @@ export class UpdatesService {
         restartNeeded: false,
         source: 'branch',
         channel: this.#channel(),
+        channels: this.#channels(),
+        channelChosen: Boolean(this.#cache.channel ?? this.#installed),
+        canFollowReleases: false,
         everyChange: false,
         releases: [],
         announce: false,
@@ -452,7 +473,10 @@ export class UpdatesService {
       ...(outcome && this.#now() - outcome.at < OUTCOME_FOR_MS && { outcome }),
       source: releases ? 'releases' : 'branch',
       ...(rel.sourceWhy && !releases && { sourceWhy: rel.sourceWhy }),
+      canFollowReleases: !releases && rel.canFollowReleases && !this.#cache.everyChange,
       channel: this.#channel(),
+      channels: this.#channels(),
+      channelChosen: Boolean(this.#cache.channel ?? this.#installed),
       everyChange: this.#cache.everyChange,
       ...(releases && newest && { latest: { version: newest.version, channel: newest.channel } }),
       releases: releases ? notes : [],
@@ -493,6 +517,9 @@ export class UpdatesService {
       ...(outcome && this.#now() - outcome.at < OUTCOME_FOR_MS && { outcome }),
       source: 'releases',
       channel: this.#channel(),
+      channels: this.#channels(),
+      channelChosen: Boolean(this.#cache.channel ?? this.#installed),
+      canFollowReleases: false,
       everyChange: false,
       ...(newest && { latest: { version: newest.version, channel: newest.channel } }),
       releases: notes,
@@ -609,7 +636,8 @@ export class UpdatesService {
     const found = await releases
       .check({
         fetch,
-        channel: this.#channel(),
+        // Only yours: the release check works out the rest from what's there.
+        ...(this.#cache.channel && { channel: this.#cache.channel }),
         everyChange: this.#cache.everyChange,
         failed: readState(this.deps.home).failed,
       })
@@ -626,6 +654,9 @@ export class UpdatesService {
       ...((found.firstTrust ?? before.firstTrust) && {
         firstTrust: found.firstTrust ?? before.firstTrust,
       }),
+      ...(found.channel && { channel: found.channel }),
+      channels: found.channels ?? before.channels,
+      canFollowReleases: Boolean(found.canFollowReleases),
     };
     if (found.source !== 'releases') return false;
     const where = await conch.check({ fetch: false }).catch(() => undefined);
@@ -657,7 +688,10 @@ export class UpdatesService {
     if (!fetch || this.#conchJob) return;
     const before = this.#cache.app;
     const found = await app
-      .check({ channel: this.#channel(), failed: before.failed })
+      .check({
+        ...(this.#cache.channel && { channel: this.#cache.channel }),
+        failed: before.failed,
+      })
       .catch(() => undefined);
     if (!found) return;
     this.#cache.app = {
@@ -666,6 +700,9 @@ export class UpdatesService {
       offers: found.problem ? before.offers : found.offers,
       checkedAt: found.problem ? before.checkedAt : this.#now(),
       problem: found.problem,
+      ...(found.problem
+        ? { channel: before.channel, channels: before.channels }
+        : { channel: found.channel, channels: found.channels ?? [] }),
     };
     const newest = this.#cache.app.offers[0];
     if (newest && !this.#cache.told.includes(newest.version)) {

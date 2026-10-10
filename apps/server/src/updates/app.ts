@@ -15,7 +15,7 @@ import type { ReleaseChannel, ReleaseNotes } from '@conch/protocol';
 
 import type { DesktopApp } from '../desktop/app';
 import { parseNotes } from '../release/notes';
-import { channelOf, offered, releaseOfTag } from '../release/semver';
+import { channelOf, offered, openChannels, releaseOfTag, steadiest } from '../release/semver';
 
 export interface AppOffer {
   version: string;
@@ -29,6 +29,10 @@ export interface AppOffer {
 
 export interface AppCheck {
   offers: AppOffer[];
+  /** The channel looked in: the one chosen, else the steadiest with a release for this computer. */
+  channel?: ReleaseChannel;
+  /** The channels with a release for this computer, steadiest first. */
+  channels?: ReleaseChannel[];
   /** The look didn't get an answer: one quiet sentence. Offers are then the last look's. */
   problem?: string;
 }
@@ -82,12 +86,15 @@ export class AppReleases {
     return this.deps.platform ?? process.platform;
   }
 
-  /** The releases worth offering on `channel`, newest first. */
+  /**
+   * The releases worth offering on `channel` (yours; without it, the
+   * steadiest with a release for this computer), newest first.
+   */
   async check({
-    channel,
+    channel: chosen,
     failed = [],
   }: {
-    channel: ReleaseChannel;
+    channel?: ReleaseChannel;
     failed?: string[];
   }): Promise<AppCheck> {
     const { owner, repo } = this.deps.repository;
@@ -155,12 +162,15 @@ export class AppReleases {
         },
       ];
     });
+    const found = releases.map((r) => r.release);
+    const channels = openChannels(found);
+    const channel = chosen ?? steadiest(found) ?? 'stable';
     const offers = offered(releases, {
       channel,
       current: this.deps.development ? '0.0.0' : this.deps.version,
       failed,
     });
-    return { offers: offers.slice(0, 6).map((r) => r.offer) };
+    return { offers: offers.slice(0, 6).map((r) => r.offer), channel, channels };
   }
 
   /**

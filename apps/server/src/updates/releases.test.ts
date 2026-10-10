@@ -177,6 +177,59 @@ describe('where updates come from', () => {
     expect(after).toMatchObject({ source: 'releases', offers: [] });
   });
 
+  it('a copy of main sees the first alpha, and follows it once you choose alpha', async () => {
+    const w = await world();
+    const main = join(w.base, 'main');
+    git(w.base, 'clone', '--quiet', '--no-tags', w.origin, main);
+    git(w.maker, 'push', '--quiet', 'origin', ':refs/tags/v0.1.0');
+    git(w.maker, 'tag', '-d', 'v0.1.0');
+    w.release('0.2.0-alpha.1', 'An early look');
+    const unchosen = (f: ReleaseFollower) =>
+      f.check({ fetch: true, everyChange: false, failed: [] });
+    // Not by itself: an alpha is a choice.
+    expect(await unchosen(w.follower(main))).toMatchObject({
+      source: 'branch',
+      channel: 'alpha',
+      channels: ['alpha'],
+      canFollowReleases: true,
+      sourceWhy:
+        'There’s no stable release yet, so Conch follows every change on main. To follow alpha releases instead, choose a channel.',
+    });
+    expect(await w.look(w.follower(main), 'alpha')).toMatchObject({
+      source: 'releases',
+      channel: 'alpha',
+      canFollowReleases: false,
+    });
+  });
+
+  it('an install from an alpha gets the next alpha, and stable once there is one', async () => {
+    const w = await world();
+    git(w.maker, 'push', '--quiet', 'origin', ':refs/tags/v0.1.0');
+    git(w.maker, 'tag', '-d', 'v0.1.0');
+    w.release('0.2.0-alpha.1', 'An early look');
+    const early = join(w.base, 'early');
+    git(w.base, 'clone', '--quiet', w.origin, early);
+    git(
+      early,
+      '-c',
+      'advice.detachedHead=false',
+      'checkout',
+      '--quiet',
+      '--detach',
+      'v0.2.0-alpha.1',
+    );
+    const unchosen = () => w.follower(early).check({ fetch: true, everyChange: false, failed: [] });
+    w.release('0.2.0-alpha.2', 'A closer look');
+    expect(await unchosen()).toMatchObject({ source: 'releases', channel: 'alpha' });
+    expect((await unchosen()).offers.map((o) => o.version)).toEqual(['0.2.0-alpha.2']);
+    // Stable takes over: the next alpha isn't offered, the stable release is.
+    w.release('0.2.0', 'For everyone');
+    w.release('0.3.0-alpha.1', 'The next idea');
+    const later = await unchosen();
+    expect(later).toMatchObject({ channel: 'stable', channels: ['stable', 'beta', 'alpha'] });
+    expect(later.offers.map((o) => o.version)).toEqual(['0.2.0']);
+  });
+
   it('a copy ahead of the newest stable release waits for a newer one', async () => {
     const w = await world();
     w.release('0.3.0-beta.1', 'Talk to it');
