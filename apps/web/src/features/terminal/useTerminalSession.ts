@@ -16,6 +16,8 @@ export type SessionState =
 
 /** Input typed while reconnecting is kept (this much) and sent on reconnect. */
 const QUEUE_LIMIT = 4_096;
+/** A shell that prints nothing when it starts still gets what was typed, after this. */
+const QUIET_SHELL_MS = 1_500;
 
 /**
  * One terminal's live connection. Every connect asks for a fresh one-time
@@ -40,6 +42,9 @@ export function useTerminalSession(
   const [state, setState] = useState<SessionState>({ kind: 'connecting' });
   const socket = useRef<WebSocket | null>(null);
   const queue = useRef('');
+  // A shell starting up drops what's typed before it's ready (bash loses the first
+  // keys), so keys wait until it first prints something, its prompt.
+  const heard = useRef(false);
   const opts = useRef(options);
   useEffect(() => {
     opts.current = options;
@@ -50,6 +55,16 @@ export function useTerminalSession(
     let retry: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
     let noted = false;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const listening = (ws: WebSocket) => {
+      clearTimeout(quiet);
+      if (heard.current || socket.current !== ws) return;
+      heard.current = true;
+      if (queue.current && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data: queue.current }));
+        queue.current = '';
+      }
+    };
 
     const connect = async () => {
       setState((s) => (s.kind === 'exited' ? s : { kind: 'connecting' }));
@@ -79,10 +94,12 @@ export function useTerminalSession(
       const ws = new WebSocket(liveUrl(ticket.ticket));
       ws.binaryType = 'arraybuffer';
       socket.current = ws;
+      heard.current = false;
       ws.onmessage = (message: MessageEvent<string | ArrayBuffer>) => {
         if (typeof message.data !== 'string') {
           view.current?.write(new Uint8Array(message.data));
           opts.current.onOutput?.();
+          listening(ws);
           return;
         }
         let json: unknown;
@@ -106,10 +123,9 @@ export function useTerminalSession(
             );
             const size = view.current?.size();
             if (size) ws.send(JSON.stringify({ type: 'resize', ...size }));
-            if (queue.current) {
-              ws.send(JSON.stringify({ type: 'input', data: queue.current }));
-              queue.current = '';
-            }
+            // What was typed meanwhile goes once the shell has spoken.
+            clearTimeout(quiet);
+            quiet = setTimeout(() => listening(ws), QUIET_SHELL_MS);
             if (opts.current.note && !noted) {
               noted = true;
               view.current?.write(`\x1b[2m${opts.current.note}\x1b[0m\r\n`);
@@ -142,6 +158,7 @@ export function useTerminalSession(
     return () => {
       stopped = true;
       clearTimeout(retry);
+      clearTimeout(quiet);
       socket.current?.close();
       socket.current = null;
     };
@@ -149,7 +166,8 @@ export function useTerminalSession(
 
   const input = useCallback((data: string) => {
     const ws = socket.current;
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
+    if (ws?.readyState === WebSocket.OPEN && heard.current)
+      ws.send(JSON.stringify({ type: 'input', data }));
     else queue.current = (queue.current + data).slice(-QUEUE_LIMIT);
   }, []);
 
