@@ -27,9 +27,10 @@ take a release is in [ADR 0051](./adr/0051-releases.md).
    description. With the `ANTHROPIC_API_KEY` secret, Claude polishes them, held to
    the commits. If the polished version breaks a rule, the plain notes stand.
    Notes written ahead in `release/notes/<version>.md` on `main` take their
-   place (see [The notes](#the-notes)). Then CI runs on the pull request: Release
-   starts it, since GitHub starts none for what its own token pushes (the release
-   app does it instead when it's set up).
+   place (see [The notes](#the-notes)). Then CI runs on the pull request: GitHub
+   holds the runs of a pull request its own bot opened for approval, as it does an
+   outside contributor's, so Release approves them, or starts CI on the branch if
+   it can't. With the release app set up, CI starts as on any pull request.
 4. **You approve and merge it when you want to ship**, once `check` and `desktop`
    pass. Read the notes there first: they're what people read in the app, on
    GitHub and on the website. Squash is the only merge the branch rules allow.

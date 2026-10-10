@@ -292,9 +292,11 @@ jobs:
             git push --quiet origin HEAD
           fi
           gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
-      # What GitHub's own token pushes starts no workflow, so without the app CI
-      # wouldn't run on the release pull request, and branch rules would hold it.
-      - name: Start CI on the release pull request
+      # The pull request's own runs wait for approval (GitHub counts its bot as an
+      # outside contributor), and a waiting run keeps the branch rules from passing.
+      # Approve them: they run main's code with release-please's version, nothing
+      # else. If there are none, or approving isn't allowed, start CI on the branch.
+      - name: Run CI on the release pull request
         if: steps.open.outputs.open == 'true' && vars.RELEASE_APP_CLIENT_ID == ''
         env:
           GH_TOKEN: ${{ github.token }}
@@ -303,6 +305,27 @@ jobs:
         run: |
           set -euo pipefail
           head=$(git rev-parse HEAD)
+          held() {
+            gh api "repos/${GH_REPO}/actions/runs?head_sha=${head}&event=pull_request&status=action_required" \
+              --jq '.workflow_runs[].id'
+          }
+          # They appear a moment after the push.
+          ids=""
+          for _ in 1 2 3 4 5 6; do
+            ids=$(held)
+            [ -n "$ids" ] && break
+            sleep 10
+          done
+          approved=0
+          for id in $ids; do
+            if gh api -X POST "repos/${GH_REPO}/actions/runs/${id}/approve" >/dev/null; then
+              approved=$((approved + 1))
+            fi
+          done
+          if [ "$approved" -gt 0 ]; then
+            echo "Approved ${approved} waiting run(s) on ${head:0:8}."
+            exit
+          fi
           # Once a commit: a push to main that leaves the branch as it was starts nothing.
           ran=$(gh run list --workflow ci.yml --commit "$head" --json databaseId --jq length)
           if [ "$ran" = 0 ]; then

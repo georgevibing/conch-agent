@@ -150,10 +150,13 @@ maintainer prefers their own name.
 - **Commits are checked.** `scripts/commits.mjs` checks every pull request's
   commit subjects and title against Conventional Commits, since they now decide
   versions on their own.
-- **CI on the release pull request.** Pull requests opened with `GITHUB_TOKEN`
-  start no workflows, so without an app the notes job starts CI on the branch
-  (`workflow_dispatch`, once per commit), and its `check` and `desktop` land on
-  the pull request's commit as any run's do. A GitHub App token, when
+- **CI on the release pull request.** The runs of a pull request opened with
+  `GITHUB_TOKEN` wait for approval, as an outside contributor's do (the
+  repository asks it of all of them), and a waiting run keeps the branch rules
+  from passing even when the same checks passed elsewhere. So without an app,
+  the notes job approves them; they run `main`'s code with release-please's
+  version. If there are none, or it can't, it starts CI on the branch
+  (`workflow_dispatch`, once per commit). A GitHub App token, when
   `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` exist, makes that
   unnecessary. The token is limited to contents, pull requests and issues.
 - **Notes written ahead.** `release/notes/<version>.md` on `main`, in a
