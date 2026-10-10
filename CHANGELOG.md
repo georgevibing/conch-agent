@@ -2,6 +2,23 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.2](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2) (2026-10-10)
+
+### Heads up
+
+- Downloaded the 0.1.0-alpha.1 app? Choose Alpha once in Settings → Health → Updates to get this and later alphas
+
+### New
+
+- Until you choose a channel, Conch follows the newest release there is: stable once there's one, before that beta, then alpha
+- A copy of Conch that follows main can now choose the alpha channel, and a channel with no release yet says so
+- The installers install the newest alpha or beta until there's a stable release
+- The website shows the newest release, with its docs and downloads, while there's no stable one yet
+
+### Fixed
+
+- A deleted chat stays deleted, even when a task's update was on its way to it
+
 ## [0.1.0-alpha.1](https://github.com/georgevibing/conch-agent/commits/v0.1.0-alpha.1) (2026-10-10)
 
 ### Heads up
