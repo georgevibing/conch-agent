@@ -1409,6 +1409,8 @@ export class ConversationManager {
   async remove(id: string) {
     this.deps.stopProcesses?.(id);
     const live = this.#live.get(id);
+    // Nothing saves it again, so a late card or a save loaded just before can't bring it back.
+    this.#gone.add(id);
     live?.abort?.abort();
     live?.titling?.abort();
     this.#live.delete(id);
@@ -1425,6 +1427,8 @@ export class ConversationManager {
         /* An engine no longer here keeps nothing to forget. */
       }
     }
+    // A save already under way lands first, and is then removed with the rest.
+    await live?.saving?.catch(() => undefined);
     await this.deps.store.remove(id);
     if (attached.length) await this.deps.attachments?.forget(id, attached).catch(() => undefined);
     this.events.emit({ type: 'conversation.deleted', conversationId: id });
@@ -5069,10 +5073,14 @@ export class ConversationManager {
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
 
+  /** Chats deleted while this server runs (ids are never reused). */
+  readonly #gone = new Set<string>();
+
   async #persist(live: Live) {
     const save = (live.saving ?? Promise.resolve())
       .catch(() => undefined)
       .then(async () => {
+        if (this.#gone.has(live.record.id)) return;
         const record = live.record;
         const events = [...live.events];
         await this.deps.store.saveEvents(record.id, events);

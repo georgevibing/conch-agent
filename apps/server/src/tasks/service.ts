@@ -1217,6 +1217,21 @@ export class TaskService {
       worktree = { ...wt, changed, retained };
     }
     this.#asks.delete(task.id);
+    // What a task read, its chat knows before it hears the result: the result came
+    // from there (ADR 0028). And before the card, so nothing writes to that chat
+    // once it's told, and a chat deleted after the card stays deleted.
+    if (task.parentConversationId && task.conversationId) {
+      const read = await this.deps.conversations.taintOf(task.conversationId).catch(() => []);
+      if (read.length)
+        await this.deps.conversations
+          .addTaint(task.parentConversationId, read)
+          .catch(() => undefined);
+      // And the skills it used: their instructions shaped what came back (ADR 0047).
+      const held = await this.deps.conversations.holdsOf(task.conversationId).catch(() => []);
+      await this.deps.conversations
+        .addHolds(task.parentConversationId, held, task.conversationId)
+        .catch(() => undefined);
+    }
     const done = await this.#mutate(task.id, () => ({
       ...patch,
       current: undefined,
@@ -1229,19 +1244,6 @@ export class TaskService {
     if (!patch.status || patch.status === task.status) await this.#tell(done);
     for (const resolve of this.#waiters.get(task.id) ?? []) resolve(done);
     this.#waiters.delete(task.id);
-    // What a task read, its chat now knows too: its result came from there (ADR 0028).
-    if (done.parentConversationId && done.conversationId) {
-      const read = await this.deps.conversations.taintOf(done.conversationId).catch(() => []);
-      if (read.length)
-        await this.deps.conversations
-          .addTaint(done.parentConversationId, read)
-          .catch(() => undefined);
-      // And the skills it used: their instructions shaped what came back (ADR 0047).
-      const held = await this.deps.conversations.holdsOf(done.conversationId).catch(() => []);
-      await this.deps.conversations
-        .addHolds(done.parentConversationId, held, done.conversationId)
-        .catch(() => undefined);
-    }
     this.#pump();
     return done;
   }
