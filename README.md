@@ -59,8 +59,7 @@ you live in one, it brings every coding agent you have into one place.
 ## Install
 
 **The app.** Download it for macOS, Windows or Linux from the
-[latest release](https://github.com/georgevibing/conch-agent/releases/latest) and
-open it. If your computer asks first, [the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first)
+[newest release](https://github.com/georgevibing/conch-agent/releases) and open it. If your computer asks first, [the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first)
 says which button to press.
 
 **One line.** On macOS and Linux:
@@ -75,8 +74,9 @@ On Windows, in PowerShell:
 irm https://conchagent.com/install.ps1 | iex
 ```
 
-It fetches Node.js and Git if they are missing, keeps Conch running and opens it. Run
-the same line again to update. Add `--server` on a computer with no screen, or
+It installs the newest release: stable once there is one, before that the newest beta,
+then the newest alpha. It fetches Node.js and Git if they are missing, keeps Conch
+running and opens it. Run the same line again to update. Add `--server` on a computer with no screen, or
 `--uninstall` to remove it. Afterwards, `conch help` lists what the command line can do.
 
 **From a checkout**, with Node 24 or newer:
@@ -181,7 +181,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 - **They talk to each other.** "@Researcher find options, @Writer draft it." Agents
   take turns in one chat and stop before they loop or run up a bill.
 - **Work in the background.** Hand a job off and keep chatting, or have another
-  provider do a part. [Tasks](./apps/docs/content/features/tasks.md)
+  provider do a part. As many run at once as there is room for, and one that waits
+  says why. [Tasks](./apps/docs/content/features/tasks.md)
 - **Memory that looks after itself.** Plain Markdown you can read, edit or forget,
   tidied overnight and reported in a short morning note.
   [Memory](./apps/docs/content/features/memory.md)
