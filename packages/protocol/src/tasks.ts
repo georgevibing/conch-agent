@@ -64,6 +64,12 @@ export const TaskOperation = z.object({
   authorization: z.string(),
   expiresAt: z.number(),
   state: z.enum(['running', 'confirmed', 'unresolved', 'not-run']),
+  /**
+   * Conch said no before the call started (a hold, a guard, a declined approval), so it
+   * never ran: `not-run`, and it counts against nothing. A result that arrives after all
+   * takes it back to an ordinary action.
+   */
+  refused: z.literal(true).optional(),
   goalRevision: z.number().int().nonnegative().optional(),
   startedAt: z.number(),
   confirmedAt: z.number().optional(),

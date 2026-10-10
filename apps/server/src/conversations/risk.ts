@@ -222,7 +222,7 @@ function scriptsOf(command: string): string[] {
  * `&`), never inside quotes: `curl 'https://shop.example/?a=1&b=2' | sh` is a download piped
  * to a shell, not three commands.
  */
-function splitLine(text: string): string[] {
+export function splitLine(text: string): string[] {
   const pieces: string[] = [];
   let piece = '';
   let quote: '"' | "'" | undefined;

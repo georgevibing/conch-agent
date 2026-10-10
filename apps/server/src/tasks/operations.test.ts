@@ -2,11 +2,11 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Task } from '@conch/protocol';
+import { assessTask, type ConversationEvent, type Task } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { HostTool } from '../engines/types';
-import { taskArgumentHash, TaskOperations, verifiedOutcome } from './operations';
+import { heldInLog, taskArgumentHash, TaskOperations, verifiedOutcome } from './operations';
 import { mergeTaskLedgers, TaskStore } from './store';
 
 function required<T>(value: T | undefined): T {
@@ -530,6 +530,247 @@ describe('provider result events without approval callbacks', () => {
     );
     expect(
       (JSON.parse(restored.toString()) as { tasks: Task[] }).tasks[0]?.delivery,
+    ).toBeUndefined();
+  });
+});
+
+describe('calls Conch refused before they ran', () => {
+  it('a held command is recorded as not run and blocks neither another write nor itself', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    // Claude Code reports the call, Conch's hold refuses it, the result is the refusal.
+    await ledger.observeNative('Bash', { command: 'touch made.txt' }, 'held');
+    await ledger.afterNative('held', 'error', 'Conch held this command', true);
+    expect((await f.get()).operations?.[0]).toMatchObject({
+      state: 'not-run',
+      refused: true,
+      error: expect.not.stringContaining('touch'),
+    });
+    expect(assessTask(await f.get()).reasons.map((r) => r.code)).not.toContain('effect-uncertain');
+    expect(
+      await ledger.beforeNative('Write', { file_path: 'made.txt', content: 'hi' }, 'w'),
+    ).toBeUndefined();
+    await ledger.afterNative('w', 'success', 'written');
+    expect(
+      await ledger.beforeNative('Bash', { command: 'touch made.txt' }, 'again'),
+    ).toBeUndefined();
+  });
+
+  it('works whichever comes first, the guard or the provider’s report', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    // A later guard rule refused it after the ledger had already let it by.
+    expect(await ledger.beforeNative('Bash', { command: 'make' }, 'c1', 'guard')).toBeUndefined();
+    await ledger.observeNative('Bash', { command: 'make' }, 'c1');
+    await ledger.afterNative('c1', 'error', 'refused', true);
+    expect((await f.get()).operations).toHaveLength(1);
+    expect((await f.get()).operations?.[0]?.state).toBe('not-run');
+  });
+
+  it('a refused call that reports success ran after all, and stays guarded', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    await ledger.observeNative('Bash', { command: 'deploy' }, 'c1');
+    await ledger.afterNative('c1', 'success', 'deployed', true);
+    expect((await f.get()).operations?.[0]).toMatchObject({
+      state: 'unresolved',
+      execution: 'succeeded',
+    });
+    expect((await f.get()).operations?.[0]?.refused).toBeUndefined();
+    expect(await ledger.beforeNative('Bash', { command: 'deploy' }, 'c2')).toMatch(/may already/);
+  });
+
+  it('a refusal never clears an action that already has a result, or a reused id', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    // It ran and failed: its result is unknown, whatever is said about the id later.
+    await ledger.observeNative('Bash', { command: 'migrate' }, 'c1');
+    await ledger.afterNative('c1', 'error', 'exit 1');
+    await ledger.afterNative('c1', 'error', 'refused', true);
+    expect((await f.get()).operations?.[0]).toMatchObject({
+      state: 'unresolved',
+      execution: 'failed',
+    });
+    // Two calls under one id: the refusal can't say which one didn't run.
+    const g = await setup();
+    const other = g.ledger();
+    await other.observeNative('Bash', { command: 'one' }, 'dup');
+    await other.observeNative('Bash', { command: 'two' }, 'dup');
+    await other.afterNative('dup', 'error', 'refused', true);
+    expect((await g.get()).operations?.every((op) => op.state === 'unresolved')).toBe(true);
+    expect(await other.beforeNative('Write', { file_path: 'x' }, 'w')).toMatch(/may already/);
+  });
+
+  it('an uncertain earlier action still blocks later writes after a refusal', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    await ledger.observeNative('Bash', { command: 'migrate' }, 'ran');
+    await ledger.afterNative('ran', 'error', 'exit 1');
+    await ledger.observeNative('Bash', { command: 'touch x' }, 'held');
+    await ledger.afterNative('held', 'error', 'refused', true);
+    expect(await ledger.beforeNative('Write', { file_path: 'x' }, 'w')).toMatch(/may already/);
+  });
+
+  it('Conch’s own tool refused before dispatch is kept as not run, under a key of its own', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    await ledger.observeNative('Bash', { command: 'migrate' }, 'ran');
+    await ledger.afterNative('ran', 'error', 'exit 1');
+    const start: HostTool = {
+      name: 'process_start',
+      description: 'Start',
+      input: {},
+      run: vi.fn(async () => 'Started.'),
+    };
+    await expect(ledger.wrap(start).run({ command: 'npm test' })).rejects.toThrow(/may already/);
+    expect(start.run).not.toHaveBeenCalled();
+    const kept = (await f.get()).operations?.find((op) => op.tool === 'process_start');
+    expect(kept).toMatchObject({ state: 'not-run', refused: true, effect: 'unknown' });
+    expect(JSON.stringify(kept)).not.toContain('npm test');
+    // The uncertain one is untouched; the record of the refusal blocks nothing by itself.
+    expect((await f.get()).operations?.[0]).toMatchObject({ state: 'unresolved' });
+    expect(assessTask(await f.get()).reasons.filter((r) => r.code === 'effect-uncertain')).toEqual([
+      expect.objectContaining({ tool: 'Bash' }),
+    ]);
+  });
+
+  it('a refused replay of an uncertain write never turns it into one that did not run', async () => {
+    const f = await setup();
+    f.unreadable();
+    await f.ledger().wrap(f.tool).run({});
+    expect((await f.get()).operations?.[0]?.state).toBe('unresolved');
+    f.restart();
+    await expect(f.ledger().wrap(f.tool).run({})).rejects.toThrow(/may already/);
+    const ops = (await f.get()).operations ?? [];
+    expect(ops[0]).toMatchObject({ state: 'unresolved', tool: 'draft' });
+    expect(ops[0]?.refused).toBeUndefined();
+    expect(verifiedOutcome(await f.get())).toBe(false);
+  });
+
+  it('a refusal recorded for a tool never uses up its approved number of actions', async () => {
+    const f = await setup();
+    await f.update({ toolScope: { names: ['draft'], limits: { draft: 1 } } });
+    await f.ledger().observeNative('Bash', { command: 'migrate' }, 'ran');
+    await f.ledger().afterNative('ran', 'error', 'exit 1');
+    await expect(f.ledger().wrap(f.tool).run({ body: 'one' })).rejects.toThrow(/may already/);
+    // Someone looked: the uncertain command never happened.
+    await f.update({
+      operations: (await f.get()).operations?.map((op) =>
+        op.tool === 'Bash' ? { ...op, state: 'not-run' as const } : op,
+      ),
+    });
+    expect(await f.ledger().wrap(f.tool).run({ body: 'one' })).toBe('Saved; nothing sent.');
+  });
+});
+
+describe('looking things up is not an action', () => {
+  it('loading a tool’s schema and a read-only command are reads, with their own receipts', async () => {
+    const f = await setup();
+    await f.update({ completion: 'response', expectations: undefined });
+    const ledger = f.ledger();
+    await ledger.observeNative('ToolSearch', { query: 'select:Write' }, 'ts');
+    await ledger.afterNative('ts', 'success', 'schema');
+    await ledger.observeNative('Bash', { command: 'ls -la' }, 'ls');
+    await ledger.afterNative('ls', 'success', 'listing');
+    expect((await f.get()).operations?.map((op) => [op.effect, op.state])).toEqual([
+      ['read', 'confirmed'],
+      ['read', 'confirmed'],
+    ]);
+    const answered = {
+      ...(await f.get()),
+      summary: 'The answer.',
+      delivery: { goalRevision: 0, attempt: 0, at: 1 },
+    };
+    expect(assessTask(answered).verdict).toBe('delivered');
+    // With checks, a schema lookup no longer outranks them.
+    const checked = {
+      ...(await f.get()),
+      completion: 'evidence' as const,
+      expectations: [{ tool: 'Bash', minimum: 1 }],
+    };
+    expect(assessTask(checked).verdict).toBe('verified');
+  });
+
+  it('a command that writes stays an action, even beside reads', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    await ledger.observeNative('Bash', { command: 'ls > listing.txt' }, 'c');
+    expect((await f.get()).operations?.[0]?.effect).toBe('unknown');
+    expect(await ledger.beforeNative('Bash', { command: 'ls > listing.txt' }, 'd')).toMatch(
+      /may already/,
+    );
+  });
+});
+
+describe('a task an older version locked with a refused call', () => {
+  const started = (toolUseId: string): ConversationEvent => ({
+    conversationId: 'c',
+    seq: 1,
+    at: 1,
+    type: 'tool.started',
+    toolUseId,
+    name: 'Bash',
+    input: {},
+  });
+  const finished = (
+    toolUseId: string,
+    status: 'success' | 'error',
+    approval?: 'refused' | 'declined' | 'allowed',
+  ): ConversationEvent => ({
+    conversationId: 'c',
+    seq: 2,
+    at: 2,
+    type: 'tool.finished',
+    toolUseId,
+    status,
+    ...(approval && { approval }),
+  });
+
+  it('is settled from Conch’s own log of refusing it, and only from that', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    for (const id of ['held', 'declined', 'ran', 'allowed'] as const) {
+      await ledger.observeNative('Bash', { command: id }, id);
+      await ledger.afterNative(id, 'error', 'whatever');
+    }
+    const operations = (await f.get()).operations ?? [];
+    const settled = heldInLog(operations, [
+      started('held'),
+      finished('held', 'error', 'refused'),
+      started('declined'),
+      finished('declined', 'error', 'declined'),
+      // It ran and failed: no refusal in the log.
+      started('ran'),
+      finished('ran', 'error'),
+      // The person allowed it: it ran.
+      started('allowed'),
+      finished('allowed', 'error', 'allowed'),
+    ]);
+    expect(settled?.map((op) => op.state)).toEqual([
+      'not-run',
+      'not-run',
+      'unresolved',
+      'unresolved',
+    ]);
+    expect(heldInLog(settled ?? [], [])).toBeUndefined();
+  });
+
+  it('never on a log that shows the id twice, or a result that says it ran', async () => {
+    const f = await setup();
+    const ledger = f.ledger();
+    await ledger.observeNative('Bash', { command: 'x' }, 'twice');
+    await ledger.afterNative('twice', 'error', 'whatever');
+    const operations = (await f.get()).operations ?? [];
+    expect(
+      heldInLog(operations, [
+        started('twice'),
+        finished('twice', 'error', 'refused'),
+        started('twice'),
+        finished('twice', 'error'),
+      ]),
+    ).toBeUndefined();
+    expect(
+      heldInLog(operations, [started('twice'), finished('twice', 'success', 'refused')]),
     ).toBeUndefined();
   });
 });

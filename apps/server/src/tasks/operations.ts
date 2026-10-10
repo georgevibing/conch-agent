@@ -1,9 +1,16 @@
 /** Write-ahead, fail-closed effect ledger. Model text is never evidence. */
 import { createHash } from 'node:crypto';
 
-import { assessTask, TaskReceipt, type Task, type TaskOperation } from '@conch/protocol';
+import {
+  assessTask,
+  TaskReceipt,
+  type ConversationEvent,
+  type Task,
+  type TaskOperation,
+} from '@conch/protocol';
 
 import type { HostTool } from '../engines/types';
+import { taskReadOnly } from './reads';
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -22,6 +29,8 @@ export const taskArgumentHash = (args: Record<string, unknown>) => hash(args);
 
 const unresolved =
   'This action may already have happened. Conch cannot prove its result, so it will not repeat it. Inspect the original app before continuing.';
+/** Fixed words: never the refusal's own text, which may quote a command or a path. */
+const heldBack = 'Conch stopped this before it ran, so nothing happened.';
 
 export class TaskOperations {
   readonly #locks = new Map<string, Promise<unknown>>();
@@ -112,6 +121,10 @@ export class TaskOperations {
           if (this.stopped()) throw new Error('This task was stopped.');
           const contract = tool.verification;
           let recorded = false;
+          // Known once the scope is: a refusal after this is Conch's own, before dispatch.
+          let scoped: { account: string; authorization: string; expiresAt: number } | undefined;
+          // A call that is an earlier action again: refusing it leaves that action's own record.
+          let linked = false;
           try {
             const scope = contract
               ? await contract.scope(args)
@@ -124,6 +137,7 @@ export class TaskOperations {
               throw new Error(
                 'This approval expired. Reconnect the account or approve the action again.',
               );
+            scoped = scope;
             const task = await this.get();
             this.#prior ??= new Set(task.operations?.map((op) => op.id));
             const authorizedArguments = task.toolScope?.argumentHashes?.[tool.name];
@@ -139,6 +153,7 @@ export class TaskOperations {
             const history = (task.operations ?? []).filter((entry) => entry.key === key);
             // Reads are observations, not deduplicated effects. Preserve nonempty and failed attempts.
             let operation = contract?.effect === 'read' ? undefined : history.at(-1);
+            linked = operation !== undefined;
             // A new turn may reissue its original steps. A later edit must not make
             // an earlier confirmed write look new and overwrite the saved progress.
             const prior =
@@ -170,6 +185,7 @@ export class TaskOperations {
               (task.operations ?? []).filter(
                 (entry) =>
                   entry.tool === tool.name &&
+                  !entry.refused &&
                   (entry.goalRevision ?? 0) === (task.goalRevision ?? 0),
               ).length >= limit
             )
@@ -181,11 +197,13 @@ export class TaskOperations {
               operation ??= task.operations?.find(
                 (entry) => entry.key === hash({ tool: tool.name, args }),
               );
+            linked = operation !== undefined;
             if (
               task.operations?.some(
                 (entry) =>
                   entry.tool === tool.name &&
                   entry.account !== scope.account &&
+                  !entry.refused &&
                   !(entry.effect === 'read' && entry.state === 'not-run'),
               )
             )
@@ -294,7 +312,12 @@ export class TaskOperations {
               goalRevision: task.goalRevision ?? 0,
             };
             recorded = true;
-            await this.#save({ ...operation, state: 'running', error: undefined });
+            await this.#save({
+              ...operation,
+              state: 'running',
+              refused: undefined,
+              error: undefined,
+            });
             if (this.stopped()) {
               await this.#save({
                 ...operation,
@@ -394,12 +417,40 @@ export class TaskOperations {
                 error:
                   'This read failed before dispatch; it provides no evidence for this attempt.',
               });
+            } else if (!recorded && scoped && !linked && !this.stopped()) {
+              // Refused by the ledger's own checks before dispatch: the attempt is kept, as
+              // never run, under a key of its own, so it can neither clear nor block another.
+              await this.#refusedAttempt(tool.name, args, inputHash, scoped).catch(() => undefined);
             }
             throw error;
           }
         });
       },
     };
+  }
+
+  async #refusedAttempt(
+    name: string,
+    args: Record<string, unknown>,
+    inputHash: string,
+    scope: { account: string; authorization: string; expiresAt: number },
+  ): Promise<void> {
+    const task = await this.get();
+    const n = task.operations?.length ?? 0;
+    const key = hash({ tool: name, refused: hash(args), goalRevision: task.goalRevision ?? 0, n });
+    await this.#save({
+      id: `op_${hash({ task: task.id, key }).slice(0, 40)}`,
+      key,
+      tool: name,
+      inputHash,
+      effect: 'unknown',
+      ...scope,
+      state: 'not-run',
+      refused: true,
+      goalRevision: task.goalRevision ?? 0,
+      startedAt: this.now(),
+      error: heldBack,
+    });
   }
 
   /** Record reported invocations even when a provider skips its approval hook.
@@ -420,9 +471,7 @@ export class TaskOperations {
         invocationId,
         inputHash: hash(args),
         tool: name,
-        effect: ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
-          ? 'read'
-          : 'unknown',
+        effect: taskReadOnly(name, args) ? 'read' : 'unknown',
         account: 'native',
         authorization: 'observed-only',
         expiresAt: this.now(),
@@ -441,12 +490,12 @@ export class TaskOperations {
     invocationId?: string,
     phase = 'guard',
   ): Promise<string | undefined> {
-    const read = ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name);
+    const read = taskReadOnly(name, args);
     const key = hash({ tool: name, args });
     return this.#serial('host-effects', async () => {
       if (this.stopped()) return 'This task was stopped.';
       const task = await this.get();
-      if (task.restored && !['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name))
+      if (task.restored && !read)
         return 'This restored task cannot issue unverified native writes.';
       const identity = `${invocationId ?? 'unknown'}:${key}`;
       const seen = invocationId ? this.#nativeChecks.get(identity) : undefined;
@@ -455,12 +504,16 @@ export class TaskOperations {
         seen.add(phase);
         return undefined;
       }
-      if (!read && task.operations?.some((entry) => entry.key === key && entry.id !== observed))
-        return ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
-          ? undefined
-          : unresolved;
+      // The same call again is refused, unless the earlier one provably never ran.
       if (
-        !['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name) &&
+        !read &&
+        task.operations?.some(
+          (entry) => entry.key === key && entry.id !== observed && entry.state !== 'not-run',
+        )
+      )
+        return unresolved;
+      if (
+        !read &&
         task.operations?.some(
           (entry) =>
             entry.id !== observed &&
@@ -479,9 +532,7 @@ export class TaskOperations {
         invocationId,
         inputHash: hash(args),
         tool: name,
-        effect: ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
-          ? 'read'
-          : 'unknown',
+        effect: read ? 'read' : 'unknown',
         account: 'native',
         authorization: 'per-turn',
         expiresAt: this.now(),
@@ -493,21 +544,47 @@ export class TaskOperations {
       return undefined;
     });
   }
-  /** Native read evidence comes from the engine's actual result event, never summary prose. */
+  /**
+   * Native read evidence comes from the engine's actual result event, never summary prose.
+   * `notRun`: Conch refused this call before it started (a hold, a guard, a declined
+   * approval). Believed only for a failed result of the one call with that id that has no
+   * result yet; a success means it ran after all, and stays an ordinary action.
+   */
   async afterNative(
     invocationId: string,
     status: 'success' | 'error',
     output?: string,
+    notRun = false,
   ): Promise<void> {
     await this.#serial('host-effects', async () => {
       if (this.stopped()) return;
       const task = await this.get();
-      const op = task.operations?.findLast(
+      const calls = (task.operations ?? []).filter(
         (entry) => entry.account === 'native' && entry.invocationId === invocationId,
       );
+      const op = calls.at(-1);
       if (!op) return;
       if (op.effect !== 'read') {
-        await this.#save({ ...op, execution: status === 'success' ? 'succeeded' : 'failed' });
+        const held =
+          notRun &&
+          status === 'error' &&
+          calls.length === 1 &&
+          op.execution === undefined &&
+          op.state === 'unresolved';
+        await this.#save(
+          held
+            ? { ...op, state: 'not-run', refused: true, error: heldBack }
+            : {
+                ...op,
+                // A result after a refusal means it ran: back to an action Conch can't prove.
+                ...(op.refused && {
+                  state: 'unresolved' as const,
+                  refused: undefined,
+                  error: 'This provider tool was observed without an independent receipt.',
+                }),
+                execution: status === 'success' ? 'succeeded' : 'failed',
+              },
+        );
         return;
       }
       await this.#save(
@@ -534,6 +611,46 @@ export class TaskOperations {
       );
     });
   }
+}
+
+/**
+ * Calls an earlier attempt kept as "may have happened" that its chat's own log shows
+ * Conch refused before they ran (older versions didn't record that): they never
+ * happened. Only on Conch's word, written when it said no: one call with that id,
+ * started once and ended once, with an error, refused, declined or unanswered.
+ * Returns the operations changed, or undefined when nothing was.
+ */
+export function heldInLog(
+  operations: TaskOperation[],
+  events: readonly ConversationEvent[],
+): TaskOperation[] | undefined {
+  let changed = false;
+  const settled = operations.map((op) => {
+    const id = op.invocationId;
+    if (
+      !id ||
+      op.account !== 'native' ||
+      op.effect === 'read' ||
+      op.state !== 'unresolved' ||
+      op.execution !== 'failed' ||
+      operations.filter((other) => other.invocationId === id).length !== 1
+    )
+      return op;
+    const started = events.filter((e) => e.type === 'tool.started' && e.toolUseId === id);
+    const finished = events.filter((e) => e.type === 'tool.finished' && e.toolUseId === id);
+    const end = finished[0];
+    if (
+      started.length !== 1 ||
+      finished.length !== 1 ||
+      end?.type !== 'tool.finished' ||
+      end.status !== 'error' ||
+      !(end.approval === 'refused' || end.approval === 'declined' || end.approval === 'expired')
+    )
+      return op;
+    changed = true;
+    return { ...op, state: 'not-run' as const, refused: true as const, error: heldBack };
+  });
+  return changed ? settled : undefined;
 }
 
 export function verifiedOutcome(task: Task): boolean {

@@ -288,7 +288,13 @@ export interface TurnExtras {
   /** Durable task ledger: invoked outside every host tool, independent of engine. */
   wrapTool?: (tool: HostTool) => HostTool;
   observeTool?: (name: string, input: Record<string, unknown>, id: string) => Promise<void>;
-  afterTool?: (id: string, status: 'success' | 'error', output?: string) => Promise<void>;
+  /** `notRun`: Conch refused the call before it started, or the person declined it. */
+  afterTool?: (
+    id: string,
+    status: 'success' | 'error',
+    output?: string,
+    notRun?: boolean,
+  ) => Promise<void>;
   beforeTool?: (
     name: string,
     input: Record<string, unknown>,
@@ -4203,8 +4209,16 @@ export class ConversationManager {
           case 'tool-end': {
             // The provider's own tool, not run because Conch wouldn't let it (ADR 0028).
             if (event.refused) refused(event.toolUseId, true);
-            if (!abort.signal.aborted && (event.status === 'success' || event.status === 'error'))
-              await extras?.afterTool?.(event.toolUseId, event.status, event.output);
+            if (!abort.signal.aborted && (event.status === 'success' || event.status === 'error')) {
+              // Refused by Conch's rules, or declined or unanswered: it never started.
+              const approval = this.#approvalOf(live, event.toolUseId);
+              const notRun =
+                event.refused === true ||
+                approval === 'refused' ||
+                approval === 'declined' ||
+                approval === 'expired';
+              await extras?.afterTool?.(event.toolUseId, event.status, event.output, notRun);
+            }
             const settle = async () => {
               // A cancelled tool may return ordinary text while its remote action
               // is still uncertain. Only results observed before Stop settle it.

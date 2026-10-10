@@ -46,7 +46,7 @@ import { LOCAL_LABEL } from '../engines/api/ollama';
 import type { Engine, HostTool } from '../engines/types';
 import { Mutex } from '../lib/fs';
 import { PROVIDER_COPY } from '../providers/catalog';
-import { taskArgumentHash, taskArgumentText, TaskOperations } from './operations';
+import { heldInLog, taskArgumentHash, taskArgumentText, TaskOperations } from './operations';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import type { TaskStore } from './store';
@@ -705,6 +705,16 @@ export class TaskService {
     try {
       // Recheck the parent’s current ceiling, including changes made while interrupted.
       if (task.attempt) options = await this.#optionsFor(parent, options);
+      // A call an earlier attempt's chat shows Conch refused before it ran never happened.
+      if (task.attempt && task.conversationId) {
+        const { events } = await this.deps.conversations
+          .detail(task.conversationId)
+          .catch(() => ({ events: [] }));
+        if (heldInLog(task.operations ?? [], events))
+          task = await this.#mutate(id, (current) => ({
+            operations: heldInLog(current.operations ?? [], events) ?? current.operations,
+          }));
+      }
       const cwd = task.cwd ?? (await this.deps.settings.workspace());
       task = await this.#mutate(id, (current) => ({
         options: {
@@ -781,8 +791,8 @@ export class TaskService {
             if (!hostNames.has(name.replace(/^mcp__conch__/, '')))
               await operations.observeNative(name, args, invocationId);
           },
-          afterTool: (invocationId, status, output) =>
-            operations.afterNative(invocationId, status, output),
+          afterTool: (invocationId, status, output, notRun) =>
+            operations.afterNative(invocationId, status, output, notRun),
           beforeTool: async (name, args, invocationId, phase) => {
             if (!permitted(name))
               return 'This task is only authorized to use its listed tools. Shell commands, browser actions, and other tools are not authorized.';
