@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/pearl-dark.svg">
-    <img src=".github/assets/pearl-light.svg" alt="" width="360">
+    <img src=".github/assets/pearl-light.svg" alt="" width="200">
   </picture>
 </p>
 
@@ -30,11 +30,11 @@
 <p align="center">
   <a href="#install"><b>Install</b></a>
   &nbsp;·&nbsp;
+  <a href="#three-things-it-does-differently"><b>Why Conch</b></a>
+  &nbsp;·&nbsp;
   <a href="#what-it-does"><b>What it does</b></a>
   &nbsp;·&nbsp;
-  <a href="./apps/docs/content/start/first-chat.md"><b>Your first chat</b></a>
-  &nbsp;·&nbsp;
-  <a href="./apps/docs/content"><b>Documentation</b></a>
+  <a href="https://conchagent.com/docs/"><b>Docs</b></a>
   &nbsp;·&nbsp;
   <a href="./CONTRIBUTING.md"><b>Contributing</b></a>
 </p>
@@ -48,193 +48,38 @@
   </picture>
 </p>
 
-Download it, open it, sign in with a subscription or paste a key. That's the setup.
-No account, no terminal, no telemetry. Your chats, memories and settings stay in
-`~/.conch` on your computer, and one assistant reaches you on the web, your phone,
-your desktop and the chat apps you already use.
+Download it, open it, sign in with a plan you already pay for or paste a key. That is
+the setup. There is no account to make, no terminal to learn and no telemetry. Your
+chats, memories and settings live in `~/.conch` on your computer, and one assistant
+reaches you on the web, your phone, your desktop and the chat apps you already use.
 
-## What it does
-
-### Talk to any model
-
-- **Every provider, one picker.** Claude Code, Codex, GitHub Copilot, Gemini CLI and
-  Grok with your own sign-in; Ollama, LM Studio or a server of your own; keys from
-  OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more; or your company's
-  Amazon Bedrock, Google Vertex AI or Azure OpenAI, picked from the sign-ins already on
-  your computer. A chat can switch models without losing its thread. [Providers](./apps/docs/content/providers)
-- **A limit never stops a chat.** When a plan runs out, the next plan or key with room
-  carries on, yours first and then the cheapest, in an order you can change. It comes
-  back once the limit resets. [Offline and at a limit](./apps/docs/content/care/offline.md)
-- **`/` commands that work everywhere.** Autocomplete for commands and their choices,
-  on a phone too: `/clear` (with Undo), `/goal`, `/plan` and the rest, with every
-  provider and in every chat app. [Slash commands](./apps/docs/content/reference/slash-commands.md)
-- **A chat list that stays tidy.** Pin, file into folders (hold to drag on a phone),
-  start a chat inside a folder, and see which chats need you. Your apps sit on top
-  under **Apps**, with a folder for the rest. What you didn't send stays as a **Draft**,
-  files and all, on every device. [Your chats](./apps/docs/content/features/chats.md)
-- **It says what it's doing, in plain words.** Instead of a wall of commands, each run
-  of work is one line, like "Ran the tests · 241 passed", that opens into its steps
-  and then the exact calls. Ask **Why?** about any step, and see what each reply
-  changed, with Undo. [Your chats](./apps/docs/content/features/chats.md)
-- **See how it did it, and keep it.** Scrub or replay any chat, routine run or task step
-  by step: what it read, changed and cost, and where it waited for you. Save one chat
-  or many as a page to read, or as OpenAI, ShareGPT (Hermes) or ATIF files for
-  training, with keys and personal details taken out first. Nothing leaves your
-  computer. [How it did it](./apps/docs/content/features/how-it-did-it.md)
-- **Big jobs in one go.** For 300 emails or 40 pages, your assistant writes one short
-  script that uses its tools, sealed off, every step asking what it would ask anyway.
-  The chat shows it as one line with live counts, and one Undo puts it all back. [Big jobs in one go](./apps/docs/content/features/scripts.md)
-- **It doesn't give up at the first error.** Every model reads what went wrong, tries
-  another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
-- **It waits without nagging.** "Watch CI and fix it if it fails": Conch watches CI, a
-  command, a page or the clock itself, the chat stays yours, and your assistant carries
-  on when something changes. [When it has to wait](./apps/docs/content/features/working-on-a-problem.md#when-it-has-to-wait)
-- **Long jobs that finish.** Long chats summarise their start, caching keeps costs
-  down, and each reply says what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
-- **On your own dashboard.** Turns, tokens, spending, tools and this computer in
-  Grafana, Honeycomb, Datadog, New Relic, Langfuse, Phoenix or Prometheus: paste
-  the key the service shows and press Send a test. Numbers only, never the words of
-  your chats. [Dashboards](./apps/docs/content/care/dashboards.md)
-
-### Agents
-
-- **As many agents as you like.** Give each a name, a face (one of 18, your own
-  picture, or one drawn by AI), a personality and instructions. Pick who answers a
-  chat, switch mid-chat, or set one per chat app and routine; replies say who's
-  speaking. [Agents](./apps/docs/content/features/agents.md)
-- **Agents that talk to each other.** "@Researcher find options, @Writer draft it":
-  agents take turns in one chat, with a live picture of who's talking to whom, and
-  stop by themselves before they loop or run up a bill. Add agents elsewhere by
-  pasting their address (A2A), and let other agents talk to yours, in words only,
-  once you let them in. [Several agents in one chat](./apps/docs/content/features/agents.md#several-agents-in-one-chat)
-- **Work in the background.** Hand a job off and keep chatting, or have another
-  provider do a part ("have Codex write the tests"). Every provider runs it as a
-  Conch task you can see, answer and stop, with its chat's permissions and never
-  more. A task counts as done only with a saved answer, or the tool receipts set before it started, and you can look at what it recorded. [Hand it off](./apps/docs/content/features/tasks.md)
-- **Memory that looks after itself.** Conch learns what will still matter from a chat
-  and tidies its memories overnight, then says what it learned in a short morning note,
-  each line with Undo. They're Markdown you can read, edit or forget. A
-  memory a web page tries to plant is held and asked about. [Memory](./apps/docs/content/features/memory.md)
-- **Skills.** Agent Skills (`SKILL.md`) for every model, from what worked, from a
-  sentence, or from **Discover**. [Skills](./apps/docs/content/features/skills.md)
-- **Bring your things.** Memories, skills, routines and agents from OpenClaw or
-  Hermes, shown first and undoable for a week. [Come home](./apps/docs/content/care/come-home.md)
-- **Your past chats.** Conversations from Claude Code, Codex, Gemini CLI, OpenCode,
-  Copilot, OpenClaw and Hermes, found by themselves and brought in with one press, to
-  search and carry on. [Past chats](./apps/docs/content/care/past-chats.md)
-
-### Works for you
-
-- **Routines.** Every weekday at 7:30, or when an email arrives, before a meeting,
-  when a page changes. [Routines](./apps/docs/content/features/routines.md)
-- **Standing orders and check-ins.** Say once "always tell me if a flight changes";
-  Conch looks now and then, for free until something's new, and tells you only then,
-  with why. Outside quiet hours, and never a permission. [Check-ins](./apps/docs/content/features/check-ins.md)
-- **A browser you can watch** and take over, and a real terminal a keystroke away.
-  [Browser](./apps/docs/content/features/browser.md) ·
-  [Terminal](./apps/docs/content/features/terminal.md)
-- **Your apps, while you watch.** On a Mac, it can look at the screen and click and
-  type in the apps you allow, one app at a time, with a glowing edge and Stop one
-  press away. [Use your apps](./apps/docs/content/features/use-your-apps.md)
-- **Research, files and pictures.** Sources with references, PDF and Office files
-  read and made (PDF, Word, Excel, CSV, PowerPoint, charts) with any chat model and
-  sent to your chat apps, pictures from any chat model, and charts and documents
-  that open beside the chat. [Research](./apps/docs/content/features/research.md) ·
-  [Files](./apps/docs/content/features/files.md) ·
-  [Pictures](./apps/docs/content/features/pictures.md) ·
-  [Show me](./apps/docs/content/features/show-me.md)
-- **Cards you can press.** Products to compare, songs and videos that play, the
-  weather in °C or °F, recipes with timers, places on a map, share and coin prices,
-  and charts, each a card in the chat. Save one as a picture, copy it, or send it to
-  your chat apps. [Cards](./apps/docs/content/features/cards.md)
-
-### Apps and integrations
-
-- **One gallery for every model.** Gmail, Google Calendar and Drive, Slack, GitHub,
-  Notion, Linear and more. Add as many Google accounts as you like and choose Off,
-  Read or Read & write for each product. A change shows you first unless you allowed
-  it, and an email can be edited on its card before it goes.
-  [Apps](./apps/docs/content/features/apps.md)
-- **Apps it makes for you.** Ask for an ability it doesn't have and Conch builds a
-  Conch app: tools every model can use and pages that look like Conch, sealed off
-  from your files. Added when you say so, shared on GitHub in one press.
-  [Make apps](./apps/docs/content/features/make-apps.md)
-- **Any provider, any chat app.** Name one Conch doesn't list ("add Fireworks as a
-  provider", "connect me on Zulip") and it reads the docs, makes it, tests it with
-  your key on a card, and adds it when you press Add. Or add one from a link.
-  [Add any provider](./apps/docs/content/providers/any-provider.md),
-  [Add any chat app](./apps/docs/content/channels/any-chat-app.md)
-- **Your other tools.** Claude Desktop, Cursor and VS Code can use your memory,
-  skills, apps and browser, each only what you tick. [Other apps](./apps/docs/content/features/other-apps.md)
-
-### Everywhere
-
-- **Web and desktop.** An app for macOS, Windows and Linux, with the pearl in the
-  menu bar, one-press updates and "Hey Conch" if you turn it on.
-- **Your phone.** An installable app over a private Tailscale address, with
-  notifications you can answer with one tap, and voice (“Hey Conch” while it's open). Add it from **Settings → Access**. [On your phone](./apps/docs/content/start/phone.md)
-- **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Teams, Google Chat, Matrix, WeChat, Feishu / Lark, DingTalk, QQ and more, with the same commands as the app.
-  [Chat apps](./apps/docs/content/channels)
-- **A server of your own.** One line installs it at `conch.yourname.com` with its own
-  certificate. [On a server](./apps/docs/content/start/server.md)
-
-### Safe by design
-
-- **Four permission modes, the same on every provider.** **Read only**, **Ask first**,
-  **Auto** (where new chats start: it gets on with it and asks only before risky steps)
-  and **Full trust**. [Permission modes](./apps/docs/content/reference/modes.md)
-- **Careful after reading.** Once a chat has read a web page or an email, anything
-  risky asks first. Commands run sealed off from your keys.
-- **Choose where work runs.** This computer, a locked-down container (Docker or
-  Podman, installed for you), a machine you reach with SSH, or a sandbox in the
-  cloud that sleeps when idle. Each command's row says where it ran. [Where work runs](./apps/docs/content/features/where-work-runs.md)
-- **See it, undo it.** **Activity** shows everything the assistant did; **Undo** puts
-  files back. [Undo](./apps/docs/content/care/undo.md)
-- **It fixes itself.** **Repair everything** checks every part of Conch, with daily
-  backups and signed updates that roll back on failure. Conch watches for freezes,
-  cleans up programs left behind by a crash, and resumes waiting work after a healthy
-  recovery. It tells active assistants when resources are tight and gradually
-  restores managed work when there is room again. **Settings → This computer**
-  shows the machine live, and what each provider uses. [Health](./apps/docs/content/care/health.md)
-- **Sign in with your device.** Touch ID, Windows Hello or Face ID; a new device waits
-  for your OK in **Settings → Access**.
-
-## Good to know
-
-- **It runs as you.** Conch can read your files and run commands. Treat it like an
-  SSH server and read [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a
-  network. Out of the box only this computer can open it.
-- **Local models are smaller.** A model on your computer is free and private, but
-  slower and less capable than the cloud ones.
-- **Conch is free.** The models cost what your plan or key costs.
+Conch is for anyone. If you have never opened a terminal, it still works for you. If
+you live in one, it brings every coding agent you have into one place.
 
 ## Install
 
-**Download the app** for macOS, Windows or Linux from the
+**The app.** Download it for macOS, Windows or Linux from the
 [latest release](https://github.com/georgevibing/conch-agent/releases/latest) and
-open it. If your computer asks first,
-[the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first) says which
-button to press.
+open it. If your computer asks first, [the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first)
+says which button to press.
 
-Or one line in a terminal. macOS and Linux:
+**One line.** On macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.sh | sh
+curl -fsSL https://conchagent.com/install.sh | sh
 ```
 
-Windows (PowerShell):
+On Windows, in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.ps1 | iex
+irm https://conchagent.com/install.ps1 | iex
 ```
 
-It gets Node.js and Git if they're missing, keeps Conch running and opens it. Run it
-again to update, add `--uninstall` to remove it, or `--server` on a computer with no
-screen ([On a server](./apps/docs/content/start/server.md)). Afterwards, `conch help`
-lists what the command line can do.
+It fetches Node.js and Git if they are missing, keeps Conch running and opens it. Run
+the same line again to update. Add `--server` on a computer with no screen, or
+`--uninstall` to remove it. Afterwards, `conch help` lists what the command line can do.
 
-From a checkout (Node 24 or newer):
+**From a checkout**, with Node 24 or newer:
 
 ```bash
 corepack enable
@@ -242,23 +87,197 @@ pnpm install
 pnpm start        # builds and opens http://localhost:4317
 ```
 
-## Documentation
+## Three things it does differently
+
+### It knows what it can do. Just ask.
+
+Ask about Friday before your calendar is connected, and Conch does not guess. The
+card that connects it is right under the reply. Press it, and the chat carries on by
+itself with the day as it is. Every app, skill and setting works this way: nothing to
+configure first, no file to edit, and nothing is turned on until you say so. That is
+how someone who has never opened a terminal gets the same assistant as someone who
+lives in one.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/knows-dark.gif">
+    <img src=".github/assets/knows-light.gif" width="720" alt="Asked about Friday, Conch offers to connect Google Calendar under its reply; once connected, the chat carries on by itself and shows the day as it is">
+  </picture>
+</p>
+
+### Ask for an app. It builds one.
+
+When nothing you have does what you need, say so in your own words. Conch writes a
+Conch app, checks it, tries every part of it and shows it to you as a card. Its tools
+work with every model, its pages look like Conch, and it runs sealed off from your
+files. Nothing is added until you press the button, and you can share it on GitHub in
+one press. The same goes for a provider or a chat app Conch does not list yet: name
+it, and Conch reads the docs and makes it.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/make-apps-dark.gif">
+    <img src=".github/assets/make-apps-light.gif" width="720" alt="Asked for something that remembers when the plants were watered, Conch writes Plant diary, checks it, tries it and offers it as a card">
+  </picture>
+</p>
+
+### Something broke? It is already fixed.
+
+Conch keeps an eye on every part of itself and mends what it can before you notice: a
+program that is missing, a process left behind by a crash, an app whose sign-in needed
+refreshing. What it fixed while you were away is a quiet list, not an alarm. When
+something needs you, like signing in again, you get one plain sentence and the button
+that does it. Daily backups and signed updates that roll back on failure come with it.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/repair-dark.gif">
+    <img src=".github/assets/repair-light.gif" width="720" alt="Repair everything: Conch fixes three things on its own and leaves one sign-in for you, with its button">
+  </picture>
+</p>
+
+## What it does
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**In the chat**
+
+- **Every model you have, one picker.** The plans you already pay for, with their own
+  sign-in: Claude Code, Codex, GitHub Copilot, Gemini CLI, Grok. Keys from OpenRouter,
+  Anthropic, OpenAI, Google, Mistral, DeepSeek and more. Ollama or LM Studio for a
+  model that is private and offline. A chat can switch models without losing its
+  thread, and when a plan hits its limit or the internet goes, the next one carries
+  on. [Providers](./apps/docs/content/providers)
+- **It says what it is doing, in plain words.** Each run of work is one line, like
+  "Ran the tests · 241 passed", that opens into its steps. Ask **Why?** about any of
+  them. [Your chats](./apps/docs/content/features/chats.md)
+- **It does not give up at the first error.** Every model reads what went wrong, tries
+  another way and checks its work before it says done.
+  [Working on a problem](./apps/docs/content/features/working-on-a-problem.md)
+- **It waits without nagging.** "Watch CI and fix it if it fails." The chat stays
+  yours, and your assistant carries on when something changes.
+- **Big jobs in one go.** For 300 emails or 40 pages it writes one short script,
+  sealed off, shown as one line with live counts and one Undo.
+  [Scripts](./apps/docs/content/features/scripts.md)
+- **Cards you can press.** Calendars, emails, files, products, songs, places, prices
+  and charts, each a card in the chat. [Cards](./apps/docs/content/features/cards.md)
+- **Research, files and pictures.** Sources with references, PDF and Office files read
+  and made, and charts and documents that open beside the chat.
+  [Show me](./apps/docs/content/features/show-me.md)
+- **See how it did it.** Replay any chat step by step, and save it as a page or as
+  training files with keys and personal details taken out.
+  [How it did it](./apps/docs/content/features/how-it-did-it.md)
+
+</td>
+<td width="50%" valign="top">
+
+**Your agents**
+
+- **As many as you like.** Each with a name, a face, a personality and instructions.
+  Pick who answers a chat, or set one per chat app and routine.
+  [Agents](./apps/docs/content/features/agents.md)
+- **They talk to each other.** "@Researcher find options, @Writer draft it." Agents
+  take turns in one chat and stop before they loop or run up a bill.
+- **Work in the background.** Hand a job off and keep chatting, or have another
+  provider do a part. [Tasks](./apps/docs/content/features/tasks.md)
+- **Memory that looks after itself.** Plain Markdown you can read, edit or forget,
+  tidied overnight and reported in a short morning note.
+  [Memory](./apps/docs/content/features/memory.md)
+- **Skills** for every model, from what worked, from a sentence or from **Discover**.
+  [Skills](./apps/docs/content/features/skills.md)
+- **Bring your things.** Memories, skills, routines and agents from OpenClaw or
+  Hermes, and past chats from Claude Code, Codex, Gemini CLI, OpenCode and Copilot.
+  [Come home](./apps/docs/content/care/come-home.md)
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Works for you**
+
+- **Routines.** Every weekday at 7:30, when an email arrives, before a meeting, when a
+  page changes. [Routines](./apps/docs/content/features/routines.md)
+- **Standing orders.** Say once "always tell me if a flight changes". Conch looks now
+  and then, for free until something is new. [Check-ins](./apps/docs/content/features/check-ins.md)
+- **A browser you can watch** and take over, and a real terminal a keystroke away.
+  [Browser](./apps/docs/content/features/browser.md) ·
+  [Terminal](./apps/docs/content/features/terminal.md)
+- **Your apps, while you watch.** On a Mac it can click and type in the apps you
+  allow, one at a time, with Stop one press away.
+  [Use your apps](./apps/docs/content/features/use-your-apps.md)
+- **One gallery for every model.** Gmail, Google Calendar and Drive, Slack, GitHub,
+  Notion, Linear and more. Choose Off, Read or Read & write for each.
+  [Apps](./apps/docs/content/features/apps.md)
+- **Your other tools.** Claude Desktop, Cursor and VS Code can use your memory,
+  skills, apps and browser. [Other apps](./apps/docs/content/features/other-apps.md)
+
+</td>
+<td width="50%" valign="top">
+
+**Everywhere, and safe**
+
+- **Web, desktop, phone.** An app for macOS, Windows and Linux with the pearl in the
+  menu bar, and an installable app on your phone over a private address.
+  [On your phone](./apps/docs/content/start/phone.md)
+- **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
+  Teams, Matrix and more, with the same commands.
+  [Chat apps](./apps/docs/content/channels)
+- **A server of your own.** One line installs it at `conch.yourname.com` with its own
+  certificate. [On a server](./apps/docs/content/start/server.md)
+- **Four permission modes,** the same on every provider: Read only, Ask first, Auto
+  and Full trust. [Modes](./apps/docs/content/reference/modes.md)
+- **Careful after reading.** Once a chat has read a web page or an email, anything
+  risky asks first. Commands run sealed off from your keys.
+- **Choose where work runs.** This computer, a locked-down container, a machine over
+  SSH or a sandbox in the cloud.
+  [Where work runs](./apps/docs/content/features/where-work-runs.md)
+- **See it, undo it.** **Activity** shows everything it did. **Undo** puts files back.
+  [Undo](./apps/docs/content/care/undo.md)
+- **Sign in with your device.** Touch ID, Windows Hello or Face ID. A new device waits
+  for your OK. [Signing in](./apps/docs/content/security/signing-in.md)
+
+</td>
+</tr>
+</table>
+
+## How it works
+
+| Wherever you are                                       | Conch, on your computer                                                                               | Your providers                                                              |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| A browser on this computer, your phone, or a chat app. | Keeps your chats, memory, skills, apps and routines in `~/.conch`. Asks before anything that matters. | The assistants and models you connect. All of them answer, from one picker. |
+
+A small Node gateway on your machine drives every provider you connected and streams
+the conversation to a React app built on [Nacre](./packages/nacre), Conch's own
+design system. Apps and skills belong to Conch, not to a provider, so they work with
+every model. Conch keeps no copy of anything anywhere else.
+
+## Good to know
+
+- **It runs as you.** Conch can read your files and run commands. Treat it like an SSH
+  server and read [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a
+  network. Out of the box, only this computer can open it.
+- **Local models are smaller.** A model on your computer is free and private, but
+  slower and less capable than the cloud ones.
+- **Conch is free.** The models cost what your plan or key costs, and each reply says
+  what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
+
+## Documentation and development
 
 [conchagent.com/docs](https://conchagent.com/docs/) covers every provider, chat app
-and feature, with a reference read from the code.
-[Development docs](https://conchagent.com/docs/next/) follow `main`, and
-[release notes](https://conchagent.com/releases/) list every version. Locally,
-`pnpm docs:dev` serves them at http://localhost:4400.
-
-How it's built: [ARCHITECTURE.md](./ARCHITECTURE.md) ·
-[decisions](./docs/adr) · [AGENTS.md](./AGENTS.md) (for people and coding agents).
-
-## Development
+and feature, with a reference read from the code. [Development docs](https://conchagent.com/docs/next/)
+follow `main`, and [release notes](https://conchagent.com/releases/) list every
+version. How it is built: [ARCHITECTURE.md](./ARCHITECTURE.md) ·
+[decisions](./docs/adr) · [AGENTS.md](./AGENTS.md), the manual for people and coding
+agents alike.
 
 ```bash
 pnpm dev          # web app on :5173 (hot reload) + gateway on :4317
 pnpm dev:mock     # the same with a scripted provider: no model usage
 pnpm storybook    # the Nacre design system on :6006
+pnpm docs:dev     # the documentation on :4400
 pnpm check        # format, lint, types and tests: must pass before every commit
 pnpm e2e          # Playwright journeys
 pnpm desktop:dev  # the desktop app, with hot reload
@@ -288,6 +307,8 @@ notices in [NOTICE.md](./NOTICE.md).
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/pearl-dark.svg">
-    <img src=".github/assets/pearl-light.svg" alt="" width="140">
+    <img src=".github/assets/pearl-light.svg" alt="" width="120">
   </picture>
+  <br>
+  <sub>In the old story, whoever holds the conch gets to speak.</sub>
 </p>
