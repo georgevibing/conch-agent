@@ -1,8 +1,65 @@
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
-import type { ResourceSnapshot } from './resources';
+import type { WorkloadPace } from './pace';
+import { memoryReserve, type ResourceSnapshot } from './resources';
 import type { RecoveryResource } from './supervisor-state';
+
+/** Why new work waits, as a code a log or a test can read. */
+export type HoldReason =
+  | 'stopping'
+  | 'recovering'
+  | 'not-answering'
+  | 'not-measured'
+  | 'memory'
+  | 'cpu'
+  | 'easing'
+  | 'held';
+
+/**
+ * Whether this computer has room for new work right now, and if not, why and
+ * what it waits for, in fixed words an assistant can act on and a person can
+ * read. Never a command, a path or anything a chat said.
+ */
+export type Room =
+  | { room: true }
+  | {
+      room: false;
+      reason: HoldReason;
+      /** "the processor is busy". */
+      why: string;
+      /** "once the processor has been calm for about half a minute". */
+      until: string;
+    };
+
+const HELD: Record<HoldReason, { why: string; until: string }> = {
+  stopping: { why: 'Conch is stopping', until: 'once Conch has started again' },
+  recovering: {
+    why: 'Conch is recovering after repeated trouble',
+    until: 'once Conch has stayed responsive for a full minute',
+  },
+  'not-answering': {
+    why: 'Conch is checking that it can still respond',
+    until: 'as soon as its next check answers, a few seconds from now',
+  },
+  'not-measured': {
+    why: 'Conch can’t measure this computer’s room right now',
+    until: 'as soon as its next look works, a few seconds from now',
+  },
+  memory: {
+    why: 'memory is running short',
+    until: 'once memory has stayed free for about half a minute',
+  },
+  cpu: {
+    why: 'the processor is busy',
+    until: 'once the processor has been calm for about half a minute',
+  },
+  easing: {
+    why: 'this computer was busy a moment ago, and Conch is letting work back in gradually',
+    until: 'within about a minute, as it stays calm',
+  },
+  held: { why: 'new work is held for now', until: 'as soon as there’s room' },
+};
 
 /** Local supervisor IPC only. No credentials, commands or conversation content. */
 export type RecoveryMessage =
@@ -34,6 +91,8 @@ export interface GatewayRecoveryDeps {
    * processor doesn't hold it, only memory or Conch's own recovery. `admit` when absent.
    */
   admitPlanned?: () => boolean;
+  /** The shared managed-work budget, to say why `admit` holds work. */
+  pace?: () => WorkloadPace;
 }
 
 /** A stalled optional reader must not suppress proof that HTTP still answers. */
@@ -109,13 +168,45 @@ export class GatewayRecovery {
 
   /** Why work waits right now, in a few words (for the log when a paused chat can't go on). */
   get holding(): string {
-    if (this.#stopping) return 'Conch is stopping';
-    if (this.#mode) return 'Conch is recovering';
-    if (!this.#answering) return 'Conch isn’t answering yet';
-    if (!this.#snapshot) return 'this computer hasn’t been looked at yet';
-    if (this.deps.admit && !this.deps.admit())
-      return 'background work is held (the processor is busy, or memory is short)';
-    return `${this.#snapshot.level}: ${this.#snapshot.reason}`;
+    const room = this.room();
+    return room.room
+      ? `${this.#snapshot?.level ?? 'unknown'}: ${this.#snapshot?.reason ?? ''}`
+      : `${room.reason}: ${room.why}`;
+  }
+
+  /**
+   * Whether there's room for new work (`allowsWork`), and if not, why and until
+   * when. The same order of checks as `allowsWork`, so the two always agree.
+   */
+  room(): Room {
+    const held = (reason: HoldReason): Room => ({ room: false, reason, ...HELD[reason] });
+    if (this.#stopping) return held('stopping');
+    if (this.#mode) return held('recovering');
+    if (!this.#answering) return held('not-answering');
+    const snapshot = this.#snapshot;
+    if (!snapshot) return held('not-measured');
+    if (snapshot.level !== 'healthy')
+      return held(
+        snapshot.availableBytes < memoryReserve(snapshot.totalBytes) ||
+          (snapshot.memoryPressure ?? 0) >= 5
+          ? 'memory'
+          : 'cpu',
+      );
+    if (this.deps.admit && !this.deps.admit()) {
+      const pace = this.deps.pace?.();
+      if (!pace) return held('held');
+      if (pace.phase === 'recovering') return held('easing');
+      return held(
+        pace.cause === 'memory'
+          ? 'memory'
+          : pace.cause === 'cpu'
+            ? 'cpu'
+            : pace.cause === 'recovery'
+              ? 'recovering'
+              : 'not-measured',
+      );
+    }
+    return { room: true };
   }
 
   async start(probe: () => Promise<boolean>): Promise<void> {

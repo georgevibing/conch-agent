@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayRecovery } from './gateway';
+import type { WorkloadPace } from './pace';
 import { resourcePolicy } from './resources';
 
 const healthy = () =>
@@ -28,6 +29,66 @@ function setup(recoveryMode = false) {
 }
 
 afterEach(() => vi.useRealTimers());
+
+describe('whether there is room, and why not', () => {
+  it('says why work waits, and always agrees with allowsWork', async () => {
+    let pace: WorkloadPace = {
+      phase: 'normal',
+      cause: 'recovery',
+      concurrency: 4,
+      critical: false,
+    };
+    let sample = healthy();
+    let answering = false;
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({
+      ...deps,
+      sample: async () => sample,
+      admit: () => pace.phase === 'normal',
+      pace: () => pace,
+    });
+    const check = (reason: string | undefined) => {
+      const room = recovery.room();
+      expect(room.room ? undefined : room.reason).toBe(reason);
+      expect(room.room).toBe(recovery.allowsWork);
+      if (!room.room) {
+        expect(room.why).toBeTruthy();
+        expect(room.until).toBeTruthy();
+      }
+    };
+    try {
+      check('not-answering');
+      await recovery.start(async () => answering);
+      check('not-answering');
+      answering = true;
+      await recovery.poll();
+      check(undefined);
+      // Five helpers starting at once push the load up: the pacer slows work down.
+      pace = { phase: 'constrained', cause: 'cpu', concurrency: 1, critical: false };
+      check('cpu');
+      expect(recovery.room()).toMatchObject({ why: 'the processor is busy' });
+      pace = { phase: 'held', cause: 'memory', concurrency: 0, critical: false };
+      check('memory');
+      pace = { phase: 'recovering', cause: 'recovery', concurrency: 2, critical: false };
+      check('easing');
+      pace = { phase: 'held', cause: 'unknown', concurrency: 0, critical: false };
+      check('not-measured');
+      pace = { phase: 'normal', cause: 'recovery', concurrency: 4, critical: false };
+      sample = resourcePolicy({ ...healthy(), availableBytes: 1e8 });
+      await recovery.poll();
+      check('memory');
+      sample = resourcePolicy({ ...healthy(), loadPerCpu: 3 });
+      await recovery.poll();
+      check('cpu');
+      expect(recovery.holding).toContain('the processor is busy');
+    } finally {
+      recovery.stop();
+    }
+    check('stopping');
+    const restarted = setup(true).recovery;
+    expect(restarted.room()).toMatchObject({ room: false, reason: 'recovering' });
+  });
+});
 
 describe('gateway recovery', () => {
   it('lets a pause the person chose go on while the processor is busy, never short of memory', async () => {

@@ -10,12 +10,13 @@ import { join } from 'node:path';
 import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Engine, EngineEvent, TurnInput } from '../engines/types';
+import type { Engine, EngineEvent, HostTool, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager } from './manager';
 import { ConversationStore } from './store';
 import type { WorkloadPace } from '../recovery/pace';
+import type { Room } from '../recovery/gateway';
 
 class Scripted implements Engine {
   readonly id = 'openrouter' as const;
@@ -56,7 +57,9 @@ async function open(
     allowedPlanned?: () => boolean;
     intervalMs?: number;
     workload?: () => WorkloadPace;
+    room?: () => Room;
   },
+  tools: HostTool[] = [],
 ) {
   const settings = new SettingsStore(home);
   await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
@@ -67,6 +70,7 @@ async function open(
     engine: () => engine,
     context: async () => '',
     recovery,
+    tools: () => tools,
   });
 }
 
@@ -518,9 +522,13 @@ describe('native commands share resource admission', () => {
       await until(manager, conversation.id, (events) =>
         events.some((e) => e.type === 'turn.completed'),
       );
+      // It says it never ran, and gives no advice this turn can't follow.
       expect(guarded[0]).toMatchObject({
         decision: 'deny',
-        message: expect.stringContaining('process_start'),
+        message: expect.stringContaining('before it ran, so nothing happened'),
+      });
+      expect(guarded[0]).toMatchObject({
+        message: expect.not.stringContaining('process_start'),
       });
       expect(guarded[1]).not.toEqual(expect.objectContaining({ decision: 'deny' }));
       expect(guarded[2]).not.toEqual(expect.objectContaining({ decision: 'deny' }));
@@ -529,6 +537,59 @@ describe('native commands share resource admission', () => {
       await manager.drain();
     },
   );
+});
+
+describe('a held command says why, and what it waits for', () => {
+  it('names the reason, when it lets commands run again, and the queue when there is one', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-held-why-'));
+    const said: unknown[] = [];
+    const engine = new Scripted(async function* (input) {
+      said.push(
+        await input.guard?.({ toolName: 'Bash', toolUseId: 'b1', input: { command: 'ls' } }),
+      );
+      said.push(
+        await input.guard?.({ toolName: 'Bash', toolUseId: 'b2', input: { command: 'ls' } }),
+      );
+      yield { type: 'done', outcome: 'success' };
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const start: HostTool = {
+      name: 'process_start',
+      description: 'Start a managed command',
+      input: {},
+      run: async () => 'Started.',
+    };
+    const manager = await open(
+      home,
+      engine,
+      {
+        allowed: () => false,
+        room: () => ({
+          room: false,
+          reason: 'cpu',
+          why: 'the processor is busy',
+          until: 'once the processor has been calm for about half a minute',
+        }),
+      },
+      [start],
+    );
+    try {
+      const chat = await manager.send({ clientMessageId: 'u1', text: 'List the files' });
+      await until(manager, chat.id, (events) => events.some((e) => e.type === 'turn.completed'));
+      const message = (said[0] as { message: string }).message;
+      expect(message).toContain('the processor is busy');
+      expect(message).toContain('once the processor has been calm for about half a minute');
+      expect(message).toContain('process_start');
+      expect(message).not.toContain('ls');
+      // Logged once a turn per reason, with no command in it.
+      const lines = warn.mock.calls.filter((call) => String(call[0]).includes('[recovery]'));
+      expect(lines).toHaveLength(1);
+      expect(String(lines[0]?.[0])).not.toMatch(/\bls\b/);
+    } finally {
+      warn.mockRestore();
+      await manager.drain();
+    }
+  });
 });
 
 describe('Conch pausing a chat for its own update', () => {

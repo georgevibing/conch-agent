@@ -118,6 +118,8 @@ import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
 import { resourceFeedback, ROOM_NOTE } from './resource-feedback';
 import type { WorkloadPace } from '../recovery/pace';
+import type { Room } from '../recovery/gateway';
+import { heldCommandWords } from './held';
 import { TurnPlan } from '../plans/turn';
 import { APPROVAL_WAIT_MS } from '../push/approve';
 import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
@@ -992,6 +994,8 @@ export class ConversationManager {
         allowedPlanned?: () => boolean;
         /** Why work waits, in a few words, for the log. */
         holding?: () => string;
+        /** Whether there's room for new work, and if not why and until when. */
+        room?: () => Room;
         workload?: () => WorkloadPace;
         intervalMs?: number;
       };
@@ -3829,6 +3833,8 @@ export class ConversationManager {
       );
     };
 
+    /** Reasons a shell command was held this turn, already said in the log. */
+    const heldFor = new Set<string>();
     /** Before every tool call, in every mode (Claude Code's PreToolUse hook). */
     const guard = async (request: {
       toolName: string;
@@ -3859,10 +3865,23 @@ export class ConversationManager {
         (request.toolName === 'Bash' || request.toolName === 'PowerShell') &&
         this.deps.recovery &&
         !this.deps.recovery.allowed()
-      )
+      ) {
+        const room = this.deps.recovery.room?.();
+        // Why, at the moment it happened: once a turn per reason, never the command.
+        const reason = room && !room.room ? room.reason : 'held';
+        if (!heldFor.has(reason)) {
+          heldFor.add(reason);
+          console.warn(
+            `[recovery] held a provider's shell command before it ran: ${this.deps.recovery.holding?.() ?? reason}`,
+          );
+        }
         return refuse(
-          'Conch is holding new commands while this computer recovers. Use process_start to queue this command; it will start when there is room. Use process_read to check progress and process_stop to stop existing work.',
+          heldCommandWords(
+            room,
+            tools.some((tool) => tool.name === 'process_start'),
+          ),
         );
+      }
       const blocked = await extras?.beforeTool?.(
         request.toolName,
         request.input,

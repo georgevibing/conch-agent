@@ -53,6 +53,8 @@ Conch tells active assistants when this computer is approaching its memory or CP
 
 Commands can say **Waiting to start**, with a reason. They keep their place until there is room. Stopping the chat cancels its waiting commands too; a stopped or expired command will not start later.
 
+A command the assistant runs in its own shell can be held before it starts. The assistant is told that nothing happened, why (the processor is busy, or memory is short), and when commands run again, so it waits or queues the command rather than trying again and again. A held command never counts against a task: it didn't happen.
+
 Once there is sustained room again, Conch restores managed work gradually and tells the assistant to carry on. Chats share that allowance, so they do not all restart heavy work at once. **Settings → Health** shows whether managed commands are slowing, waiting, or recovering. Resource updates never answer an approval for you or give an assistant permission to raise system limits.
 
 If memory pressure stays high, Conch may stop one of its managed commands to protect the rest of your work. Its output stays available in the chat. Conch does not stop other applications or automatically run that command again.

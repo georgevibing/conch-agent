@@ -587,6 +587,7 @@ export class Services {
     this.recovery = new GatewayRecovery({
       sample: () => this.processes.resourceSnapshot(),
       admit: () => this.processes.workload.phase === 'normal',
+      pace: () => this.processes.workload,
       // A pause the person chose goes on while the processor is busy; memory still holds it.
       admitPlanned: () => {
         const pace = this.processes.workload;
@@ -1354,6 +1355,7 @@ export class Services {
         allowed: () => this.recovery.allowsWork,
         allowedPlanned: () => this.recovery.allowsPlanned,
         holding: () => this.recovery.holding,
+        room: () => this.recovery.room(),
         workload: () => this.processes.workload,
       },
       redact: this.vault.redactor(),
