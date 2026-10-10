@@ -2,6 +2,13 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.4](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-10-10)
+
+### Fixed
+
+- Publishing asks GitHub again after a passing 502 instead of failing the build
+- A Mac lists Conch by name in Privacy & Security, not "node"
+
 ## [0.1.0-alpha.3](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-10-10)
 
 ### Fixed
