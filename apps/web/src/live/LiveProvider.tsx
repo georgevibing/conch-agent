@@ -368,6 +368,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'task.changed':
         case 'task.deleted':
+        case 'task.capacity':
           applyTaskEvent(client, event, (to) =>
             window.dispatchEvent(new CustomEvent('conch:navigate', { detail: to })),
           );

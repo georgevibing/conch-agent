@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import type { TaskNote } from '../../live/reducer';
 import { useLive } from '../../live/LiveProvider';
-import { LiveTaskCard, withCode } from './LiveTaskCard';
+import { LiveTaskCard, useWaiting, withCode } from './LiveTaskCard';
 import { useOpenTask } from './open';
 import { useRemoveTask, useTasks } from './queries';
 import styles from './Tasks.module.css';
@@ -62,6 +62,9 @@ function BatchCard({
 }) {
   const socket = useLive();
   const remove = useRemoveTask();
+  const waitingOf = useWaiting();
+  // How many this computer takes at once right now, while some wait for room (ADR 0128).
+  const capacity = useTasks().data?.capacity?.words;
   // The answer is on its way: its buttons wait for it to land.
   const [answered, setAnswered] = useState<string>();
   const items: TaskGroupItem[] = notes.map((note, i) => {
@@ -84,6 +87,7 @@ function BatchCard({
         task.status === 'needs-you' && task.asking && !asking
           ? withCode(`Wants to ${lower(task.asking.summary)}`)
           : task.current && withCode(task.current),
+      waiting: waitingOf(task),
       summary: task.summary,
       error: task.error,
       startedAt: task.startedAt,
@@ -108,6 +112,7 @@ function BatchCard({
     <TaskGroupCard
       className={styles.chatCard}
       tasks={items}
+      capacity={capacity}
       // What's gone from the list has nothing left to open.
       onOpen={known.size ? (id) => known.has(id) && onOpen(id) : undefined}
     />

@@ -89,7 +89,9 @@ export function BackgroundPulse({
       chat: titleOf(task.parentConversationId),
       current: asking
         ? withCode(`Wants to ${asking.summary.charAt(0).toLowerCase()}${asking.summary.slice(1)}`)
-        : task.current && withCode(task.current),
+        : task.status === 'queued' && task.waiting
+          ? task.waiting.words
+          : task.current && withCode(task.current),
       asking:
         asking?.here && task.conversationId
           ? { pending, onAllow: () => answer('allow'), onDeny: () => answer('deny') }

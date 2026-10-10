@@ -155,7 +155,9 @@ export function useChatTaskTree({
     current:
       task.status === 'needs-you' && task.asking
         ? withCode(`Wants to ${lower(task.asking.summary)}`)
-        : task.current && withCode(task.current),
+        : task.status === 'queued' && task.waiting
+          ? task.waiting.words
+          : task.current && withCode(task.current),
     reason: task.error && withCode(firstLine(task.error)),
     startedAt: task.startedAt,
     finishedAt: task.finishedAt,

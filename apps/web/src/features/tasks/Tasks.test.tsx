@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { Sidebar } from '../sidebar/Sidebar';
 import { LiveTaskCard } from './LiveTaskCard';
+import { TaskChatCard } from './TaskChatCard';
 import { useTask } from './queries';
 import { TasksMoved } from './TasksMoved';
 
@@ -463,5 +464,83 @@ describe('Tasks', () => {
     // It opens over the chat it came from.
     await user.click(within(rows[1] as HTMLElement).getByRole('link', { name: 'Write the notes' }));
     await waitFor(() => expect(where()).toBe('/c/c1?task=t2'));
+  });
+
+  it('a waiting task says why on its batch’s card, the header how many fit, and Start now asks the gateway (ADR 0128)', async () => {
+    const user = userEvent.setup();
+    const batch = [
+      task({ id: 'b1', title: 'Fix the login', group: 'g', parentConversationId: 'c1' }),
+      task({
+        id: 'b2',
+        title: 'Tidy the auth helpers',
+        status: 'queued',
+        startedAt: undefined,
+        group: 'g',
+        parentConversationId: 'c1',
+        waiting: {
+          reason: 'conflict',
+          words: 'Starts when “Fix the login” finishes: both change auth.ts',
+          on: ['b1'],
+          canStartNow: false,
+        },
+      }),
+      task({
+        id: 'b3',
+        title: 'Check the docs build',
+        status: 'queued',
+        startedAt: undefined,
+        group: 'g',
+        parentConversationId: 'c1',
+        waiting: {
+          reason: 'room',
+          words: 'Starts when “Fix the login” finishes',
+          canStartNow: true,
+        },
+      }),
+    ];
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/tasks': () => ({ concurrent: 1, tasks: batch }),
+      'POST /api/tasks/b3/start-now': () => ({ ...batch[2], startNow: true, rev: 2 }),
+    });
+    renderApp(
+      <TaskChatCard
+        tasks={batch.map((t) => ({
+          taskId: t.id,
+          title: t.title,
+          taskKind: t.kind,
+          state: t.status,
+        }))}
+      />,
+    );
+    const card = await screen.findByRole('article', { name: '3 tasks' });
+    expect(await within(card).findByText(/both change auth\.ts/)).toBeVisible();
+    await waitFor(() => expect(FakeSocket.last).toBeDefined());
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'task.capacity',
+        capacity: {
+          atOnce: 1,
+          working: 1,
+          waiting: 2,
+          words: '1 at once on this computer right now',
+        },
+      }),
+    );
+    expect(await within(card).findByText('1 at once on this computer right now')).toBeVisible();
+    // Only the one waiting for room can be started now.
+    expect(
+      within(card).queryByRole('button', { name: 'Start “Tidy the auth helpers” now' }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      within(card).getByRole('button', { name: 'Start “Check the docs build” now' }),
+    );
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/tasks/b3/start-now');
+    // Pressed once: it doesn't offer it again while the gateway starts it.
+    await waitFor(() =>
+      expect(
+        within(card).queryByRole('button', { name: 'Start “Check the docs build” now' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });
