@@ -109,24 +109,81 @@ export function assessTask(task: Task) {
   };
 }
 
+/** What one call is, in a word a person reads. */
+function kindOf(tool: string): 'command' | 'file change' | 'action' {
+  const name = tool.replace(/^mcp__conch__/, '');
+  if (/^(?:Bash|PowerShell|process_start|process_write)$/.test(name)) return 'command';
+  if (/^(?:Write|Edit|MultiEdit|NotebookEdit)$/.test(name)) return 'file change';
+  return 'action';
+}
+
+/** "one of its commands", "2 of its file changes", "3 of its actions". */
+function ofIts(tools: string[]): string {
+  const kinds = new Set(tools.map(kindOf));
+  const kind = kinds.size === 1 ? [...kinds][0] : 'action';
+  return `${tools.length === 1 ? 'one' : tools.length} of its ${kind}s`;
+}
+
+type Reasons = ReturnType<typeof assessTask>['reasons'];
+const toolsFor = (reasons: Reasons, code: 'effect-uncertain' | 'receipt-unavailable') =>
+  reasons.flatMap((r) => (r.code === code ? [r.tool] : []));
+
 /**
  * Why a finished task is worth a look, in a few words a person reads, only
  * when there's a concrete reason: an action whose result it couldn't confirm,
  * or something it was asked for that isn't confirmed. Nothing to check it
  * against, or a tool that can't say what it did, is no reason: done is done.
+ * A call Conch refused before it ran never counts: it didn't happen.
  */
 export function taskWorth(task: Task): string | undefined {
   if (task.status !== 'unverified') return undefined;
   const { verdict, reasons } = assessTask(task);
-  if (verdict === 'uncertain') {
-    const n = reasons.filter((r) => r.code === 'effect-uncertain').length;
-    return n === 1
-      ? 'Couldn’t confirm one of its actions worked.'
-      : `Couldn’t confirm ${n} of its actions worked.`;
-  }
+  if (verdict === 'uncertain')
+    return `Couldn’t confirm ${ofIts(toolsFor(reasons, 'effect-uncertain'))} worked.`;
   if (verdict === 'incomplete')
     return reasons.some((r) => r.code === 'response-missing')
       ? 'It finished without returning an answer.'
       : 'Some of what it was asked for isn’t confirmed.';
   return undefined;
+}
+
+/**
+ * The actions whose result Conch couldn't confirm, in a sentence, however the
+ * task ended: what its card's Details says. Nothing when there are none.
+ */
+export function taskDoubt(task: Task): string | undefined {
+  const tools = (task.operations ?? []).filter(uncertainEffect).map((op) => op.tool);
+  return tools.length
+    ? `Conch couldn’t confirm whether ${ofIts(tools)} worked, so it won’t run that again by itself.`
+    : undefined;
+}
+
+/**
+ * How a finished task went, beyond "done", in a sentence for the chat it came
+ * from: why Conch couldn't vouch for it, never as if the answer were wrong.
+ * Nothing when it's simply done.
+ */
+export function taskOutcome(task: Task): string | undefined {
+  const { verdict, reasons } = assessTask(task);
+  switch (verdict) {
+    case 'uncertain':
+      return `It finished, but ${taskDoubt(task) ?? ''} Look at the result before trying again.`;
+    case 'incomplete': {
+      if (reasons.some((r) => r.code === 'response-missing'))
+        return 'It finished without returning an answer.';
+      const tools = new Set(
+        reasons.flatMap((r) => (r.code === 'required-evidence-missing' ? [r.tool] : [])),
+      );
+      return `It finished, but these checks aren’t confirmed yet: ${[...tools].map((t) => `\`${t}\``).join(', ')}.`;
+    }
+    case 'unsupported': {
+      const tools = toolsFor(reasons, 'receipt-unavailable');
+      const none = task.expectations?.length ? '' : ', and no checks were set for this task';
+      return `It finished. Conch can’t confirm what ${ofIts(tools)} did, since ${tools.length === 1 ? 'it gives' : 'they give'} no receipt${none}.`;
+    }
+    case 'unchecked':
+      return 'It finished. No checks were set for this task, so Conch didn’t check the result.';
+    default:
+      return undefined;
+  }
 }

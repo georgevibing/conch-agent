@@ -59,6 +59,8 @@ Once it's over, a task says how it went:
 
 For a task that only asks for an answer, Conch checks that a nonempty answer was saved for this attempt. An empty reply is flagged for inspection. This confirms delivery, not the factual accuracy of what the assistant wrote.
 
+Looking things up is never an action to check: reading files, a command that only lists or reads (`ls`, `git status`), loading a tool. Neither is a step Conch held back before it started, because the computer was busy or a rule said no: it didn't happen, so it never stops the task from carrying on. When Conch can't vouch for a finished task, the chat it came from hears why in a line, such as no checks being set, or a command that gives no receipt. That's about what Conch could confirm, not whether the answer is right.
+
 When your assistant hands off work that needs tools, it can set checks before the task starts: which observations or actions must have receipts, and the exact target or content when known. Missing receipts remain visible even if the assistant says it finished. The checks carry through a restart and cannot grant permission to use a tool.
 
 Partial results stay visible after a task didn't finish or was stopped.

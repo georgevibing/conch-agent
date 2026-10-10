@@ -58,8 +58,11 @@ export function taskSource(deps: FinishedDeps): TriggerSource<'task'> {
                 : `“${task.title.slice(0, 80)}” finished`,
             detail: [
               `Task: ${task.title}`,
-              `Status: ${task.status === 'failed' ? 'did not finish' : task.status === 'unverified' ? 'finished, not verified' : 'done'}`,
-              ...(task.error ? [`Problem: ${task.error}`] : []),
+              `Status: ${task.status === 'failed' ? 'did not finish' : 'done'}`,
+              // Done, with why Conch couldn't vouch for it: a note, not a problem.
+              ...(task.error
+                ? [`${task.status === 'unverified' ? 'Note' : 'Problem'}: ${task.error}`]
+                : []),
               ...(task.summary ? ['', task.summary] : []),
             ].join('\n'),
           };

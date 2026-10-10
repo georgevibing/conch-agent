@@ -36,6 +36,7 @@ import {
   MODE_POWER,
   TaskChecks,
   TaskExpectation,
+  taskOutcome,
   type TaskCheck,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -867,13 +868,10 @@ export class TaskService {
                 modelCompleted: true,
                 ...answer,
                 summary: summary || undefined,
+                // Why Conch can't vouch for it, in the words its chat and card use.
                 error: ['verified', 'delivered', 'unchecked'].includes(assessment.verdict)
                   ? undefined
-                  : assessment.verdict === 'uncertain'
-                    ? 'It couldn’t confirm some of its actions worked. Look at what it recorded before running them again.'
-                    : assessment.verdict === 'unsupported'
-                      ? 'It finished; some of its tools can’t confirm what they did.'
-                      : 'It finished, but some of what it was asked for isn’t confirmed.',
+                  : taskOutcome({ ...current, ...answer }),
               }
             : turn.outcome === 'interrupted'
               ? {
@@ -1496,8 +1494,11 @@ export function merged(tasks: Task[]): string {
       const branch = t.worktree?.changed
         ? `\n(Changes are on branch \`${t.worktree.branch}\` in ${t.worktree.path}.)`
         : '';
-      if (t.status === 'unverified')
-        return `${head}\n${assessTask(t).verdict === 'unchecked' ? 'Finished; no automatic outcome criteria' : 'Not verified'}: ${t.summary ?? t.error}${branch}`;
+      // Finished, and why Conch can't vouch for it: never "not verified", which reads as wrong.
+      if (t.status === 'unverified') {
+        const outcome = taskOutcome(t) ?? t.error;
+        return `${head}\n${[outcome, t.summary].filter(Boolean).join('\n') || 'Done.'}${branch}`;
+      }
       if (t.status === 'done') return `${head}\n${t.summary ?? 'Done.'}${branch}`;
       if (t.status === 'stopped') return `${head}\nStopped before it finished.`;
       return `${head}\nDidn’t finish: ${t.error ?? 'something went wrong.'}`;

@@ -76,6 +76,47 @@ describe('Tasks', () => {
     );
   });
 
+  it('says which of its actions it couldn’t confirm, and never counts one Conch held before it ran', async () => {
+    const user = userEvent.setup();
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/tasks': () => ({ tasks: [] }) });
+    const op = (id: string, patch: Partial<NonNullable<Task['operations']>[number]>) => ({
+      id,
+      key: id,
+      tool: 'Bash',
+      effect: 'unknown' as const,
+      state: 'unresolved' as const,
+      account: 'native',
+      authorization: 'per-turn',
+      expiresAt: 1,
+      startedAt: 1,
+      ...patch,
+    });
+    renderApp(
+      <LiveTaskCard
+        task={task({
+          status: 'unverified',
+          finishedAt: Date.now(),
+          completion: 'response',
+          summary: 'Made the file.',
+          delivery: { goalRevision: 0, attempt: 0, at: 1 },
+          operations: [
+            op('held-1', { state: 'not-run', refused: true }),
+            op('held-2', { state: 'not-run', refused: true }),
+            op('lost', { execution: 'failed' }),
+          ],
+        })}
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'Tidy up the README' });
+    expect(within(card).getByText('Couldn’t confirm one of its commands worked.')).toBeVisible();
+    await user.click(within(card).getByRole('button', { name: /Details/ }));
+    expect(
+      within(card).getByText(
+        'Conch couldn’t confirm whether one of its commands worked, so it won’t run that again by itself.',
+      ),
+    ).toBeVisible();
+  });
+
   it('an older copy arriving late never undoes a newer one', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

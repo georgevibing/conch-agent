@@ -1,10 +1,4 @@
-import {
-  assessTask,
-  taskWorth,
-  uncertainEffect,
-  type PermissionMode,
-  type Task,
-} from '@conch/protocol';
+import { assessTask, taskDoubt, taskWorth, type PermissionMode, type Task } from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
@@ -34,8 +28,9 @@ function details(task: Task, assessment: ReturnType<typeof assessTask>): ReactNo
   const missing = assessment.reasons.flatMap((reason) =>
     reason.code === 'required-evidence-missing' ? [reason] : [],
   );
-  const uncertain = task.operations?.some(uncertainEffect);
-  if (!confirmed.length && !missing.length && !uncertain) return undefined;
+  // Which of its actions, in words: a call Conch held before it ran isn't one of them.
+  const doubt = taskDoubt(task);
+  if (!confirmed.length && !missing.length && !doubt) return undefined;
   return (
     <>
       {confirmed.length > 0 && (
@@ -63,9 +58,7 @@ function details(task: Task, assessment: ReturnType<typeof assessTask>): ReactNo
           ))}
         </ul>
       )}
-      {uncertain && (
-        <p>Some of its actions have no confirmed result, so Conch won’t repeat them by itself.</p>
-      )}
+      {doubt && <p>{doubt}</p>}
     </>
   );
 }
