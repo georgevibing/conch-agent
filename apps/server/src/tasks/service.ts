@@ -37,6 +37,7 @@ import type {
 } from '@conch/protocol';
 import {
   assessTask,
+  waitingLine,
   MODE_POWER,
   TaskChecks,
   TaskExpectation,
@@ -1672,7 +1673,7 @@ export class TaskService {
                 title: t.title,
                 status: t.status,
                 current: t.current,
-                ...(t.waiting && { waiting: t.waiting.words }),
+                ...(t.waiting && { waiting: waitingLine(t.waiting, this.#now) }),
                 error: t.error,
                 result: t.summary,
                 modelCompleted: t.modelCompleted,
