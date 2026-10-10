@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Release starts it on the release pull request's branch: GitHub doesn't start
+  # workflows for what its own token pushes, and the branch rules want `check`
+  # and `desktop` on that commit (docs/RELEASING.md).
+  workflow_dispatch:
 
 # Every job only reads the repository. Checkout keeps no credentials: nothing
 # here pushes. A job that needs more asks for it by itself.
@@ -136,7 +140,7 @@ jobs:
   # it, re-running this job is enough.
   commits:
     name: Conventional commits
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -153,14 +157,19 @@ jobs:
       - name: Check the commit subjects and the title
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE_REF: ${{ github.base_ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          title=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)
-          node scripts/commits.mjs "origin/$BASE_REF..HEAD" --title "$title"
+          # A run started by hand has no pull request of its own: the branch's open one, if any.
+          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            node scripts/commits.mjs "origin/main..HEAD"
+            exit
+          fi
+          read -r base title < <(gh pr view "$number" --repo "$GITHUB_REPOSITORY" --json baseRefName,title --jq '"\(.baseRefName) \(.title)"')
+          node scripts/commits.mjs "origin/$base..HEAD" --title "$title"
       # Merged with no key in the list, a release couldn't be signed (docs/RELEASING.md).
       - name: A release pull request can be released
-        if: startsWith(github.head_ref, 'release-please--')
+        if: startsWith(github.head_ref || github.ref_name, 'release-please--')
         run: |
           if ! grep -Eq '^[^#[:space:]][^[:space:]]* +namespaces="git" +[a-z0-9@.-]+ +[A-Za-z0-9+/=]+' release/allowed_signers; then
             echo "::error file=release/allowed_signers::No release key: run pnpm release key and push the list before merging."
@@ -169,7 +178,7 @@ jobs:
 
   # Preserve one stable gate for branch rules. Website publication still waits
   # for the entire CI workflow, so no partial pass can publish the site. The
-  # commit check runs for pull requests only, so it may be skipped on a push.
+  # commit check runs for every run but a push to main, which may skip it.
   # The required check `check` in the main ruleset.
   check:
     if: ${{ always() }}
@@ -185,7 +194,7 @@ jobs:
         run: |
           node -e '
             const jobs = JSON.parse(process.env.RESULTS);
-            const optional = process.env.EVENT === "pull_request" ? [] : ["commits"];
+            const optional = process.env.EVENT === "push" ? ["commits"] : [];
             const passed = (name, job) =>
               job.result === "success" || (job.result === "skipped" && optional.includes(name));
             let ok = true;

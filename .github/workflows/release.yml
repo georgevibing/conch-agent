@@ -232,6 +232,7 @@ jobs:
     permissions:
       contents: write # pushes the notes to the release branch
       pull-requests: write # rewrites the pull request’s description
+      actions: write # starts CI on the release branch when no app pushed it
     steps:
       # Merged in the moment since release-please updated it: its notes are past changing.
       - name: Is the pull request still open?
@@ -290,6 +291,25 @@ jobs:
             git push --quiet origin HEAD
           fi
           gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+      # What GitHub's own token pushes starts no workflow, so without the app CI
+      # wouldn't run on the release pull request, and branch rules would hold it.
+      - name: Start CI on the release pull request
+        if: steps.open.outputs.open == 'true' && vars.RELEASE_APP_CLIENT_ID == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          # Once a commit: a push to main that leaves the branch as it was starts nothing.
+          ran=$(gh run list --workflow ci.yml --commit "$head" --json databaseId --jq length)
+          if [ "$ran" = 0 ]; then
+            gh workflow run ci.yml --ref "$BRANCH"
+            echo "Started CI on ${BRANCH} (${head:0:8})."
+          else
+            echo "CI has already run on ${head:0:8}."
+          fi
       # Merged now, it couldn't be released: say so where the merge button is.
       - name: Is it ready to merge?
         if: steps.open.outputs.open == 'true'
