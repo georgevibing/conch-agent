@@ -106,6 +106,70 @@ export const TaskCheck = TaskExpectation.omit({ inputHash: true }).extend({
 export type TaskCheck = z.infer<typeof TaskCheck>;
 export const TaskChecks = z.array(TaskCheck).min(1).max(100);
 
+/** How much a task asks of this computer while it works (ADR 0128). */
+export const TaskWeight = z.enum(['light', 'medium', 'heavy']);
+export type TaskWeight = z.infer<typeof TaskWeight>;
+
+/** What a task mostly uses: the processor, memory, the disk, the network, or only the model. */
+export const TaskUse = z.enum(['cpu', 'memory', 'disk', 'network', 'model']);
+export type TaskUse = z.infer<typeof TaskUse>;
+
+/**
+ * What Conch expects of a task before it starts (ADR 0128): from the provider's
+ * small model when one may be asked, else from rules. It only ever decides when
+ * a task starts and what it runs beside; it never grants anything.
+ */
+export const TaskEstimate = z.object({
+  weight: TaskWeight,
+  uses: z.array(TaskUse).max(5),
+  /** About how long it takes, in minutes. */
+  minutes: z.number().min(0.1).max(240),
+  /** What it changes (a file, a folder): two that change the same thing never run together. */
+  touches: z.array(z.string().max(200)).max(20).optional(),
+  /** Tasks of its batch it starts after. */
+  after: z.array(z.string().max(128)).max(6).optional(),
+  /** Who estimated it: the small model, or Conch's rules. */
+  by: z.enum(['model', 'rules']),
+});
+export type TaskEstimate = z.infer<typeof TaskEstimate>;
+
+/** Why a task is still waiting (ADR 0128). */
+export const TaskWaitReason = z.enum([
+  /** Every place is taken: it starts when one finishes. */
+  'room',
+  /** This computer is short of memory. */
+  'memory',
+  /** This computer's processor is busy. */
+  'cpu',
+  /** It starts after another task of its batch. */
+  'after',
+  /** It changes what a task that's working changes. */
+  'conflict',
+  /** Its provider asked Conch to slow down. */
+  'provider',
+  /** Its provider already has as many as it takes well. */
+  'provider-busy',
+  /** Conch is recovering, or hasn't looked at this computer yet. */
+  'recovering',
+]);
+export type TaskWaitReason = z.infer<typeof TaskWaitReason>;
+
+/** A waiting task's reason, for a machine and in plain words. */
+export const TaskWaiting = z.object({
+  reason: TaskWaitReason,
+  /** "Starts after “Web fetch”", "Waiting for memory: 3 heavy tasks running". */
+  words: z.string().max(200),
+  /** The tasks it waits for, when it waits for tasks. */
+  on: z.array(z.string().max(128)).max(12).optional(),
+  /** When it tries again, when that's known (epoch ms). */
+  retryAt: z.number().optional(),
+  /** About when it should start, from what's working now (epoch ms): a guess. */
+  expectedAt: z.number().optional(),
+  /** It waits only for room, so the person may start it now. */
+  canStartNow: z.boolean().default(false),
+});
+export type TaskWaiting = z.infer<typeof TaskWaiting>;
+
 export const Task = z.object({
   id: z.string(),
   kind: TaskKind,
@@ -210,15 +274,38 @@ export const Task = z.object({
       retained: z.boolean().optional(),
     })
     .optional(),
+  /** What Conch expects of it, for deciding when it starts (ADR 0128). */
+  estimate: TaskEstimate.optional(),
+  /** Still `queued`: why, and until when when that's known (ADR 0128). */
+  waiting: TaskWaiting.optional(),
+  /** The person pressed "Start now": it goes ahead of what's waiting for room. */
+  startNow: z.boolean().optional(),
   /** Goes up with every change, so a newer copy always wins over an older one arriving late. */
   rev: z.number().int().nonnegative().default(0),
 });
 export type Task = z.infer<typeof Task>;
 
+/**
+ * How many tasks this computer takes at once right now (ADR 0128): worked out
+ * from its processor and memory as they are, each task's size and each
+ * provider's pace, never a fixed number.
+ */
+export const TaskCapacity = z.object({
+  /** About how many run at once right now. */
+  atOnce: z.number().int().nonnegative(),
+  working: z.number().int().nonnegative(),
+  waiting: z.number().int().nonnegative(),
+  /** What holds the rest back, in a few words, when something waits for room. */
+  words: z.string().max(200).optional(),
+});
+export type TaskCapacity = z.infer<typeof TaskCapacity>;
+
 export const TaskList = z.object({
   tasks: z.array(Task),
   /** How many run at once; the rest wait their turn. */
   concurrent: z.number().int().positive(),
+  /** The same, live, and what holds the rest back (ADR 0128). */
+  capacity: TaskCapacity.optional(),
 });
 export type TaskList = z.infer<typeof TaskList>;
 
