@@ -274,8 +274,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           pnpm release ci notes --body-file "$RUNNER_TEMP/body.md" --not-ready-file "$RUNNER_TEMP/not-ready"
-          # As CI's format check wants them, whatever words the notes have.
-          pnpm exec prettier --write CHANGELOG.md release-please-config.json
+          # As CI's format check wants them, whatever words the notes have, and
+          # release-please's manifest, which it writes as compact JSON.
+          pnpm exec prettier --write CHANGELOG.md release-please-config.json .release-please-manifest.json
       - name: Put them on the pull request
         if: steps.open.outputs.open == 'true'
         env:
@@ -284,7 +285,7 @@ jobs:
           PR: ${{ fromJSON(needs.release-please.outputs.pr).number }}
         run: |
           set -euo pipefail
-          git add -- CHANGELOG.md release-please-config.json
+          git add -- CHANGELOG.md release-please-config.json .release-please-manifest.json
           git rm --quiet --cached --ignore-unmatch -- release-notes.md
           if ! git diff --cached --quiet; then
             git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" commit --quiet -m "chore: Conch's notes for this release"
