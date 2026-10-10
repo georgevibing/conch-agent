@@ -12,8 +12,9 @@
 # you'll reach Conch instead, and ends with a link that makes it yours
 # (`conch setup`, ADR 0064). System packages ask for permission;
 # Conch itself always runs as you.
-# It installs the newest stable release (ADR 0051), checked against the
-# signing keys Conch ships; after that Conch updates itself.
+# It installs the newest release (ADR 0051): stable once there's a stable
+# release, before that the newest beta, then the newest alpha. Each is
+# checked against the signing keys Conch ships; after that Conch updates itself.
 # Run it again any time: it repairs anything that moved.
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
@@ -24,7 +25,7 @@
 #   sh install.sh --uninstall [--delete-data]
 #
 # Settings from the environment: CONCH_REPO, CONCH_DIR, CONCH_HOME,
-#   CONCH_CHANNEL=beta|alpha   also take beta (or alpha) releases
+#   CONCH_CHANNEL=stable|beta|alpha   follow that channel (beta and alpha take earlier releases)
 #   CONCH_BRANCH=main          a developer's copy: follow a branch, every change
 
 set -eu
@@ -32,7 +33,8 @@ set -eu
 NODE_MAJOR=24
 REPO=${CONCH_REPO:-https://github.com/georgevibing/conch-agent.git}
 BRANCH=${CONCH_BRANCH:-main}
-CHANNEL=${CONCH_CHANNEL:-stable}
+# Empty: the steadiest channel with a release, which Conch then follows by itself.
+CHANNEL=${CONCH_CHANNEL:-}
 HOME_DIR=${CONCH_HOME:-$HOME/.conch}
 BACKGROUND=1
 SHORTCUT=1
@@ -68,7 +70,7 @@ while [ $# -gt 0 ]; do
     --delete-data) DELETE_DATA=1 ;;
     -h|--help)
       printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
-        '  Installs the newest stable release; CONCH_CHANNEL=beta or alpha for earlier ones,' \
+        '  Installs the newest release (stable, else beta, else alpha); CONCH_CHANNEL=beta or alpha for earlier ones,' \
         '  CONCH_BRANCH=main for a developer'"'"'s copy that follows every change.' \
         '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
         '  --server             Headless setup for a computer that stays on' \
@@ -81,7 +83,7 @@ while [ $# -gt 0 ]; do
 done
 
 case "$CHANNEL" in
-  stable|beta|alpha) ;;
+  ''|stable|beta|alpha) ;;
   *) echo "CONCH_CHANNEL can be stable, beta or alpha (not $CHANNEL)." >&2; exit 1 ;;
 esac
 
@@ -274,6 +276,20 @@ pick_release() {
   done | sort | tail -n 1 | sed 's/.* //'
 }
 
+# With no channel asked for: the newest release of the steadiest channel that
+# has one, stable, else beta, else alpha, as "channel tag". Nothing before the
+# first release.
+pick_steadiest() {
+  _tags=$(cat)
+  for _c in stable beta alpha; do
+    _t=$(printf '%s\n' "$_tags" | pick_release "$_c")
+    if [ -n "$_t" ]; then
+      printf '%s %s\n' "$_c" "$_t"
+      return 0
+    fi
+  done
+}
+
 # git 2.34 or newer checks SSH signatures.
 git_checks_ssh() {
   _gv=$(git --version 2>/dev/null | sed -n 's/^git version \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
@@ -405,12 +421,30 @@ else
   mkdir -p "$(dirname "$DIR")"
   quietly git clone --branch "$BRANCH" "$REPO" "$DIR" ||
     fail "Conch couldn't be downloaded." "Check your internet connection, then run this again."
-  TAG=$(git -C "$DIR" tag -l 'v*' | pick_release "$CHANNEL")
+  if [ -n "$CHANNEL" ]; then
+    TAG=$(git -C "$DIR" tag -l 'v*' | pick_release "$CHANNEL")
+    TAKEN=$CHANNEL
+  else
+    PICKED=$(git -C "$DIR" tag -l 'v*' | pick_steadiest)
+    TAKEN=${PICKED%% *}
+    TAG=${PICKED#* }
+  fi
   if [ -n "$TAG" ]; then
     verify_release "$TAG"
     quietly git -C "$DIR" -c advice.detachedHead=false checkout --quiet --detach "$TAG" ||
       fail "Conch couldn't open release $TAG." "Run this again; the lines above say what went wrong."
-    [ "$CHANNEL" = stable ] || git -C "$DIR" config conch.channel "$CHANNEL"
+    # A channel asked for is kept; otherwise Conch follows the steadiest one by
+    # itself, so a stable release takes over once there is one.
+    if [ -n "$CHANNEL" ]; then
+      [ "$CHANNEL" = stable ] || git -C "$DIR" config conch.channel "$CHANNEL"
+      say "${DIM}Conch ${TAG#v}, the newest release on the $CHANNEL channel.${RESET}"
+    elif [ "$TAKEN" = stable ]; then
+      say "${DIM}Conch ${TAG#v}, the newest release.${RESET}"
+    else
+      say "${DIM}Conch ${TAG#v}, the newest $TAKEN: there's no stable release yet.${RESET}"
+    fi
+  elif [ -n "$CHANNEL" ]; then
+    say "${DIM}There's no $CHANNEL release yet, so Conch follows every change.${RESET}"
   else
     # Before Conch's first release, it follows main, as it always did.
     say "${DIM}Conch has no releases yet, so it follows every change.${RESET}"

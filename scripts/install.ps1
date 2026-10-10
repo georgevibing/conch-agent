@@ -7,13 +7,14 @@
 # It gets what Conch needs (Node.js and Git, when they're missing) into your
 # own folders, builds Conch, keeps it running in the background, adds it to
 # the Start menu and opens it. Nothing needs an administrator. It installs
-# the newest stable release (ADR 0051), checked against the signing keys
-# Conch ships; after that Conch updates itself. Run it again any time: it
-# repairs anything that moved.
+# the newest release (ADR 0051): stable once there's a stable release, before
+# that the newest beta, then the newest alpha. Each is checked against the
+# signing keys Conch ships; after that Conch updates itself. Run it again any
+# time: it repairs anything that moved.
 #
 # Options (set before running): $env:CONCH_NO_BACKGROUND, $env:CONCH_NO_SHORTCUT,
 # $env:CONCH_NO_OPEN, $env:CONCH_UNINSTALL, $env:CONCH_DIR, $env:CONCH_REPO,
-# $env:CONCH_CHANNEL (beta or alpha: also take those releases),
+# $env:CONCH_CHANNEL (stable, beta or alpha: follow that channel; beta and alpha take earlier releases),
 # $env:CONCH_BRANCH (a developer's copy: follow a branch, every change),
 # $env:CONCH_SERVER (a little computer: no browser; then `conch setup` asks how you'll reach it),
 # $env:CONCH_DOMAIN (on a server, at an address of your own, over HTTPS by Conch itself: ADR 0064),
@@ -26,8 +27,9 @@ $ProgressPreference = 'SilentlyContinue'
 $NodeMajor = 24
 $Repo = if ($env:CONCH_REPO) { $env:CONCH_REPO } else { 'https://github.com/georgevibing/conch-agent.git' }
 $Branch = if ($env:CONCH_BRANCH) { $env:CONCH_BRANCH } else { 'main' }
-$Channel = if ($env:CONCH_CHANNEL) { $env:CONCH_CHANNEL } else { 'stable' }
-if ($Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be stable, beta or alpha (not $Channel)." }
+# Empty: the steadiest channel with a release, which Conch then follows by itself.
+$Channel = if ($env:CONCH_CHANNEL) { $env:CONCH_CHANNEL } else { '' }
+if ($Channel -and $Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be stable, beta or alpha (not $Channel)." }
 $ConchHome = if ($env:CONCH_HOME) { $env:CONCH_HOME } else { Join-Path $HOME '.conch' }
 $Dir = if ($env:CONCH_DIR) { $env:CONCH_DIR } else { Join-Path $env:LOCALAPPDATA 'Conch\app' }
 $Runtime = Join-Path $ConchHome 'runtime'
@@ -160,6 +162,16 @@ function Select-Release([string[]]$tags, [string]$channel) {
   return $best
 }
 
+# With no channel asked for: the newest release of the steadiest channel that
+# has one, stable, else beta, else alpha. Nothing before the first release.
+function Select-Steadiest([string[]]$tags) {
+  foreach ($channel in @('stable', 'beta', 'alpha')) {
+    $tag = Select-Release $tags $channel
+    if ($tag) { return @{ Channel = $channel; Tag = $tag } }
+  }
+  return $null
+}
+
 # The release must be signed by a key Conch's own list names. On a first
 # install that list comes from the same place as the release (GitHub, over
 # HTTPS), so this catches a tag never signed, or signed by someone else;
@@ -280,13 +292,33 @@ if (Test-Path (Join-Path $Dir '.git')) {
     # A developer's copy: this branch, every change on it.
     & $git -C $Dir config conch.follow branch
   } else {
-    $tag = Select-Release @(& $git -C $Dir tag -l 'v*') $Channel
+    $tags = @(& $git -C $Dir tag -l 'v*')
+    if ($Channel) {
+      $tag = Select-Release $tags $Channel
+      $taken = $Channel
+    } else {
+      $picked = Select-Steadiest $tags
+      $tag = if ($picked) { $picked.Tag } else { $null }
+      $taken = if ($picked) { $picked.Channel } else { '' }
+    }
     if ($tag) {
       Confirm-Release $tag
       if (-not (Quietly $git @('-C', "`"$Dir`"", '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $tag))) {
         Fail "Conch couldn't open release $tag." 'Run this again; the lines above say what went wrong.'
       }
-      if ($Channel -ne 'stable') { & $git -C $Dir config conch.channel $Channel }
+      # A channel asked for is kept; otherwise Conch follows the steadiest one by
+      # itself, so a stable release takes over once there is one.
+      $version = $tag.Substring(1)
+      if ($Channel) {
+        if ($Channel -ne 'stable') { & $git -C $Dir config conch.channel $Channel }
+        Say "Conch $version, the newest release on the $Channel channel."
+      } elseif ($taken -eq 'stable') {
+        Say "Conch $version, the newest release."
+      } else {
+        Say "Conch $version, the newest ${taken}: there's no stable release yet."
+      }
+    } elseif ($Channel) {
+      Say "There's no $Channel release yet, so Conch follows every change."
     } else {
       # Before Conch's first release, it follows main, as it always did.
       Say 'Conch has no releases yet, so it follows every change.'
