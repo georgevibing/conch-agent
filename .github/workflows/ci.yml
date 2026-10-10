@@ -53,8 +53,9 @@ jobs:
             command: pnpm --filter @conch/server test --maxWorkers=2 --shard=2/2
           - suite: nacre
             command: pnpm --filter @conch/nacre test --maxWorkers=2
+          # pnpm, not turbo: turbo was killed (exit 137) just after every suite passed.
           - suite: web, docs, protocol and desktop
-            command: pnpm exec turbo run test --filter='!@conch/server' --filter='!@conch/nacre' --concurrency=1 -- --maxWorkers=2
+            command: pnpm --filter @conch/web --filter @conch/docs --filter @conch/protocol --filter @conch/desktop --workspace-concurrency=1 --no-bail test --maxWorkers=2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
