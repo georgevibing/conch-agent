@@ -7,9 +7,12 @@ export const SITE_URL = 'https://conchagent.com';
 export const REPO_URL = 'https://github.com/georgevibing/conch-agent';
 export const REPO_BRANCH = publication.commit;
 export const DEVELOPMENT = publication.next;
-export const VERSION_LABEL = publication.tag
-  ? `Stable · ${publication.tag}`
-  : `Development · ${publication.commit.slice(0, 8)}`;
+const CHANNEL = { stable: 'Stable', beta: 'Beta', alpha: 'Alpha' } as const;
+/** "Alpha · v0.1.0-alpha.2" for a release; "Development · 1a2b3c4d" for main. */
+export const VERSION_LABEL =
+  publication.tag && publication.channel !== 'development'
+    ? `${CHANNEL[publication.channel]} · ${publication.tag}`
+    : `Development · ${publication.commit.slice(0, 8)}`;
 export const HAS_DOWNLOAD =
   !DEVELOPMENT &&
   publication.releases.some((release) => release.tag === publication.tag && release.downloads);
