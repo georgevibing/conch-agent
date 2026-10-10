@@ -142,10 +142,12 @@ export function Layout() {
 
       {/* The development docs say so on every page: a search can land anywhere in them. */}
       {!front && DEVELOPMENT && (
-        <Text as="p" size="sm" tone="muted" className={styles.version}>
-          These are the development docs: they describe what’s on main, ahead of the newest release.{' '}
-          <TextLink href="/docs/">Read the docs for the released version</TextLink>
-        </Text>
+        <aside aria-label="About these docs" className={styles.version}>
+          <Text as="p" size="sm" tone="muted">
+            These are the development docs: they describe what’s on main, ahead of the newest
+            release. <TextLink href="/docs/">Read the docs for the released version</TextLink>
+          </Text>
+        </aside>
       )}
       <Outlet />
 
