@@ -24,8 +24,11 @@ export interface ReleaseChannelPickerProps extends Omit<
   ComponentProps<'div'>,
   'onChange' | 'defaultValue'
 > {
-  value: ReleaseChannelValue;
+  /** None, for a copy that follows every change and hasn't chosen releases yet. */
+  value?: ReleaseChannelValue;
   onValueChange: (value: ReleaseChannelValue) => void;
+  /** The channels with a release to follow; the others can't be chosen yet. All, when not given. */
+  available?: readonly ReleaseChannelValue[];
   /** "Which releases Conch gets" */
   label?: string;
   /** A sentence under the choices: going back to stable waits for its next release. */
@@ -35,8 +38,8 @@ export interface ReleaseChannelPickerProps extends Omit<
 
 /**
  * Which releases Conch follows, in plain words: Stable (the default), Beta
- * or Alpha, each with one sentence about what it means. Arrow keys move
- * between them.
+ * or Alpha, each with one sentence about what it means. A channel with no
+ * release yet says so, and can't be chosen. Arrow keys move between them.
  */
 export function ReleaseChannelPicker({
   value,
@@ -44,6 +47,7 @@ export function ReleaseChannelPicker({
   label = 'Which releases Conch gets',
   note,
   disabled,
+  available,
   className,
   ...props
 }: ReleaseChannelPickerProps) {
@@ -52,19 +56,23 @@ export function ReleaseChannelPicker({
       <RadioGroup
         variant="card"
         aria-label={label}
-        value={value}
+        value={value ?? ''}
         disabled={disabled}
         onValueChange={(next) => onValueChange(next as ReleaseChannelValue)}
         className={styles.channelGroup}
       >
-        {RELEASE_CHANNELS.map((channel) => (
-          <RadioGroup.Item
-            key={channel.value}
-            value={channel.value}
-            label={channel.label}
-            description={channel.description}
-          />
-        ))}
+        {RELEASE_CHANNELS.map((channel) => {
+          const none = available !== undefined && !available.includes(channel.value);
+          return (
+            <RadioGroup.Item
+              key={channel.value}
+              value={channel.value}
+              label={channel.label}
+              description={none ? `${channel.description} None yet.` : channel.description}
+              disabled={none}
+            />
+          );
+        })}
       </RadioGroup>
       {note && <p className={styles.channelNote}>{note}</p>}
     </div>

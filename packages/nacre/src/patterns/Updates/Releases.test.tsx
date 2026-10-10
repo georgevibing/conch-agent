@@ -86,6 +86,19 @@ describe('UpdateBanner', () => {
 });
 
 describe('ReleaseChannelPicker', () => {
+  it('only offers channels with a release, and can start with none chosen', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    renderNacre(<ReleaseChannelPicker available={['alpha']} onValueChange={onValueChange} />);
+    const stable = screen.getByRole('radio', { name: 'Stable' });
+    expect(stable).toBeDisabled();
+    expect(stable).toHaveAccessibleDescription('Tested releases. Recommended. None yet.');
+    expect(screen.getByRole('radio', { name: 'Beta' })).toBeDisabled();
+    expect(screen.queryByRole('radio', { checked: true })).toBeNull();
+    await user.click(screen.getByRole('radio', { name: 'Alpha' }));
+    expect(onValueChange).toHaveBeenCalledWith('alpha');
+  });
+
   it('chooses a channel with the arrow keys, each said in a sentence', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();

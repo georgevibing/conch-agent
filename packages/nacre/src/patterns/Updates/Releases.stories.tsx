@@ -120,6 +120,14 @@ export const Channels: Story = {
   },
 };
 
+/** Before the first stable release: only alpha has one, and a copy of main hasn't chosen yet. */
+export const FirstAlpha: Story = {
+  render: () => {
+    const [value, setValue] = useState<ReleaseChannelValue | undefined>(undefined);
+    return <ReleaseChannelPicker value={value} available={['alpha']} onValueChange={setValue} />;
+  },
+};
+
 /** Settings → Health → Updates, with a release waiting. */
 export const Composed: Story = {
   render: () => (
