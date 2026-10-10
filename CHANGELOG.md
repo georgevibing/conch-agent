@@ -4,11 +4,10 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.3](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-10-10)
 
+### Fixed
 
-### Bug Fixes
-
-* **site:** the docs show their version, without a line about development docs ([99bdfb4](https://github.com/georgevibing/conch-agent/commit/99bdfb48bd8204115f3fad49f0e875a2dbbb845b))
-* **web:** keys typed while a new terminal starts aren't lost ([69ad638](https://github.com/georgevibing/conch-agent/commit/69ad63805f46ece978bfadc7ede09096fd7044cc))
+- The docs show their version, without a line about development docs
+- Keys typed while a new terminal starts aren't lost
 
 ## [0.1.0-alpha.2](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2) (2026-10-10)
 
