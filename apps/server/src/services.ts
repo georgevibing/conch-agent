@@ -146,6 +146,7 @@ import { OutsideAgents } from './a2a/outside';
 import { TelemetryService } from './telemetry/service';
 import { Redaction } from './trajectory/redact';
 import { diskOf } from './computer/readers';
+import { admitsPlanned } from './recovery/pace';
 import { sampleResources } from './recovery/resources';
 import { outsideCheck } from './a2a/doctor';
 import { registerAgentsDoctor } from './agents/doctor';
@@ -590,10 +591,7 @@ export class Services {
       admit: () => this.processes.workload.phase === 'normal',
       pace: () => this.processes.workload,
       // A pause the person chose goes on while the processor is busy; memory still holds it.
-      admitPlanned: () => {
-        const pace = this.processes.workload;
-        return !pace.critical && pace.cause !== 'memory' && pace.cause !== 'recovery';
-      },
+      admitPlanned: () => admitsPlanned(this.processes.workload),
       relieve: () => this.processes.relievePressure(),
       pause: (reason) => this.processes.pauseAdmission(reason),
       resume: () => this.processes.resumeAdmission(),

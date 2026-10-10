@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ResourcePace, paceMessage } from './pace';
+import { admitsPlanned, ResourcePace, paceMessage } from './pace';
 import { resourcePolicy, type ResourceSnapshot } from './resources';
 
 const GiB = 1024 ** 3;
@@ -117,5 +117,26 @@ describe('shared workload pacing', () => {
     });
     expect(paceMessage(value)).not.toContain('PRIVATE');
     expect(paceMessage(value)).toContain('approvals');
+  });
+});
+
+describe('work the person asked for just now', () => {
+  it('goes on when all is normal and while the processor is busy, never short of memory or recovering', () => {
+    const { pace, observe } = setup();
+    observe();
+    // A healthy pace says cause "recovery": it's the phase that counts.
+    expect(pace.current).toMatchObject({ phase: 'normal', cause: 'recovery' });
+    expect(admitsPlanned(pace.current)).toBe(true);
+    observe(sample({ loadPerCpu: 1.2 }));
+    expect(pace.current.cause).toBe('cpu');
+    expect(admitsPlanned(pace.current)).toBe(true);
+    observe(sample({ availableBytes: 1 * GiB }));
+    expect(admitsPlanned(pace.current)).toBe(false);
+    expect(
+      admitsPlanned({ phase: 'held', cause: 'recovery', concurrency: 0, critical: false }),
+    ).toBe(false);
+    expect(
+      admitsPlanned({ phase: 'recovering', cause: 'recovery', concurrency: 1, critical: false }),
+    ).toBe(false);
   });
 });
