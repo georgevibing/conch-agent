@@ -135,8 +135,15 @@ function parse(commit: Commit): Parsed | 'end' | undefined {
   };
 }
 
-/** One line in Conch's plain voice: no ADR numbers, no "and its tests", not too long. */
-export function cleanLine(text: string): string | undefined {
+/** How long a line can be once read back (`parseNotes`): a heads-up can use all of it. */
+const LONGEST = 160;
+
+/**
+ * One line in Conch's plain voice: no ADR numbers, no "and its tests", not
+ * too long. A heads-up is `whole`: it keeps whole sentences, never half of
+ * one, so what the person must do isn't cut short.
+ */
+export function cleanLine(text: string, { whole = false } = {}): string | undefined {
   const human = humanise(`x: ${text}`);
   if (!human) return undefined;
   let line = human
@@ -145,8 +152,18 @@ export function cleanLine(text: string): string | undefined {
     .replace(/\s*\((?=[^)]*[⌘⇧↩⌥])[^)]*\)/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+  if (whole && line.length > LONGEST) {
+    const sentences = line.match(/[^.!?]+[.!?]+(?=\s|$)/g) ?? [];
+    let kept = '';
+    for (const sentence of sentences) {
+      if ((kept + sentence).trim().length > LONGEST) break;
+      kept += sentence;
+    }
+    line =
+      kept.trim().replace(/\.$/, '') || `${line.slice(0, LONGEST - 1).replace(/\s+\S*$/, '')}…`;
+  }
   // A long list reads better cut at its last whole item.
-  if (line.length > 96) {
+  if (!whole && line.length > 96) {
     const cut = line.lastIndexOf(', ', 92);
     line = cut > 40 ? line.slice(0, cut) : `${line.slice(0, 92).replace(/\s+\S*$/, '')}…`;
   }
@@ -280,7 +297,10 @@ function headsUp(members: Parsed[]): string {
   const breaking = members.find((c) => c.breaking);
   const footer = breaking && /^BREAKING[ -]CHANGE:\s*(.+(?:\n(?!\n).+)*)/m.exec(breaking.body)?.[1];
   const said = footer ? footer.replace(/\s+/g, ' ').trim() : breaking?.text;
-  return cleanLine(said ?? '') ?? 'Something works differently: read on before you update';
+  return (
+    cleanLine(said ?? '', { whole: true }) ??
+    'Something works differently: read on before you update'
+  );
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -387,7 +407,7 @@ export function parseNotes(text: string): Notes {
     if (!at || !item) continue;
     // eslint-disable-next-line no-control-regex
     const clean = item.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e]/g, '').trim();
-    if (clean && notes[at].length < 12) notes[at].push(clean.slice(0, 160));
+    if (clean && notes[at].length < 12) notes[at].push(clean.slice(0, LONGEST));
   }
   return notes;
 }

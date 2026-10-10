@@ -177,6 +177,19 @@ describe('notes from commits', () => {
     expect(notes.headsUp).toEqual(['Sign in again after updating']);
   });
 
+  it('keeps a long heads-up to whole sentences, never half of one', () => {
+    const { notes } = notesFrom([
+      c(
+        'feat(server)!: a browser is let in once Conch opened it',
+        'BREAKING CHANGE: A browser on the computer running Conch is let in once Conch has opened it. If you typed the address yourself and see "Open Conch from your apps", do that once, or run `pnpm conch open`. Scripts need this computer’s key now.',
+      ),
+    ]);
+    expect(notes.headsUp).toEqual([
+      'A browser on the computer running Conch is let in once Conch has opened it',
+    ]);
+    expect(parseNotes(releaseBody(notes)).headsUp).toEqual(notes.headsUp);
+  });
+
   it('keeps each group to a few lines, and the rest in one', () => {
     const words = [
       'apples',
