@@ -22,6 +22,11 @@ for (const name of [
   'install.sh',
   'install.ps1',
   '404.html',
+  'sitemap.xml',
+  'robots.txt',
+  'llms.txt',
+  'llms-full.txt',
+  'releases/feed.xml',
 ])
   if (!existsSync(resolve(output, name))) throw new Error(`Missing public file: ${name}`);
 const html = (name) => readFileSync(resolve(output, name), 'utf8');
@@ -29,6 +34,8 @@ if (!html('docs/next/start/install/index.html').includes('content="noindex"'))
   throw new Error('Development documentation must stay out of search.');
 if (html('sitemap.xml').includes('/docs/next/'))
   throw new Error('The public sitemap includes development pages.');
+if (html('llms.txt').includes('/docs/next/'))
+  throw new Error('llms.txt points AI assistants at development pages.');
 for (const [path, commit] of [
   ['index.html', selection.production.commit],
   ['docs/next/index.html', selection.next.commit],

@@ -15,11 +15,33 @@ import {
   NOT_FOUND_HEAD,
   type Head,
 } from './site/head';
-import { DEVELOPMENT } from './site/config';
+import publication from 'virtual:conch-publication';
+
+import { DEVELOPMENT, REPO_URL, SECTIONS, SITE_URL } from './site/config';
+import { llmsFullTxt, llmsTxt, releasesFeed } from './site/discovery';
 import { headOf, pageAt, PAGES } from './site/pages';
 
 export { headHtml };
 export { SITE_URL } from './site/config';
+
+/** `llms.txt`, `llms-full.txt` and the releases' feed (`site/discovery.ts`), by file name. */
+export function discovery(): Record<string, string> {
+  const about = {
+    siteUrl: SITE_URL,
+    summary: LANDING_HEAD.description,
+    sections: SECTIONS,
+    pages: PAGES.filter((page) => page.listed || page.section === 'decisions'),
+  };
+  return {
+    'llms.txt': llmsTxt(about),
+    'llms-full.txt': llmsFullTxt(about),
+    'releases/feed.xml': releasesFeed({
+      siteUrl: SITE_URL,
+      repository: REPO_URL,
+      releases: publication.releases,
+    }),
+  };
+}
 
 /** The address the page for a missing one is drawn at (written as `404.html`). */
 export const MISSING = '/404';

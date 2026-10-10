@@ -6,6 +6,7 @@
 //   dist/<section>/<page>/index.html   every guide and decision, at its own address
 //   dist/404.html                what an address with nothing behind it shows
 //   dist/sitemap.xml, robots.txt, CNAME, install.sh, install.ps1, favicon.ico
+//   dist/llms.txt, llms-full.txt, releases/feed.xml   (site/discovery.ts)
 //
 // Directory indexes support both /start/install and /start/install/ on Pages.
 // Every page answers with its own
@@ -27,7 +28,9 @@ const development = base === '/docs/next/';
 
 const originalTemplate = readFileSync(join(dist, 'index.html'), 'utf8');
 const template = development
-  ? originalTemplate.replace(/<link rel="sitemap"[^>]*>/, '')
+  ? originalTemplate
+      .replace(/<link rel="sitemap"[^>]*>/, '')
+      .replace(/<link\s+rel="alternate"\s+type="application\/atom\+xml"[^>]*>\s*/, '')
   : originalTemplate;
 const HEAD = /<!--head-->[\s\S]*?<!--\/head-->/;
 const ROOT = '<div id="root"></div>';
@@ -119,6 +122,8 @@ write(
     '',
   ].join('\n'),
 );
+// For AI assistants and feed readers; the development pages have neither.
+if (!development) for (const [name, text] of Object.entries(site.discovery())) write(name, text);
 write('robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
 write('.nojekyll', '');
 // Pages custom-domain settings own routing; CNAME also documents it in the artifact.
@@ -134,4 +139,6 @@ copyFileSync(join(icons, 'apple-touch-icon.png'), join(dist, 'apple-touch-icon.p
 
 rmSync(built, { recursive: true, force: true });
 rmSync(join(dist, '.vite'), { recursive: true, force: true });
-console.warn(`  🐚  ${entries.length} pages drawn ahead of time, and the sitemap for ${siteUrl}`);
+console.warn(
+  `  🐚  ${entries.length} pages drawn ahead of time, with the sitemap, llms.txt and the releases' feed for ${siteUrl}`,
+);
