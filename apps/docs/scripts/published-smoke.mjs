@@ -99,9 +99,12 @@ try {
       assert.deepEqual(violations, [], `${path} in ${mode}`);
       await tab.screenshot({ path: `.artifacts/site/${path.replaceAll('/', '_')}-${mode}.png` });
     }
-    await tab.getByRole('link', { name: 'Default docs', exact: true }).click();
+    // The development docs' note leads back to the released ones.
+    await tab
+      .getByRole('link', { name: 'Read the docs for the released version', exact: true })
+      .click();
     await tab.waitForURL(`${origin}/docs/`);
-    await tab.getByRole('link', { name: 'Release notes', exact: true }).click();
+    await tab.getByRole('banner').getByRole('link', { name: 'Releases', exact: true }).click();
     await tab.waitForURL(`${origin}/releases/`);
     await tab.getByRole('tab', { name: 'Beta', exact: true }).click();
     assert.equal(
