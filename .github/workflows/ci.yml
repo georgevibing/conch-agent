@@ -99,6 +99,9 @@ jobs:
       - run: pnpm e2e
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # Evidence for a failure, not a check: an upload that times out (GitHub
+        # storage, not the tests) never turns a run whose tests passed red.
+        continue-on-error: true
         with:
           name: e2e-results-${{ matrix.shard }}
           path: |
@@ -129,6 +132,9 @@ jobs:
       # Keep evidence of a failed first attempt even when the retry passes.
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # Evidence for a failure, not a check: an upload that times out (GitHub
+        # storage, not the tests) never turns a run whose tests passed red.
+        continue-on-error: true
         with:
           name: desktop-e2e-results
           path: test-results/desktop/
