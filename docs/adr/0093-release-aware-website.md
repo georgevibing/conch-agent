@@ -8,9 +8,16 @@
 
 GitHub Pages serves the existing static site at conchagent.com, with Cloudflare
 providing DNS. Publishing runs from trusted `main`. The landing page, guides,
-reference and installer scripts are built from the newest published, signed
-stable release's exact commit. Before the first stable release, they use the
-latest main commit that passed CI. Alpha and beta releases never replace stable.
+reference and installer scripts are built from the exact commit of the newest
+published, signed release of the steadiest channel that has one: stable once
+there is one, before that beta, then alpha. That's what the installers install
+too, so the site describes the version people get. Before the first release, they
+use the latest main commit that passed CI. Alpha and beta releases never replace
+stable. The site labels the version with its channel: "Alpha · v0.1.0-alpha.2".
+
+Each version's site is built from its own code, so it must know its channel's
+name. Sites before `0.1.0-alpha.2` knew only stable and development; for a
+pre-release from then, the latest validated main stands in.
 
 A second build at `/docs/next/` always describes that validated main commit, is
 labelled Development, and is excluded from indexing. Existing guide addresses
@@ -41,7 +48,8 @@ no Cloudflare deployment credential is needed.
 
 ## Verification
 
-Selection tests cover prerelease-only repositories, version ordering, draft and
+Selection tests cover prerelease-only repositories (the newest alpha, a beta over
+a newer alpha, stable over both), sites that can't describe a channel, version ordering, draft and
 flag mismatches, failed verification and unavailable downloads. Rendering tests
 cover notes, empty states, source/version labels and accessibility. A production
 build and browser journeys cover direct links, development routes, theme changes,

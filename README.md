@@ -212,7 +212,7 @@ your desktop and the chat apps you already use.
 ## Install
 
 **Download the app** for macOS, Windows or Linux from the
-[latest release](https://github.com/georgevibing/conch-agent/releases/latest) and
+[newest release](https://github.com/georgevibing/conch-agent/releases) and
 open it. If your computer asks first,
 [the guide](./apps/docs/content/start/app.md#if-your-computer-asks-first) says which
 button to press.
@@ -229,7 +229,9 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/install.ps1 | iex
 ```
 
-It gets Node.js and Git if they're missing, keeps Conch running and opens it. Run it
+It installs the newest release: stable once there is one, before that the newest
+beta, then the newest alpha. It gets Node.js and Git if they're missing, keeps Conch
+running and opens it. Run it
 again to update, add `--uninstall` to remove it, or `--server` on a computer with no
 screen ([On a server](./apps/docs/content/start/server.md)). Afterwards, `conch help`
 lists what the command line can do.

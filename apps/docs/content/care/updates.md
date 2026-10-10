@@ -25,6 +25,8 @@ Under **Release channel**, choose which releases Conch gets:
 - **Beta** — new things a little early. Mostly finished.
 - **Alpha** — the newest work, as soon as it's out. Expect rough edges.
 
+Until you choose, Conch follows the steadiest channel with a release: **Stable** once there's a stable release, before that **Beta**, then **Alpha**. A channel with no release yet can't be chosen. A copy that follows every change on `main` keeps doing so until you choose a channel.
+
 Beta and alpha ask you to confirm it's you. Going back to **Stable** never takes you back a version. Conch waits for the next stable release newer than the one you have, and says so under the channels.
 
 Conch only installs releases signed by Conch's makers. A release that isn't is refused, and the card says so in a sentence. [Security](../security/signing-in.md) says more.
@@ -100,4 +102,4 @@ Conch itself never updates this way. It restarts, so it always asks first.
 - Automatic updates need the computer awake between 2 and 5 a.m.
 - [Repair everything](./health.md) also lists the updates that wait. A new release of Conch shows there as news, not a problem.
 - The menu bar says **Conch 0.3 is ready** too. To hear about new versions on your phone, turn on **There's a new version** in [Notifications](../start/phone.md). It's off until you do.
-- Running [the install line](../start/install.md) again repairs Conch, but a copy installed from a release updates here, in **Updates**. The installer gets the newest stable release. Set `CONCH_CHANNEL=beta` or `alpha` before it for those.
+- Running [the install line](../start/install.md) again repairs Conch, but a copy installed from a release updates here, in **Updates**. The installer gets the newest release: stable once there is one, before that the newest beta, then the newest alpha. Set `CONCH_CHANNEL=beta` or `alpha` before it to follow that channel.

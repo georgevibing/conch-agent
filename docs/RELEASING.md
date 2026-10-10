@@ -99,7 +99,9 @@ and only once: every release after it is past that commit. Going from betas back
 to alphas of the same version is refused: installs never go back a version.
 
 People choose their channel in Settings → Health → Updates (ADR 0051 §
-Channels). Stable is the default and only takes stable releases.
+Channels). Stable only takes stable releases. Until someone chooses, an install
+follows the steadiest channel with a release: stable once there is one, before
+that beta, then alpha. The installers install the same way.
 
 ## The notes
 
@@ -232,8 +234,11 @@ Each app is opened once on its runner to check it starts. Every installer and
 
 [conchagent.com](https://conchagent.com) is `apps/docs`: the front page, the
 documentation, and the installers at `/install.sh` and `/install.ps1`.
-`.github/workflows/site.yml` publishes the newest verified stable release. Before
-there is one, it publishes the latest `main` commit that passed CI. The landing
+`.github/workflows/site.yml` publishes the newest verified release of the
+steadiest channel that has one: stable once there is one, before that beta, then
+alpha. Before the first release, it publishes the latest `main` commit that passed
+CI, and so it does for a release whose own site can't describe its channel (any
+before `0.1.0-alpha.2`). The landing
 page, guides, generated reference and installer scripts all come from that exact
 commit; the site shows its version and source link.
 
