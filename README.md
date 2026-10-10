@@ -110,7 +110,7 @@ your desktop and the chat apps you already use.
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part ("have Codex write the tests"). Every provider runs it as a
   Conch task you can see, answer and stop, with its chat's permissions and never
-  more. A task counts as done only with a saved answer, or the tool receipts set before it started, and you can look at what it recorded. [Hand it off](./apps/docs/content/features/tasks.md)
+  more. As many run at once as your computer and provider have room for, and one that waits says why. A task counts as done only with a saved answer, or the tool receipts set before it started, and you can look at what it recorded. [Hand it off](./apps/docs/content/features/tasks.md)
 - **Memory that looks after itself.** Conch learns what will still matter from a chat
   and tidies its memories overnight, then says what it learned in a short morning note,
   each line with Undo. They're Markdown you can read, edit or forget. A
