@@ -70,7 +70,7 @@ const page = `<!doctype html>
 <div class="pearl">${pearl}</div>
 <div>
   <h1>Conch</h1>
-  <p>The AI agent that just works. <em>Let it solve your problems.</em></p>
+  <p>The AI assistant that just works. <em>Let it solve your problems.</em></p>
   <div class="site">conchagent.com · open source</div>
 </div>`;
 

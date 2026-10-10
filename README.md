@@ -8,7 +8,7 @@
 <h1 align="center">Conch</h1>
 
 <p align="center">
-  <b>The AI agent that just works. Let it solve your problems.</b>
+  <b>The AI assistant that just works. Let it solve your problems.</b>
 </p>
 
 <p align="center">

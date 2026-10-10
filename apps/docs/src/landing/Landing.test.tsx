@@ -27,7 +27,7 @@ describe('the front page', () => {
   it('says what Conch is, the button that downloads it, and the one line that installs it', async () => {
     const { container } = open();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /The AI agent that just works\.\s*Let it solve your problems\./,
+      /The AI assistant that just works\.\s*Let it solve your problems\./,
     );
     expect(screen.getAllByRole('button', { name: 'Copy command' }).length).toBeGreaterThan(0);
     // One download for every system, and the docs beside it.

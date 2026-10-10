@@ -137,7 +137,7 @@ export function Landing() {
           }
           title={
             <>
-              The AI agent that just works.
+              The AI assistant that just works.
               <br />
               <em>Let it solve your problems.</em>
             </>
@@ -562,8 +562,8 @@ export function Landing() {
           }
         >
           <p>
-            I built Conch for myself. I wanted an agent that fixes my problems, not one I have to
-            keep fixing.
+            I built Conch for myself. I wanted an assistant that fixes my problems, not one I have
+            to keep fixing.
           </p>
           <p>It’s open source now, so it can be yours too.</p>
         </Statement>

@@ -30,7 +30,7 @@ export const SOCIAL_IMAGE = {
   path: '/social.png',
   width: 1200,
   height: 630,
-  alt: 'Conch: the AI agent that just works. Let it solve your problems.',
+  alt: 'Conch: the AI assistant that just works. Let it solve your problems.',
 } as const;
 
 /** A page's full address. */
@@ -56,10 +56,10 @@ const SITE = {
 } as const;
 
 const DESCRIPTION =
-  'Conch is an open-source AI agent that sets itself up and fixes what breaks. Use the AI subscriptions and API keys you already have, on your own computer.';
+  'Conch is an open-source AI assistant that sets itself up and fixes what breaks. Use the AI subscriptions and API keys you already have, on your own computer.';
 
 export const LANDING_HEAD: Head = {
-  title: 'Conch · the AI agent that just works',
+  title: 'Conch · the AI assistant that just works',
   description: DESCRIPTION,
   path: '/',
   data: [

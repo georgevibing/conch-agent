@@ -1,7 +1,7 @@
 {
   "name": "Conch",
   "short_name": "Conch",
-  "description": "The AI agent that just works, on your own computer.",
+  "description": "The AI assistant that just works, on your own computer.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

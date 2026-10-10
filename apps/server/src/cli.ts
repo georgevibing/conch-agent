@@ -1069,7 +1069,7 @@ async function help() {
   const topic = process.argv[3];
   if (process.argv[2] === 'help' && topic && helpFor(topic)) return;
   await banner(ui, {
-    line: 'The AI agent that just works.',
+    line: 'The AI assistant that just works.',
     sub: `${SERVER_LABEL} · ${conch('help <command>')} for the details`,
   });
   const width = Math.max(...commandList.map((c) => c.usage.length)) + 2;
