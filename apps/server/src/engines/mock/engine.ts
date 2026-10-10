@@ -1184,6 +1184,23 @@ export class MockEngine implements Engine {
         yield* speak('The wait is over, so I’m carrying on from here.');
         return;
       }
+      // More than this computer has room for at once (ADR 0128): three heavy builds, the
+      // first long, so the others wait for room and say so.
+      if (
+        /\bbuild everything\b/i.test(input.prompt) &&
+        input.tools.some((t) => t.name === 'delegate')
+      ) {
+        const out = yield* hostTool('delegate', {
+          parts: ['app', 'docs', 'site'].map((what, i) => ({
+            title: `Build the ${what}`,
+            instructions: `Build the ${what}${i === 0 ? ' for a while' : ''} and say how it went.`,
+            model: 'fast',
+            worktree: false,
+          })),
+        });
+        yield* speak(`The three builds are back:\n\n${out}`);
+        return;
+      }
       if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {
         const out = yield* hostTool('delegate', {
           parts: [

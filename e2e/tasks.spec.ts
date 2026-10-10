@@ -149,6 +149,33 @@ test('several tasks work at once on one card, open over the chat, and come back 
   expect(page.url()).toBe(url);
 });
 
+test('more than there’s room for: the rest say why they wait, and one can start now', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
+  await composer.fill('build everything');
+  await composer.press('Enter');
+  const card = page.getByRole('article', { name: '3 tasks' });
+  await expect(card).toBeVisible();
+  // Three heavy builds don't fit this computer at once (ADR 0128): the others say why.
+  await expect(card.getByText('Starts when “Build the app” finishes').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(card.getByText(/at once on this computer right now/)).toBeVisible();
+  await card.getByRole('button', { name: 'Start “Build the docs” now' }).click();
+  await expect(card.getByRole('button', { name: 'Start “Build the docs” now' })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: /Build the docs/ })).not.toContainText(
+    'Starts when',
+    { timeout: 15_000 },
+  );
+  // Stopping the chat stops its helpers, waiting or working.
+  await composer.focus();
+  await page.keyboard.press('Escape');
+  await expect(card).not.toContainText('working', { timeout: 15_000 });
+  await expect(card).not.toContainText('waiting');
+});
+
 test('a task that needs your OK says so, and waits only for you', async ({ page, request }) => {
   // Ask first: in Auto, a task's git push goes ahead (ADR 0100, ADR 0119).
   await askFirst(request);
