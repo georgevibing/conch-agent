@@ -2,6 +2,13 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.3](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-10-10)
+
+### Fixed
+
+- The docs show their version, without a line about development docs
+- Keys typed while a new terminal starts aren't lost
+
 ## [0.1.0-alpha.2](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2) (2026-10-10)
 
 ### Heads up
