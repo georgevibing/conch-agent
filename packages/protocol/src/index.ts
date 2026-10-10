@@ -306,6 +306,13 @@ export const Preferences = z.object({
    */
   checkAfterReading: z.boolean().default(true),
   /**
+   * Classes of step Auto never asks about again, in any chat (ADR 0128): what
+   * the person answered "Always allow, in every chat" to on a card, as the risk
+   * policy names them (`risk:<kind>:<reason>`, `risk:install:moderate`,
+   * `risk:second-look`). Settings → Security → Safety lists and forgets them.
+   */
+  autoAllowed: z.array(z.string().max(220)).max(200).default([]),
+  /**
    * Commands run in a sealed box: they can change the work folder and caches,
    * and can't read where keys and passwords live (ADR 0028).
    */
@@ -439,6 +446,8 @@ export const UpdateSettingsBody = z.object({
       tipsPutAway: TipsPutAway,
       /** Turning any of these off needs a recent password or key (ADR 0028, ADR 0087). */
       checkAfterReading: z.boolean(),
+      /** The whole list, as Settings last saw it: a class forgotten is left out (ADR 0128). */
+      autoAllowed: z.array(z.string().max(220)).max(200),
       sealedCommands: z.boolean(),
       checkMemories: z.boolean(),
       menuBar: z.boolean(),
@@ -738,6 +747,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      * question is this once.
      */
     lasting: z.boolean().optional(),
+    /**
+     * The words on Always allow when it means more than this chat (ADR 0128): "Always
+     * allow, in every chat", for a class of step lifted in another chat before, or asked
+     * about for the third time this turn. Without it, the button says Always allow.
+     */
+    always: z.string().max(60).optional(),
     /** The same, as the first version of this field said it (2026-10-04). */
     afterReading: z.boolean().optional(),
     /** Shows exactly what goes to other people, so it's asked each time: no "Always allow". */
@@ -762,7 +777,14 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      * the reason to ask it lifted (`read:<tool>`, `box:Bash`). Kept in the log,
      * so it still holds after a restart (ADR 0117).
      */
-    kept: z.object({ tool: z.string().max(200), waive: z.string().max(220).optional() }).optional(),
+    kept: z
+      .object({
+        tool: z.string().max(200),
+        waive: z.string().max(220).optional(),
+        /** Kept for every chat, in `preferences.autoAllowed` (ADR 0128). */
+        everywhere: z.boolean().optional(),
+      })
+      .optional(),
   }),
   z.object({
     ...logged,

@@ -3,7 +3,10 @@
 - Status: accepted; Claude Code's row amended by [ADR 0118](./0118-auto-judges-every-app-step.md)
   (Auto runs as `default`, answered by Conch); the modes amended by
   [ADR 0119](./0119-four-modes-auto-by-default.md) (four modes: Edit freely gone, Plan only
-  called Read only; new chats start in Auto)
+  called Read only; new chats start in Auto); the score, the second look and four tiers amended
+  by [ADR 0128](./0128-auto-reads-what-you-asked-for.md) (a step the person asked for scores
+  two at most; the look lifts a question; non-production infrastructure, a new remote, a pushed
+  image and an assistant's permission files ask before reading)
 - Date: 2026-10-07
 - Builds on: [ADR 0028](./0028-safe-hands.md) (the guard after reading, the sealed box),
   [ADR 0031](./0031-skill-trust.md) (skill holds), [ADR 0033](./0033-hand-it-off.md)
@@ -70,6 +73,13 @@ it read something untrusted (ADR 0028).
 
 So something severe that can't be put back always asks; severe-but-undoable and
 moderate-but-lasting ask only once the chat read something; the rest never asks.
+
+> **Amended by [ADR 0128](./0128-auto-reads-what-you-asked-for.md).** A boundary the person
+> stated adds a point; a step they asked for in their own words scores two at most, so it goes
+> ahead before and after reading. Only the kinds no words ask for (keys, a stranger's code
+> decoded from a blob, money, an assistant's own permission files, the circuit breaker) keep
+> their score whatever is said. Non-production infrastructure, a new remote and a pushed image
+> moved to the left column; `git reset --hard` on a clean tree asks nowhere.
 
 | Severe and lasting: always asks                                                                                   | Asks only after reading something                                                        |
 | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -160,7 +170,9 @@ So:
   (`risk-look.ts`, `riskLook` = `cheapModel`), fenced and datamarked like the memory
   check's (ADR 0087), once per command per turn, six seconds at most. It picks a kind;
   Conch says it in its own words. It can only add a question: no model, a timeout or an
-  unreadable answer leaves the rules' verdict, and the command runs.
+  unreadable answer leaves the rules' verdict, and the command runs. (Since ADR 0128 it also
+  lifts a question the rules asked only for what the chat read, when it sees routine work in
+  service of the request.)
 
 Ask first, Edit freely, Plan only and Full trust are unchanged, as are the circuit
 breaker, protected paths, Conch's powers, tools turned Off and skill holds.
@@ -206,13 +218,13 @@ Spending limits (ADR 0079) stop a reply; they never ask.
 Every provider now offers all five modes (`ALL_MODES`); `honouredMode` still turns one
 a provider can't do into its first.
 
-| Provider                                                                                 | Plan only                                      | Ask first / Edit freely                       | Auto                                                                                                                                                                                                                               | Full trust                                                                                                               |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Claude Code**                                                                          | `plan`                                         | `default` / `acceptEdits`                     | Its own `auto` (classifier) where the model has it, plus Conch's risk policy in the PreToolUse hook; otherwise `default`, with Conch answering each question. When its classifier wants a person (`escalated`), the person answers | `bypassPermissions`; the hook keeps the irreducible list; commands sealed, leaving the box free                          |
-| **Codex CLI** (its own tools)                                                            | approvals declined                             | approvals asked / changes accepted            | approvals accepted after the guard; its sandbox: the work folder **with the network**, sealed with someone else's words, nobody there after reading, or a skill's hold                                                             | approvals accepted after the guard; its sandbox: **your folders and the network** (`reach: 'open'`), Conch's keys denied |
-| **Codex**, **Copilot**, **Gemini CLI**, **Grok** (ACP), **model APIs**, **local models** | Conch's tools refuse changes                   | Conch's tools ask (`authorizeTool`)           | Conch's tools go ahead after the guard; commands leave the box for the network, after reading only where the risk policy and second look see nothing                                                                               | Conch's tools go ahead; commands needing the network or your folders run unsealed                                        |
-| **Tasks and helpers**                                                                    | their chat's mode, never more (ADR 0033)       |                                               |                                                                                                                                                                                                                                    |                                                                                                                          |
-| **Chat apps**                                                                            | `/mode` lists the ladder; a raise asks to save | the owner answers in Conch or by notification | as in Conch; someone else's words check every way out                                                                                                                                                                              | its own warning before saving; the restore preview names it                                                              |
+| Provider                                                                                 | Plan only                                      | Ask first / Edit freely                       | Auto                                                                                                                                                                   | Full trust                                                                                                               |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Claude Code**                                                                          | `plan`                                         | `default` / `acceptEdits`                     | `default`, with Conch answering each question by its own risk policy and second look (ADR 0118; its own classifier isn't used)                                         | `bypassPermissions`; the hook keeps the irreducible list; commands sealed, leaving the box free                          |
+| **Codex CLI** (its own tools)                                                            | approvals declined                             | approvals asked / changes accepted            | approvals accepted after the guard; its sandbox: the work folder **with the network**, sealed with someone else's words, nobody there after reading, or a skill's hold | approvals accepted after the guard; its sandbox: **your folders and the network** (`reach: 'open'`), Conch's keys denied |
+| **Codex**, **Copilot**, **Gemini CLI**, **Grok** (ACP), **model APIs**, **local models** | Conch's tools refuse changes                   | Conch's tools ask (`authorizeTool`)           | Conch's tools go ahead after the guard; commands leave the box for the network, after reading only where the risk policy and second look see nothing                   | Conch's tools go ahead; commands needing the network or your folders run unsealed                                        |
+| **Tasks and helpers**                                                                    | their chat's mode, never more (ADR 0033)       |                                               |                                                                                                                                                                        |                                                                                                                          |
+| **Chat apps**                                                                            | `/mode` lists the ladder; a raise asks to save | the owner answers in Conch or by notification | as in Conch; someone else's words check every way out                                                                                                                  | its own warning before saving; the restore preview names it                                                              |
 
 ACP programs' own tools are declined in every mode, as before: the door's tools do the
 work, under these rules, so every ACP program behaves the same. Codex CLI's sandbox is

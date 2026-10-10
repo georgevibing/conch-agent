@@ -39,6 +39,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'tools-never-ask': <Wrench />,
   'chats-never-ask': <MessagesSquare />,
   'chats-go-ahead': <MessagesSquare />,
+  'auto-never-asks': <MessagesSquare />,
   'work-runs-elsewhere': <Server />,
   'safety-off': <ShieldAlert />,
   'routine-never-asks': <Repeat />,

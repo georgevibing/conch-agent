@@ -111,6 +111,13 @@ export const BackupPower = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('chats-never-ask') }),
   /** New chats start in Auto: routine steps go ahead without asking (ADR 0100). */
   z.object({ kind: z.literal('chats-go-ahead') }),
+  /** Kinds of step Auto never asks about again, in any chat (ADR 0128). */
+  z.object({
+    kind: z.literal('auto-never-asks'),
+    steps: z.array(PowerText).min(1).max(20),
+    /** More kinds than listed. */
+    more: z.number().int().nonnegative().default(0),
+  }),
   /** New chats' commands run on another machine or in the cloud, the work folder copied there (ADR 0106). */
   z.object({ kind: z.literal('work-runs-elsewhere'), where: PowerText }),
   /** Safety checks turned off (ADR 0028, ADR 0087): what they'd stop doesn't stop. */

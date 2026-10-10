@@ -2,14 +2,16 @@ import {
   AlertDialog,
   Callout,
   Collapsible,
+  IconButton,
   SealCoverage,
   Stack,
   Switch,
   Text,
   toast,
 } from '@conch/nacre';
+import { autoLiftWords } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { ApiError } from '../../api/client';
@@ -19,6 +21,7 @@ import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
 import { AdminCommand } from '../setup/AdminCommand';
 import { safetyApi, safetyKeys } from './api';
+import styles from './Safety.module.css';
 
 type Guard = 'checkAfterReading' | 'sealedCommands' | 'checkMemories';
 
@@ -73,6 +76,17 @@ export function SafetySection() {
     }
   };
   const change = (key: Guard, value: boolean) => (value ? void set(key, true) : setConfirm(key));
+  // A kind of step the person told Auto never to ask about again (ADR 0128): forgetting one
+  // only makes Auto ask again, so it needs no second look.
+  const forget = async (cls: string) => {
+    try {
+      await update.mutateAsync({
+        preferences: { autoAllowed: prefs.autoAllowed.filter((c) => c !== cls) },
+      });
+    } catch (failure) {
+      toast.error(failure instanceof ApiError ? failure.message : 'That didn’t save. Try again.');
+    }
+  };
 
   const sandbox = safety?.sandbox;
   return (
@@ -128,6 +142,28 @@ export function SafetySection() {
             </Collapsible>
           )}
         </Stack>
+        {prefs.autoAllowed.length > 0 && (
+          <Stack gap={2}>
+            <Text size="sm" tone="subtle">
+              Auto never asks again, in any chat, before it would:
+            </Text>
+            <ul className={styles.lifted} aria-label="Kinds of step Auto never asks about">
+              {prefs.autoAllowed.map((cls) => (
+                <li key={cls} className={styles.lift}>
+                  <ShieldCheck aria-hidden className={styles.liftIcon} />
+                  <span className={styles.liftWords}>{autoLiftWords(cls)}</span>
+                  <IconButton
+                    size="sm"
+                    label={`Ask again before it would ${autoLiftWords(cls)}`}
+                    onClick={() => void forget(cls)}
+                  >
+                    <X />
+                  </IconButton>
+                </li>
+              ))}
+            </ul>
+          </Stack>
+        )}
       </Stack>
       <AlertDialog.Root open={Boolean(confirm)} onOpenChange={(o) => !o && setConfirm(undefined)}>
         {confirm && (

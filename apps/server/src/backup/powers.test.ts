@@ -39,6 +39,25 @@ describe('what in a backup can act for you', () => {
     ).toContainEqual({ kind: 'chats-go-ahead' });
   });
 
+  it('discloses the kinds of step Auto never asks about again (ADR 0128)', () => {
+    expect(
+      powersOf(
+        ['settings.json'],
+        reader({
+          'settings.json': {
+            preferences: {
+              autoAllowed: ['risk:install:moderate', 'risk:egress:push code to a remote'],
+            },
+          },
+        }),
+      ),
+    ).toContainEqual({
+      kind: 'auto-never-asks',
+      steps: ['install a package it doesn’t know well', 'push code to a remote'],
+      more: 0,
+    });
+  });
+
   it('discloses new chats running their work on another machine or in the cloud (ADR 0106)', () => {
     const of = (place: string) =>
       powersOf(['settings.json'], reader({ 'settings.json': { preferences: { place } } }));

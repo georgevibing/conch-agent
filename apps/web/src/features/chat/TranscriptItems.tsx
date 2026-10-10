@@ -454,6 +454,8 @@ function AskCard({
       // tool through for the rest of the chat; for a skill's list, or words going to
       // other people, it's this once.
       allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways}
+      // A class of step lifted in another chat before (ADR 0128): the button says every chat.
+      {...(item.always && { alwaysLabel: item.always })}
       sent={sent}
       onDecide={respond}
       allowRef={allowRef}

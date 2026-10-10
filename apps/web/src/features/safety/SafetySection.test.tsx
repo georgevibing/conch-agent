@@ -69,4 +69,36 @@ describe('Safety in Settings', () => {
       }),
     );
   });
+
+  it('lists the kinds of step Auto never asks about again, and forgets one (ADR 0128)', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () =>
+        appState({
+          preferences: {
+            ...appState().preferences,
+            autoAllowed: ['risk:install:moderate', 'risk:egress:push code to a remote'],
+          },
+        }),
+      'GET /api/auth': () => ({
+        method: 'none',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/safety': () => ({ sandbox: { available: true, protects: [] }, providers: [] }),
+      'PATCH /api/settings': (body) => appState(body as never),
+    });
+    renderApp(<SafetySection />);
+    const list = await screen.findByRole('list', { name: 'Kinds of step Auto never asks about' });
+    expect(list).toHaveTextContent('install a package it doesn’t know well');
+    expect(list).toHaveTextContent('push code to a remote');
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Ask again before it would push code to a remote' }),
+    );
+    await vi.waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        preferences: { autoAllowed: ['risk:install:moderate'] },
+      }),
+    );
+  });
 });

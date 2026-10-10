@@ -82,15 +82,20 @@ import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
 import {
+  askable,
   assessRisk,
+  type Risk,
   breaksCircuit,
   riskAsks,
   riskClass,
+  riskScore,
   riskWords,
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
-import { lookAtAppStep, lookAtCommand } from './risk-look';
+import { type CommandVerdict, judgeCommand, lookAtAppStep } from './risk-look';
+import type { AutoLifts } from './lifts';
+import { treeClean } from './tree';
 import {
   carriesData,
   describeTaint,
@@ -191,6 +196,12 @@ interface PendingPermission {
    * for leaving the sealed box.
    */
   waive?: string;
+  /**
+   * The card's Always allow means every chat (ADR 0128): a class of step the person lifted in
+   * another chat before, or the third question of this turn. The answer goes into
+   * `preferences.autoAllowed`, where Settings → Security → Safety lists it.
+   */
+  everywhere?: boolean;
   /** The question's own check of a change the person made before allowing it (`AskRequest.edit`). */
   edit?: (proposed: MailEdit) => void;
 }
@@ -224,6 +235,10 @@ const AUTO_AFTER_READING =
 
 /** What Always allow on a second look's card lifts for the chat: second looks, not every command. */
 const LOOK_CLASS = 'risk:second-look';
+
+/** A command that throws away uncommitted changes: worth asking git whether there are any. */
+const DISCARDS =
+  /\bgit\b[^\n|;&]*\b(?:reset\s+(?:-\S+\s+)*--hard|clean\s+(?:-\S+\s+)*-\w*f|(?:checkout|restore)\s[^\n|;&]*(?:(?:^|\s)\.|:\/)(?=\s|$))/;
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
 export interface AskRequest {
@@ -985,8 +1000,16 @@ export class ConversationManager {
   constructor(
     private readonly deps: {
       store: ConversationStore;
-      /** Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. */
-      judged?: (verdict: 'went_ahead' | 'asked', risk?: string) => void;
+      /**
+       * Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. `lifted`: the
+       * rules would have asked after reading, and the second look saw it serves the request.
+       */
+      judged?: (verdict: 'went_ahead' | 'asked' | 'lifted', risk?: string) => void;
+      /**
+       * Which chats lifted each class of step with Always allow (ADR 0128), so a card for a
+       * class lifted in another chat before can offer it for every chat.
+       */
+      lifts?: AutoLifts;
       /** Resource admission for automatic recovery; manual chats remain available. */
       recovery?: {
         allowed: () => boolean;
@@ -2182,9 +2205,26 @@ export class ConversationManager {
     }
     const kept =
       decision === 'allow-always' && pending.remember
-        ? { tool: pending.toolName, ...(pending.waive && { waive: pending.waive }) }
+        ? {
+            tool: pending.toolName,
+            ...(pending.waive && { waive: pending.waive }),
+            ...(pending.everywhere && pending.waive && { everywhere: true }),
+          }
         : undefined;
     if (kept) keep(live, kept);
+    // A class of step lifted (ADR 0128): noted for the next chat's card, and, when the card
+    // said so, kept for every chat in the person's preferences.
+    if (kept?.waive?.startsWith('risk:')) {
+      const cls = kept.waive;
+      await this.deps.lifts?.note(cls, live.record.id).catch(() => undefined);
+      if (kept.everywhere) {
+        const { preferences } = await this.deps.settings.get();
+        if (!preferences.autoAllowed.includes(cls))
+          await this.deps.settings
+            .update({ preferences: { autoAllowed: [...preferences.autoAllowed, cls].slice(-200) } })
+            .catch(() => undefined);
+      }
+    }
     this.#append(live, {
       type: 'permission.resolved',
       permissionId,
@@ -2957,7 +2997,9 @@ export class ConversationManager {
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
-    const askUser = (
+    /** Questions Auto's policy asked this turn: the third one offers its class for every chat. */
+    let autoAsks = 0;
+    const askUser = async (
       request: AskRequest & {
         toolUseId?: string;
         remember: boolean;
@@ -2969,6 +3011,18 @@ export class ConversationManager {
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       const permissionId = newId('perm');
+      // A class of step (ADR 0128): lifted in another chat before, or the third question this
+      // turn, Always allow is offered for every chat, and the button says so.
+      const cls =
+        request.remember && request.waive?.startsWith('risk:') ? request.waive : undefined;
+      if (cls) autoAsks += 1;
+      const everywhere =
+        Boolean(cls) &&
+        (autoAsks >= 3 ||
+          (await this.deps.lifts?.seen(cls as string).catch(() => [] as string[]))?.some(
+            (id) => id !== live.record.id,
+          ) === true);
+      if (everywhere) this.deps.judged?.('asked', 'repeated');
       // The card's quiet line: where what it read came from, each place once, when that's
       // why it asks; any other reason (a skill's list, a risk) is short already.
       const caution = request.taint
@@ -2988,6 +3042,7 @@ export class ConversationManager {
           ...(request.toolUseId && { toolUseId: request.toolUseId }),
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
+          ...(everywhere && { everywhere: true }),
           ...(request.explicit && { explicit: true }),
           ...(request.edit && { edit: request.edit }),
         });
@@ -3030,6 +3085,7 @@ export class ConversationManager {
           ...(request.taint && { taint: request.taint }),
           ...(caution && { caution: caution.slice(0, 240) }),
           ...(request.waive && { lasting: true }),
+          ...(everywhere && { always: 'Always allow, in every chat' }),
           ...(request.once && { once: true }),
           ...(request.edit && { editable: true }),
           ...(step && { script: { runId: step.runId, step: step.step, title: step.title } }),
@@ -3069,6 +3125,36 @@ export class ConversationManager {
       return answer;
     };
 
+    /**
+     * Whether the repository a command would throw changes away in has anything to lose
+     * (ADR 0128): looked up once per folder per turn, only for such a command, so `git reset
+     * --hard` on a clean tree is nothing, before and after reading.
+     */
+    const cleanTrees = new Map<string, Promise<boolean | undefined>>();
+    const cleanFor = async (
+      input: Record<string, unknown>,
+    ): Promise<((dir?: string) => boolean | undefined) | undefined> => {
+      const command = typeof input.command === 'string' ? input.command : '';
+      if (!DISCARDS.test(command)) return undefined;
+      const dirs = new Set<string>([workspace]);
+      for (const m of command.matchAll(/\bgit\s+(?:-\S+\s+)*-C\s+("[^"]+"|'[^']+'|\S+)/g))
+        dirs.add(resolve(workspace, (m[1] ?? '').replace(/^["']|["']$/g, '')));
+      const known = new Map<string, boolean | undefined>();
+      for (const dir of dirs) {
+        let look = cleanTrees.get(dir);
+        if (!look) {
+          look = treeClean(dir);
+          cleanTrees.set(dir, look);
+        }
+        known.set(dir, await look);
+      }
+      return (dir) =>
+        known.get(dir ? resolve(workspace, dir.replace(/^["']|["']$/g, '')) : workspace);
+    };
+    /** A class of step the person lifted for every chat (ADR 0128), or for this one. */
+    const lifted = (cls: string) =>
+      live.waived.has(cls) || settings.preferences.autoAllowed.includes(cls);
+
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
       if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
       // The call asking, so its row can carry the answer; and what it read, as the tools see it.
@@ -3099,8 +3185,14 @@ export class ConversationManager {
         // Full trust: an app's Ask, and the words going to other people, go ahead (ADR 0100).
         if ((request.chosen || request.once) && trustAllows(mode, request.toolName)) return 'allow';
         if (mode === 'auto') {
-          // Auto stops only for something serious, and says what (ADR 0100).
-          const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
+          // Auto stops only for something serious, and says what (ADR 0100); not for what
+          // the person asked for in their own words (ADR 0128).
+          const risk = assessRisk(request.toolName, request.input, {
+            workspace,
+            ...access,
+            said: this.#yourWords(live),
+            treeClean: await cleanFor(request.input),
+          });
           if (riskAsks(risk, false)) {
             this.deps.judged?.('asked', risk?.kind);
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
@@ -3135,21 +3227,25 @@ export class ConversationManager {
           workspace,
           ...access,
           said: this.#yourWords(live),
+          treeClean: await cleanFor(request.input),
         });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
-        // A class the person already said Always allow to in this chat goes (ADR 0117,
-        // 2026-10-09), as for any command.
-        const flagged = risk && riskAsks(risk, true) && !live.waived.has(riskClass(risk));
-        let lift = flagged ? riskClass(risk) : undefined;
-        let why = flagged
-          ? risk.reason
-          : command && !live.waived.has(LOOK_CLASS)
-            ? await secondLook(
-                command,
-                request.input.dangerouslyDisableSandbox === true,
-                this.#tainted(live),
-              )
-            : undefined;
+        const unsealed = request.input.dangerouslyDisableSandbox === true;
+        // A class the person already said Always allow to, in this chat or every chat, goes
+        // (ADR 0117, ADR 0128), as for any command. A question asked only for what the chat
+        // read is lifted by a second look that sees routine work in service of the request.
+        let flagged = risk && riskAsks(risk, true) && !lifted(riskClass(risk));
+        if (flagged && risk && command && (await serves(command, unsealed, read, risk))) {
+          this.deps.judged?.('lifted', risk.kind);
+          flagged = false;
+        }
+        let lift = flagged && risk ? riskClass(risk) : undefined;
+        let why =
+          flagged && risk
+            ? risk.reason
+            : command && !lifted(LOOK_CLASS)
+              ? await secondLook(command, unsealed, this.#tainted(live))
+              : undefined;
         if (why && !flagged && command) lift = LOOK_CLASS;
         // Someone else's app: judged by what this step sends and does (ADR 0118). When nothing
         // could judge it (no small model to look), its own question stands, as before.
@@ -3488,25 +3584,47 @@ export class ConversationManager {
     };
 
     /** Each command's second look, once a turn (ADR 0100): it can only add a question. */
-    const looked = new Map<string, Promise<string | undefined>>();
-    const secondLook = (
+    const looked = new Map<string, Promise<CommandVerdict | undefined>>();
+    /** The second look's verdict on a command, once per command per turn. */
+    const judge = (command: string, read: readonly TaintSource[]) => {
+      if (!this.deps.riskLook) return Promise.resolve(undefined);
+      let look = looked.get(command);
+      if (!look) {
+        // Judged against what the person asked this turn, never against what was read.
+        look = judgeCommand(command, read, this.deps.riskLook, {
+          signal: abort.signal,
+          asked: this.#yourWords(live).slice(-2).join('\n'),
+        });
+        looked.set(command, look);
+      }
+      return look;
+    };
+    const secondLook = async (
       command: string,
       unsealed: boolean,
       read: readonly TaintSource[],
     ): Promise<string | undefined> => {
-      if (!this.deps.riskLook || !wantsSecondLook(command, unsealed))
-        return Promise.resolve(undefined);
-      const key = `${unsealed ? 1 : 0}:${command}`;
-      let look = looked.get(key);
-      if (!look) {
-        // Judged against what the person asked this turn, never against what was read.
-        look = lookAtCommand(command, read, this.deps.riskLook, {
-          signal: abort.signal,
-          asked: this.#yourWords(live).slice(-2).join('\n'),
-        });
-        looked.set(key, look);
-      }
-      return look;
+      if (!wantsSecondLook(command, unsealed)) return undefined;
+      const verdict = await judge(command, read);
+      return verdict?.risky ? verdict.words : undefined;
+    };
+    /**
+     * Whether a command the rules would ask about only because the chat read something is
+     * routine work in service of the request, by the second look (ADR 0128): it lifts the
+     * question, as Claude Code's classifier clears a soft block for work the person asked
+     * for. Never for a step that asks whatever was read, one the person said not to do, or
+     * when nothing could look.
+     */
+    const serves = async (
+      command: string,
+      unsealed: boolean,
+      read: readonly TaintSource[],
+      risk: Risk,
+    ): Promise<boolean> => {
+      if (!askable(risk) || risk.held || riskScore(risk, false) >= 3) return false;
+      void unsealed;
+      const verdict = await judge(command, read);
+      return verdict?.risky === false;
     };
 
     /**
@@ -3656,6 +3774,10 @@ export class ConversationManager {
           ...(app?.destructive && { destructive: true }),
           // What its change does with money is read for a tool known to change things.
           ...(app?.access && { access: app.access }),
+          // What the person asked for in their own words goes ahead (ADR 0128), in Auto; the
+          // modes below it ask before every change anyway.
+          ...(mode === 'auto' && { said: this.#yourWords(live) }),
+          treeClean: await cleanFor(request.input),
         });
         const allowed =
           risk?.kind === 'app-delete' &&
@@ -3723,6 +3845,7 @@ export class ConversationManager {
           ...(described?.access && { access: described.access }),
           // The person's own words: a push they asked for is the outcome (ADR 0117).
           said: this.#yourWords(live),
+          treeClean: await cleanFor(request.input),
         });
         const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =
@@ -3735,16 +3858,27 @@ export class ConversationManager {
           (/(?:WebFetch|web_fetch)$/.test(request.toolName) &&
             typeof request.input.url === 'string' &&
             !carriesData(request.input.url));
-        // A class the person already said Always allow to in this chat goes (ADR 0117,
-        // 2026-10-09): every unknown install, this kind of push. What asks whatever was read
-        // never reaches here.
-        const asks = risk && riskAsks(risk, true) && !live.waived.has(riskClass(risk));
-        const flagged = asks ? risk.reason : undefined;
-        if (asks) lift = riskClass(risk);
+        // A class the person already said Always allow to, in this chat or every chat, goes
+        // (ADR 0117, ADR 0128): every unknown install, this kind of push. What asks whatever
+        // was read never reaches here. A question asked only for what the chat read is
+        // lifted by a second look that sees routine work in service of the request.
+        let asks = risk && riskAsks(risk, true) && !lifted(riskClass(risk));
+        if (
+          asks &&
+          risk &&
+          command &&
+          typeof request.input.command === 'string' &&
+          (await serves(request.input.command, unsealed, tainted, risk))
+        ) {
+          this.deps.judged?.('lifted', risk.kind);
+          asks = false;
+        }
+        const flagged = asks && risk ? risk.reason : undefined;
+        if (asks && risk) lift = riskClass(risk);
         sink = flagged ?? (routine ? undefined : sink);
         // Nothing the rules know, but unusual and able to reach out: a small model looks too.
         if (!sink && command && typeof request.input.command === 'string') {
-          sink = live.waived.has(LOOK_CLASS)
+          sink = lifted(LOOK_CLASS)
             ? undefined
             : await secondLook(request.input.command, unsealed, tainted);
           if (sink) lift = LOOK_CLASS;

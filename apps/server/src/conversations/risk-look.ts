@@ -78,6 +78,34 @@ export async function lookAtCommand(
     asked?: string;
   } = {},
 ): Promise<string | undefined> {
+  const verdict = await judgeCommand(command, read, model, options);
+  return verdict?.risky ? verdict.words : undefined;
+}
+
+/** What a second look made of a command: risky, with the card's words, or not. */
+export interface CommandVerdict {
+  risky: boolean;
+  /** After "This would ", when risky. */
+  words?: string;
+}
+
+/**
+ * The second look's verdict on a command, as it is (ADR 0128): `risky` with the card's words,
+ * or not risky, meaning routine work in service of what the person asked; undefined when it
+ * couldn't look (no model, a timeout, an answer it can't read). A question the rules asked
+ * only because the chat had read something is lifted by "not risky", as Claude Code's second
+ * stage clears a soft block; a question that asks whatever was read never is.
+ */
+export async function judgeCommand(
+  command: string,
+  read: readonly TaintSource[],
+  model: (() => Promise<LookModel | undefined>) | undefined,
+  options: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    asked?: string;
+  } = {},
+): Promise<CommandVerdict | undefined> {
   if (!model) return undefined;
   try {
     const found = await model();
@@ -109,8 +137,8 @@ export async function lookAtCommand(
     const json = /\{[\s\S]*\}/.exec(answer.text)?.[0];
     if (!json) return undefined;
     const reply = Reply.safeParse(JSON.parse(json));
-    if (!reply.success || !reply.data.risky) return undefined;
-    return WORDS[reply.data.kind];
+    if (!reply.success) return undefined;
+    return reply.data.risky ? { risky: true, words: WORDS[reply.data.kind] } : { risky: false };
   } catch {
     return undefined;
   }

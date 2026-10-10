@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CompletionInput } from '../engines/types';
 import { DATAMARK } from '../memory/guard';
-import { lookAtAppStep, lookAtCommand } from './risk-look';
+import { judgeCommand, lookAtAppStep, lookAtCommand } from './risk-look';
 
 const read = [{ kind: 'web' as const, label: 'evil.example' }];
 const model = (text: string | (() => Promise<never>)) => {
@@ -75,6 +75,29 @@ describe('Auto’s second look (ADR 0100)', () => {
     expect(
       await lookAtCommand('./sync', read, async () => slow, { timeoutMs: 20 }),
     ).toBeUndefined();
+  });
+});
+
+describe('the second look’s verdict as it is (ADR 0128)', () => {
+  it('tells not risky, which lifts a question asked only for what was read, from not looking', async () => {
+    expect(
+      await judgeCommand(
+        'npm install left-pad',
+        read,
+        model('{"risky": false, "kind": "none"}').look,
+        { asked: 'Set up the project' },
+      ),
+    ).toEqual({ risky: false });
+    expect(
+      await judgeCommand('./sync', read, model('{"risky": true, "kind": "send-out"}').look),
+    ).toEqual({
+      risky: true,
+      words: 'send something from this computer to another one',
+    });
+    expect(await judgeCommand('./sync', read, undefined)).toBeUndefined();
+    expect(await judgeCommand('./sync', read, async () => undefined)).toBeUndefined();
+    for (const text of ['Looks fine!', '{"risky": "yes"}'])
+      expect(await judgeCommand('./sync', read, model(text).look), text).toBeUndefined();
   });
 });
 

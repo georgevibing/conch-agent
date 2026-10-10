@@ -5,7 +5,8 @@
  * way Codex, the ACP programs and the model APIs run Conch's tools, and
  * through the guard alone, the way Codex CLI and Claude Code ask.
  */
-import { mkdtemp } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,6 +26,7 @@ import type { Engine, EngineEvent, HostTool, TurnInput } from '../engines/types'
 import type { LookModel } from '../memory/guard';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
+import { AutoLifts } from './lifts';
 import { ConversationManager, type ToolProvider } from './manager';
 import { ConversationStore } from './store';
 import { sandboxSupport } from './sandbox';
@@ -135,6 +137,9 @@ async function run(
     look,
     text = 'Pull the latest conch codebase',
     answer = 'deny',
+    lifts,
+    prefs,
+    workspace,
   }: {
     read?: TaintSource;
     tools?: ToolProvider;
@@ -143,6 +148,12 @@ async function run(
     text?: string;
     /** How every question is answered. */
     answer?: 'deny' | 'allow-always';
+    /** Which chats lifted each class before (ADR 0128). */
+    lifts?: AutoLifts;
+    /** More of the person's preferences: classes lifted for every chat. */
+    prefs?: { autoAllowed?: string[] };
+    /** The work folder, when a test needs a real one (a git repository). */
+    workspace?: string;
   } = {},
 ) {
   const home = await mkdtemp(join(tmpdir(), 'conch-auto-'));
@@ -150,7 +161,13 @@ async function run(
   engine.steps = steps;
   const settings = new SettingsStore(home);
   await settings.update({
-    preferences: { engine: 'mock', autoTitle: false, permissionMode: mode },
+    preferences: {
+      engine: 'mock',
+      autoTitle: false,
+      permissionMode: mode,
+      ...prefs,
+      ...(workspace && { workspace }),
+    },
   });
   const complete = look ? vi.fn(look) : undefined;
   const manager = new ConversationManager({
@@ -160,6 +177,7 @@ async function run(
     engine: () => engine,
     ...(tools && { tools }),
     ...(complete && { riskLook: async () => ({ complete }) }),
+    ...(lifts && { lifts }),
   });
   const convo = await manager.send({
     clientMessageId: 'u1',
@@ -183,7 +201,15 @@ async function run(
       break;
     await new Promise((r) => setTimeout(r, 5));
   }
-  return { asked, outcomes: engine.outcomes, reach: engine.reaches[0], events, looks: complete };
+  return {
+    asked,
+    outcomes: engine.outcomes,
+    reach: engine.reaches[0],
+    events,
+    looks: complete,
+    settings,
+    home,
+  };
 }
 
 const web: TaintSource = { kind: 'web', label: 'evil.example' };
@@ -679,5 +705,145 @@ describe('Always allow lifts a class for the chat (ADR 0117, 2026-10-09)', () =>
     expect(outcomes).toEqual(['started', 'started', 'started']);
     expect(asked).toHaveLength(1);
     expect(asked[0]?.lasting).toBe(true);
+  });
+});
+
+describe('what the person asked for, in Auto (ADR 0128)', () => {
+  const page: TaintSource = { kind: 'web', label: 'evil.example' };
+
+  it('someone else’s systems ask before reading, and go when the person named the step', async () => {
+    const steps = [
+      unsealed('docker push registry.example.com/shop:latest'),
+      native('fly deploy'),
+      unsealed('git remote add mine https://github.com/ada/shop.git'),
+    ];
+    const unasked = await run('auto', steps, { text: 'Fix the failing build' });
+    expect(unasked.outcomes).toEqual(['declined', 'declined', 'declined']);
+    expect(unasked.asked.map((a) => a.taint)).toEqual([
+      expect.stringContaining('push an image to a registry'),
+      expect.stringContaining('deploy where people can reach it'),
+      expect.stringContaining('change where pushes go'),
+    ]);
+    const words =
+      'Push the image to the registry, deploy it with fly, and add a remote called mine at github.com/ada/shop';
+    const named = await run('auto', steps, { text: words });
+    expect(named.asked).toEqual([]);
+    expect(named.outcomes).toEqual(['ran', 'ran', 'ran']);
+    // After reading too: the person's words, not the page's.
+    const after = await run('auto', steps, { read: page, text: words });
+    expect(after.asked).toEqual([]);
+    expect(after.outcomes).toEqual(['ran', 'ran', 'ran']);
+  });
+
+  it('a boundary the person stated asks before reading, through every way of asking', async () => {
+    const { asked, outcomes } = await run(
+      'auto',
+      [unsealed('git push origin HEAD'), native('git push origin HEAD')],
+      { text: 'Fix the bug, but don’t push yet' },
+    );
+    expect(outcomes).toEqual(['declined', 'declined']);
+    expect(asked[0]?.taint).toContain('push code to a remote');
+  });
+
+  it('the second look lifts a question asked only for what was read, when the step serves the request', async () => {
+    const serves = async () => ({ text: '{"risky": false, "kind": "none"}' });
+    const risky = async () => ({ text: '{"risky": true, "kind": "unasked"}' });
+    const steps = [unsealed('npm install right-pad'), native('npm install right-pad')];
+    const lifted = await run('auto', steps, {
+      read: page,
+      text: 'Set up the project',
+      look: serves,
+    });
+    expect(lifted.asked).toEqual([]);
+    expect(lifted.outcomes).toEqual(['ran', 'ran']);
+    // Once per command per turn, for both ways of asking.
+    expect(lifted.looks).toHaveBeenCalledTimes(1);
+    const kept = await run('auto', steps, { read: page, text: 'Set up the project', look: risky });
+    expect(kept.outcomes).toEqual(['declined', 'declined']);
+    expect(kept.asked[0]?.taint).toContain('install right-pad');
+    // Nothing to look with: the question stands.
+    const blind = await run('auto', steps, { read: page, text: 'Set up the project' });
+    expect(blind.outcomes).toEqual(['declined', 'declined']);
+    // What asks whatever was read is never lifted this way, nor what the person said not to do.
+    const never = await run(
+      'auto',
+      [unsealed('pip install reqeusts'), unsealed('git push origin HEAD')],
+      { read: page, text: 'Set up the project, don’t push anything', look: serves },
+    );
+    expect(never.outcomes).toEqual(['declined', 'declined']);
+  });
+
+  it('throwing away changes asks only when there are any to lose', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'conch-repo-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-C', repo, ...args], { stdio: 'ignore' });
+    git('init', '-q');
+    git('config', 'user.email', 'ada@example.com');
+    git('config', 'user.name', 'Ada');
+    await writeFile(join(repo, 'a.txt'), 'one');
+    git('add', 'a.txt');
+    git('commit', '-q', '-m', 'one');
+    const clean = await run('auto', [unsealed('git reset --hard HEAD'), native('git clean -fdx')], {
+      read: page,
+      workspace: repo,
+    });
+    expect(clean.asked).toEqual([]);
+    expect(clean.outcomes).toEqual(['ran', 'ran']);
+    await writeFile(join(repo, 'a.txt'), 'two');
+    const dirty = await run('auto', [unsealed('git reset --hard HEAD')], {
+      read: page,
+      workspace: repo,
+    });
+    expect(dirty.outcomes).toEqual(['declined']);
+    expect(dirty.asked[0]?.taint).toContain('throw away changes that aren’t committed');
+  });
+
+  it('Always allow offers every chat for a class lifted in another chat before, and keeps it', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-lifts-'));
+    const lifts = new AutoLifts(home);
+    const first = await run('auto', [unsealed('npm install right-pad')], {
+      read: page,
+      answer: 'allow-always',
+      lifts,
+    });
+    expect(first.asked[0]?.always).toBeUndefined();
+    expect(first.asked[0]?.lasting).toBe(true);
+    expect(await lifts.seen('risk:install:moderate')).toHaveLength(1);
+    const second = await run('auto', [unsealed('pip install pdf-maker-utils-pro')], {
+      read: page,
+      answer: 'allow-always',
+      lifts,
+    });
+    expect(second.asked[0]?.always).toBe('Always allow, in every chat');
+    expect((await second.settings.get()).preferences.autoAllowed).toEqual([
+      'risk:install:moderate',
+    ]);
+    const resolved = second.events.find((e) => e.type === 'permission.resolved');
+    expect(resolved && 'kept' in resolved ? resolved.kept : undefined).toMatchObject({
+      everywhere: true,
+    });
+    // From then on, in any chat: no question. A push, another class, still asks.
+    const third = await run(
+      'auto',
+      [unsealed('npm install left-pad'), unsealed('git push origin HEAD')],
+      {
+        read: page,
+        prefs: { autoAllowed: ['risk:install:moderate'] },
+      },
+    );
+    expect(third.outcomes).toEqual(['ran', 'declined']);
+  });
+
+  it('the third question of one turn offers its class for every chat', async () => {
+    const { asked } = await run(
+      'auto',
+      [unsealed('npm install a-pad'), unsealed('npm install b-pad'), unsealed('npm install c-pad')],
+      { read: page },
+    );
+    expect(asked.map((a) => a.always)).toEqual([
+      undefined,
+      undefined,
+      'Always allow, in every chat',
+    ]);
   });
 });

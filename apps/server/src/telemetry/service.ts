@@ -277,8 +277,11 @@ export class TelemetryService {
     this.turns.observe(event);
   }
 
-  /** A step Auto judged (ADR 0117/0118): went ahead, or asked, and the risk that made it. */
-  auto(verdict: 'went_ahead' | 'asked', risk?: string): void {
+  /**
+   * A step Auto judged (ADR 0117/0118/0128): went ahead, asked, or lifted (the rules would
+   * have asked after reading; a second look saw it serves the request), and the risk that made it.
+   */
+  auto(verdict: 'went_ahead' | 'asked' | 'lifted', risk?: string): void {
     this.meter.add('conch.auto.judgements', 1, {
       'conch.verdict': verdict,
       'conch.risk': risk ?? 'none',

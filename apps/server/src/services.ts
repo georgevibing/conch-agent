@@ -135,6 +135,7 @@ import { linuxBrowserHome, ThisComputer } from './auth/here';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
+import { AutoLifts } from './conversations/lifts';
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
@@ -1196,6 +1197,8 @@ export class Services {
       memoryLook: () => cheapModel(this.providers.engine()),
       // Auto's second look at an unusual command after reading (ADR 0100): the same model.
       riskLook: () => cheapModel(this.providers.engine()),
+      // Which chats lifted each kind of step with Always allow (ADR 0128): the card offers it for every chat.
+      lifts: new AutoLifts(config.CONCH_HOME),
       // A new chat's title (ADR 0103): its own provider, else another with room, else this computer.
       titleModel: async (id) => {
         const picked = await this.#smallFor(id, 'plan');

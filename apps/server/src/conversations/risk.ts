@@ -36,7 +36,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { isRunScript } from '@conch/protocol';
 
-import { fromTooling, imitates, packageName, type Registry, wellKnown } from './packages';
+import { declared, fromTooling, imitates, packageName, type Registry, wellKnown } from './packages';
 
 export type RiskKind =
   /** Running code downloaded from the internet, or decoded from a blob. */
@@ -80,11 +80,31 @@ export interface Risk {
   /** No mode lifts it, Full trust included: a whole folder or disk gone (`breaksCircuit`). */
   critical?: boolean;
   /**
-   * The person asked for this very step in their own words this turn (ADR 0117, 2026-10-09):
-   * a plain push to the repository's own remote, or merging its pull request. What the chat
-   * read can't add the point that makes it ask; harm and lasting still count.
+   * What a person would say to ask for this very step (ADR 0128): the words that name the
+   * act, and the names (a branch, a package, a host, a path) their message must carry. A risk
+   * without one can't be asked for: keys leaving, a stranger's code, money, the circuit breaker.
+   */
+  wish?: Wish;
+  /**
+   * The person asked for this very step in their own words, in their latest message
+   * (ADR 0117, ADR 0128): a push, a deploy they named, a package they named. It goes ahead
+   * before and after reading, as Claude Code's auto mode clears a soft block the person
+   * named. It scores two at most.
    */
   asked?: boolean;
+  /**
+   * The person said not to, or not yet ("don't push", "wait before deploying"), and hasn't
+   * said otherwise since (ADR 0128): a boundary, so it asks before reading too.
+   */
+  held?: boolean;
+}
+
+/** What a person says to ask for a step: the verbs, and what their message must name. */
+export interface Wish {
+  /** Words that name the act, as a regular expression's source without anchors or flags. */
+  verbs: RegExp;
+  /** Each must be named in the message, if any: a branch, a package, a host, a path, or a shape of words. */
+  names?: readonly (string | RegExp)[];
 }
 
 export interface RiskContext {
@@ -102,19 +122,117 @@ export interface RiskContext {
   home?: string;
   /**
    * The person's own words, latest last, when a person is here and no one else's words are
-   * in the chat (ADR 0117, 2026-10-09). Only they can make a push `asked`; a page can't.
+   * in the chat (ADR 0117, 2026-10-09). Only they can make a step `asked`; a page can't.
    */
   said?: readonly string[];
+  /**
+   * Whether the repository a command would throw changes away in has nothing to lose: no
+   * staged, changed or untracked files (ADR 0128). Asked only for such a command, with the
+   * folder `git -C` names when it does; undefined when it can't be known.
+   */
+  treeClean?: (dir?: string) => boolean | undefined;
 }
 
 /**
- * The score: three or more asks (ADR 0100). A step the person asked for in their own words
- * doesn't take the point for what the chat read (ADR 0117, 2026-10-09).
+ * The score: three or more asks (ADR 0100). Harm (severe 2, moderate 1), lasting (1), what the
+ * chat read (1), and a boundary the person stated (1). A step the person asked for in their own
+ * words scores two at most (ADR 0128), so it goes ahead before and after reading; what can't be
+ * asked for (`wish` unset) keeps its score.
  */
 export function riskScore(risk: Risk, untrusted: boolean): number {
-  return (
-    (risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0) + (untrusted && !risk.asked ? 1 : 0)
+  const base = (risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0);
+  if (risk.asked) return Math.min(base, 2);
+  return base + (untrusted ? 1 : 0) + (risk.held ? 1 : 0);
+}
+
+/**
+ * Whether the person could lift this step by asking for it (ADR 0128): the risk has words to
+ * ask with, and the chat has read nothing that would make its score three on its own.
+ * `riskAsks(risk, true)` with this false asks on its own terms, whatever anyone says.
+ */
+export function askable(risk: Risk): boolean {
+  if (risk.critical || risk.wish === NEVER) return false;
+  return Boolean(risk.wish ?? WISHES[risk.kind]);
+}
+
+/** A step no words ask for: keys leaving, a stranger's code decoded from a blob, money. */
+export const NEVER: Wish = { verbs: /(?!)/ };
+
+/** The words that ask for each kind of step, when a rule names none of its own (ADR 0128). */
+const WISHES: Partial<Record<RiskKind, RegExp>> = {
+  history:
+    /\b(?:force[- ]?push|overwrite|rewrite|reset|discard|throw\s+away|revert|undo|start\s+(?:over|fresh|again)|scrap|drop|clear|stash|delete|remove|prune)\w*/,
+  egress:
+    /\b(?:send|post|upload|submit|put|patch|sync|copy|transfer|push|deploy|publish|share|call|hit|request|ssh|connect|run\s+(?:it\s+)?on)\w*/,
+  infra:
+    /\b(?:deploy|ship|release|roll\s*out|go\s+live|put\s+(?:it\s+)?(?:up|live|online)|apply|launch|publish|provision|create|destroy|tear\s+down|delete|remove|take\s+down|decommission|scale|restart|rollback|roll\s+back|migrat|drop|reset|wipe|truncate|recreate|grant|give|allow|share|secret|dns|record|certificate|cert|domain|merge|public|open[- ]source|protect|admin)\w*/,
+  publish:
+    /\b(?:publish|release|ship|push|upload|unpublish|deprecate|yank|take\s+(?:it\s+)?down|remove|tag)\w*/,
+  install:
+    /\b(?:install|add|use|need|try|with|set\s*up|get|bring\s+in|pull\s+in|update|upgrade|bump)\w*/,
+  wipe: /\b(?:delete|remove|rm|clean|clear|wipe|erase|get\s+rid|trash|tidy|prune|empty|reset|fresh)\w*/,
+  'app-delete':
+    /\b(?:delete|remove|trash|cancel|clear|get\s+rid|drop|archive|unsubscribe|decline|dismiss|erase|wipe|clean)\w*/,
+  disrupt:
+    /\b(?:restart|reboot|shut\s*down|power\s+off|kill|stop|quit|force[- ]quit|log\s*out|end)\w*/,
+  persistence:
+    /\b(?:schedule|cron|every\s+(?:day|hour|morning|night|week|minute|evening)|daily|hourly|weekly|nightly|at\s+login|on\s+(?:start|boot|login)|start\s*up|automatic|launch\s*agent|service|daemon|background|keep\s+(?:it\s+)?running|by\s+itself|hook|workflow|action|pipeline|ci\b|zshrc|bashrc|profile|shell|path|alias|dotfile)\w*/,
+  'safety-off':
+    /\b(?:disable|turn\s+off|switch\s+off|skip|bypass|unsafe|insecure|no[- ]verify|yolo|dangerously|without\s+(?:the\s+)?(?:check|sandbox|permission|verif|guard|protection)|allow\s+(?:any|all|unsigned)|quarantine|gatekeeper|firewall|defender|selinux|sip\b|certificate|ssl|tls|hook)\w*/,
+  privilege:
+    /\b(?:sudo|admin|administrator|root|superuser|elevat|as\s+super|permission|chmod|chown|owner|grant|give|allow|access|role|policy|iam|share|collaborator|protect|user|account|password|group|setuid)\w*/,
+  'remote-code':
+    /\b(?:install|run|set\s*up|use|get|execute|bootstrap|script|installer|curl|wget|pipe)\w*/,
+};
+
+/** A verb said not to, or not yet: "don't push", "wait before deploying", "without pushing". */
+function heldBack(verbs: RegExp): RegExp {
+  return new RegExp(
+    `\\b(?:don['’]?t|do\\s+not|never|without|not|no|wait|hold\\s+off|until|before|avoid|skip|leave|nicht|kein\\w*|nie)\\b[^.!?\\n]{0,40}(?:${verbs.source})`,
+    'i',
   );
+}
+
+const asked = (verbs: RegExp) => new RegExp(verbs.source, 'i');
+
+/** The person's message names this: as a whole word, not part of another. */
+function names(said: string, name: string | RegExp): boolean {
+  if (name instanceof RegExp) return new RegExp(name.source, 'i').test(said);
+  const last = said.toLowerCase();
+  const key = name.toLowerCase();
+  if (!key) return true;
+  let at = last.indexOf(key);
+  while (at >= 0) {
+    // A whole word: "main" isn't "main-fix", but "github.com/ada/shop" names github.com and
+    // "~/Documents/old-notes.txt" names old-notes.txt.
+    const before = last[at - 1] ?? ' ';
+    const after = last[at + key.length] ?? ' ';
+    if (!/[\w-]/.test(before) && !/[\w-]/.test(after)) return true;
+    at = last.indexOf(key, at + 1);
+  }
+  return false;
+}
+
+/**
+ * What the person's words say about this step (ADR 0128), the latest message that mentions it
+ * deciding: said not to, and not since, it's `held`; asked for in the latest message, with every
+ * name it needs, it's `asked`; otherwise neither. An older "push it" covers nothing now: an
+ * approval is one message, a boundary lasts until a later message about the same act.
+ */
+export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
+  const verbs = risk.wish?.verbs ?? WISHES[risk.kind];
+  if (!verbs || !said?.length || !askable(risk)) return risk;
+  const hold = heldBack(verbs);
+  const asks = asked(verbs);
+  for (let i = said.length - 1; i >= 0; i--) {
+    const message = said[i] ?? '';
+    if (!asks.test(message)) continue;
+    if (hold.test(message)) return { ...risk, held: true, asked: false };
+    if (i === said.length - 1 && (risk.wish?.names ?? []).every((name) => names(message, name)))
+      return { ...risk, asked: true };
+    return risk;
+  }
+  return risk;
 }
 
 /** What the card says (`GuardNote`): what it would do, and whether that can be put back. */
@@ -347,18 +465,34 @@ const WHOLE: Risk = {
   reason: 'delete a whole folder like your home, the work folder or the disk',
 };
 
-const severe = (kind: RiskKind, reason: string, lasting = true): Risk => ({
+const severe = (kind: RiskKind, reason: string, lasting = true, wish?: Wish): Risk => ({
   kind,
   harm: 'severe',
   lasting,
   reason,
+  ...(wish && { wish }),
 });
-const moderate = (kind: RiskKind, reason: string, lasting = true): Risk => ({
+const moderate = (kind: RiskKind, reason: string, lasting = true, wish?: Wish): Risk => ({
   kind,
   harm: 'moderate',
   lasting,
   reason,
+  ...(wish && { wish }),
 });
+/** The words to ask with, and what the message must name. */
+const wish = (verbs: RegExp, ...names: (string | RegExp | undefined)[]): Wish => ({
+  verbs,
+  names: names.filter((n): n is string | RegExp => Boolean(n)),
+});
+/** Production, as a person names it. */
+const PROD_WORDS = /\b(?:prod|production|live)\b/;
+/** The host an address names, for the person to name too. */
+function hostOf(word: string): string | undefined {
+  const m = /^(?:https?:\/\/|git@|ssh:\/\/|[\w.-]+@)?([\w.-]+\.[a-z]{2,})(?=[/:\s]|$)/i.exec(
+    word.replace(/^["']|["']$/g, ''),
+  );
+  return m?.[1]?.toLowerCase();
+}
 
 interface Places {
   workspace: string;
@@ -366,6 +500,7 @@ interface Places {
   scratch: string[];
   /** The person's own words (`RiskContext.said`). */
   said?: readonly string[];
+  treeClean?: RiskContext['treeClean'];
 }
 
 const inside = (root: string, path: string) => {
@@ -427,38 +562,32 @@ function rmRisk(words: string[], places: Places): Risk | undefined {
       )
     );
   });
-  if (outside && recursive) return severe('wipe', 'delete files outside the work folder for good');
-  if (outside) return moderate('wipe', 'delete a file outside the work folder for good');
+  // The person names what goes ("delete ~/Documents/old-notes.txt", "remove the old notes").
+  const named = targets
+    .map((t) => placeOf(t, places))
+    .filter((p): p is string => Boolean(p))
+    .map((p) => p.split(/[\\/]/).filter(Boolean).pop() ?? '')
+    .filter(Boolean);
+  const asks = wish(WISHES.wipe as RegExp, named[0]);
+  if (outside && recursive)
+    return severe('wipe', 'delete files outside the work folder for good', true, asks);
+  if (outside)
+    return moderate('wipe', 'delete a file outside the work folder for good', true, asks);
   return undefined;
 }
 
 /** Branches a push publishes or deploys from: pushed as asked only when the person names them. */
 const DEPLOY_BRANCH = /^(?:stable|production|prod|live|release(?:[/-].*)?|gh-pages)$/i;
 
-/** The person's words saying not to, or not yet: "don't push", "wait before pushing". */
-const HOLD_BACK =
-  /\b(?:don['’]?t|do\s+not|never|without|not|no|wait|hold\s+off|until|before|nicht|kein\w*|nie)\b[^.!?\n]{0,40}\b(?:push|merg)/i;
-const PUSH_WORDS = /\bpush(?:es|ed|ing|en|e)?\b/i;
+const PUSH_WORDS = /\bpush(?:es|ed|ing|en|e)?\b/;
 /** Merging a pull request is asked by "merge it", or by "push to main" when main takes PRs. */
-const MERGE_WORDS = /\bmerg\w*|\bpush\w*\b[^.!?\n]{0,30}\b(?:main|master|trunk)\b/i;
-
-/** The person's latest words ask for this, and don't hold it back. */
-function saysTo(said: readonly string[] | undefined, words: RegExp): boolean {
-  const last = said?.at(-1) ?? '';
-  return words.test(last) && !HOLD_BACK.test(last);
-}
-
-/** The person's latest words name this branch. */
-function names(said: readonly string[] | undefined, branch: string): boolean {
-  const last = (said?.at(-1) ?? '').toLowerCase();
-  const at = last.indexOf(branch.toLowerCase());
-  if (at < 0) return false;
-  const around = `${last[at - 1] ?? ' '}${last[at + branch.length] ?? ' '}`;
-  return !/[\w/-]/.test(around[0] ?? '') && !/[\w/-]/.test(around[1] ?? '');
-}
+const MERGE_WORDS = /\bmerg\w*|\bpush\w*\b[^.!?\n]{0,30}\b(?:main|master|trunk)\b/;
+/** Throwing away uncommitted changes, as a person says it. */
+const DISCARD_WORDS =
+  /\b(?:reset|discard|throw\s+away|revert|undo|start\s+(?:over|fresh|again)|scrap|clean|wipe|drop)\w*/;
 
 /** `git …`: force pushes, deleted branches, thrown-away work. */
-function gitRisk(words: string[], said?: readonly string[]): Risk | undefined {
+function gitRisk(words: string[], places: Places): Risk | undefined {
   // `git -C dir push …`: the subcommand after git's own options.
   let i = 1;
   while (i < words.length && (words[i] ?? '').startsWith('-'))
@@ -472,8 +601,23 @@ function gitRisk(words: string[], said?: readonly string[]): Risk | undefined {
     const plus = args.some((a) => a.startsWith('+'));
     const deleting =
       flags.some((f) => /^(?:--delete|-d)$/.test(f)) || args.some((a) => /^:/.test(a));
+    // A plain push to the repository's own remote (`origin`, or the one the branch tracks),
+    // asked for in the person's own words (ADR 0117, ADR 0128): the outcome they asked for,
+    // not a way out. A remote named or written out, a config override, or another program
+    // to receive it is still a way out, whatever they said; a publishing branch, a
+    // force-push or a deleted branch is theirs to name.
+    const own =
+      !words.slice(1, i).includes('-c') &&
+      !words.slice(1, i).some((w) => w.startsWith('--config-env')) &&
+      !flags.some((f) => /^--(?:repo|receive-pack|exec)(?:=|$)/.test(f)) &&
+      (args[0] === undefined || args[0] === 'origin');
     if (flags.includes('--mirror'))
-      return severe('history', 'mirror-push, replacing everything on the remote');
+      return severe(
+        'history',
+        'mirror-push, replacing everything on the remote',
+        true,
+        own ? wish(/\bmirror\w*/) : NEVER,
+      );
     const refs = args.slice(1).map((a) =>
       a
         .replace(/^\+|^:/, '')
@@ -483,86 +627,137 @@ function gitRisk(words: string[], said?: readonly string[]): Risk | undefined {
     );
     const named = refs.filter((r): r is string => Boolean(r));
     const shared = !named.length || named.some((r) => PROTECTED_BRANCH.test(r));
-    if (deleting)
+    if (deleting) {
+      const asks = own ? wish(/\b(?:delet|remov|drop|prune|clean)\w*/, named[0]) : NEVER;
       return shared
-        ? severe('history', `delete the ${named[0] ?? 'remote'} branch others rely on`)
-        : moderate('history', `delete the ${named[0] ?? 'remote'} branch`);
-    if (force || plus)
+        ? severe('history', `delete the ${named[0] ?? 'remote'} branch others rely on`, true, asks)
+        : moderate('history', `delete the ${named[0] ?? 'remote'} branch`, true, asks);
+    }
+    if (force || plus) {
+      const asks = own
+        ? wish(
+            /\bforce[- ]?push\w*|\bpush\w*\s+(?:--force|-f)\b|\boverwrit\w*|\brewrit\w*/,
+            named[0],
+          )
+        : NEVER;
       return shared
         ? severe(
             'history',
             named[0]
               ? `force-push over ${named[0]}, which rewrites history others share`
               : 'force-push, which rewrites history others may share',
+            true,
+            asks,
           )
-        : moderate('history', `force-push over ${named[0] ?? 'a branch'}`);
-    // A plain push to the repository's own remote (`origin`, or the one the branch tracks),
-    // asked for in the person's own words this turn (ADR 0117, 2026-10-09): the outcome they
-    // asked for, not a way out. A remote named or written out, a config override, another
-    // program to receive it, or a publishing branch they didn't name is still a way out.
-    const own =
-      !words.slice(1, i).includes('-c') &&
-      !words.slice(1, i).some((w) => w.startsWith('--config-env')) &&
-      !flags.some((f) => /^--(?:repo|receive-pack|exec)(?:=|$)/.test(f)) &&
-      (args[0] === undefined || args[0] === 'origin');
-    const asked =
-      own &&
-      saysTo(said, PUSH_WORDS) &&
-      named.filter((r) => DEPLOY_BRANCH.test(r)).every((r) => names(said, r));
-    return { ...moderate('egress', 'push code to a remote'), ...(asked && { asked: true }) };
+        : moderate('history', `force-push over ${named[0] ?? 'a branch'}`, true, asks);
+    }
+    return moderate(
+      'egress',
+      'push code to a remote',
+      true,
+      own ? wish(PUSH_WORDS, ...named.filter((r) => DEPLOY_BRANCH.test(r))) : NEVER,
+    );
   }
-  // Where pushes go: a new or repointed remote is a new way out (Claude Code asks too).
-  if (sub === 'remote' && /^(?:add|set-url|rename)$/.test(args[0] ?? ''))
-    return moderate('egress', 'change where pushes go');
+  // Where pushes go: a new or repointed remote is a new way out, before reading too, unless
+  // the person named it (Claude Code asks the same way).
+  if (sub === 'remote' && /^(?:add|set-url|rename)$/.test(args[0] ?? '')) {
+    const target = args.slice(1).map(hostOf).find(Boolean) ?? args[1];
+    return severe(
+      'egress',
+      'change where pushes go',
+      true,
+      wish(/\b(?:remote|point|set[- ]?url|origin|upstream|mirror|fork)\w*/, target),
+    );
+  }
+  // Throwing away changes that aren't committed: nothing to lose in a clean tree (ADR 0128),
+  // and Undo keeps the work folder's files, so it isn't lasting.
+  const dir = (() => {
+    const at = words.indexOf('-C');
+    return at > 0 && at < i ? words[at + 1] : undefined;
+  })();
+  const discards = (reason: string) =>
+    places.treeClean?.(dir) === true
+      ? undefined
+      : severe('history', reason, false, wish(DISCARD_WORDS));
   if (sub === 'reset' && flags.includes('--hard'))
-    return severe('history', 'throw away changes that aren’t committed', false);
+    return discards('throw away changes that aren’t committed');
   if (sub === 'clean' && flags.some((f) => /^-\w*f/.test(f)) && flags.some((f) => /[dxX]/.test(f)))
-    return severe('history', 'delete every file git doesn’t track', false);
+    return discards('delete every file git doesn’t track');
   if ((sub === 'checkout' || sub === 'restore') && rest.some((w) => w === '.' || w === ':/'))
-    return severe('history', 'throw away changes that aren’t committed', false);
+    return discards('throw away changes that aren’t committed');
   if (sub === 'stash' && /^(?:drop|clear)$/.test(args[0] ?? ''))
-    return moderate('history', 'throw away stashed changes');
+    return moderate(
+      'history',
+      'throw away stashed changes',
+      true,
+      wish(/\bstash\w*|\bdrop\w*|\bclear\w*|\bdiscard\w*/),
+    );
   if (sub === 'filter-branch' || sub === 'filter-repo')
-    return severe('history', 'rewrite the whole history of the repository', false);
+    return severe(
+      'history',
+      'rewrite the whole history of the repository',
+      false,
+      wish(/\brewrit\w*|\bpurg\w*|\bscrub\w*|\bfilter\w*|\bremov\w*\s[^.!?\n]{0,30}\bhistory\b/),
+    );
   if (sub === 'config' && rest.some((w) => /^core\.hooksPath$|^http\.sslVerify$/i.test(w)))
-    return moderate('safety-off', 'change how git runs hooks or checks certificates', false);
+    return moderate(
+      'safety-off',
+      'change how git runs hooks or checks certificates',
+      false,
+      wish(/\bhook\w*|\bssl\b|\bverif\w*|\bcertificate\w*/),
+    );
   return undefined;
 }
 
 /** Cloud, clusters, infrastructure as code, deploys and databases. */
-function infraRisk(
-  part: string,
-  prog: string,
-  words: string[],
-  said?: readonly string[],
-): Risk | undefined {
+/** Words that ask for a deploy or a change to infrastructure; production must be named too. */
+const DEPLOY_WORDS =
+  /\b(?:deploy|ship|release|roll\s*out|go\s+live|put\s+(?:it\s+)?(?:up|live|online)|apply|launch|publish|provision|update|upgrade|scale|promote|push\s+(?:it\s+)?(?:up|out|to))\w*/;
+const DESTROY_WORDS =
+  /\b(?:destroy|tear\s+down|delete|remove|take\s+down|decommission|drain|uninstall|roll\s*back|terminate|purge|nuke|clean\s*up|wipe|drop|reset|truncate|clear|recreate|start\s+fresh)\w*/;
+const GRANT_WORDS =
+  /\b(?:grant|give|allow|add|share|invite|permission|access|role|policy|binding|iam|collaborator|protect|public|open[- ]source)\w*/;
+
+/**
+ * Cloud, clusters, infrastructure as code, deploys and databases: someone else's systems, so
+ * a change asks before reading too, unless the person named it (ADR 0128); production must be
+ * named as such. Claude Code blocks the same by default and clears them by name.
+ */
+function infraRisk(part: string, prog: string, words: string[]): Risk | undefined {
   const sub = words.slice(1).join(' ');
   const prod = PROD.test(part);
+  const deploy = wish(DEPLOY_WORDS, prod ? PROD_WORDS : undefined);
+  const destroy = wish(DESTROY_WORDS, prod ? PROD_WORDS : undefined);
   if (/^(?:terraform|tofu|terragrunt|pulumi|cdk|cdktf|sst|serverless|sls)$/.test(prog)) {
     if (/\bdestroy\b|apply\b.*-destroy|\bstack\s+rm\b/.test(sub))
-      return severe('infra', 'tear down cloud infrastructure');
+      return severe('infra', 'tear down cloud infrastructure', true, destroy);
     if (/\b(?:apply|up|deploy|import|state\s+(?:rm|mv|push))\b/.test(sub))
       return prod
-        ? severe('infra', 'change production infrastructure')
-        : severe('infra', 'change cloud infrastructure', false);
+        ? severe('infra', 'change production infrastructure', true, deploy)
+        : severe('infra', 'change cloud infrastructure', true, deploy);
   }
   if (/^(?:kubectl|oc)$/.test(prog)) {
     if (/\b(?:delete|drain|cordon)\b/.test(sub))
-      return severe('infra', 'delete or drain things in a cluster');
+      return severe('infra', 'delete or drain things in a cluster', true, destroy);
     if (/\b(?:create\s+(?:cluster)?rolebinding)\b/.test(sub))
-      return severe('privilege', 'grant access in a cluster');
+      return severe('privilege', 'grant access in a cluster', true, wish(GRANT_WORDS));
     if (/\b(?:apply|create|replace|patch|scale|rollout|set|edit|annotate|label)\b/.test(sub))
       return prod
-        ? severe('infra', 'change a production cluster')
-        : severe('infra', 'change a cluster', false);
+        ? severe('infra', 'change a production cluster', true, deploy)
+        : severe('infra', 'change a cluster', true, deploy);
   }
   if (prog === 'helm') {
     if (/\b(?:uninstall|delete|rollback)\b/.test(sub))
-      return severe('infra', 'remove a release from a cluster');
+      return severe('infra', 'remove a release from a cluster', true, destroy);
     if (/\b(?:install|upgrade)\b/.test(sub))
       return prod
-        ? severe('infra', 'change a production cluster')
-        : severe('infra', 'change a cluster', false);
+        ? severe('infra', 'change a production cluster', true, deploy)
+        : severe(
+            'infra',
+            'change a cluster',
+            true,
+            wish(/\binstall\w*|\bupgrad\w*|\bdeploy\w*|\brelease\w*|\bupdat\w*|\broll\s*out\w*/),
+          );
   }
   if (/^(?:aws|gcloud|gsutil|az|doctl|linode-cli|hcloud|oci|ibmcloud|scw)$/.test(prog)) {
     if (
@@ -570,23 +765,28 @@ function infraRisk(
         sub,
       )
     )
-      return severe('privilege', 'grant access to cloud resources');
+      return severe('privilege', 'grant access to cloud resources', true, wish(GRANT_WORDS));
     if (
       /\b(?:secretsmanager\s+(?:put|create|update)|kms\s+(?:schedule-key-deletion|disable)|route53\s+change|dns\s+record-sets|acm\s+delete)/.test(
         sub,
       )
     )
-      return severe('infra', 'change secrets, DNS or certificates in the cloud');
+      return severe(
+        'infra',
+        'change secrets, DNS or certificates in the cloud',
+        true,
+        wish(/\bsecret\w*|\bdns\b|\brecord\w*|\bcertificate\w*|\bcert\b|\bdomain\w*|\bkey\w*/),
+      );
     if (
       /(?:^|\s)(?:delete|terminate|remove|deregister|purge|destroy|rb)(?:[-\s]|$)|[a-z]-(?:delete|terminate|remove|deregister|purge)(?:[-\s]|$)|\bdelete-\w|\bterminate-\w|\brm\b.*(?:-r|--recursive)|\b(?:rm|rb)\s+(?:-\w+\s+)*gs:\/\//.test(
         sub,
       )
     )
-      return severe('infra', 'delete cloud resources');
+      return severe('infra', 'delete cloud resources', true, destroy);
     if (/\b(?:deploy|update-function-code|update-service|create-deployment)\b/.test(sub))
       return prod
-        ? severe('infra', 'deploy to production')
-        : severe('infra', 'deploy to the cloud', false);
+        ? severe('infra', 'deploy to production', true, deploy)
+        : severe('infra', 'deploy to the cloud', true, deploy);
   }
   if (
     /^(?:vercel|netlify|fly|flyctl|firebase|heroku|wrangler|railway|render|eb|amplify|surge)$/.test(
@@ -594,58 +794,95 @@ function infraRisk(
     )
   ) {
     if (/\b(?:destroy|remove|rm|delete|apps:destroy|pg:reset|\w+:delete)\b/.test(sub))
-      return severe('infra', 'delete a deployed app or its data');
+      return severe('infra', 'delete a deployed app or its data', true, destroy);
     if (
       /\b(?:deploy|publish|up|release|promote)\b/.test(sub) ||
       prod ||
       (words.length === 1 && /^(?:vercel|surge)$/.test(prog))
     )
       return prod
-        ? severe('infra', 'deploy to production')
-        : severe('infra', 'deploy where people can reach it', false);
+        ? severe('infra', 'deploy to production', true, deploy)
+        : severe('infra', 'deploy where people can reach it', true, deploy);
   }
   if (prog === 'gh') {
     if (/\b(?:repo\s+delete|release\s+delete|secret\s+(?:set|delete)|variable\s+set)\b/.test(sub))
-      return severe('infra', 'delete a repository or change its secrets');
+      return severe(
+        'infra',
+        'delete a repository or change its secrets',
+        true,
+        wish(/\bdelet\w*|\bremov\w*|\bsecret\w*|\bvariable\w*/),
+      );
     if (
       /\brepo\s+(?:edit\b.*--visibility\s*=?\s*public|create\b.*--public)|gist\s+create\b.*--public/.test(
         sub,
       )
     )
-      return severe('publish', 'make a repository or gist public');
+      return severe(
+        'publish',
+        'make a repository or gist public',
+        true,
+        wish(/\bpublic\w*|\bopen[- ]sourc\w*/),
+      );
     if (
       /\bpr\s+merge\b.*--admin|\bapi\b.*(?:collaborators|branches\/[^/\s]+\/protection)/.test(sub)
     )
-      return severe('privilege', 'change who can push or what protects a branch');
-    if (/\brelease\s+create\b/.test(sub)) return severe('publish', 'publish a release');
+      return severe(
+        'privilege',
+        'change who can push or what protects a branch',
+        true,
+        wish(GRANT_WORDS),
+      );
+    if (/\brelease\s+create\b/.test(sub))
+      return severe(
+        'publish',
+        'publish a release',
+        true,
+        wish(/\brelease\w*|\bpublish\w*|\bship\w*|\btag\w*/),
+      );
+    // This repository's own pull request, merged because the person said so (ADR 0117).
     if (/\bpr\s+merge\b/.test(sub))
-      return {
-        ...moderate('egress', 'merge a pull request'),
-        // This repository's own pull request, merged because the person said so (ADR 0117).
-        ...(!/(?:^|\s)(?:-R|--repo)\b/.test(sub) && saysTo(said, MERGE_WORDS) && { asked: true }),
-      };
+      return moderate(
+        'egress',
+        'merge a pull request',
+        true,
+        /(?:^|\s)(?:-R|--repo)\b/.test(sub) ? NEVER : wish(MERGE_WORDS),
+      );
   }
   if (
     /^(?:supabase|prisma|rails|rake|alembic|knex|sequelize|flyway|liquibase|dbmate)$/.test(prog)
   ) {
     if (/\b(?:db\s+reset|migrate\s+reset|db:drop|db:reset|db:schema:load|drop)\b/.test(sub))
-      return severe('infra', 'wipe a database');
+      return severe('infra', 'wipe a database', true, destroy);
     if (/\b(?:migrate|db:migrate|upgrade|db\s+push)\b/.test(sub) && prod)
-      return severe('infra', 'change a production database');
+      return severe(
+        'infra',
+        'change a production database',
+        true,
+        wish(/\bmigrat\w*|\bupgrad\w*|\bupdat\w*|\bchang\w*|\bpush\w*/, PROD_WORDS),
+      );
   }
   if (
     /^(?:psql|mysql|mariadb|sqlite3|mongosh|mongo|redis-cli|cqlsh|clickhouse-client)$/.test(prog) ||
     /^(?:dropdb|dropuser)$/.test(prog)
   ) {
-    if (/^(?:dropdb|dropuser)$/.test(prog)) return severe('infra', 'delete a database');
+    if (/^(?:dropdb|dropuser)$/.test(prog))
+      return severe('infra', 'delete a database', true, destroy);
     if (
       /\b(?:DROP\s+(?:DATABASE|SCHEMA|TABLE|COLLECTION)|TRUNCATE\b|FLUSHALL|FLUSHDB|dropDatabase\s*\(|DELETE\s+FROM\s+[\w."`]+\s*(?:;|"|'|$))/i.test(
         part,
       )
     )
-      return severe('infra', 'delete data in a database');
+      return severe('infra', 'delete data in a database', true, destroy);
     if (prod && /\b(?:UPDATE|DELETE|INSERT|ALTER|CREATE|GRANT)\b/i.test(part))
-      return severe('infra', 'change a production database');
+      return severe(
+        'infra',
+        'change a production database',
+        true,
+        wish(
+          /\bupdat\w*|\bdelet\w*|\binsert\w*|\balter\w*|\bcreat\w*|\bgrant\w*|\bchang\w*|\bmigrat\w*|\brun\b/,
+          PROD_WORDS,
+        ),
+      );
   }
   return undefined;
 }
@@ -654,9 +891,12 @@ function infraRisk(
 function publishRisk(prog: string, words: string[]): Risk | undefined {
   const sub = words.slice(1).filter((w) => !w.startsWith('-'));
   if (words.includes('--dry-run')) return undefined;
+  const takeDown = wish(
+    /\bunpublish\w*|\bdeprecat\w*|\btake\s+(?:it\s+)?down|\bremov\w*|\byank\w*|\bpull\s+(?:it\s+)?(?:from|off)/,
+  );
   if (/^(?:npm|pnpm|yarn|bun)$/.test(prog)) {
     if (sub[0] === 'unpublish' || sub[0] === 'deprecate')
-      return severe('publish', 'take a published package down for everyone');
+      return severe('publish', 'take a published package down for everyone', true, takeDown);
     if (sub[0] === 'publish' || (sub[0] === 'npm' && sub[1] === 'publish'))
       return severe('publish', 'publish a package for everyone to install');
   }
@@ -673,8 +913,14 @@ function publishRisk(prog: string, words: string[]): Risk | undefined {
     (prog === 'uv' && sub[0] === 'publish')
   )
     return severe('publish', 'publish a package for everyone to install');
+  // An image for others to pull: before reading too, unless the person said to (ADR 0128).
   if (/^(?:docker|podman)$/.test(prog) && sub[0] === 'push')
-    return moderate('publish', 'push an image to a registry');
+    return severe(
+      'publish',
+      'push an image to a registry',
+      true,
+      wish(/\bpush\w*|\bpublish\w*|\bupload\w*|\brelease\w*|\bdeploy\w*|\bship\w*/),
+    );
   return undefined;
 }
 
@@ -801,8 +1047,15 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
     if (prog !== 'composer') registry = prog === 'gem' ? 'gem' : 'brew';
   } else if (prog === 'dotnet' && sub[0] === 'add' && sub.includes('package')) pkgs = named(2);
   if (!pkgs.length) return undefined;
+  const installs = WISHES.install as RegExp;
+  // The person named the address themselves ("install it from github.com/x/y"): theirs to ask.
   if (fromUrl(pkgs))
-    return severe('remote-code', 'install and run code straight from an address on the internet');
+    return severe(
+      'remote-code',
+      'install and run code straight from an address on the internet',
+      true,
+      wish(installs, pkgs.map(hostOf).find(Boolean) ?? pkgs[0]),
+    );
   const elsewhere = sub.some((w) => otherSource(registry, w));
   if (registry) {
     const at = registry;
@@ -813,22 +1066,38 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
         return severe(
           'install',
           `install ${name}, a name one slip away from the well-known ${known}, which a stranger could have registered to catch that slip`,
+          true,
+          NEVER,
         );
     }
-    if (elsewhere)
+    if (elsewhere) {
+      const source = sub.map(hostOf).find(Boolean);
       return severe(
         'install',
         `install ${names.slice(0, 2).join(' and ')} from somewhere other than its usual registry`,
         false,
+        wish(installs, names[0], source),
       );
-    const unknown = names.filter((name) => !wellKnown(at, name));
+    }
+    // Well known, or what the project itself declares (ADR 0128): routine, as Claude Code
+    // allows installs from the manifests.
+    const unknown = names.filter(
+      (name) => !wellKnown(at, name) && !declared(places.workspace, at, name),
+    );
     if (!unknown.length) return undefined;
     return moderate(
       'install',
       `install ${unknown.slice(0, 2).join(' and ')}, which isn’t a package I know well, and it runs its own code`,
+      true,
+      wish(installs, unknown[0]),
     );
   }
-  return moderate('install', `install ${pkgs.slice(0, 2).join(' and ')}, which runs its own code`);
+  return moderate(
+    'install',
+    `install ${pkgs.slice(0, 2).join(' and ')}, which runs its own code`,
+    true,
+    wish(installs, pkgs[0]),
+  );
 }
 
 /** Paths whose files run again by themselves later, or let someone in. */
@@ -852,10 +1121,13 @@ const SYSTEM =
 
 /** Writing to a path: what that means beyond the file itself. */
 function writeRisk(path: string): Risk | undefined {
-  if (ACCESS.test(path)) return severe('privilege', 'let someone sign in to this computer');
+  if (ACCESS.test(path))
+    return severe('privilege', 'let someone sign in to this computer', true, NEVER);
   if (SYSTEM.test(path)) return severe('privilege', 'change the computer’s own system files');
+  // An assistant's own permissions, raised by a file it writes: a way to more power that no
+  // words ask for, so it asks whatever was read (ADR 0128; Claude Code blocks the same).
   if (AGENT_CONFIG.test(path))
-    return severe('privilege', 'change what an assistant is allowed to do', false);
+    return severe('privilege', 'change what an assistant is allowed to do', true, NEVER);
   if (PERSISTENT.test(path))
     return severe('persistence', 'set something to run by itself later', false);
   if (HOOKS.test(path))
@@ -1015,7 +1287,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (prog !== 'net' || /\b(?:user|localgroup)\b/i.test(part))
       return severe('privilege', 'change who can use this computer or what they may do');
   }
-  if (prog === 'git') return gitRisk(words, places.said);
+  if (prog === 'git') return gitRisk(words, places);
   if (prog === 'csrutil' && /\bdisable\b/.test(part))
     return severe('safety-off', 'turn off your Mac’s system protection');
   if (prog === 'spctl' && /--(?:master|global)-disable|--disable\b/.test(part))
@@ -1086,14 +1358,18 @@ function partRisk(part: string, places: Places): Risk | undefined {
     )
   )
     return severe('credentials', 'read your keys or saved sign-ins');
+  // A tunnel the person asked for ("expose the dev server with ngrok") is theirs (ADR 0128).
+  const tunnel = wish(
+    /\btunnel\w*|\bexpos\w*|\bngrok\b|\bcloudflared\b|\bfunnel\b|\bforward\w*|\bshar\w*\s[^.!?\n]{0,30}\b(?:server|port|site|app)\b|\breachable\b|\bpublic(?:ly)?\s+(?:url|address|link)/,
+  );
   if (
     /^(?:ngrok|cloudflared|lt|localtunnel|bore|frpc|tailscale)$/.test(prog) &&
     /\b(?:http|tcp|tls|tunnel|local|funnel|start)\b|--port/.test(part)
   )
-    return severe('exfiltration', 'open this computer to the internet', false);
+    return severe('exfiltration', 'open this computer to the internet', false, tunnel);
   if (prog === 'ssh' && /\s-\w*R\b/.test(part))
-    return severe('exfiltration', 'open this computer to another one', false);
-  const infra = infraRisk(part, prog, words, places.said);
+    return severe('exfiltration', 'open this computer to another one', false, tunnel);
+  const infra = infraRisk(part, prog, words);
   if (infra) return infra;
   const publish = publishRisk(prog, words);
   if (publish) return publish;
@@ -1107,12 +1383,31 @@ function partRisk(part: string, places: Places): Risk | undefined {
       /\bcompose\b.*\bdown\b.*(?:\s-v\b|--volumes)/.test(part))
   )
     return moderate('wipe', 'delete the data a container kept, like a database’s');
+  // Where it goes, for the person to name ("post it to api.example.com", "copy it to the NAS").
+  const to = words
+    .slice(1)
+    .map((w) => {
+      const word = w.replace(/^["']|["']$/g, '');
+      const bucket = /^(?:s3|gs):\/\/([^/\s]+)/.exec(word)?.[1];
+      if (bucket) return bucket.toLowerCase();
+      if (/^https?:\/\//i.test(word)) return hostOf(word);
+      // `user@host:path`, as scp and rsync name it; a local file isn't a host.
+      const host = /^(?:[\w.-]+@)?([\w.-]+):/.exec(word)?.[1];
+      return host?.includes('.') ? host.toLowerCase() : undefined;
+    })
+    .find(Boolean);
+  const sends = wish(WISHES.egress as RegExp, to);
   if (NETWORK.test(prog)) {
     // What a command prints, put in an address or a name to look up: a way out for anything.
     if (/\$\(|`/.test(part))
-      return moderate('egress', 'send what a command printed to another computer');
+      return moderate('egress', 'send what a command printed to another computer', true, NEVER);
     if (words.some(carriesData))
-      return moderate('egress', 'send something in a web address that could carry what it read');
+      return moderate(
+        'egress',
+        'send something in a web address that could carry what it read',
+        true,
+        NEVER,
+      );
   }
   if (/^(?:curl|wget|http|https|xh|httpie)$/.test(prog)) {
     if (
@@ -1121,23 +1416,23 @@ function partRisk(part: string, places: Places): Risk | undefined {
       ) ||
       (/^(?:http|https|xh)$/.test(prog) && /^(?:POST|PUT|PATCH|DELETE)$/i.test(words[1] ?? ''))
     )
-      return moderate('egress', 'send data to an address on the internet');
+      return moderate('egress', 'send data to an address on the internet', true, sends);
   }
   if (
     /Invoke-(?:WebRequest|RestMethod)\b.*-Method\s+(?:Post|Put|Patch|Delete)|-InFile\b/i.test(part)
   )
-    return moderate('egress', 'send data to an address on the internet');
+    return moderate('egress', 'send data to an address on the internet', true, sends);
   if (/^(?:nc|ncat|netcat|socat|telnet)$/.test(prog))
-    return moderate('egress', 'open a raw connection to another computer');
+    return moderate('egress', 'open a raw connection to another computer', true, sends);
   if (
     /^(?:scp|sftp|rsync|rclone|lftp|ftp)$/.test(prog) &&
     /(?:^|\s)(?:[\w.-]+@)?[\w.-]+:(?!\/\/)|\s\w+:[^\s]*|s3:\/\/|gs:\/\//.test(part)
   )
-    return moderate('egress', 'copy files to another computer');
+    return moderate('egress', 'copy files to another computer', true, sends);
   if (prog === 'ssh' && words.filter((w) => !w.startsWith('-')).length >= 2)
-    return moderate('egress', 'run a command on another computer');
+    return moderate('egress', 'run a command on another computer', true, sends);
   if (/^(?:aws|gsutil|azcopy)$/.test(prog) && /\b(?:cp|sync|mv)\b.*(?:s3|gs|https):\/\//.test(part))
-    return moderate('egress', 'copy files to cloud storage');
+    return moderate('egress', 'copy files to cloud storage', true, sends);
   if (
     /^(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php)$/.test(prog) &&
     /\s-(?:c|e|r|E)\b|\seval\b/.test(part) &&
@@ -1145,7 +1440,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
       part,
     )
   )
-    return moderate('egress', 'send data out from a script');
+    return moderate('egress', 'send data out from a script', true, NEVER);
   return undefined;
 }
 
@@ -1166,11 +1461,14 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     home: context.home ?? homedir(),
     scratch: [tmpdir(), '/tmp', '/private/tmp', '/var/folders'].map((p) => resolve(p)),
     ...(context.said && { said: context.said }),
+    ...(context.treeClean && { treeClean: context.treeClean }),
   };
   const risks: (Risk | undefined)[] = [];
   for (const script of scriptsOf(command)) {
-    // Whole-line shapes: downloaded or decoded code handed straight to a shell.
-    if (
+    // Whole-line shapes: downloaded or decoded code handed straight to a shell. An installer
+    // the person named by its host ("install it with the script from brew.sh") is theirs to
+    // ask for (ADR 0128); code decoded from a blob is nobody's.
+    const downloaded =
       new RegExp(
         `${DOWNLOADER.source}${UNQUOTED_RUN}\\|\\s*(?:sudo\\s+(?:-\\S+\\s+)*)?(?:env\\s+)?(?:\\S*[\\\\/])?(?:(?:ba|z|da|k|fi)?sh|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh|powershell|iex|Invoke-Expression|osascript)(?=\\s*(?:$|[;&|)\\n])|\\s+-s\\b|\\s+-(?:\\s|$)|\\s+--(?:\\s|$))`,
         'i',
@@ -1186,18 +1484,28 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       ) ||
       /(?:^|[\s;&|])(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php)\s+-[ce]\s+["']?\$\(\s*(?:curl|wget)\b/.test(
         script,
-      ) ||
+      );
+    const decoded =
       /base64\s+(?:-d|--decode|-D)\b[^|;&]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python\d?|perl|node)\b/.test(
         script,
       ) ||
       /\|\s*base64\s+(?:-d|--decode|-D)\b[^|;&]*\|\s*(?:(?:ba|z|da|k)?sh|python\d?|perl|node)\b/.test(
         script,
       ) ||
-      /FromBase64String\([^)]{40,}\)/i.test(script)
-    )
+      /FromBase64String\([^)]{40,}\)/i.test(script);
+    if (downloaded || decoded) {
+      const host = [...script.matchAll(/https?:\/\/([^/\s"'`)]+)/gi)]
+        .map((m) => (m[1] ?? '').replace(/:\d+$/, '').toLowerCase())
+        .find(Boolean);
       risks.push(
-        severe('remote-code', 'run code downloaded from the internet without reading it first'),
+        severe(
+          'remote-code',
+          'run code downloaded from the internet without reading it first',
+          true,
+          decoded || !host ? NEVER : wish(WISHES['remote-code'] as RegExp, host),
+        ),
       );
+    }
     // Run as the computer's administrator, wherever in the line.
     if (
       /(?:^|[;&|\n(]\s*|\$\(\s*|`\s*)(?:sudo|doas|pkexec|gsudo|run0)\b/.test(script) ||
@@ -1252,7 +1560,9 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       if (path && !/^\/dev\//.test(path)) risks.push(writeRisk(path));
     }
   }
-  const risk = worst(risks);
+  // What the person's words say about each (ADR 0128), then the worst of them: of two alike,
+  // the one nobody asked for.
+  const risk = worst(risks.map((r) => (r ? wanted(r, places.said) : r)));
   // An asked-for push with keys added on the same line is keys leaving: it asks after reading.
   if (risk?.asked && commandParts(command).some((part) => addsSecrets(part, places)))
     return { ...risk, asked: false };
@@ -1461,10 +1771,11 @@ export function assessRisk(
     typeof args.command === 'string'
   )
     return commandRisk(args.command, context);
+  const said = (risk: Risk | undefined) => (risk ? wanted(risk, context.said) : undefined);
   if (FILE_WRITERS.has(toolName)) {
     const raw = String(args.file_path ?? args.notebook_path ?? '');
     const path = raw ? placeOf(raw, places) : undefined;
-    return path ? writeRisk(path) : undefined;
+    return said(path ? writeRisk(path) : undefined);
   }
   if (FILE_READERS.has(toolName)) {
     const raw = String(
@@ -1493,32 +1804,57 @@ export function assessRisk(
   // An app's step (your MCP apps, Conch's own Google, Slack and apps): what it deletes stays deleted.
   const app = /^mcp__(?!conch__)[a-z0-9_-]+?__(.+)$/.exec(toolName)?.[1];
   const step = app ?? (/^(?:google|slack|app)_/.test(bare) ? bare : '');
+  // The person's words lift an app's step too (ADR 0128): "delete the old entries", "send it
+  // to the team", "give Bo access". Money and keys are nobody's to ask for this way.
   if (context.destructive || DELETES.test(step))
-    return severe('app-delete', 'delete something in one of your apps');
+    return said(severe('app-delete', 'delete something in one of your apps'));
   // What an app's change does with money or other people, by what its tool is called
   // (ADR 0117). Only for a tool known to change things: `get_order` only looks.
   const tool = step.replace(/^app_[a-z0-9_]+?__/, '');
   if (context.access === 'write' && step && PAYS.test(tool))
-    return severe('spend', 'spend money in one of your apps');
+    return severe('spend', 'spend money in one of your apps', true, NEVER);
   if (context.access === 'write' && step && SPEAKS.test(tool))
-    return moderate('egress', 'send something to other people from one of your apps');
+    return said(
+      moderate(
+        'egress',
+        'send something to other people from one of your apps',
+        true,
+        wish(SPEAK_WORDS),
+      ),
+    );
   // Who can reach the person's things, and code run as they say (ADR 0118): after reading.
   if (context.access === 'write' && step && GRANTS.test(tool))
-    return moderate('privilege', 'change who can reach something in one of your apps');
+    return said(moderate('privilege', 'change who can reach something in one of your apps'));
   if (step && RUNS.test(tool))
-    return moderate('remote-code', 'run code it wrote in one of your apps');
+    return said(
+      moderate(
+        'remote-code',
+        'run code it wrote in one of your apps',
+        true,
+        wish(/\brun\w*|\bexecut\w*|\bscript\w*|\bcode\b|\bquer(?:y|ies)\b|\bsql\b/),
+      ),
+    );
   // A key, a token or an encoded blob sent to an app, read or change (ADR 0118): nothing a
   // lookup or an ordinary change needs, and the shape of a chat's secrets leaving it.
   const carried = step ? carriesSecrets(args) : undefined;
   if (carried === 'key')
-    return severe('exfiltration', 'send something that looks like a key or token to an app', false);
+    return severe(
+      'exfiltration',
+      'send something that looks like a key or token to an app',
+      false,
+      NEVER,
+    );
   if (carried === 'blob')
-    return severe('exfiltration', 'send a long block of encoded data to an app', false);
+    return severe('exfiltration', 'send a long block of encoded data to an app', false, NEVER);
   // A read that sends pages of text to the app's site: it could carry what was read.
   if (context.access === 'read' && step && wordsSent(args) > HEAVY_READ)
-    return moderate('egress', 'send a lot of text from this chat to an app’s website');
+    return moderate('egress', 'send a lot of text from this chat to an app’s website', true, NEVER);
   return undefined;
 }
+
+/** Speaking for the person to other people, as they ask for it. */
+const SPEAK_WORDS =
+  /\b(?:send|post|reply|share|invite|publish|email|mail|message|text|notify|comment|tweet|forward|announce|tell|let\s+\w+\s+know|respond|answer|broadcast|dm|ping|write\s+(?:to|back)|get\s+back\s+to)\w*/;
 
 /**
  * The circuit breaker no mode lifts, Full trust included (ADR 0100): deleting

@@ -336,7 +336,7 @@ describe('apps hosted by Conch', () => {
       host: { toolName: 'google_calendar_delete_event' },
       mode: 'auto',
     });
-    const convo = await manager.send({ clientMessageId: 'u1', text: 'delete the meeting' });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'tidy up my calendar' });
     const events = await eventsUntil(manager, convo.id, 'permission.requested');
     expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
       taint: expect.stringContaining('delete something in one of your apps'),
@@ -344,6 +344,17 @@ describe('apps hosted by Conch', () => {
     await answer(manager, convo.id);
     await eventsUntil(manager, convo.id, 'turn.completed');
     expect(call).not.toHaveBeenCalled();
+  });
+
+  it('Auto deletes in an app without a word when the person asked to (ADR 0128)', async () => {
+    const { manager, call } = await setup({
+      host: { toolName: 'google_calendar_delete_event' },
+      mode: 'auto',
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'delete the meeting' });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).toHaveBeenCalledOnce();
   });
 
   it('Full trust skips an app’s own Ask question', async () => {

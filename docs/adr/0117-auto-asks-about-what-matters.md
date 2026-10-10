@@ -3,7 +3,9 @@
 - Status: accepted; a stranger's app and apps over MCP amended by
   [ADR 0118](./0118-auto-judges-every-app-step.md) (judged by what each step does); amended
   2026-10-09 (a push the person asked for; reading is not a blanket: well-known installs, a
-  second look that judges relevance, Always allow by class)
+  second look that judges relevance, Always allow by class); `asked` generalised by
+  [ADR 0128](./0128-auto-reads-what-you-asked-for.md) (every kind of step the person names,
+  scoring two at most; a boundary they state; Always allow in every chat)
 - Date: 2026-10-08
 - Builds on: [ADR 0100](./0100-permission-modes-every-provider.md) (the ladder, Auto's
   risk policy, Full trust's irreducible list), [ADR 0028](./0028-safe-hands.md) (the guard

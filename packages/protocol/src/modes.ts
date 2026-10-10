@@ -84,3 +84,21 @@ export const ALL_MODES: readonly PermissionMode[] = [
   'auto',
   'bypassPermissions',
 ];
+
+/**
+ * A kind of step Auto never asks about again (ADR 0128), in a person's words,
+ * from the class the risk policy named on the card (`risk:<kind>:<reason>`,
+ * `risk:install:moderate`, `risk:second-look`): for Settings → Security →
+ * Safety and the restore preview. Said after "before it would".
+ */
+export function autoLiftWords(cls: string): string {
+  if (cls === 'risk:second-look') return 'do something a second check thought could be risky';
+  if (cls === 'risk:install:moderate') return 'install a package it doesn’t know well';
+  if (cls === 'risk:install:severe')
+    return 'install a package from somewhere other than its usual registry';
+  const reason = /^risk:[a-z-]+:(.+)$/.exec(cls)?.[1];
+  if (reason) return reason;
+  if (cls.startsWith('read:')) return `use ${cls.slice(5)} after reading something`;
+  if (cls.startsWith('box:')) return 'run a command outside the sealed box';
+  return cls;
+}

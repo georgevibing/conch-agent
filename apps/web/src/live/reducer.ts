@@ -147,6 +147,8 @@ export type TranscriptItem =
       taint?: string;
       /** Asked for a reason "Always allow" can lift (what it read, the sealed box). */
       lasting?: boolean;
+      /** The words on Always allow when it means every chat (ADR 0128). */
+      always?: string;
       /** Shows what goes to other people, so it's asked each time: no "always". */
       once?: boolean;
       /** The person may change it before allowing it (an email's words): the answer carries it. */
@@ -814,6 +816,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...(event.vault && { vault: event.vault }),
             ...(event.taint && { taint: event.taint }),
             ...((event.lasting || event.afterReading) && { lasting: true }),
+            ...(event.always && { always: event.always }),
             ...(event.once && { once: true }),
             ...(event.editable && { editable: true }),
             ...(event.script && { script: event.script }),

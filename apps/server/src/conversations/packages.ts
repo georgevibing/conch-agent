@@ -11,6 +11,9 @@
  * name missing from them isn't suspect, only asked about after reading, as before.
  */
 
+import { readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 export type Registry = 'pypi' | 'npm' | 'brew' | 'cargo' | 'gem' | 'go';
 
 const words = (text: string) => new Set(text.split(/\s+/).filter(Boolean));
@@ -209,4 +212,116 @@ export function imitates(registry: Registry, name: string): string | undefined {
     if (key.length >= 5 && known.length >= 5 && distance(key, known) === 1) return known;
   }
   return undefined;
+}
+
+// ── What the project itself declares ──────────────────────────────────────
+
+/** The manifests each registry's installs are declared in, at the work folder's root. */
+const MANIFESTS: Record<Registry, string[]> = {
+  npm: ['package.json'],
+  pypi: [
+    'pyproject.toml',
+    'requirements.txt',
+    'requirements-dev.txt',
+    'requirements/base.txt',
+    'requirements/dev.txt',
+    'Pipfile',
+    'setup.cfg',
+    'environment.yml',
+  ],
+  cargo: ['Cargo.toml'],
+  go: ['go.mod'],
+  gem: ['Gemfile'],
+  brew: ['Brewfile'],
+};
+
+/** The names a manifest declares, read once per change of the file. */
+const manifestCache = new Map<string, { mtimeMs: number; names: Set<string> }>();
+
+function namesIn(registry: Registry, file: string, text: string): string[] {
+  const names: string[] = [];
+  if (registry === 'npm') {
+    try {
+      const json = JSON.parse(text) as Record<string, unknown>;
+      for (const field of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ]) {
+        const deps = json[field];
+        if (deps && typeof deps === 'object') names.push(...Object.keys(deps));
+      }
+    } catch {
+      /* Not JSON: nothing declared. */
+    }
+    return names;
+  }
+  if (registry === 'go') {
+    for (const m of text.matchAll(/^\s*(?:require\s+)?([\w.-]+(?:\/[\w.~-]+)+)\s+v[\w.+-]+/gm))
+      if (m[1]) names.push(m[1]);
+    return names;
+  }
+  if (registry === 'gem') {
+    for (const m of text.matchAll(/^\s*gem\s+['"]([^'"]+)['"]/gm)) if (m[1]) names.push(m[1]);
+    return names;
+  }
+  if (registry === 'brew') {
+    for (const m of text.matchAll(/^\s*(?:brew|cask|tap)\s+['"]([^'"]+)['"]/gm))
+      if (m[1]) names.push(m[1].replace(/^.*\//, ''));
+    return names;
+  }
+  if (registry === 'cargo') {
+    for (const m of text.matchAll(/^\s*([A-Za-z0-9_-]+)\s*=\s*(?:"|\{)/gm))
+      if (m[1]) names.push(m[1]);
+    for (const m of text.matchAll(/^\s*\[dependencies\.([A-Za-z0-9_-]+)\]/gm))
+      if (m[1]) names.push(m[1]);
+    return names;
+  }
+  // PyPI: a requirements line, a pyproject or Pipfile entry, a conda `pip:` line.
+  if (/pyproject\.toml$|Pipfile$|setup\.cfg$/.test(file)) {
+    for (const m of text.matchAll(
+      /^\s*["']?([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*(?:[<>=!~;@ ]|["'],?\s*$)/gm,
+    ))
+      if (m[1]) names.push(m[1]);
+    for (const m of text.matchAll(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=\s*(?:"|\{|')/gm))
+      if (m[1]) names.push(m[1]);
+    return names;
+  }
+  for (const line of text.split('\n')) {
+    const m = /^\s*(?:-\s*)?([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*(?:[<>=!~;@#\s]|$)/.exec(
+      line,
+    );
+    if (m?.[1] && !/^(?:-|--|pip|python|dependencies|name|version)$/.test(m[1])) names.push(m[1]);
+  }
+  return names;
+}
+
+/**
+ * Whether the project in the work folder declares this package itself (ADR 0128): in its
+ * `package.json`, `pyproject.toml` or requirements, `Cargo.toml`, `go.mod`, `Gemfile` or
+ * `Brewfile`. Installing what the project lists is routine, as Claude Code's auto mode allows
+ * installs declared in the manifests. Read from the files, cached by their modification time.
+ */
+export function declared(workspace: string, registry: Registry, name: string): boolean {
+  const key = normal(registry, name);
+  for (const file of MANIFESTS[registry]) {
+    const path = join(workspace, file);
+    let names: Set<string> | undefined;
+    try {
+      const stat = statSync(path);
+      const cached = manifestCache.get(path);
+      if (cached && cached.mtimeMs === stat.mtimeMs) names = cached.names;
+      else {
+        names = new Set(
+          namesIn(registry, file, readFileSync(path, 'utf8')).map((n) => normal(registry, n)),
+        );
+        manifestCache.set(path, { mtimeMs: stat.mtimeMs, names });
+      }
+    } catch {
+      continue;
+    }
+    if (names.has(key)) return true;
+  }
+  return false;
 }

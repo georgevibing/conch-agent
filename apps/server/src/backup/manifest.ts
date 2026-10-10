@@ -282,6 +282,11 @@ export const RULES: readonly BackupRule[] = [
   },
   { match: 'terminal.json', class: 'kept', group: 'settings', why: 'The terminal’s settings.' },
   {
+    match: 'auto-lifts.json',
+    class: 'derived',
+    why: 'Which chats lifted a kind of step with Always allow (ADR 0128): the offer for every chat comes one chat later without it.',
+  },
+  {
     match: 'telemetry.json',
     class: 'kept',
     group: 'settings',

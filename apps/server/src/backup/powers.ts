@@ -11,7 +11,12 @@
  * even when something else about it is off. The names come from the file,
  * so they're cut to size, and the page shows them as text.
  */
-import { DASHBOARD_DESTINATIONS, POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
+import {
+  autoLiftWords,
+  DASHBOARD_DESTINATIONS,
+  POWER_TEXT_MAX,
+  type BackupPower,
+} from '@conch/protocol';
 
 import { DEFAULT_LEARNING_USD } from '../learning/spend';
 import { DEFAULT_MONTHLY_USD } from '../routines/spend';
@@ -180,6 +185,16 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
     powers.push({ kind: 'chats-go-ahead' });
   // A safety check off (ADR 0028, ADR 0087) isn't brought back quietly either.
   const prefs = record(settings?.preferences);
+  // Kinds of step the person told Auto never to ask about again (ADR 0128).
+  const lifted = (Array.isArray(prefs?.autoAllowed) ? prefs.autoAllowed : [])
+    .filter((cls): cls is string => typeof cls === 'string')
+    .map((cls) => text(autoLiftWords(cls), 'a kind of step'));
+  if (lifted.length)
+    powers.push({
+      kind: 'auto-never-asks',
+      steps: lifted.slice(0, MAX_LISTED),
+      more: Math.max(0, lifted.length - MAX_LISTED),
+    });
   const off = [
     ...(prefs?.checkAfterReading === false ? ['checking after it reads something'] : []),
     ...(prefs?.sealedCommands === false ? ['sealed commands'] : []),

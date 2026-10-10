@@ -481,12 +481,18 @@ for something serious: running downloaded code, reading your keys or sending the
 (an `.env`, every setting, a key folder) anywhere, deleting outside the work folder or
 a repository's history, force-pushing a shared branch, running as administrator,
 stopping the programs the computer runs on, changing its system files, production
-infrastructure, publishing, spending money. Once the chat reads something from
-outside it also asks before the ways something could leave (a push, a new package,
-data or a command's output sent out, an app's change); everyday commands still run.
-An unusual command that could reach out after reading gets a second look from a small
-model, which can only add a question and never writes the card's words. It is a
-careful reader, not a wall: the sealed box and protected paths are what hold.
+infrastructure, publishing, spending money, and changing someone else's systems (a deploy,
+a cluster, an image pushed to a registry, where pushes go) unless you asked for it. Once
+the chat reads something from outside it also asks before the ways something could
+leave (a push, a new package, data or a command's output sent out, an app's change);
+everyday commands still run. What you asked for in your own words goes ahead, before and
+after reading, when your message names the thing that makes it risky (the branch, the
+package, the host, production); what you said not to do holds until you say otherwise.
+Keys, code decoded from a blob, money, an assistant's own permission files and a whole
+folder ask whatever anyone says. An unusual command that could reach out after reading
+gets a second look from a small model, which adds a question or lifts one asked only for
+what was read, and never writes the card's words. It is a careful reader, not a wall:
+the sealed box and protected paths are what hold ([ADR 0128](./adr/0128-auto-reads-what-you-asked-for.md)).
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this
