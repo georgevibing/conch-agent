@@ -4,9 +4,9 @@ channel: signal
 
 ## Connect it
 
-Signal has no bots you can make, so Conch joins **your own Signal** as a linked device, the way Signal Desktop does. It talks to Signal through signal-cli, which Conch installs for you when it isn't there yet (on a Mac or Linux, with Homebrew; on Windows, Conch links to its download and installs Java for it).
+Signal has no bots, so Conch joins **your own Signal** as a linked device, like Signal Desktop. It uses signal-cli, which Conch installs if needed: with Homebrew on a Mac or Linux, and on Windows from signal-cli's download, with Java.
 
-In Conch, open **Apps**, choose **Talk to me here**, then **Signal**. A code is on the page at once.
+Open **Apps → Talk to me here → Signal**. A code is on the page at once.
 
 1. **Open Signal** on your phone.
 2. Tap your picture, then **Linked devices**.
@@ -14,20 +14,20 @@ In Conch, open **Apps**, choose **Talk to me here**, then **Signal**. A code is 
 
 <!-- conch:channel-scene signal link -->
 
-Scanning it is your hello: Conch knows the account is yours. A code nobody scans is replaced by itself, a few times, before the page offers **Show a new code**.
+Scanning it is your hello. A code nobody scans replaces itself a few times, then the page offers **Show a new code**.
 
 ## Talk to it in Note to Self
 
-Your assistant lives in **Note to Self**. Write there from your phone or any device; it answers there, and the conversation is also in Conch.
+Write in **Note to Self** from any device. Your assistant answers there, and the conversation is also in Conch.
 
 <!-- conch:channel-scene signal hello -->
 
-When it asks before doing something, the question ends with numbers: reply **1** to allow, **2** for always in this chat, **3** to not allow.
+To approve, reply **1** to allow, **2** for always in this chat, **3** to not allow.
 
 ## Good to know
 
-- **Your friends' chats stay yours.** Conch never reads or answers other people's chats with you, or your groups, unless you turn on **A number just for Conch** for a number used only by your assistant.
-- **signal-cli** is a long-standing open-source Signal client that Signal doesn't make. Your messages stay end-to-end encrypted; this computer becomes one of your linked devices.
-- **Pictures and files come back too.** A picture your assistant makes, or a file it finishes, arrives in Note to Self with its words, several in one message.
-- **It keeps going by itself.** If signal-cli stops, Conch starts it again. If it needs Java or signal-cli itself, the channel shows **Install**, and **Repair everything** does too.
-- **Disconnect** in Conch deletes its keys from this computer. Then remove Conch under **Linked devices** in Signal as well: Signal only lets the phone do that.
+- **Your friends' chats stay yours.** Conch never reads or answers other people's chats with you, or your groups. The exception is a number only your assistant uses, with **A number just for Conch** on.
+- **signal-cli** is a long-standing open-source client that Signal doesn't make. Messages stay end-to-end encrypted.
+- **Pictures and files come back** in Note to Self with their words, several in one message.
+- **It keeps going by itself.** If signal-cli stops, Conch restarts it. If Java or signal-cli is missing, the channel shows **Install**, and **Repair everything** installs it too.
+- **Disconnect** deletes Conch's keys from this computer. Then remove Conch under **Linked devices** on your phone. Only the phone can.

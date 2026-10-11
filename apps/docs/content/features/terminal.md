@@ -6,26 +6,12 @@ order: 6
 
 ## Commands your assistant keeps running
 
-For a build, test run or development server, your assistant can start a managed
-command, read its progress, send input and stop it. Each belongs to the chat
-that started it. Ask “What is still running?” or “Stop that server”.
+Your assistant can start a build, test run or server, read its output, send input and stop it. Each command belongs to its chat. Ask "What is still running?" or "Stop that server".
 
-Commands are sealed when this computer supports it and sealing is on. A command
-that needs the network can ask to run with your access. The approval says which
-way it runs. Never send passwords through command input.
-
-Conch adjusts how many commands can run to the computer’s available memory and
-CPU capacity, up to four across all chats and two in one chat. Extra commands
-wait in a bounded queue with a reason you can ask your assistant to read. You
-can stop a waiting command before it starts. Each command has a maximum lifetime
-of 30 minutes, including its time waiting.
-
-If memory stays under severe pressure, Conch stops one of its managed command
-trees and briefly holds new work to stay responsive. Its output remains available;
-Conch does not automatically repeat a stopped command, which may already have
-changed files or sent something. These protections reduce overload; they are not
-hard CPU or memory limits on individual programs.
-
-Conch keeps the latest 64,000 characters of output and says when older output
-has been dropped. Stopping or deleting the chat stops its command trees; closing
-Conch stops all managed commands. They do not resume after a restart.
+- Commands are sealed when this computer supports it. One that needs the network asks, and the approval says how it runs.
+- Never send passwords through command input.
+- Up to four run across all chats, two per chat, fewer when memory or the processor is busy. The rest wait, with a reason, and can be stopped before they start.
+- Each lasts at most 30 minutes, waiting included.
+- Under severe memory pressure, Conch stops one command and briefly holds new work. Its output stays, and it's never rerun by itself. This eases overload; it isn't a hard limit per program.
+- The latest 64,000 characters of output are kept.
+- Stopping or deleting the chat stops its commands; closing Conch stops all. None resume after a restart.

@@ -4,55 +4,69 @@ description: Replay any chat, routine run or task step by step, and save it as a
 order: 12.7
 ---
 
-Every chat keeps its steps: what you asked, what your assistant read, ran and changed, where it waited for you, and what each reply cost. **How it did it** puts them on one timeline you can scrub through and replay. Routine runs and tasks have one too, so you can see what happened while you weren't watching.
+**How it did it** puts a chat's steps on one timeline you can scrub and replay: what
+you asked, what your assistant read, ran and changed, where it waited, and what each
+reply cost. Routine runs and tasks have one too.
 
 ## Open it
 
-- In a chat, press the **How it did it** button at the top, next to **Find in chat**.
+- In a chat, press **How it did it** at the top, next to **Find in chat**.
 - On a phone, press **More** (the three dots), then **How it did it**.
-- Or press <kbd>mod+k</kbd> and type "replay" or "timeline".
-
-A routine's run and a task open as their own chat, so the same button works there.
+- Or <kbd>mod+k</kbd> and type "replay" or "timeline".
 
 ## Scrub and replay
 
-The bar across the top is the run, from your first message to the last reply. Each mark is a step. Its colour shows the kind of work, like reading, changing files or running tests. A diamond is a question it asked you, and red means something didn't work. Long waits, like the time between your messages, fold into a short break so the work itself stays readable.
+The bar runs from your first message to the last reply. Each mark is a step: its colour is the kind of work (reading, changing files, running tests), a
+diamond is a question it asked you, red means something didn't work. Long waits fold
+into a short break.
 
-- **Drag** along the bar, or use the arrow keys to go one step at a time. Page Up and Page Down jump a whole message at a time.
-- **Replay** plays it back one step at a time, with the pearl riding along the bar.
-- Below the bar is the step you're on: what it did, how long it took, and what it found. An edit shows the lines it changed, and a browser step shows the page as it was.
-- **Show in chat** closes the timeline and opens the chat right at that step.
+- **Drag** along the bar, or use the arrow keys, for one step at a time; Page Up and
+  Page Down jump a whole message.
+- **Replay** plays it back, the pearl riding the bar.
+- Below the bar: what the step did, how long it took and what it found. An edit shows
+  the changed lines; a browser step shows the page as it was.
+- **Show in chat** opens the chat there.
 
-The line above the bar adds up the work up to the step you're on: time spent, steps, tokens and money. At the end it says **In all**. While your assistant is still working, new steps appear as they happen.
+Above the bar: time, steps, tokens and money so far (**In all** at the end). New steps
+appear live.
 
 ## Save it as a file
 
-Press **Save it** at the bottom of the timeline to save that chat. To save many chats at once, press **Save as a file** on the **Activity** page (in the sidebar), or <kbd>mod+k</kbd> and **Save chats as a file**. Then choose how far back to go and, if you have more than one, which agent or provider. Routine runs and tasks are included unless you turn off **Routines and tasks too**.
+1. Choose what to save:
+   - one chat: **Save it** at the bottom of its timeline;
+   - many chats: **Save as a file** on **Activity**, or <kbd>mod+k</kbd> and **Save
+     chats as a file**. Choose how far back and, if you have several, which agent or
+     provider. Routine runs and tasks are included unless you turn off **Routines and
+     tasks too**.
+2. Under **Save it as**, choose a format:
+   - **A page to read**: every step, as a web page that runs and loads nothing.
+   - **Markdown**: the same, as plain text.
+   - **OpenAI chat, for training**: messages and tool calls, one chat per line, as
+     OpenAI's fine-tuning and many other tools take.
+   - **ShareGPT, as Hermes writes it**: Hermes Agent's training format, with each tool
+     call and result in the conversation.
+   - **ATIF, for agent research**: Harbor's trajectory format, with numbered steps,
+     tool calls, results, and tokens and cost per step.
+3. Press **Save**. It goes to Downloads, or press **Change** for another folder.
 
-Choose what to save it as:
-
-- **A page to read**: every step with what it found, as a web page that opens in any browser. It runs nothing and loads nothing from the internet.
-- **Markdown**: the same, as plain text for notes and documents.
-- **OpenAI chat, for training**: the messages and tool calls, one chat per line. This is the format OpenAI's fine-tuning and many other training tools take.
-- **ShareGPT, as Hermes writes it**: the format Hermes Agent saves for training, with each tool call and its result written into the conversation.
-- **ATIF, for agent research**: Harbor's trajectory format, with numbered steps, tool calls and their results, and tokens and cost for each step.
-
-Press **Save**. The file goes into your Downloads folder, or press **Change** to choose another folder. It never replaces a file that's already there: a second copy gets " 2" at the end of its name. It stays on this computer, because Conch never sends your chats anywhere.
+A second copy gets " 2" on its name instead of replacing the first. Conch never sends
+your chats anywhere.
 
 ## Keys and personal details come out
 
-**Take out keys and personal details** is on whenever you save. Before you save, Conch shows what it will take out, like "2 keys and tokens, 1 email address and 3 folder names". Press that line to see where each one was, written as it will be saved (`OPENAI_API_KEY=[key]`). The values themselves aren't shown there.
+**Take out keys and personal details** is on for every save, and first shows what goes ("2 keys and tokens, 1 email address and 3 folder names"). Press that line
+to see where each was, as it will be saved (`OPENAI_API_KEY=[key]`), without the values.
 
 It takes out:
 
-- the passwords and keys Conch keeps
-- anything shaped like a key or token
+- the passwords and keys Conch keeps, and anything shaped like a key or token
 - email addresses, phone numbers and card numbers
 - addresses of computers on the internet
 - your home folder's name
-- your name and the names of the people in [About you](./memory.md)
+- your name and the names of people in [About you](./memory.md)
 
 > [!WARNING]
-> This catches what it can recognise, not everything. Before you share a file, look through it for anything private, like a secret in an unusual shape, or a name you never added to About you.
+> This catches what it recognises, not everything. Before you share a file, look for
+> anything private, like a secret in an unusual shape or a name not in About you.
 
-Turn the switch off only for a file you keep for yourself. The next time you save, it's on again.
+Turn it off only for a file you keep. It's back on next time.

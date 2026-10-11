@@ -4,66 +4,63 @@ description: Conch says hello, asks your name and helps you connect a provider. 
 order: 2
 ---
 
-The first time you open Conch, it shows you three short screens. Everything on them can be skipped, and everything can be changed later in **Settings**.
+The first time you open Conch, it shows three short screens. You can skip anything and change it later in **Settings**.
 
 ## Hello, and your name
 
-Conch introduces itself and asks what to call you. Type your name and press <kbd>enter</kbd>, or just press **Let’s begin**. Conch uses your name to greet you.
+Type your name and press <kbd>enter</kbd>, or press **Let’s begin**. Conch greets you by it.
 
-Your first agent starts out as **Conch**, with a warm voice. You can give it another name, a face and a different voice in **Settings → Agents** whenever you like, and make more [agents](../features/agents.md) there too.
+Your first agent is **Conch**, with a warm voice. Change its name, face and voice, or make more [agents](../features/agents.md), in **Settings → Agents**.
 
 ## A mind to think with
 
-A provider is what answers: an assistant already on your computer, a model you hold a key for, or a model that runs right here. Conch finds what you have and puts it first.
+A provider is what answers: an assistant already on your computer, a model you hold a key for, or one that runs right here. Conch puts what you have first.
 
-1. Pick a provider. Not sure? [Compare them](../providers/index.md).
-2. Press its one button, like **Sign in**, **Add a key**, **Set up** or **Install**. Conch shows the exact command it runs, and carries on by itself when it's done.
+1. Pick one. Not sure? [Compare them](../providers/index.md).
+2. Press its button: **Sign in**, **Add a key**, **Set up** or **Install**. Conch shows the command it runs, and moves on once it works.
 
-Once one works, Conch moves on by itself. **Back**, at the top, returns to the screen before. **I’ll do this later** skips it for now. You can connect more at any time in **Settings → Providers**, and every connected one is in the model list at once.
+**Back**, at the top, returns a screen. **I’ll do this later** skips. Connect more in **Settings → Providers**; each appears in the model list at once.
 
 ## Somewhere to start
 
-Conch ends with three things you could ask first. Choose one and a chat opens with it typed in, ready to send or change. Or press **Open Conch** and start with anything.
+Conch offers three things to ask first. Choose one and a chat opens with it typed in, ready to send or change. Or press **Open Conch** and ask anything.
 
-To see the welcome again, use **Replay welcome** in **Settings → General**.
+**Replay welcome** in **Settings → General** shows the welcome again.
 
 ## What the new chat offers next
 
-The welcome doesn't stop for anything else. Under the box on a new chat, Conch offers what it can do for you next: one short tip at a time, each only until it's done. They come in this order:
+Under the box on a new chat, Conch shows one short tip at a time, each until it's done, in this order:
 
-1. **Connect Gmail, GitHub and more**: the [apps](../features/apps.md) you live in. You don't have to go looking: when an app would help in a chat, Conch offers it right there.
-2. **Bring your things from OpenClaw** (or Hermes), when Conch finds another assistant on your computer: [its agents, memories and the rest](../care/come-home.md), after you've looked at what would come over.
-3. **Bring in 1,284 past chats** (with your own count), when Conch finds conversations you had in other apps on this computer: [your past chats](../care/past-chats.md), to search and carry on here. Point at it to see which apps they're from.
-4. **Talk to it from your chat apps**: [your assistant on WhatsApp, Telegram and the rest](../channels/index.md).
+1. **Connect Gmail, GitHub and more**: the [apps](../features/apps.md) you use. Conch also offers one in a chat when it would help.
+2. **Bring your things from OpenClaw** (or Hermes), when it finds another assistant here: [its agents, memories and the rest](../care/come-home.md), after you've reviewed them.
+3. **Bring in 1,284 past chats** (your own count), when it finds conversations from other apps here: [your past chats](../care/past-chats.md), to search and carry on. Point at it to see which apps.
+4. **Talk to it from your chat apps**: [WhatsApp, Telegram and the rest](../channels/index.md).
 
-Not interested? Press the **×** beside a tip and it won't come back, on any of your devices. **Undo** brings it straight back. The next tip waits for your next new chat. To see every tip again, use **Show tips again** in **Settings → General**.
+**×** puts a tip away on all your devices; **Undo** brings it back. The next tip waits for your next new chat. **Show tips again** in **Settings → General** brings them all back.
 
 ## Say hello
 
-Type in the box and press <kbd>enter</kbd>. The answer flows in as it's written, under your agent's face and name, and anything it does (reading a file, running a command) appears as a step you can open.
+Type in the box and press <kbd>enter</kbd>. The answer flows in under your agent's face and name. Anything it does (reading a file, running a command) is a step you can open.
 
-When it wants to do something that matters, it asks, right in the chat, with one button to allow it and one to refuse.
+Before anything that matters, it asks in the chat, with buttons to allow or refuse.
 
 ## Three controls worth knowing
 
-**The Model · Mode chip**, under the message box. It reads like "Opus · Auto". Press it to choose the model from every provider you connected, how hard it should think, and, under **Mode**, how much your assistant may do without asking, from **Read only** to **Full trust**. A chat can move to another provider mid-way and keep its thread. [What each mode means](../reference/modes.md).
+**The Model · Mode chip** under the message box reads like "Opus · Auto". Press it to choose the model from any connected provider, how hard it thinks, and, under **Mode**, how much it may do without asking, from **Read only** to **Full trust** ([modes](../reference/modes.md)). A chat can switch provider mid-way and keep its thread.
 
-**Find anything**, with <kbd>mod+k</kbd>. One box for chats, messages, models, skills, apps and settings. Typos are fine.
+**Find anything** with <kbd>mod+k</kbd>: chats, messages, models, skills, apps and settings. Typos are fine.
 
-Type `/` to see every command, or read the [whole list](../reference/slash-commands.md).
+**Commands:** type `/` to see them all, or read the [list](../reference/slash-commands.md).
 
 ## Settings, kept short
 
-<kbd>mod+,</kbd> opens **Settings**. Each place is one short page, with everything it
-holds in sight. A place with a lot in it (**Access**, **Security**) keeps what almost
-nobody changes at its foot, under **Advanced**. Nothing is hidden: ⌘K finds a setting
-by name wherever it lives, and opens its place with **Advanced** already open.
+<kbd>mod+,</kbd> opens **Settings**, one short page per place. Busy places (**Access**, **Security**) keep rarely changed settings under **Advanced** at the foot. <kbd>mod+k</kbd> finds any setting by name and opens it, **Advanced** included.
 
 ## Where next
 
-- Make another agent, with a face and a voice of its own: [agents](../features/agents.md).
+- Another agent, with its own face and voice: [agents](../features/agents.md).
 - Take it with you: [Conch on your phone](./phone.md).
 - Let it use your tools: [connect an app](../features/apps.md).
 - Teach it something once: [skills](../features/skills.md).
-- Have it work while you're away: [routines](../features/routines.md) and [check-ins](../features/check-ins.md).
-- See what it can show you: [cards in the chat](../features/cards.md).
+- Work while you're away: [routines](../features/routines.md) and [check-ins](../features/check-ins.md).
+- What it can show you: [cards in the chat](../features/cards.md).

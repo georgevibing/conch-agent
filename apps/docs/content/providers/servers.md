@@ -9,20 +9,20 @@ after: lm-studio
 ## Add one
 
 1. Open **Settings → Providers** and choose **Another server**.
-2. Type its address: `localhost:8080`, `gpu-box:8000` or an `https://` address. Conch looks at it as you type and says what it found, like “llama.cpp, with 3 models”.
-3. Give it a name, and a key if it asks for one. Press **Add server**.
+2. Type its address: `localhost:8080`, `gpu-box:8000` or an `https://` address. Conch says what it found, like “llama.cpp, with 3 models”.
+3. Give it a name, and a key if it asks. Press **Add server**.
 
-Its models join the picker under the name you gave it. A server already running on this computer, on its usual port, is offered under **Found on this computer**: one press adds it.
+A server already running here on its usual port is offered under **Found on this computer**.
 
 ## Starting points
 
-The page offers the ones people add most: llama.cpp, vLLM, Jan and LiteLLM on your computer, and Together AI, Fireworks, Hugging Face, NVIDIA and Venice online. Choose one and its address is filled in.
+Choose llama.cpp, vLLM, Jan or LiteLLM on your computer, or Together AI, Fireworks, Hugging Face, NVIDIA or Venice online, and its address is filled in.
 
 ## Good to know
 
-- **Plain http stays at home.** It works on this computer and your own network, including your tailnet. Anywhere else, the address must be `https`, so your key and your chats never cross the internet in the clear.
-- **A key goes to that server only,** and is kept like every key in Conch.
-- **On this computer means offline too.** A server at `localhost` answers with no internet, and Conch can hand a chat to it when the internet drops.
-- **Ollama and LM Studio on this computer have their own cards.** If you type their address, Conch sends you there: they can do more through their own cards. One on another machine is added here like any server.
-- **Hugging Face and Venice need their key first.** They list their models to anyone, so Conch asks for the key before calling them ready.
-- **A backup names its servers.** Restoring a backup that adds a server shows it first, so an old or borrowed backup can’t quietly send your chats somewhere.
+- **Plain http stays at home:** this computer and your own network, tailnet included. Anywhere else needs `https`.
+- **A key goes to that server only.**
+- **A server at `localhost` answers offline,** and can take over a chat when the internet drops.
+- **Ollama and LM Studio here have their own cards,** which do more. Type their address and Conch sends you there. One on another machine is added here.
+- **Hugging Face and Venice need their key first** before Conch calls them ready.
+- **A backup names its servers.** Restoring one that adds a server shows it first.

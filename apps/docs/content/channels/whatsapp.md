@@ -4,7 +4,7 @@ channel: whatsapp
 
 ## Connect it
 
-WhatsApp has no bots you can make, so Conch joins **your own WhatsApp** as a linked device, the way WhatsApp Web does. In Conch, open **Apps**, choose **Talk to me here**, then **WhatsApp**. A code is on the page at once.
+WhatsApp has no bots, so Conch joins **your own WhatsApp** as a linked device, like WhatsApp Web. Open **Apps → Talk to me here → WhatsApp**. A code is on the page at once.
 
 1. **Open WhatsApp** on your phone.
 2. Tap **Settings** (on Android, **⋮**), then **Linked devices**.
@@ -12,29 +12,29 @@ WhatsApp has no bots you can make, so Conch joins **your own WhatsApp** as a lin
 
 <!-- conch:channel-scene whatsapp link -->
 
-That's all. The code changes by itself every minute or so, so there's nothing to press in Conch. Scanning it from your phone is your hello: Conch knows the account is yours.
+The code renews itself every minute or so. Scanning it is your hello.
 
-On a phone? A phone can't scan its own screen. Open Conch on your computer, or on another screen, and scan it there.
+On a phone? It can't scan its own screen. Open Conch on another screen and scan it there.
 
 ## Talk to it in Message yourself
 
-Your assistant lives in the chat with yourself (**Message yourself**, at the top of the list when you start a new chat). Write there from your phone or any device; it answers there, and the conversation is also in Conch.
+Write in **Message yourself** (at the top when you start a new chat) from any device. Your assistant answers there, and the conversation is also in Conch.
 
 <!-- conch:channel-scene whatsapp hello -->
 
-When it asks before doing something, the question ends with numbers: reply **1** to allow, **2** for always in this chat, **3** to not allow. Plain **yes** and **no** work too.
+To approve, reply **1** to allow, **2** for always in this chat, **3** to not allow, or **yes** or **no**.
 
 ## Your friends' chats stay yours
 
-- **Other people who write to you** are writing to you, not to your assistant. Conch never reads their chats and never answers them.
+- **Other people's chats** with you are never read or answered.
 - **Groups** never hear from your assistant.
-- **A number just for your assistant?** Turn on **A number just for Conch** on the channel's page. Then anyone else who writes to it gets one polite reply and waits for you to **Let them in**, like a bot.
+- **A number only for your assistant?** Turn on **A number just for Conch** on the channel's page. Anyone else gets one polite reply and waits for you to **Let them in** or **Block**.
 
 ## Good to know
 
-- **WhatsApp's terms allow only its own apps.** Conch links the way WhatsApp Web does, through Baileys, an unofficial open-source client. WhatsApp can restrict a number it thinks is automated. That's rare for a number only you use; if you couldn't do without yours, link a spare number instead.
-- **Your phone keeps its notifications.** Conch never says it's online, so WhatsApp keeps telling your phone about new messages.
-- **No history.** Conch reads what arrives from the moment it's linked, never your past chats.
-- **Pictures and files come back too.** A picture your assistant makes, or a file it finishes, arrives in Message yourself: pictures as photos with their words under them (up to 16 MB), anything else as a document.
-- **Unlinked on the phone?** The channel says so and shows **Show the code** to link it again. Linking a different number there is refused: connect that one as a new channel.
-- **Disconnect** in Conch takes Conch off your Linked devices too.
+- **WhatsApp's terms allow only its own apps.** Conch links through Baileys, an unofficial open-source client. WhatsApp can restrict a number it thinks is automated. That's rare for a number only you use. If you couldn't do without yours, link a spare number.
+- **Your phone keeps its notifications.** Conch never says it's online.
+- **No history.** Conch reads only what arrives after it's linked.
+- **Pictures and files come back** in Message yourself: pictures as photos with their words (up to 16 MB), anything else as a document.
+- **Unlinked on the phone?** The channel shows **Show the code** to link it again. A different number is refused: connect it as a new channel.
+- **Disconnect** in Conch removes it from your Linked devices too.

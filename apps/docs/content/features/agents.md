@@ -1,135 +1,132 @@
 ---
 title: Your agents
 nav: Agents
-description: Give your assistant a name, a face and a voice, or make several, each with its own instructions, and choose who answers each chat.
+description: Give your assistant a name, a face and a voice. Make several, each with its own instructions, and choose who answers each chat.
 order: 0.5
 ---
 
-Your assistant has a name, a face, a way of talking and things it always does. You can make more than one: a calm planner for trips, a candid reviewer for your code, a patient tutor for homework. Each one is an **agent**.
-
-Every agent is the same Conch underneath. They all know what Conch remembers about you, use the same apps, skills and providers, and follow the same safety settings. Only how they talk and what they focus on changes.
+An **agent** is your assistant's name, face, voice and standing instructions. Make several, like a calm trip planner or a candid code reviewer: the same Conch underneath, each with its own focus ([What they share](#what-they-share)).
 
 ## The one you start with
 
-Your first agent is there from the start, called **Conch**, with a warm voice. The welcome doesn't stop to ask about it. To make it yours, open **Settings → Agents** and press it: change its name, pick a face, and choose how it sounds. It says hello in that voice as you choose, and saves as you go. If you never make another agent, nothing else changes.
+Your first agent is **Conch**, with a warm voice. Press it in **Settings → Agents** to change its name, face and voice; it says hello in each voice as you choose.
 
 ## Make another
 
-1. Open **Settings → Agents**, under **Your assistant**, and press **New agent**. <kbd>mod+k</kbd> finds **New agent** too.
-2. Give it a **Name**, up to 40 characters. The dice, **Another name**, offers one with a face to match.
-3. Choose a **Face**. See [A face](#a-face).
+1. In **Settings → Agents**, under **Your assistant**, press **New agent** (or find it with <kbd>mod+k</kbd>).
+2. Give it a **Name**, up to 40 characters. The dice, **Another name**, suggests one with a matching face.
+3. Choose a **Face** ([A face](#a-face)).
 4. Choose **How it sounds**: **Warm**, **Concise**, **Playful**, **Precise**, **Calm**, **Formal** or **Candid**.
 5. Press **Create ‹name›**. It says **‹name› is ready**, with **Add instructions** and **Chat with ‹name›**.
 
 ## Its page
 
-Press an agent's face in **Settings → Agents** to open its page. Everything saves as you go: the page says **Saving…**, then **Saved**.
+Press an agent's face in **Settings → Agents**. It saves as you go (**Saving…**, then **Saved**).
 
-- **Name**, and **What it's for**: one line, like "Plans trips and keeps the bookings", shown when you choose an agent.
-- **Face**.
-- **Personality**: its tone, and **In your own words** for anything else, like "Dry humour, never gushes".
-- **Instructions**: what it always does, in every chat. "Answer in British English." "Give me two options, never one." **Start from** offers a starting point (**Coding**, **Research**, **Writing**, **Personal assistant** or **Tutor**) to change as you like; once it has instructions, it's **Start again from…**.
-- **Its chats start with**: turn on **A model and mode of ‹name›'s own** and its new chats start with that model and [permission mode](../reference/modes.md). **Full trust** is never one of them: you choose that for a chat yourself.
+- **Name**, **Face**, and **What it's for**: one line shown when you choose an agent, like "Plans trips and keeps the bookings".
+- **Personality**: its tone, plus **In your own words**, like "Dry humour, never gushes".
+- **Instructions**: what it does in every chat. **Start from** offers **Coding**, **Research**, **Writing**, **Personal assistant** or **Tutor**; once it has instructions, it's **Start again from…**.
+- **Its chats start with**: **A model and mode of ‹name›'s own** starts its new chats with that model and [permission mode](../reference/modes.md). **Full trust** is never offered; you choose that per chat.
 
-**Chat with ‹name›** starts a chat with it. **Make default** has new chats start with it. **Delete** removes it.
-
-A change counts from its next answer, in every chat it's in.
+**Chat with ‹name›**, **Make default** and **Delete** do what they say. Changes count from its next answer, in every chat.
 
 ## A face
 
-Every agent has a face. It's shown beside its name above every answer, in the pickers and in Settings.
+Shown above every answer, in pickers and in Settings.
 
-- **One of Conch's faces.** Eighteen of them: a shell, a fox, an owl, a moon, a little robot and more.
-- **Upload a picture.** It opens in **Frame the picture**: drag it, zoom, then press **Use this picture**. PNG, JPEG and WebP all work.
-- **Create with AI.** Say **What it looks like** ("a fox in a raincoat") and press **Create**. It only shows when one of your providers can make pictures: your ChatGPT plan first, then an OpenAI or Gemini key, then [OpenRouter](../providers/openrouter.md) (see [Make and edit pictures](./pictures.md)).
+- **One of Conch's faces.** Eighteen, like a fox or a little robot.
+- **Upload a picture.** PNG, JPEG or WebP. In **Frame the picture**, drag and zoom, then press **Use this picture**.
+- **Create with AI.** Describe **What it looks like** ("a fox in a raincoat") and press **Create**. Needs a provider that makes pictures: your ChatGPT plan first, then an OpenAI or Gemini key, then [OpenRouter](../providers/openrouter.md) ([pictures](./pictures.md)).
 
-**Where the pictures go.** A picture you upload stays on your computer, framed and shrunk, without what a camera writes into it, like where and when it was taken. **Create with AI** sends the service that makes it only the words you wrote, never your chats or memories, and the picture it sends back is kept the same way. Faces are part of every [backup](../care/backups.md).
+Uploads stay on your computer, framed, shrunk and stripped of camera details like place and time. **Create with AI** sends only your description. Faces are in every [backup](../care/backups.md).
 
 ## Who answers
 
-A new chat starts with your default agent. Above the message box, **Talking to ‹name›** says who; press it to choose another before you send. Its menu also has **New agent** and **Agents**.
+New chats start with your default agent, named in **Talking to ‹name›** above the message box. Press it to choose another; its menu also has **New agent** and **Agents**.
 
-In a chat, the name at the top says **‹name› answers this chat**. Press it to choose another under **Answer with**. On a phone it's **Answering: ‹name›**, in the **⋯** menu. You can also type `/agent` and a name.
-
-The new agent answers from your next message, and reads the whole chat first, so nothing is lost. A line in the chat marks where: **Atlas took over from Juniper**. Each answer is headed by a small line with the face and name of whoever wrote it, and the words below take the chat's full width.
+To switch mid-chat, press **‹name› answers this chat** at the top and choose under **Answer with** (on a phone, **Answering: ‹name›** in the **⋯** menu), or type `/agent` and a name. The new agent reads the whole chat and answers from your next message, marked by a line like **Atlas took over from Juniper**.
 
 In <kbd>mod+k</kbd>, type an agent's name for **New chat with ‹name›** or **Edit ‹name›**.
 
 ## Several agents in one chat
 
-Mention agents in a message and they take turns: "@Researcher find three options, @Writer draft an email about the best one". Type `@` in the message box to see who you can bring in, and press one to write its name.
+Mention agents (type `@` to pick) and they take turns: "@Researcher find three options, @Writer draft an email about the best one".
 
-- **The first one you name answers your message**, then the next. Each reads everything said before it.
-- **An agent can hand over** by writing `@` and another agent's name. That agent goes next.
-- **A card shows who's talking to whom**: every face in the chat, an arc each time one passes to another, and **‹name› is answering** with how many replies so far. Press **Stop** to end it. Once they're done, it folds to one line.
-- **Writing in the chat ends it.** Your message goes as soon as the reply that's running finishes.
-- **They stop by themselves for you** after 8 replies, after 3 from any one agent, when two keep handing it back and forth, or once the round has spent $1. The card says why. Your spending limits count too.
+- **The first one named answers first**, each reading everything before it. An agent hands over by writing `@` and another's name.
+- **A card shows who's talking to whom**: faces, an arc per handover, and **‹name› is answering** with the reply count. **Stop** ends it; when done, it folds to one line.
+- **Writing in the chat ends the round**, once the running reply finishes.
+- **They stop by themselves** after 8 replies, 3 from one agent, two agents handing back and forth, or $1 in the round, and the card says why. Your spending limits count too.
 
-Every agent in the chat works with the chat's own model, [permission mode](../reference/modes.md) and safety settings. Handing over can't change any of them. After the round, the last agent to speak answers your next message.
+All use the chat's model, [permission mode](../reference/modes.md) and safety settings; handing over can't change them. The last to speak answers your next message.
 
 ## Outside agents
 
-An outside agent lives somewhere else, on another computer or a service, and speaks **A2A**, the open protocol agents use to talk to each other. Another Conch can be one.
+An outside agent (on another computer, a service, another Conch) speaks **A2A**, the open protocol agents talk to each other with.
 
-1. Open **Settings → Agents**, and under **Outside agents**, paste its address into **Add an outside agent**. If it gave you a key, paste the two together. Another Conch gives you both in one copy.
-2. Conch reads who it is and shows it: its name, what it says it can do, and where it answers. Press **Add ‹name›**.
-3. Mention it in a chat, like your own agents: "@Travel Agent find flights to Lisbon on 3 May".
+1. In **Settings → Agents**, under **Outside agents**, paste its address (and any key; another Conch gives both in one copy) into **Add an outside agent**.
+2. Check its name, what it says it can do and where it answers, then press **Add ‹name›**.
+3. Mention it in a chat: "@Travel Agent find flights to Lisbon on 3 May".
 
-It's sent only the message you mention it in, nothing else from the chat. Your own agents can't send it anything: if one tries, the chat says only you can. What it answers appears under **Outside agent**, in a frame of its own. Your agents read it as someone else's words, never as instructions, and Conch is more careful for the rest of the chat, as it is after reading a web page (see [Auto](../reference/modes.md#auto)). An outside agent's row says if it didn't answer last time. **Repair everything** in **Settings → Health** tries it again. **Remove** forgets it and its key.
+- It gets only the message you mention it in. Your agents can't message it; if one tries, the chat says only you can.
+- Its answer appears framed under **Outside agent**, read by your agents as someone else's words, never as instructions.
+- Conch is more careful for the rest of the chat, as after reading a web page ([Auto](../reference/modes.md#auto)).
+
+Its row says if it didn't answer last time; **Repair everything** in **Settings → Health** retries. **Remove** forgets it and its key.
 
 ## Let another agent talk to yours
 
-Nobody else's agent can reach yours until you let it in.
+No one else's agent reaches yours until you let it in.
 
-1. Open **Settings → Agents**, and under **Agents that can talk to yours**, press **Let another agent in**.
-2. Say **Whose agent is it?**, tick which of your agents it may talk to, and, if it's on another computer, turn on **It's on another computer** (this needs [your own address](../start/server.md)).
-3. Press **Let it in** and confirm it's you. Copy **Its address and key** and give it to the other agent. It's shown once.
+1. In **Settings → Agents**, under **Agents that can talk to yours**, press **Let another agent in**.
+2. Fill in **Whose agent is it?** and tick which of your agents it may talk to. For one on another computer, turn on **It's on another computer** (needs [your own address](../start/server.md)).
+3. Press **Let it in** and confirm it's you. Copy **Its address and key**, shown once, and give it to the other agent.
 
-It gets your agent's name and voice, in words only. It can't use tools, your apps or anything Conch knows about you, never sees your instructions, and nothing it says can give your agent permission for anything. Each key can send a few messages a minute, and what its answers cost stops at $1 a day. **What it did** shows the conversation. **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
+- It gets words only, in your agent's name and voice: no tools, apps, instructions or anything Conch knows about you. Nothing it says grants a permission.
+- Each key sends a few messages a minute, and its answers cost at most $1 a day.
+- **What it did** shows the conversation; **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
 
 ## In chat apps
 
-In [Telegram, WhatsApp, Slack](../channels/index.md) and the others, send `/agent` to see your agents, the one answering ticked, and tap another (in an app without buttons, reply with its number). `/agent atlas` chooses by name. The choice stays for that chat app.
+In [Telegram, WhatsApp, Slack](../channels/index.md) and the others, send `/agent` to list your agents (the one answering ticked), then tap one or reply with its number; `/agent atlas` chooses by name. Or in Conch, open the chat app from **Apps** and press **Answered by** under **Settings**; **Default agent** follows your default. The choice stays for that chat app, from your next message.
 
-You can choose in Conch too: open the chat app from **Apps**, and under **Settings**, press **Answered by**. **Default agent** means whichever agent is your default. Either way, the other agent answers from your next message, and the page and the chat app always agree.
-
-Only you can change agents, in your private chat with Conch. A bot you [brought from OpenClaw or Hermes](../care/come-home.md) keeps answering as the agent it answered as there.
+Only you can change agents, in your private chat with Conch. A bot [brought from OpenClaw or Hermes](../care/come-home.md) keeps answering as the agent it was there.
 
 ## Tasks and routines
 
-- **A task** you [send to the background](./tasks.md) is done by the agent of the chat it came from.
-- **A routine** asked for in a chat is done by that chat's agent; one you make on the Routines page, by your default agent. **Answered by** in its editor chooses another, or **Default agent** for whichever is your default when it runs. Its results come in that agent's voice, here and in your chat apps. If its agent is deleted, the default agent takes over. See [Routines](./routines.md).
+- **A task** [sent to the background](./tasks.md), or **a routine** asked for in a chat, is done by that chat's agent.
+- **A routine** made on the Routines page uses your default. **Answered by** in its editor picks another, or **Default agent** for whichever is default when it runs. Results come in that agent's voice; if it's deleted, the default takes over. See [Routines](./routines.md).
 
 ## What they share
 
-Each agent has its own name, face, personality and instructions, and if you like a model and mode to start with. Everything else belongs to Conch, so every agent has it:
+Beyond its name, face, personality, instructions and starting model and mode, everything is shared:
 
-- **What Conch knows about you.** [Memory](./memory.md) and About you are shared. Tell one agent you're vegetarian and the others know too.
-- **Your apps, skills and providers.** Connect an app once and every agent can use it.
-- **Your chats.** Any agent can [look through earlier chats](./memory.md#your-earlier-chats), whoever was in them.
+- [Memory](./memory.md) and About you: tell one agent you're vegetarian and the others know.
+- Your apps, skills and providers.
+- Your chats: any agent can [look through earlier chats](./memory.md#your-earlier-chats), whoever was in them.
 
 ## What an agent can't change
 
-An agent's personality and instructions shape how it talks. They can't lift a permission, turn off a safety check, or make it skip asking you. Conch's own rules come first, whatever an agent's instructions say, and the assistant can't edit an agent itself.
+Personality and instructions can't lift a permission, turn off a safety check or skip asking you. Conch's rules come first, and the assistant can't edit an agent.
 
 ## Every agent keeps going
 
-Whichever you pick, an agent doesn't give up at the first error. When something fails, it works out why, tries another way, and checks the result before it tells you it's done. If it really can't, it says what it tried and the one thing it needs from you, in its own voice. See [how Conch works on a problem](./working-on-a-problem.md).
+On an error, an agent works out why, tries another way and checks the result. If it can't finish, it says what it tried and the one thing it needs from you ([how Conch works on a problem](./working-on-a-problem.md)).
 
 ## Bring them from OpenClaw or Hermes
 
-Your agents there come over with their names, faces (their picture, or one of Conch's that matches), personalities, instructions, models, which one was the default, and the bots they answered in. Bringing them again brings them up to date instead of making them twice. Instructions come over whole. If an earlier Conch kept only the start of an agent's instructions, Conch brings the rest in by itself. If you changed the file there since, the agent's page says **The end of its instructions stayed in OpenClaw**, with **Bring the rest in**. Only if the rest asks for keys or passwords, to send things away, or to turn safety checks off does **Take a look** open Come home to read it first. See [Coming from another assistant](../care/come-home.md#what-comes-over).
+Agents come over with names, faces (their picture or a matching Conch face), personalities, instructions, models, the default, and the bots they answered in. Bringing them again updates them.
+
+Instructions come over whole; if an earlier Conch kept only the start, Conch brings the rest in by itself. If you've changed the file there since, the agent's page says **The end of its instructions stayed in OpenClaw**, with **Bring the rest in**. If the rest asks for keys or passwords, sending things away or turning safety checks off, **Take a look** opens Come home so you read it first. See [Coming from another assistant](../care/come-home.md#what-comes-over).
 
 ## Order and delete
 
-Drag faces in **Settings → Agents** to put them in your order, the order every picker uses. Each face's menu, **More for ‹name›**, has **Edit**, **Make default**, **Move earlier**, **Move later** and **Delete**.
+Drag faces in **Settings → Agents** to order every picker. Each face's menu, **More for ‹name›**, has **Edit**, **Make default**, **Move earlier**, **Move later** and **Delete**.
 
-Deleting says **‹name› deleted**, with **Undo**. Its chats stay, and carry on with your default agent if you write in them. Memories stay too, since they were never only its own. Delete your default agent and the first in your order becomes the default. Your last agent can't be deleted: Conch always has someone to answer.
+Deleting says **‹name› deleted**, with **Undo**. Its chats continue with your default; memories stay. Delete your default and the first in your order takes over. Your last agent can't be deleted.
 
 ## Good to know
 
-- Up to 50 agents. A name is up to 40 characters, what it's for 120, its own words on personality 2,000, and its instructions 100,000.
-- Instructions are read before every answer, so long ones cost a little on every message. When yours are long, the page says so under them, with their size, and names the model if they crowd it. They're never cut.
-- A model that reads only a little at once (often one on this computer) may read just the start of very long instructions. The chat says so once, and the model knows to tell you when that might matter. A model that reads more gets them whole.
+- Up to 50 agents. Name 40 characters, what it's for 120, personality in your own words 2,000, instructions 100,000.
+- Instructions are read before every answer, so long ones cost a little each message; the page shows their size and names any model they crowd. They're never cut, but a model that reads little at once (often one on this computer) may see only the start. The chat says so once, and the model tells you when it matters.
 - Old links to **Settings → Personality** open **Settings → Agents**.
-- Agents are kept in `~/.conch/agents`: `agents.json`, their pictures in `avatars`, and outside agents in `outside.json`. Outside agents' keys are kept sealed in `~/.conch/a2a.secrets.json`, and come back only from a backup with a passphrase.
+- Agents live in `~/.conch/agents`: `agents.json`, pictures in `avatars`, outside agents in `outside.json`. Outside agents' keys are sealed in `~/.conch/a2a.secrets.json` and come back only from a backup with a passphrase.

@@ -5,151 +5,132 @@ description: Products, songs, videos, weather, recipes, places, prices, charts, 
 order: 18.5
 ---
 
-When the answer is something to look at, Conch shows it as a card in the chat instead
-of a paragraph. Ask the way you would ask a friend; the card appears under what Conch
-did, and the reply adds only what you asked: which one to pick, and why.
-
-Every card works with every provider you connected.
+When the answer is something to look at, Conch shows a card instead of a paragraph.
+The reply adds only which one to pick, and why. Cards work with every provider.
 
 ## Shopping
 
-"Find me a gooseneck kettle under €100." Conch searches, reads the shop pages and
-shows a **shelf** of products: photo, price (a struck-through old price and the
-discount when there is one), stars, whether it's in stock, and the shop.
+"Find me a gooseneck kettle under €100" shows a **shelf**: photo, price (with old price
+and discount), stars, stock and shop.
 
-- Press a photo to see all of its pictures.
-- Press the heart to keep one on your shortlist for this session.
-- Choose **Compare** and pick two or three to see them side by side; the best in each
-  row is marked, in words too.
-- **Ask about this** puts a question in the message box. Nothing is sent until you send it.
+- Press a photo for all its pictures; the heart shortlists it for this session.
+- **Compare** two or three side by side. The best in each row is marked, in words too.
+- **Ask about this** puts a question in the message box, unsent.
 
 ## Music and podcasts
 
-"Play Bohemian Rhapsody." Conch finds it in Apple's catalogue and shows the cover with
-a player. Press play to hear the preview; drag the bar or use <kbd>←</kbd> and
-<kbd>→</kbd> to move through it. Several results are a track list.
+"Play Bohemian Rhapsody" shows the cover from Apple's catalogue and plays a preview;
+drag the bar or use <kbd>←</kbd> and <kbd>→</kbd>. Several results make a track list.
 
-Podcasts play whole episodes, with 15-second and 30-second skips and speeds up to 2×.
-Only one thing plays at a time. Scroll away and a small player stays at the bottom of
-the chat; your keyboard's media keys work too. Links open the same song in Apple
-Music, Spotify or YouTube Music.
+- Podcasts play whole episodes, with 15- and 30-second skips and up to 2×.
+- One thing plays at a time; scrolled away, a small player stays at the bottom. Media
+  keys work.
+- Links open the song in Apple Music, Spotify or YouTube Music.
 
 ## Videos
 
-"Show me how to shape sourdough." Conch finds videos on YouTube or Vimeo and shows the
-first one large, with the rest beside it. Press play and it plays right there. **Theater**
-makes it as wide as the chat (<kbd>Esc</kbd> leaves), and full screen works too.
-
-Nothing loads from YouTube or Vimeo until you press play.
+"How to shape sourdough" shows YouTube or Vimeo results that play in the chat. **Theater** fills the chat's width (<kbd>Esc</kbd> leaves);
+full screen works too. Nothing loads from YouTube or Vimeo until you press play.
 
 ## Weather
 
-"Will it rain in Lisbon tomorrow?" The card shows the sky as it is there now, the
-temperature, the next 24 hours and up to 10 days. Drag along the hours (or use the
-arrow keys) to see any hour; let go and it returns to now. UV, air quality, wind,
-sunrise and sunset are there too, each in words as well as colour.
+"Will it rain in Lisbon tomorrow?" shows the sky now, the temperature, the next 24
+hours and up to 10 days, plus UV, air quality, wind, sunrise and sunset, in words as
+well as colour. Drag along the hours (or use the arrow keys); let go and it returns to
+now.
 
-The switch at the bottom shows it in **°C** (with km/h and mm) or **°F** (with mph and
-inches). Conch starts with the one used in your time zone, and this browser remembers
-what you choose for every weather card after.
+The switch at the bottom picks **°C** (km/h, mm) or **°F** (mph, inches). It starts
+with your time zone's and this browser remembers your choice.
 
 ## Recipes
 
-"A recipe for tomato rice." The card has the photo, the times and how many it serves.
+"A recipe for tomato rice" shows the photo, times and servings.
 
-- Press **−** and **+** to change the servings; every amount changes with it.
+- **−** and **+** change the servings; every amount follows.
 - Tick ingredients off as you go.
-- Times in the steps ("simmer for 20 minutes") are timers: press one to start it. It
-  keeps running while you scroll, and chimes when it's done.
-- **Cook mode** shows one step at a time in large type, with its ingredients and your
-  timers, and keeps the screen awake while it's open.
+- Times in the steps ("simmer for 20 minutes") are timers that keep running and chime.
+- **Cook** shows one step at a time in large type, with its ingredients and timers, and
+  keeps the screen awake.
 
 ## Places
 
-"Coffee near the Louvre." The card shows a map with numbered pins and a list: what each
-place is, how far, and whether it's open now. Pressing a place in the list or on the map
-shows its address, hours, phone and website, with **Directions** in Apple Maps, Google
-Maps or OpenStreetMap. Drag the map to move it, and zoom with the buttons, a pinch or
-<kbd>+</kbd> and <kbd>−</kbd>.
+"Coffee near the Louvre" shows a map with numbered pins and a list: what each place is,
+how far, and whether it's open.
 
-"How far is Brighton from London?" shows both, and the distance as the crow flies.
+- Press a place for its address, hours, phone and website.
+- **Directions** opens Apple Maps, Google Maps or OpenStreetMap.
+- Drag to move; zoom with the buttons, a pinch, or <kbd>+</kbd> and <kbd>−</kbd>.
+
+"How far is Brighton from London?" shows both and the distance as the crow flies.
 
 ## Share prices and companies
 
-"What's Apple at?" The card shows the price, how much it moved today (in words as well
-as colour), and a chart of the last month. Drag along the chart, or use the arrow keys,
-to see the price on any day and how far it moved since the start; let go and it returns
-to the latest. **1W** to **5Y** change the range. Below are the day's range, the open,
-the previous close, volume and market value.
+"What's Apple at?" shows the price, today's move (in words as well as colour) and a
+month's chart; drag along it, or use the arrow keys, for any day. **1W** to **5Y** change the range. Below: day's range, open, previous
+close, volume and market value.
 
-- **Several at once**: "AAPL, MSFT and NVDA" shows a row of them; choose one to see it large.
-- **Compare**: "Compare Apple and Microsoft" draws them on one chart, each as the change
-  since the start of the range, with a table of who moved most.
-- **How a company is doing**: revenue, profit, margins and earnings per share from its
-  filings with the SEC, year by year or quarter by quarter, side by side for up to four
-  companies. Press a figure to see which filing it came from.
+- **Several at once**: "AAPL, MSFT and NVDA" shows a row; choose one to see it large.
+- **Compare**: "Compare Apple and Microsoft" charts each one's change over the range,
+  with a table of who moved most.
+- **How a company is doing**: revenue, profit, margins and earnings per share from SEC
+  filings, by year or quarter, for up to four companies. Press a figure for its filing.
 
-Prices are delayed, and every card says from when and from where. Filings cover
-companies that file with the SEC in the US; for others, Conch says so instead of guessing.
-None of it is financial advice.
+Prices are delayed, with source and time shown. Filings cover US SEC filers only. None
+of it is financial advice.
 
 ### Crypto
 
-"What's bitcoin at?", "How's solana doing?" or "doge in euros". A coin's card shows its
-rank, its price "24/7 · as of 21:04" (coins never close), and its move over the last hour,
-day, week, month and year. Press one of those to see that stretch on the chart. Below are
-what the coin is worth beside what it would be worth if every coin that can exist did, how
-much of it exists (or that there's no maximum), and how far it is below its all-time high.
+"What's bitcoin at?" or "doge in euros" shows:
 
-- **The same symbol, several coins**: Conch shows the one worth the most and names the
-  others, so you can say which you meant.
-- **How's crypto doing?**: what every coin is worth together and how it moved today, how
-  much of that is bitcoin and ether, and the ten biggest coins with their week.
+- rank and price, "24/7 · as of 21:04" (coins never close);
+- the move over the last hour, day, week, month and year. Press one to chart it;
+- what the coin is worth beside what it would be if every possible coin existed;
+- how much exists (or that there's no maximum), and how far below its all-time high.
 
-Coin figures come from CoinGecko. Its price is an average across many exchanges, not what
-any one exchange charges. When CoinGecko is busy, the card says so and shows Stooq's price
-instead. Prices are in your own currency, or the one you ask for.
+When several coins share a symbol, Conch shows the most valuable and names the others.
+"How's crypto doing?" shows the whole market, today's move, bitcoin's and ether's share,
+and the ten biggest coins with their week.
+
+Figures are CoinGecko's average across exchanges, in your currency or the one you ask
+for; when it's busy, the card shows Stooq's price and says so.
 
 ## Charts
 
-"Make me a pie chart of where my money went this month." Conch draws the chart in the
-chat: pie, donut, bars, lines, areas or a scatter, chosen for the question. Point at it
-(or use the arrow keys) to read every value; press a name in the legend to hide or show
-that series; press a slice or a bar to pick it out. **Show the numbers** opens the same
-data as a table.
+"A pie chart of my spending this month" draws a pie, donut, bars,
+lines, areas or scatter, chosen for the question.
 
-For a chart as a file for a document or a deck, ask for a PNG or SVG file instead.
+- Point at it (or use the arrow keys) to read values; press a slice or bar to pick it
+  out.
+- Press a legend name to hide or show a series.
+- **Show the numbers** opens the data as a table.
+
+For a chart file, ask for a PNG or SVG.
 
 ## Keep and send a card
 
-Charts, share and coin prices, company figures, the crypto market and the weather
-have three small buttons at the bottom. Point at one to see its name.
+Charts, share and coin prices, company figures, the crypto market and weather have
+three buttons at the bottom (point at one for its name):
 
 - **Save as image** downloads a picture of the card.
-- **Copy** puts the picture on your clipboard, ready to paste. A browser that can't
-  copy pictures gets the card's words instead, and the button says **Copied as text**.
-- **Send** sends the picture, with the card's title under it, to your own chat in a
-  chat app you connected (Telegram, WhatsApp, Slack…). Choose the app, and Conch asks
-  "Send this chart to Telegram?": press **Send to Telegram**, or **Cancel**. With no
-  chat app connected, there is no **Send**.
-
-The picture is made in your browser, so no extra setup is needed.
+- **Copy** puts the picture on your clipboard. Where a browser can't copy pictures, it
+  copies the words and says **Copied as text**.
+- **Send** sends the picture, titled, to your own chat in a connected chat app, after
+  "Send this chart to Telegram?" (**Send to Telegram** or **Cancel**). No chat app, no
+  **Send**.
 
 ## People, things, links, books and shows
 
-- **Who or what something is**: a card from Wikipedia with a picture, a short summary
-  (**Read more** for the rest) and key facts.
-- **Links**: ask Conch about a few links, and each one gets a preview with its
-  picture, site and title.
-- **Books**: covers on a shelf, from Open Library. Press one for its details.
-- **TV shows**: posters, ratings and when the next episode is, from TVmaze. For films,
-  Conch shows a Wikipedia card.
+- **Who or what something is**: a Wikipedia card with picture, summary (**Read more**)
+  and key facts.
+- **Links**: each gets a preview with picture, site and title.
+- **Books**: covers on a shelf from Open Library; press one for details.
+- **TV shows**: posters, ratings and the next episode from TVmaze. Films get a Wikipedia
+  card.
 
 ## Your calendar, email, files and messages
 
-What your assistant finds in Google Calendar, Gmail, Google Drive or Slack shows the
-way the app would show it: see [what it found, as it is](./apps.md#what-it-found-as-it-is).
-An email it wants to send shows as the email itself, which you can
+Google Calendar, Gmail, Google Drive and Slack results look as in that app: see [what it found, as it is](./apps.md#what-it-found-as-it-is). An email to send
+shows as the email itself, which you can
 [change before it goes](./apps.md#what-read-and-write-cover).
 
 ## What leaves your computer
@@ -169,7 +150,6 @@ nothing about you:
 | Places                          | OpenStreetMap (the place, and what you're looking for)                |
 | People and things, books, shows | Wikipedia, Open Library, TVmaze (the name)                            |
 
-Pictures on cards are copies Conch keeps with the chat. Your browser never loads them
-from the web, so a page Conch reads can't learn anything from them. After Conch has read
-a web page in a chat, it asks you before a lookup that could carry what it read
-somewhere else.
+Card pictures are copies kept with the chat, never loaded from the web. After reading
+a web page in a chat, Conch asks before any lookup that could carry what it read
+elsewhere.

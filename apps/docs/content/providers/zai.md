@@ -6,20 +6,18 @@ provider: zai
 
 1. Open **Settings → Providers** and choose **Z.ai**.
 2. Press **Open z.ai** and create a key. A key from BigModel in China works too.
-3. Paste it. Conch checks it before keeping it.
+3. Paste it.
 
-Or paste the key anywhere on **Settings → Providers**. Its keys don’t start with anything only it uses, so Conch asks you whose it is, then checks it before keeping it.
+Or paste it anywhere on **Settings → Providers**, and say whose it is when Conch asks.
 
-Conch tries Z.ai’s international address first, then BigModel’s, and remembers the one that takes your key. A key is only ever sent to Z.ai’s own addresses.
+Conch tries Z.ai’s international address, then BigModel’s, and remembers which works.
 
 ## What you get
 
 Zhipu’s GLM models: strong at coding and very cheap.
 
-Conch runs the conversation itself: it keeps the thread, hands the model the tools of your [apps](../features/apps.md), and asks you before anything changes. [Memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work with models that can call tools.
+Conch runs the chat and supplies the tools: your [apps](../features/apps.md), [memory](../features/memory.md), [skills](../features/skills.md), the [browser](../features/browser.md), files with **Undo** and sealed commands. Anything that changes asks first. Models without tools show **Chat only**. Spend counts toward your [budget](../care/offline.md).
 
 ## Good to know
 
-- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled in the picker. If a model turns out not to take tools, Conch asks it again without them and says so.
-- **Spend is tracked.** Conch records each turn, and you can set a budget. See [Offline and at a limit](../care/offline.md).
-- **Pay-as-you-go keys only.** The GLM Coding Plan’s terms keep it to the coding tools Z.ai lists, so Conch doesn’t use it.
+- **Pay-as-you-go keys only.** The GLM Coding Plan is limited to the coding tools Z.ai lists.

@@ -4,51 +4,67 @@ description: Send Conch's numbers and the shape of each turn to Grafana, Honeyco
 order: 1.6
 ---
 
-Conch can show how it's doing on a dashboard of your own: how many replies it finished and how long they took, the tokens and money they used, the tools it called and the questions it asked, what routines and chat apps did, and how the computer is coping. **Settings → Dashboards** sets it up. It's off until you turn it on.
+See how Conch is doing on your own dashboard: replies finished and how long they took, tokens and money, tools called and questions asked, what routines and chat apps did, and how the computer is coping.
 
-Press <kbd>mod+k</kbd> and type **grafana**, **prometheus** or **dashboards** to go straight there.
+It's off until you turn it on in **Settings → Dashboards**. <kbd>mod+k</kbd> finds it as **grafana**, **prometheus** or **dashboards**.
 
 ## Send to a service
 
-1. Choose where: **Grafana Cloud**, **Honeycomb**, **Datadog**, **New Relic**, **Langfuse**, **Phoenix**, **On this computer** (Grafana, a collector or Jaeger running here), or **Another place** for any OpenTelemetry endpoint.
-2. Paste what the service shows you. Grafana Cloud's OpenTelemetry page gives a few `OTEL_EXPORTER_OTLP_…` lines; Langfuse gives two keys; the others give one. Paste the whole thing: Conch reads the address and the key out of it, and if the paste says it belongs to another service, it switches to that one. **Paste** reads the clipboard in one press, and a paste anywhere on the page lands there too. **Type them instead** opens each field.
+1. Choose **Grafana Cloud**, **Honeycomb**, **Datadog**, **New Relic**, **Langfuse**, **Phoenix**, **On this computer** (Grafana, a collector or Jaeger here), or **Another place** for any OpenTelemetry endpoint.
+2. Paste what the service shows you: Grafana Cloud's `OTEL_EXPORTER_OTLP_…` lines, Langfuse's two keys, or the one key others give. Conch reads the address and key out of it, and switches service if the paste belongs to another. **Paste** reads the clipboard, a paste anywhere on the page lands there too, and **Type them instead** opens each field.
 3. Turn on **Send to** it.
-4. Press **Send a test**. Conch sends a real span and its numbers there now, and says **Grafana Cloud received it** with how long it took, or exactly what went wrong: a key it didn't take, an address with nothing at it.
+4. Press **Send a test**. Conch sends a real span and numbers, then says **Grafana Cloud received it** and how long it took, or exactly what went wrong, such as a rejected key or nothing at the address.
 
-Choose what goes: **Numbers**, **Each turn as a trace** and **Events** (a short line when a turn, a tool call, a question, a routine run or a task ends, or when Conch fixes something on its own). Events are off at first. Langfuse and Phoenix take traces only.
+Choose what goes:
 
-If you sign in to Conch, a change on this page asks you to **Confirm it's you** first, with your password or passkey. It doesn't ask again for ten minutes.
+- **Numbers**: turns, tokens, spending, tools and this computer.
+- **Each turn as a trace**.
+- **Events**, off at first: a line when a turn, tool call, question, routine run or task ends, or when Conch fixes something.
 
-The key is kept with Conch's other keys, locked to this computer. It's only ever sent to the service it was pasted for, and never over plain `http` unless the address is on this computer or your own network.
+Langfuse and Phoenix take traces only.
+
+If you sign in to Conch, changes here ask you to **Confirm it's you** with your password or passkey, then not again for ten minutes.
+
+The key is kept with Conch's other keys, locked to this computer. It goes only to the service it was pasted for, never over plain `http` unless the address is on this computer or your network.
 
 ### Each turn as a trace
 
-A turn is drawn as the [OpenTelemetry GenAI conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) draw an agent: the agent's span (`invoke_agent Juniper`), the model at work between tool calls (`chat claude-sonnet-4-5`), and each tool call (`execute_tool Bash`), with when it asked you and what you answered. The provider, the model, the tokens and the cost are on the agent's span. Turns of one chat share an id, changed so it can't be traced back to the chat in Conch.
+A turn follows the [OpenTelemetry GenAI conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/):
+
+- the agent's span (`invoke_agent Juniper`), with provider, model, tokens and cost;
+- the model at work between tool calls (`chat claude-sonnet-4-5`);
+- each tool call (`execute_tool Bash`), with what it asked you and your answer.
+
+Turns of one chat share an id that can't be traced back to the chat.
 
 ## Prometheus
 
 Turn on **Answer at /metrics** under Prometheus, and Prometheus (or Grafana Alloy) can read Conch's numbers.
 
-- **With its token** (the usual): press **Make a scrape token**. It's shown once, with the scrape config that uses it, to copy into `prometheus.yml`. Making a new one stops the old one.
-- **This computer only**: programs on this computer read it without a token, never through a proxy. Use it when Prometheus runs here and nobody else shares the computer.
+- **With its token** (the usual): press **Make a scrape token**. It's shown once, with a scrape config for `prometheus.yml`. A new one stops the old.
+- **This computer only**: programs here read it without a token, never through a proxy. For when Prometheus runs here and nobody shares the computer.
 
 The page shows when Prometheus last read it. Off, nothing answers at `/metrics`.
 
 ## A dashboard, ready made
 
-**Copy dashboard** or **Download** gives a Grafana dashboard for these numbers: turns and spending at the top, then how long turns take, tokens by model, tools and the questions they asked, routines and chat apps, and this computer. In Grafana, open **Dashboards → New → Import** and paste it. It reads from Prometheus, so it works with Grafana Cloud and with a Prometheus of your own. The same file is in the repository at `docs/dashboards/conch-grafana.json`.
+**Copy dashboard** or **Download** gives a Grafana dashboard: turns and spending, turn times, tokens by model, tools and their questions, routines and chat apps, and this computer. In Grafana, open **Dashboards → New → Import** and paste it. It reads from Prometheus, so it works with Grafana Cloud or your own. It's also at `docs/dashboards/conch-grafana.json`.
 
 ## What leaves
 
-**What leaves** on the same page shows exactly what Conch would send now: every metric by name, with a few of its values, and your last turn as its trace.
+**What leaves** shows exactly what Conch would send now: every metric with a few values, and your last turn as a trace.
 
-By default that's numbers, and the names of providers, models, agents and tools. Never what anyone wrote, a prompt or a reply, what a tool read or wrote, a file's name, an email address, a key, or a chat's id. A label that looks like an address, a path or a key is replaced before it leaves, and each label holds only so many different values, so a dashboard never grows a line per chat.
+By default that's numbers and the names of providers, models, agents and tools. Never what anyone wrote, what a tool read or wrote, a file name, an email address, a key or a chat's id. Labels that look like an address, path or key are replaced, and each label holds only so many values, so a dashboard never grows a line per chat.
 
-Under **Advanced**, **Send what's written, too** adds the words of messages, replies and tool calls to traces, for people reading their prompts in their own Langfuse or Phoenix. Keys, passwords, addresses and your home folder are taken out first. The security checkup says it's on. **Numbers go** sets how often numbers are sent, from every 15 seconds to every 5 minutes, and **Format** chooses **Protobuf** or **JSON**.
+Under **Advanced**:
+
+- **Send what's written, too** adds message, reply and tool-call words to traces, for your own Langfuse or Phoenix. Keys, passwords, addresses and your home folder are taken out first, and the security checkup says it's on.
+- **Numbers go** sets how often, from every 15 seconds to every 5 minutes.
+- **Format** is **Protobuf** or **JSON**.
 
 ## When it can't send
 
-A service that's down or busy is tried again by itself, a little later each time, and what waits is bounded, so a turn never waits for a dashboard and Conch never fills up its memory. What never arrived is counted (`conch.telemetry.dropped`). When the service keeps refusing, **Repair everything** says so in Health, and a key it didn't take is yours to paste again.
+Conch retries a down or busy service, waiting longer each time. What waits is bounded, so turns never wait and memory never fills. What never arrived is counted (`conch.telemetry.dropped`). If the service keeps refusing, **Repair everything** says so in Health, and a rejected key is yours to paste again.
 
 ## From the terminal
 
@@ -62,10 +78,10 @@ conch dashboards prometheus
 conch dashboards send grafana-cloud
 ```
 
-`conch dashboards test` sends a test now, and `conch dashboards off` stops everything. See [the command line](../reference/cli.md).
+`conch dashboards test` sends a test, and `conch dashboards off` stops everything. See [the command line](../reference/cli.md).
 
 ## The numbers
 
-Each one by its OpenTelemetry name, then the name Prometheus gives it, and the labels it may carry.
+Each by its OpenTelemetry name, its Prometheus name, and the labels it may carry.
 
 <!-- conch:metrics -->

@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Conch needs no configuration. These environment variables are for when you want to change where it listens or where it keeps things.
+description: Conch needs no configuration. These environment variables change where it listens and where it keeps things.
 order: 2
 ---
 
@@ -18,4 +18,7 @@ Everything Conch writes is a plain file in one folder: `~/.conch`, or wherever `
 
 ## Dashboards
 
-Where Conch's numbers go is a setting, not an environment variable: **Settings → Dashboards**, or `conch dashboards` from the terminal (see [Dashboards](../care/dashboards.md)). It's kept in `telemetry.json`, and the key it sends with in the sealed `telemetry.secrets.json`. Prometheus reads `GET /metrics`, which answers only once you turn it on.
+Where Conch's numbers go is a setting, not an environment variable: **Settings → Dashboards**, or `conch dashboards` in the terminal (see [Dashboards](../care/dashboards.md)).
+
+- The setting is kept in `telemetry.json`, and the key it sends with in the sealed `telemetry.secrets.json`.
+- Prometheus reads `GET /metrics`, which answers only once you turn it on.

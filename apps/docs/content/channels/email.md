@@ -4,13 +4,11 @@ channel: email
 
 ## Connect it
 
-Email reaches your assistant from any mail app, on any device. You write to your own address with `+conch` added (`you+conch@gmail.com`), and the answer comes back in the same thread, from your own account.
+Write from any mail app to your own address with `+conch` added (`you+conch@gmail.com`). The answer comes back in the same thread, from your own account. Open **Apps → Talk to me here → Email**.
 
-In Conch, open **Apps**, choose **Talk to me here**, then **Email**.
-
-1. **Your email address.** Type it, and Conch picks your mail service: Gmail, iCloud or Fastmail. For another service, choose **Other** and say where its mail lives.
-2. **Make an app password.** An app password lets Conch into your mail without your real password, and you can take it back any time. Press **Make one in Gmail** (or iCloud, or Fastmail), name it "Conch", and paste the password into Conch. It's checked with your mail service as it lands.
-3. **Write to your assistant.** You're in already: Conch sends you a hello, and shows the address to write to with **Write an email**.
+1. **Type your email address.** Conch picks Gmail, iCloud or Fastmail. For another, choose **Other** and say where its mail lives.
+2. **Make an app password.** It lets Conch in without your real password, and you can take it back any time. Press **Make one in Gmail** (or iCloud, or Fastmail), name it "Conch", and paste it into Conch.
+3. **Write to your assistant.** Conch sends you a hello, and **Write an email** opens a message to the right address.
 
 <!-- conch:channel-scene email key -->
 
@@ -20,14 +18,15 @@ In Conch, open **Apps**, choose **Talk to me here**, then **Email**.
 
 ## Good to know
 
-- **With Gmail, it's part of Gmail.** An email channel on Gmail is Gmail's **Talk to me here** in Apps: one card. If Gmail is connected with an app password already, turning on **Talk to me here** on its page uses the same one, in one press. The other way round, the channel's page offers **Use it for Gmail**.
-- **Only mail for Conch is read.** Conch reads mail sent to your `+conch` address, from the last day, and files it in a **Conch** folder once it's handled. The rest of your inbox is never looked at.
-- **iCloud has no `+` addresses.** With iCloud, write to yourself with "Conch" at the start of the subject.
-- **Outlook needs Microsoft's own sign-in.** Since September 2024 Outlook.com takes no app passwords, and Conch can't do Microsoft's sign-in yet. Forward your Outlook mail to Gmail, iCloud or Fastmail and connect that.
-- **Conch checks who really sent it.** A From line is easy to fake, so Conch believes it only when your mail service says the sender checked out, or when the email is in your own Sent mail. Anything else is left unread.
-- **Other people's mail is never read.** Mail to your `+conch` address from someone else is left alone, unless you turn on **An address just for Conch** on the channel's page: then they get one polite reply and show up in Conch for you to **Let in** or **Block**. Lists, auto-replies and bounces are never answered.
-- **A forward is someone else's words.** Forward an email to ask about it: your assistant reads it as it would a web page, and asks before acting on it.
-- **Threads are conversations.** Reply in a thread to carry on; a new email starts a fresh conversation. Approvals are a number: the question lists its answers, and you reply with one's number (or yes, or no).
-- **Pictures and files come attached.** A picture your assistant makes shows in the email itself, and is attached too; finished files are attached. More than about 18 MB of files goes in several emails, as mail services take about 25 MB each.
-- **App passwords need two-step sign-in.** Gmail asks for 2-Step Verification and iCloud for two-factor authentication before they make one. Fastmail's Basic plan has none.
-- **Changing your Apple Account password** takes back every iCloud app password: paste a new one in Conch.
+- **With Gmail, it's one card.** The channel is the **Talk to me here** switch on Gmail's card in Apps, and reuses Gmail's app password in one press. The other way round, the channel's page offers **Use it for Gmail**.
+- **Only mail for Conch is read**: mail to your `+conch` address from the last day, filed in a **Conch** folder once handled.
+- **iCloud has no `+` addresses.** Write to yourself with "Conch" at the start of the subject.
+- **Outlook isn't supported yet.** Outlook.com has taken no app passwords since September 2024, and Conch can't do Microsoft's sign-in. Forward your Outlook mail to Gmail, iCloud or Fastmail and connect that.
+- **Conch checks who really sent it.** It believes a From line only when your mail service says the sender checked out, or the email is in your own Sent mail. Anything else is left unread.
+- **Other people's mail is left alone.** With **An address just for Conch** on, anyone else gets one polite reply and waits for you to **Let them in** or **Block**. Lists, auto-replies and bounces are never answered.
+- **A forward is someone else's words.** Your assistant reads it like a web page, and asks before acting on it.
+- **Threads are conversations.** Reply to carry on. A new email starts a fresh one.
+- **Approvals**: reply with the answer's number, or yes, or no.
+- **Pictures and files come attached.** Over about 18 MB is split across several emails.
+- **App passwords need two-step sign-in**: 2-Step Verification on Gmail, two-factor authentication on iCloud. Fastmail's Basic plan has none.
+- **Changing your Apple Account password** cancels every iCloud app password. Paste a new one in Conch.

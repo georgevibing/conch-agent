@@ -21,8 +21,7 @@ export function DownloadApp({
   if (!HAS_DOWNLOAD && !children)
     return (
       <Callout tone="neutral" title="Use the terminal installer for this version">
-        Desktop downloads have not been published for this version. The command below installs
-        Conch.
+        This version has no desktop download yet. The command below installs Conch.
       </Callout>
     );
   return (

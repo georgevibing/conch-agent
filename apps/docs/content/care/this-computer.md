@@ -4,38 +4,40 @@ description: See how the computer running Conch is doing, live, and what Conch a
 order: 1.5
 ---
 
-Conch runs on your computer, and so does the work you give it. **Settings → This computer** shows how that computer is doing, as it happens.
-
-Press <kbd>mod+k</kbd> and type **this computer**, **cpu** or **disk space** to go straight there.
+Conch and its work run on your computer. **Settings → This computer** shows how it's doing, live. Or press <kbd>mod+k</kbd> and type **this computer**, **cpu** or **disk space**.
 
 ## At a glance
 
-The top of the page says how things are in a few words: **Room to spare**, **Busy right now**, **Working hard**, **Low on memory** or **Battery low**. Under it are the computer's system, its processor and memory, and how long it has been on.
+The top sums it up: **Room to spare**, **Busy right now**, **Working hard**, **Low on memory** or **Battery low**. Under it: the system, processor, memory and how long it has been on.
 
-Then four numbers: the processor, memory, the disk Conch keeps your things on, and the battery. A computer without a battery shows its graphics processor instead.
+Then four numbers: processor, memory, the disk Conch keeps your things on, and battery (or the graphics processor, without one).
 
 ## The last few minutes
 
-The processor, memory, network and graphics each have a live chart. New readings arrive every two seconds and the line moves along with them, filling out to three minutes of history. Point at a chart, or drag a finger across it, to read a moment. With **Reduce motion** on (in **Settings → Appearance**), the charts redraw in place instead of moving.
+Processor, memory, network and graphics each have a live chart:
 
-Under the processor's chart, a row of bars shows each core.
+- A reading every two seconds, up to three minutes.
+- Point at a chart, or drag a finger across it, to read a moment.
+- Bars under the processor's chart show each core.
+
+With **Reduce motion** on (**Settings → General**, under **Appearance**), charts redraw in place.
 
 ## Conch and what it started
 
-A table shows what Conch itself uses, and everything it started, grouped by who it belongs to: each provider's program, the browser, and **Commands and helpers**. A command your assistant runs counts toward the provider that ran it, so you can see which one is busy. Ollama is counted even when it was started on its own.
+A table shows what Conch uses and everything it started, grouped by owner: each provider's program, the browser, and **Commands and helpers**. A command counts toward the provider that ran it. Ollama counts even if started on its own.
 
 ## Use your apps
 
-At the bottom of the page, **Use your apps** lets your assistant look at the screen and click and type in the apps you allow, on a Mac. It's off until you turn it on. See [Use your apps](../features/use-your-apps.md).
+At the bottom, **Use your apps** lets your assistant see the screen and click and type in apps you allow, on a Mac. Off until you turn it on. See [Use your apps](../features/use-your-apps.md).
 
 ## What it reads
 
-Conch looks only while the page is open and in front. Leave it, and Conch stops looking soon after. It keeps only the last three minutes, in memory, and lets them go when you leave.
+Conch looks only while the page is open and in front. It keeps the last three minutes in memory and drops them when you leave.
 
-It shows numbers only: no file names, no commands, no addresses and not the computer's name. Nothing needs a password, so a few readings depend on the system:
+Numbers only: no file names, commands, addresses or computer name. Nothing needs a password, so some readings depend on the system:
 
-- **Temperature** shows on Linux and on computers with an NVIDIA graphics card.
-- **Battery** shows on a Mac and on Linux.
-- **Network**, **load** and **Conch and what it started** aren't shown on Windows yet.
+- **Temperature**: Linux, or an NVIDIA graphics card.
+- **Battery**: Mac and Linux.
+- **Network**, **load** and **Conch and what it started**: not on Windows yet.
 
-When this computer is busy, Conch already waits before starting heavy work. See [Repair everything](./health.md#when-this-computer-is-busy).
+When the computer is busy, Conch waits before heavy work. See [Repair everything](./health.md#when-this-computer-is-busy).

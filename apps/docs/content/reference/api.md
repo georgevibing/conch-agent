@@ -5,13 +5,13 @@ order: 8
 nav: API
 ---
 
-This is the app's own API, at protocol version 7 today. It moves with the app, so treat it as a map and not a promise. Every body is checked against the schemas in `packages/protocol`, on both sides.
+This is the app's own API, at protocol version 7 today. It moves with the app: treat it as a map, not a promise. Both sides check every body against the schemas in `packages/protocol`.
 
 ```bash
 curl -H "Authorization: Bearer conch_…" http://localhost:4317/api/state
 ```
 
-Make the key with `conch key`. Changes that grant trust also need a password or key from the last ten minutes.
+Make a key with `conch key`. Changes that grant trust also need a password or key entered in the last ten minutes.
 
 ## Over HTTP
 
@@ -31,6 +31,6 @@ One WebSocket at `/ws` carries everything that happens while you watch.
 
 ### What a conversation is made of
 
-A conversation is an append-only log. Each event has a `seq`; a client that reconnects says the last one it saw, and Conch replays the rest.
+A conversation is an append-only log. Each event has a `seq`. A client that reconnects says the last one it saw, and Conch replays the rest.
 
 <!-- conch:socket conversation -->

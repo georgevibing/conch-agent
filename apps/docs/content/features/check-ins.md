@@ -1,60 +1,60 @@
 ---
 title: Check-ins and standing orders
 nav: Check-ins
-description: Say once what you want to hear about, or what your assistant may do, and Conch tells you only when something comes up, with why.
+description: Say once what you want to hear about, or what your assistant may do. Conch tells you only when something comes up, and why.
 order: 3.5
 ---
 
-A standing order is something you say once, in your own words, for every chat: "Always tell me if a flight changes", "Tell me when my parcel is out for delivery", "You may archive newsletters". Conch keeps it in mind from then on.
+A standing order is something you say once, for every chat: "Always tell me if a flight changes", "You may archive newsletters".
 
-The check-in is what makes the "tell me" ones work. Every half hour, Conch looks at what's new in your email and the next two hours of your calendar. When something fits one of your standing orders, it tells you on your phone and in your [chat apps](../channels/index.md), and says why. Otherwise it says nothing.
+The check-in makes the "tell me" ones work. Every half hour, Conch looks at new email and the next two hours of your calendar. When something fits, it tells you on your phone and in your [chat apps](../channels/index.md), and says why.
 
 ## Add one
 
-Open **Routines** in the sidebar. Under **Check-ins and standing orders**, type what you want the way you'd say it to a person, and press **Add**.
+1. Open **Routines** in the sidebar.
+2. Under **Check-ins and standing orders**, type what you want in your own words.
+3. Press **Add**.
 
-As you type, a label says how Conch reads it:
+A label shows how Conch reads it:
 
-- **Tell me**: something you want to hear about. The check-in watches for it.
-- **You may**: something you're happy for your assistant to do, like archiving newsletters.
+- **Tell me**: something the check-in watches for.
+- **You may**: something your assistant may do.
 
-You can also just say it in a chat: "from now on, always tell me if a flight changes". Your assistant offers it as a card, **Keep this as a standing order?**, with your words. Press **Keep it**, or **Not now**. Nothing is kept until you press. Until then it also waits in the list on the Routines page, marked **Suggested in a chat**, with the same two choices. You can keep up to 20 standing orders.
+Or say it in a chat: "from now on, always tell me if a flight changes". A card, **Keep this as a standing order?**, offers **Keep it** or **Not now**; nothing is kept until you press. It also waits on the Routines page, marked **Suggested in a chat**.
 
-To change one, press the pencil beside it. To stop one, press **×**. In <kbd>mod+k</kbd>, type "standing orders".
+You can keep up to 20. The pencil changes one; **×** stops it. In <kbd>mod+k</kbd>, type "standing orders".
 
 ## What you hear
 
-A notification from a check-in says what came in, what changed in a few words, and **why you're hearing this**: the standing order it was about, in your words.
+A notification says what came in, what changed, and **why you're hearing this**: the standing order behind it.
 
-On the Routines page, **Told you** lists the recent ones. **Why?** opens each to the standing order behind it, and **Open** goes to the email or the event.
+On the Routines page, **Told you** lists recent ones, with **Why?** and **Open** (the email or event).
 
 - Each thing is told once.
-- At most twelve notifications a day. On a busy day the rest are listed under **Told you**, without a sound.
-- Notifications come under **Routines** in your notification settings, the same switch as your routines' results.
+- At most twelve notifications a day. The rest are listed under **Told you**, without a sound.
+- They use the **Routines** switch in your notification settings.
 
 ## Quiet hours
 
-There are no check-ins between 10 PM and 7 AM. To change that, press **Quiet 10:00 PM – 7:00 AM** on the card and pick other times. The first look after quiet hours covers the night, so email that came while you slept still counts.
+No check-ins between 10 PM and 7 AM. Press **Quiet 10:00 PM – 7:00 AM** on the card to pick other times. The first look after covers the night.
 
-**Look now** looks straight away, whatever the time. The switch on the card turns check-ins off; turned back on, they start from then.
+**Look now** looks at once, whatever the time. The switch on the card turns check-ins off; turned back on, they start from then.
 
 ## What it costs
 
-Looking is free: Conch searches your email and reads your calendar itself, without a model. Only when something new is there does it ask the cheapest model you have whether one of your standing orders covers it. That's a few cents a month at most, counted with your [routines](routines.md#what-it-costs) and held by the same monthly limit. On a plan, or with a model on this computer, it costs nothing.
+Looking uses no model. Only something new goes to your cheapest model: a few cents a month at most, counted under your [routines'](routines.md#what-it-costs) monthly limit. On a plan, or with a model on this computer, it's free.
 
-With no "tell me" standing orders, the check-in doesn't look at all.
+With no "tell me" orders, the check-in doesn't look.
 
 ## What a standing order can't do
 
-A standing order says what you want and what you welcome. It never gives permission. Whatever an order says, anything your [permission mode](../reference/modes.md) asks about still asks first. "You may send emails without asking" doesn't change that, and Conch says so beside it.
-
-The check-in itself only reads and tells. It never replies, archives or deletes, even for a "you may" order. Those apply when your assistant is working in a chat or a routine, with that chat's permissions.
-
-Email is written by other people, and some of it tries to steer assistants. What the check-in reads is handled as information, never as instructions. An email can't add a standing order, choose where a notification sends you, or put a link in one: the link always goes to the email itself.
+- **Give permission.** Anything your [permission mode](../reference/modes.md) asks about still asks. "You may send emails without asking" doesn't change that, and Conch says so beside it.
+- **Make the check-in act.** It only reads and tells, never replies, archives or deletes. "You may" orders apply when your assistant works in a chat or routine, with that chat's permissions.
+- **Be added by an email.** What the check-in reads is information, never instructions. An email can't add a standing order, choose where a notification sends you, or put a link in one; the link always goes to the email itself.
 
 ## Good to know
 
 - Check-ins need [Gmail or Google Calendar](apps.md). Without either, the card says so, with **Open Apps**.
-- Like routines, check-ins only happen while Conch is running. With [Always on](../care/always-on.md), it keeps running with no window open.
-- Standing orders are kept in `~/.conch/standing-orders.json`, and part of every [backup](../care/backups.md). Your assistant can't change that file.
+- They happen only while Conch is running. With [Always on](../care/always-on.md), it runs with no window open.
+- Standing orders live in `~/.conch/standing-orders.json`, part of every [backup](../care/backups.md). Your assistant can't change that file.
 - **Repair everything** in **Settings → Health** checks whether the check-in can look, and says what to do when only you can fix it.

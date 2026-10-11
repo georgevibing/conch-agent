@@ -709,7 +709,7 @@ export function AgentsDemo() {
         ))}
       </fieldset>
       <Stage
-        label={`Asked “${AGENTS_ASK}”, ${agent.name} answers in its own voice. Each agent knows the same things, and says them its own way`}
+        label={`Asked “${AGENTS_ASK}”, ${agent.name} answers in its own voice`}
         alive={working}
         align="end"
       >

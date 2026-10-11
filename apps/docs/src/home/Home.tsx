@@ -67,7 +67,7 @@ export function Home() {
             Everything Conch does, <em>in plain words.</em>
           </>
         }
-        lede="A guide for each thing it does, and a reference read straight from the code, so it is never behind it."
+        lede="A guide for everything it does, and a reference read from the code, so it’s never behind."
         actions={
           <>
             <InstallCommand />
@@ -108,14 +108,14 @@ export function Home() {
 
       <Band
         title="Every provider, at once"
-        lede="One model picker for all of them, and a chat can move between them without losing its thread."
+        lede="One picker for all of them. A chat can switch without losing its thread."
       >
         <ProviderGrid />
       </Band>
 
       <Band
         title="In the apps you already use"
-        lede="A bot of your own, no public address, and nobody gets in unless you let them."
+        lede="A bot of your own, and nobody gets in unless you let them."
       >
         <ChannelGrid />
       </Band>

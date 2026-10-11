@@ -4,17 +4,14 @@ description: Search the public web and read sources, with source links kept besi
 order: 18
 ---
 
-Ask a question that needs current information. Conch can search the public web
-and read pages without opening a browser. Search results show titles, excerpts
-and links. The assistant can read the source before relying on a search snippet.
+Ask something that needs current information. Conch searches the web and reads pages without opening a browser.
 
-Search queries go to Bing. Pages are read without your cookies or sign-ins.
-For a site that needs JavaScript, a sign-in or a browser check, the assistant
-uses the [browser](./browser.md).
+- Results show titles, excerpts and links. Your assistant can read the source before trusting a snippet.
+- Source cards open the original page, with its address and when it was read. Long pages are read in sections.
 
-Source cards open the original pages. Each page read includes its address and
-retrieval time. Long pages can be continued in sections. Reading the web never
-turns a page’s words into instructions or permission to act.
+## What stays private
 
-Only public HTTPS addresses are read. Addresses on this computer or your own
-network cannot be reached through the research tools.
+- Searches go to Bing. Pages are read without your cookies or sign-ins.
+- Sites that need JavaScript, a sign-in or a browser check go through the [browser](./browser.md).
+- Only public HTTPS addresses. Nothing on this computer or your network.
+- A page's words never become instructions or permission to act.

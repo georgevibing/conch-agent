@@ -4,43 +4,33 @@ description: Your assistant can look at your Mac's screen and click and type in 
 order: 5.5
 ---
 
-Some things only happen in an app on your computer: a slide in Keynote, a list in Notes, a setting in an app with no website. Your assistant can do those for you. It looks at the screen, then clicks, types and scrolls like you would, while you watch.
-
-It's off until you turn it on, and it works on a Mac for now.
+Some things only happen in an app: a slide in Keynote, a list in Notes. Your assistant can look at the screen, then click, type and scroll while you watch. It's off until you turn it on, and Mac only for now.
 
 ## Turn it on
 
 1. Open **Settings → This computer**.
-2. Under **Use your apps**, turn on **Let Conch use your apps** (with your agent's name in place of Conch).
-3. macOS asks you to allow two things. Press **Open Screen Recording**, then turn on Conch in the list. Do the same with **Open Accessibility**.
+2. Under **Use your apps**, turn on **Let Conch use your apps** (your agent's name in place of Conch).
+3. Press **Open Screen Recording** and turn on Conch. Do the same with **Open Accessibility**.
 
-Each row says **On** by itself once macOS allows it. You don't need to come back and press anything.
-
-If you run Conch from a terminal instead of the Conch app, the rows say which app to turn on in the list (Terminal, for example).
-
-If you allowed **node** in these lists for an older Conch, you can take it out: Conch now shows up in them as **Conch**, with its own icon.
+Each row says **On** once macOS allows it. Running from a terminal? The rows name the app to allow instead. An old **node** entry in these lists can go.
 
 ## While it works
 
-- A soft glowing edge goes around your screen, and a small card at the top says what it's doing.
-- In the chat, a card shows what it last saw, and how many steps it has taken.
-- Press **Stop** on the card at the top of the screen, **Stop** in the chat, or <kbd>mod+esc</kbd> from anywhere. It lets go at once.
-
-The glowing edge and <kbd>mod+esc</kbd> come with the Conch app. In a browser, **Stop** is in the chat.
+- A glowing edge goes around your screen, and a card at the top says what it's doing.
+- The chat shows what it last saw and its step count.
+- **Stop** on either card, or <kbd>mod+esc</kbd> anywhere, takes back control at once. In a browser, without the Conch app, **Stop** is in the chat only.
 
 ## What it asks, and what it never touches
 
-- **Each app asks once per chat.** "Use Notes on your computer?" Choose **Always** and it won't ask about that app again, unless the chat has read something from the web or an email. Apps you always allow are listed under **Use your apps**, to take back any time.
-- **It never touches** password managers, System Settings and the Mac's password prompts, terminals, banking and payment apps, or Conch itself. It doesn't see them either: they're covered over in what it looks at. When something needs one of them, it asks you to do that part.
-- **In Full trust** it doesn't ask about each app, unless the chat has read something from the web or an email.
-- **Read only** lets it look at the screen, but not click or type.
-- **Only while you're there.** Routines, background tasks and chats from your chat apps can't use your apps, because nobody could press Stop.
-- **It stops to check in** after 60 steps in one go.
-- **One chat at a time** uses the computer.
-- **Nothing it sees is kept.** The last look at your screen stays in memory until the turn ends, then it's gone.
+- **Each app asks once per chat.** **Always** skips that app's question from then on, as does **Full trust**, unless the chat read something from the web or an email. Undo **Always** under **Use your apps**.
+- **Never touched, and covered over in what it sees:** password managers, System Settings and security prompts, terminals, banking, payment and crypto apps, and Conch itself. It asks you to do those parts.
+- **Read only** lets it look but not click or type.
+- **Only while you're there.** Routines, background tasks and chats from your chat apps can't use it.
+- **It checks in** after 60 steps. One chat uses the computer at a time.
+- **Nothing it sees is kept** past the turn.
 
-Something it reads on the screen could try to trick it, like a page or an email can. That's why it asks before using each app, and it's told to check with you before it sends, buys or deletes anything. Once it has looked at the screen, anything else that could send your things out asks first too.
+Text on screen could try to trick it, so it checks with you before it sends, buys or deletes anything. After it has looked at the screen, anything that could send your things out asks first too.
 
 ## When something's off
 
-**Settings → Health → Repair everything** says when macOS still needs one of the two switches, with a button that takes you to it.
+**Settings → Health → Repair everything** says when macOS still needs a switch, with a button to it.

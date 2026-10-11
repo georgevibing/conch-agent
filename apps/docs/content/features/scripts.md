@@ -5,52 +5,51 @@ description: For work that takes hundreds of steps, your assistant writes one sh
 order: 12.6
 ---
 
-Some jobs are the same small step, again and again: tag the invoices among 300 emails, read 40 pages and compare their prices, rename every photo by the date it was taken. Your assistant can do a job like that as one short program, a **script**, that uses its tools for each step. It's quicker and costs less, because your assistant reads only what the script found, not every email on the way.
+Some jobs are one small step, many times: tag the invoices among 300 emails, compare prices on 40 pages, rename every photo by date. Your assistant does these as one short program, a **script**, that uses its tools for each step. It's quicker and cheaper, because your assistant reads only what the script found.
 
-You don't need to ask for a script. Your assistant writes one when a job has many similar steps, and uses its tools one at a time for everything else. Every provider can do it.
+You don't need to ask. Every provider can do it.
 
 ## Watch it work
 
-A script shows in the chat as one line, however many steps it takes:
+A script is one line in the chat, however many steps it takes:
 
-- What it's for, in your assistant's words, and how far it is, like "120 of 300 emails".
-- A thin bar that fills as it goes.
-- A count for each kind of step, like **Read an email ×120** and **Labelled an email ×12**.
-- **Stop**, which ends the script at once. What it already did stays done.
+- What it's for and how far it is, like "120 of 300 emails", with a bar that fills.
+- A count per kind of step, like **Read an email ×120** and **Labelled an email ×12**.
+- **Stop**, which ends it at once. What it did stays done.
 
-When it's finished, the line says what it came to, like "Tagged 47 invoices among 300 emails", how many steps it took and how long.
+When it's finished, the line says what it came to ("Tagged 47 invoices among 300 emails"), how many steps and how long.
 
-Press the line to open it. You see the script itself, ready to copy, then every step it took, grouped by kind. Press a kind to see its steps, and a step to see exactly what went in and what came back. Below are the questions it asked you, and what it gave back to your assistant.
+Press the line to see the script, ready to copy, then every step by kind, with what went in and came back. Below are its questions to you and what it gave your assistant.
 
 ## It asks, the same as always
 
-A script can do only what your assistant could do one step at a time, and it asks about the same things. Each step is checked on its own, as it happens, in the mode you chose:
+A script can do only what your assistant could do step by step. Each step is checked in the mode you chose:
 
-- When a step needs your OK, the script waits. The question sits right under its line, and says which step it is: "Step 48 of the script". Your answer counts for that step, like any other.
-- If you say no, that step doesn't happen. The script carries on without it, or stops there and your assistant tells you.
-- Once the chat has read something from outside, like an email, steps that could send it somewhere still ask, as they would one at a time.
-- Many of the same thing in a row, like 50 deletes, asks first even in **Full trust**, script or not.
+- A step that needs your OK waits, with its question under the line: "Step 48 of the script". Your answer counts for that step only.
+- If you say no, that step doesn't happen. The script carries on, or stops and your assistant tells you.
+- Once the chat has read something from outside, steps that could send it somewhere still ask.
+- Many of the same thing in a row, like 50 deletes, asks first even in **Full trust**.
 
-The time a question waits for you doesn't count against the script.
+Waiting for you doesn't count against its time.
 
 ## Put it all back
 
-Changes a script makes to your files can be undone, all at once. Press **Undo all 12 changes** on the script's line (**Undo its change** when there's one), check what will change, and press **Undo**. You can press **Put all 12 back again** if you change your mind. Each change is also on the **Activity** page, with its own **Undo**.
+Press **Undo all 12 changes** on its line (**Undo its change** for one), check, and press **Undo**. **Put all 12 back again** reverses that. Each change is also on the **Activity** page, with its own **Undo**.
 
-Sent emails and messages can't be unsent, which is why sending always asks first.
+Sent emails and messages can't be unsent, so sending always asks first.
 
 ## What a script can't do
 
-A script runs sealed off from the rest of your computer. It can't reach the internet, your files or anything else by itself. It does everything through the same tools your assistant has, and nothing more. A few things it leaves to your assistant, outside the script: asking you a question with choices, offering to turn something on, suggesting replies, updating the plan and handing work to a task.
+A script runs sealed off. It reaches the internet, your files and the rest only through your assistant's tools. It can't ask you a question with choices, offer to turn something on, suggest replies, update the plan or hand work to a task.
 
-It also has limits, so a mistake can't run away with your computer:
+Its limits:
 
-- 2 minutes of work, unless your assistant gives it more (at most 10)
-- 500 steps, unless your assistant gives it more (at most 2,000)
-- 8 steps at the same time
+- 2 minutes of work, or up to 10 if your assistant allows
+- 500 steps, or up to 2,000
+- 8 steps at once
 - 256 MB of memory
 - a few pages of results back to your assistant
 
-If a script reaches one of these, it stops and your assistant is told which, so it can try a smaller piece.
+At a limit it stops, and your assistant is told which, to try a smaller piece.
 
-[How it did it](./how-it-did-it.md) replays every step a script took, one by one.
+[How it did it](./how-it-did-it.md) replays every step a script took.

@@ -5,6 +5,6 @@ order: 7
 nav: Programs it installs
 ---
 
-Nothing here needs installing first. A feature that needs one says so with a single button; the command it shows is the command it runs.
+Nothing here needs installing first. A feature that needs a program says so, with one button. The command it shows is the command it runs.
 
 <!-- conch:needs -->

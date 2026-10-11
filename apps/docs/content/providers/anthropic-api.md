@@ -6,16 +6,14 @@ provider: anthropic-api
 
 1. Create a key in the [Anthropic Console](https://console.anthropic.com/settings/keys). It starts with `sk-ant-`.
 2. Open **Settings → Providers**, find **Anthropic API** and press **Connect**.
-3. Paste the key. Conch checks it before keeping it.
+3. Paste the key.
 
-Usage is billed to that Console account. There is no subscription, and nothing else to install.
+Usage is billed to that Console account, with no subscription and nothing to install.
 
 ## What you get
 
-Every Claude model, straight from Anthropic. Conch runs the conversation itself: it keeps the thread, hands the model the tools of your [apps](../features/apps.md), and asks you before anything changes. [Memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work.
+Every Claude model, straight from Anthropic.
 
-## Good to know
+Conch runs the chat and supplies the tools: your [apps](../features/apps.md), [memory](../features/memory.md), [skills](../features/skills.md), the [browser](../features/browser.md), files with **Undo** and sealed commands. Anything that changes asks first. Models without tools show **Chat only**. Spend counts toward your [budget](../care/offline.md).
 
-- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled before answering and cannot perform actions.
-- **Spend is tracked.** Conch records what each turn cost, and you can set a budget. See [Offline and at a limit](../care/offline.md).
-- **What it already read costs a tenth.** Conch asks Anthropic to keep the instructions, the tools and the chat so far in its cache, so each step of a long job pays full price only for what's new. On a twelve-step job that's about four fifths less.
+**What it already read costs a tenth.** Conch asks Anthropic to cache the instructions, tools and chat so far. Each step pays full price only for what's new: about four fifths less on a twelve-step job.

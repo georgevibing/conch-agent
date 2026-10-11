@@ -4,46 +4,29 @@ description: Create a picture or edit one you attach, with a preview and a downl
 order: 19
 ---
 
-Describe the picture you want. To edit a picture, attach it and say what should
-change. Conch creates one picture at a time and puts it in the chat with a
-preview and **Download**. The original stays as it was. While it works, the chat
-shows how far along the picture is, and a rough version when the service sends one.
+Describe a picture, or attach one and say what to change. The original stays as it was. The chat shows progress, and a rough version when the service sends one.
 
-Under a finished picture are **Look closer**, **Download**, **Copy picture** and
-**Change it**, which puts the picture's name in the message box so you can say
-what to change. **Details** shows what was asked for, the model, and who made it.
-If the picture wasn't made, because you said no or the service couldn't, the chat
-says so in a line.
+Under a finished picture are **Look closer**, **Download**, **Copy picture**, **Change it** (puts its name in the message box) and **Details** (prompt, model, maker). If none was made, the chat says why in a line.
 
-Image creation works from any chat model that can use tools. Conch makes the
-picture with what you already have, in this order:
+## Who makes it
 
-1. **Your ChatGPT plan**, when you signed in with ChatGPT (Codex). There is no
-   extra charge; it counts toward your plan's limits.
-2. **Your own API key**: OpenAI, then Gemini. Each picture is billed by that
-   service.
-3. **OpenRouter**, when none of the above can. Each picture is billed by
-   OpenRouter, about $0.04.
+Any chat model that can use tools can ask for one. Conch uses the first of these you have:
 
-If none of your providers can make pictures, Conch offers a card in the chat to
-connect OpenRouter. Press **Connect**, finish connecting, and the request
-carries on. Your chat model stays the same.
+1. **Your ChatGPT plan** (signed in with Codex). No extra charge; it counts toward your plan's limits.
+2. **Your own API key**: OpenAI, then Gemini. Billed per picture.
+3. **OpenRouter**, about $0.04 a picture.
 
-A picture on your ChatGPT plan costs nothing extra, so in **Auto** it goes
-without asking, even after the chat read something from outside. Before a paid picture, Conch asks unless you chose
-**Full trust**. The approval names the service and the model, and about what
-it costs. The prompt and any source picture are sent to that service.
+With none of them, a card offers to connect OpenRouter. Press **Connect** and the request carries on, with your chat model unchanged. When your plan runs out of pictures for now, Conch uses the next way and notes it under **Settings → Health → Fixed on its own**.
 
-If your ChatGPT plan has made all the pictures it can for now, Conch makes it
-the next way instead, and notes it under **Settings → Health → Fixed on its own**.
+## Cost and asking first
 
-Ask which image models are available if you want to choose one. Support for
-transparent backgrounds, shape and reference pictures depends on the model.
-The assistant checks the available settings before sending the request.
+- A plan picture goes ahead in **Auto** without asking, even after the chat read something from outside.
+- A paid picture asks first, naming service, model and rough cost, unless you chose **Full trust**.
+- The prompt and any source picture go to that service.
+- OpenRouter's cost counts toward your monthly budget. Once it's reached, paid pictures stop until you review it.
 
-Generated pictures are kept with their chat and included in backups. OpenRouter’s
-reported cost counts toward your monthly spending; when the monthly budget is
-reached, paid image creation stops until you review it.
+## Good to know
 
-A failed request is never retried automatically. If the connection ends before
-the result arrives, check the service’s activity before requesting another.
+- Ask which image models are available to pick one. Transparency, shape and reference pictures depend on the model.
+- Pictures are kept with their chat and backed up.
+- A failed request is never retried by itself. If the connection dropped, check the service's activity before asking again.

@@ -142,7 +142,7 @@ export function Landing() {
               <em>Let it solve your problems.</em>
             </>
           }
-          lede="Agents of your own, on the AI subscriptions and API keys you already have. Conch sets itself up, fixes what breaks, and asks you only when it has to."
+          lede="Agents of your own, on the AI plans and keys you already have. It sets itself up, fixes what breaks, and asks only when it has to."
           actions={
             <>
               <Download />
@@ -173,9 +173,9 @@ export function Landing() {
           stage={<ProvidersDemo />}
           points={[
             `The plans you already pay for: ${sentence(plans)}.`,
-            `${local?.name ?? 'A model on this computer'} is private, free and works offline.`,
-            'Paste a key, and Conch knows whose it is, or asks.',
-            'Offline, or at a usage limit, the one you chose carries on.',
+            `${local?.name ?? 'On this computer'}: a model that’s private, free and works offline.`,
+            'Paste a key. Conch knows whose it is, or asks.',
+            'At a usage limit, the next plan or key with room carries on.',
           ]}
           action={
             <TextLink arrow="forward" asChild>
@@ -184,8 +184,8 @@ export function Landing() {
           }
         >
           <p>
-            Sign in with the plans you already pay for, or paste an API key. Each adds its models to
-            the same list, and a chat can move from one to another without losing its thread.
+            Sign in with a plan or paste an API key. Every model joins one list, and a chat can
+            switch without losing its thread.
           </p>
         </Scene>
 
@@ -199,7 +199,7 @@ export function Landing() {
           }
           stage={<AgentsDemo />}
           points={[
-            'Choose one of Conch’s faces, upload a picture, or create one with AI.',
+            'Pick one of Conch’s faces, upload a picture, or make one with AI.',
             <>
               Pick who answers each chat, task and routine. In a chat app, <code>/agent</code>{' '}
               switches.
@@ -214,9 +214,9 @@ export function Landing() {
           }
         >
           <p>
-            Make as many agents as you like, each with its own personality and instructions. Every
-            one keeps going when something fails: it works out why, tries another way, and checks
-            the result before it tells you it’s done.
+            Make as many as you like, each with its own personality and instructions. When something
+            fails, it works out why, tries another way and checks the result before saying it’s
+            done.
           </p>
         </Scene>
 
@@ -224,14 +224,14 @@ export function Landing() {
           kicker="In the chat"
           title={
             <>
-              It knows what it can do. <em>Just ask.</em>
+              It knows what it can do. <em>So ask.</em>
             </>
           }
           stage={<KnowsDemo />}
           points={[
-            'What it finds is shown as it is: your calendar, your email, your files, your messages.',
+            'Your calendar, email, files and messages, shown as they are.',
             'Questions come with answers to tap, and its plan ticks itself off as it goes.',
-            'Under a reply, what you might say next is one tap away.',
+            'What you might say next is one tap away.',
             'It never turns anything on by itself.',
           ]}
           action={
@@ -241,9 +241,8 @@ export function Landing() {
           }
         >
           <p>
-            When what you ask needs an app or a skill that isn’t on yet, the card to turn it on is
-            right under the reply. Once it’s on, the chat carries on by itself. There’s nothing to
-            ask again.
+            Need an app or a skill that isn’t on yet? The card to turn it on is under the reply.
+            Once it’s on, the chat carries on by itself.
           </p>
         </Scene>
 
@@ -257,10 +256,12 @@ export function Landing() {
           }
           stage={<MakerDemo />}
           points={[
-            'Every model you use can use it, and its page looks like Conch, in light and dark.',
+            'It works with every model, and its page looks like Conch, light or dark.',
             'It runs sealed off: its own notes, and only the websites its card names.',
-            'Nothing is added until you press the button.',
-            'Share it on GitHub in one press, or add one someone else made from a link.',
+            <>
+              Nothing is added until you press <strong>Add to my apps</strong>.
+            </>,
+            'Share it on GitHub in one press, or add someone else’s from a link.',
           ]}
           action={
             <TextLink arrow="forward" asChild>
@@ -269,8 +270,8 @@ export function Landing() {
           }
         >
           <p>
-            When nothing you have does what you need, say what you want in your own words. Conch
-            writes the app, checks it, tries every part of it and shows it to you as a card.
+            Say what you need in your own words. Conch writes the app, tries every part of it and
+            shows it to you as a card.
           </p>
         </Scene>
 
@@ -294,9 +295,9 @@ export function Landing() {
           }
         >
           <p>
-            Conch interrupts you for two things: an approval that matters, and what only a person
-            can do. Once a chat has read a web page or an email, anything that could send your
-            things out or change your computer asks first, in every mode.
+            It stops you for two things: an approval that matters, and what only a person can do.
+            After a chat reads a web page or an email, anything that could send your things out or
+            change your computer asks first, in every mode.
           </p>
         </Scene>
 
@@ -312,13 +313,12 @@ export function Landing() {
           points={[
             'It asks before it acts on a new site.',
             'Passwords are yours to type. It never sees one.',
-            'Your own browser, its cookies and its sign-ins are never touched.',
+            'Your own browser, cookies and sign-ins are never touched.',
           ]}
         >
           <p>
-            Conch has a browser of its own, with nothing to install. You see the page live beside
-            the chat, with a small pearl where it is about to click, and you can take the wheel
-            whenever you like.
+            Conch has its own browser, with nothing to install. Watch it live beside the chat, a
+            small pearl where it’s about to click, and take the wheel any time.
           </p>
         </Scene>
 
@@ -338,8 +338,7 @@ export function Landing() {
         >
           <p>
             A bot or a chat of your own in {sentence(channels.slice(0, 4).map((c) => c.name))}, and{' '}
-            {channels.length - 4} more. Most connect outward from your computer, so nothing is
-            opened to the internet.
+            {channels.length - 4} more. Most connect outward, so nothing is opened to the internet.
           </p>
           <Marquee
             label="Chat apps you can reach Conch from"
@@ -372,9 +371,11 @@ export function Landing() {
           }
           stage={<RepairDemo />}
           points={[
-            'Nothing to install first. What it needs, it fetches by itself.',
-            'One Repair everything button, for when you want to be sure.',
-            'Daily backups and signed updates, without you thinking about them.',
+            'Nothing to install first: it fetches what it needs.',
+            <>
+              One <strong>Repair everything</strong> button, for when you want to be sure.
+            </>,
+            'Daily backups and signed updates, on their own.',
           ]}
           action={
             <TextLink arrow="forward" asChild>
@@ -383,9 +384,8 @@ export function Landing() {
           }
         >
           <p>
-            Conch keeps an eye on every part of itself and mends what it can on its own. When
-            something needs you, like signing in again, you get one plain sentence and the button
-            that does it.
+            Conch watches every part of itself and mends what it can. When it needs you, like a
+            fresh sign-in, you get one plain sentence and the button that does it.
           </p>
         </Scene>
 
@@ -394,7 +394,7 @@ export function Landing() {
             <Bento.Tile
               span={3}
               title="It remembers, in the open"
-              text="Memories are small Markdown files you can read, edit or delete. It learns from how you correct it, quietly, and asks only when something looks unsafe."
+              text="Memories are small Markdown files you can read, edit or delete. It learns quietly from your corrections, and asks only when something looks unsafe."
               picture="Three things Conch remembered, each a short note"
             >
               <MemoryDemo />
@@ -421,7 +421,7 @@ export function Landing() {
               span={2}
               index={3}
               title="Hand it off"
-              text="Send a job to the background and keep chatting. Its result comes back to where you asked."
+              text="Send a job to the background and keep chatting. A waiting one says why, and the result comes back where you asked."
               picture="A background task working through its steps, then finishing"
             >
               <TaskDemo />
@@ -430,7 +430,7 @@ export function Landing() {
               span={2}
               index={4}
               title="At a time, or when it happens"
-              text="Routines run at a time you read in plain words, or when something happens, like an email from someone. Or say it once, “tell me if my flight changes”, and it speaks up only when it does. Watching costs nothing. Nothing runs until you turn it on."
+              text="Routines run at a time you read in plain words, or when something happens, like an email from someone. Say “tell me if my flight changes” once, and it speaks up only when it does. Watching is free, and nothing runs until you turn it on."
               picture="A routine your assistant drafted to tell you when someone emails, waiting to be turned on"
             >
               <RoutineDemo />
@@ -439,7 +439,7 @@ export function Landing() {
               span={4}
               index={5}
               title="It tells you what it fixed"
-              text="What Conch mended while you were away is a quiet list, not an alarm. Nothing for you to do."
+              text="What Conch mended while you were away, as a quiet list, not an alarm. Nothing for you to do."
               picture="Three things Conch fixed on its own"
             >
               <HealedDemo />
@@ -497,9 +497,8 @@ export function Landing() {
           title="Kept on your own computer"
           lede={
             <>
-              A small program on your computer, the app it serves, and the providers you connect.
-              Chats, memories, skills and settings are plain files in <code>~/.conch</code>, and
-              Conch keeps no copy anywhere else.
+              Chats, memories, skills and settings are plain files in <code>~/.conch</code>. Conch
+              keeps no copy anywhere else.
             </>
           }
         >
@@ -508,12 +507,12 @@ export function Landing() {
           </Reveal>
         </Band>
 
-        <Band title="Good to know" lede="Three things worth knowing before you install it.">
+        <Band title="Good to know">
           <Bento>
             <Bento.Tile
               span={2}
               title="It runs where you work"
-              text="An app for macOS, Linux and Windows, or one line in a terminal, on your computer or a server. Nothing to install first."
+              text="An app for macOS, Linux and Windows, or one line in a terminal, on your computer or a server."
               picture="The systems Conch runs on: macOS, Linux and Windows"
             >
               <div className={styles.systems}>

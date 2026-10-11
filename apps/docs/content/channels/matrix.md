@@ -4,19 +4,19 @@ channel: matrix
 
 ## Connect it
 
-In Conch, open **Apps**, choose **Talk to me here**, then **Matrix**. Your assistant gets a Matrix account of its own, and you message it from yours.
+Your assistant gets a Matrix account of its own, and you message it from yours. Open **Apps → Talk to me here → Matrix**.
 
-1. **Make an account for your assistant.** Conch suggests a username and a display name. Make the account in Element (it's free), on the same homeserver as yours if you can, and give it a strong password of its own.
-2. **Sign Conch in to it.** Type the homeserver (leave `matrix.org` for matrix.org), the username and the password, and press **Sign in**. Conch signs in once, as a new session called "Conch", and keeps only that session. It never keeps the password.
-3. **Say hello.** In Element, start a direct message with your assistant's account and send it anything. Conch asks **Is this you?** with your name. Press **That's me**.
+1. **Make an account for your assistant.** In Element (free), make one with the username and display name Conch suggests and a strong password of its own. Use your homeserver if you can.
+2. **Sign Conch in.** Type the homeserver (leave `matrix.org` for matrix.org), the username and the password, and press **Sign in**. Conch keeps only its new "Conch" session, never the password.
+3. **Say hello.** In Element, start a direct message with your assistant's account and send it anything. Conch asks **Is this you?**. Press **That's me**.
 
 <!-- conch:channel-scene matrix key -->
 
 ## Encrypted chats work
 
-Element encrypts direct messages, and so does your assistant: Conch has its own encryption keys, like a new phone. It reads only messages from sessions your account has verified, so nobody can slip in a session in your name and give it orders.
+Conch has its own encryption keys, like a new phone. It reads only messages from sessions your account has verified, so nobody can add a session in your name and give it orders.
 
-If a session of yours isn't verified, the assistant says so in the chat and doesn't read the message. Verify it in Element under **Settings** → **Sessions**.
+A message from an unverified session isn't read, and the assistant says so. Verify the session in Element under **Settings → Sessions**.
 
 ## Your first hello
 
@@ -24,9 +24,8 @@ If a session of yours isn't verified, the assistant says so in the chat and does
 
 ## Good to know
 
-- **No public address.** Conch keeps asking the homeserver for news from your computer, so nothing is opened to the internet.
-- **Approvals come with reactions.** Tap ✅ to allow, ♾️ for always in this chat, or ❌ not to. Replying with the number works too.
-- **An access token instead?** Use one made for Conch only. One of Element's own would break Element's encryption, and Conch refuses it.
+- **Approvals come with reactions.** Tap ✅ to allow, ♾️ for always in this chat, or ❌ not to. Or reply with the number.
+- **An access token instead?** Use one made for Conch only. Conch refuses one of Element's own, which would break Element's encryption.
 - **Groups are declined**, with a note saying why.
-- **Pictures and files from Conch** (a picture it made, a file it finished) arrive in the chat, up to 50 MB each. In an encrypted chat they're encrypted before they leave your computer.
+- **Pictures and files from Conch** arrive in the chat, up to 30 MB each, encrypted in an encrypted chat before they leave your computer.
 - **Messages sent while Conch was off** are answered when it's back, for a day.

@@ -1,251 +1,242 @@
 ---
 title: Your chats
-description: Pin, file and tidy your chats, see which need you, keep drafts, choose who answers, queue messages, use / commands, set a goal, and keep long chats going.
+description: Pin, file and tidy chats, keep drafts, choose who answers, queue messages, set a goal and keep long chats going.
 order: 12
 ---
 
-Your chats are in the sidebar. Point at one and press **⋯**, or right-click it, for what you can do with it. On a phone, press and hold.
+Your chats are in the sidebar. Press **⋯** beside one, right-click it, or hold it on a phone for its menu.
 
 ## Your list
 
-From the top, the sidebar shows:
+From the top, empty parts hidden:
 
-- **Apps.** App pages you pinned, as a row of app tiles under a quiet **Apps** heading. Each tile has its app's icon. Point at one to see where it's from, like "Page of the Tally app". Right-click a tile, or press and hold it, for **Unpin** and the app's details. The ones you open most are the ones in the row.
-  With more apps than fit, the last tile is **All apps**: press it and every app opens as a folder, with a search. Type a few letters to find one, use the arrow keys to move between them, Enter to open, and Escape to close. **Open Apps** at its foot goes to the [Apps](apps.md) page.
-- **Needs you.** Chats waiting for you to allow or answer something stay here until you do.
-- **Pinned.** Chats you keep at the top.
-- **Folders.** Your own groups of chats.
+- **Apps.** Pinned app pages as tiles, most used first. Point at one to see where it's from; right-click or hold it for **Unpin** and the app's details. With more than fit, the last tile is **All apps**: every app as a folder, with a search. **Open Apps** at its foot goes to [Apps](apps.md).
+- **Needs you**, **Pinned**, then **Folders**.
 - **Everything else, by when.** Today, Yesterday, Previous 7 days, Previous 30 days, then one group per month.
 - **Archived**, at the end.
 
-You only see a part once there's something in it.
-
 ### What each chat is doing
 
-A small mark beside a chat says what's happening in it:
-
-- **The pearl:** it's working.
-- **An amber dot:** it needs you.
-- **A dot and a bolder title:** something new happened while you were elsewhere, like a reply that finished or a message from a [chat app](../channels/index.md). Open the chat and the mark goes, on your phone too.
+- **The pearl:** working.
+- **An amber dot:** needs you.
+- **A dot and a bolder title:** something new while you were away, like a finished reply or a message from a [chat app](../channels/index.md). Opening the chat clears it, on your phone too.
 - **A red dot:** the last reply didn't finish.
 
-The menu beside **Chats** shows **All chats**, only what's **New**, or only chats **From chat apps**.
+The menu beside **Chats** shows **All chats**, only **New**, or only **From chat apps**.
 
 ### Pin a chat
 
-Choose **Pin** to keep a chat at the top. There's no limit. Drag pinned chats to put them in your own order, or use **Move up** and **Move down**. Archiving a chat unpins it.
+**Pin** keeps a chat at the top, with no limit. Drag to reorder, or use **Move up** and **Move down**. Archiving unpins.
 
 ### Folders
 
-Choose **Move to → New folder…**. Give the folder a name, and pick a mark and a colour. Then:
+Choose **Move to → New folder…**, name it, and pick a mark and a colour. Then:
 
-- Drag chats onto a folder, or choose **Move to** and the folder. On a phone, hold a chat until it lifts, then drag it onto the folder.
-- Press a folder's name to fold or unfold it.
-- Press **✎** beside a folder's name to start a chat already inside it. The new chat page says where it's going, and the chat shows in the folder from the moment you send it. **✕** starts it outside the folder instead.
-- Press **⋯** beside a folder to **Edit** or **Remove** it. Removing a folder puts its chats back in your list. It deletes nothing.
-
-Folders only sort your chats. They don't change how your assistant answers.
+- Drag chats onto it, or choose **Move to** and the folder.
+- Press its name to fold or unfold it.
+- **✎** beside it starts a chat inside it; **✕** on the new chat page starts it outside instead.
+- **⋯** has **Edit** and **Remove**. Removing deletes nothing: its chats go back in your list.
+- Folders only sort chats; they don't change the answers.
 
 ### Many at once
 
-Hold <kbd>mod</kbd> or <kbd>shift</kbd> and click chats to select them, or choose **Select** from a chat's menu. A bar at the bottom offers **Pin**, **Move to**, **Archive** and **Delete**. **Done** or <kbd>esc</kbd> ends it.
+Hold <kbd>mod</kbd> or <kbd>shift</kbd> and click chats, or choose **Select** from a chat's menu. The bar at the bottom offers **Pin**, **Move to**, **Archive** and **Delete**. **Done** or <kbd>esc</kbd> ends it.
 
 ### On a phone
 
-Swipe a chat to the right to pin it, or to the left to archive it. **Undo** puts it back.
-
-Hold a chat for a moment and it lifts off the list. Keep your finger down and drag it onto a folder: folders light up as you pass over them and say what letting go will do, and the list scrolls by itself near its top and bottom. Let go on a folder and the chat moves there. Let go anywhere else and nothing changes. Let go without moving and you get the chat's menu, as before.
+- Swipe right to pin, left to archive. **Undo** puts it back.
+- Hold a chat until it lifts, then drag it onto a folder, which says what letting go will do. Let go without moving for its menu.
 
 ### Tidy up
 
-Once a few chats haven't been touched for a month, a note at the end of the list offers **Archive them**. It leaves out anything pinned, in a folder, working, waiting for you or new. Nothing is archived until you press it, and **Undo** brings them back. **Not now** hides the note.
+Once eight or more chats are a month untouched, a note at the end of the list offers **Archive them**. It skips chats that are pinned, in a folder, working, waiting for you or new. **Undo** brings them back. **Not now** hides the note until ten more pile up.
 
 <kbd>alt+up</kbd> and <kbd>alt+down</kbd> go to the chat above or below. Double-click a title to rename it.
 
 ## Search
 
-Press <kbd>mod+k</kbd> to search chats and messages. The search window stays the
-same size as you type or move between results. Scroll the results and the preview
-separately; the search box stays in place. On a narrow screen, only results are shown.
+<kbd>mod+k</kbd> searches chats and messages. See [Find](./find.md).
 
 ## Writing a message
 
-<kbd>enter</kbd> sends and <kbd>shift+enter</kbd> starts a new line. You can start typing anywhere in the chat: the words go in the message box.
+<kbd>enter</kbd> sends, <kbd>shift+enter</kbd> starts a new line. Type anywhere in the chat and it goes in the message box.
 
-- <kbd>↑</kbd> in the empty box brings back what you sent, newest first: this chat's messages, then what you sent lately in other chats. <kbd>↓</kbd> walks forward again. Change it and send, or keep going.
-- What you were writing stays in each chat, with what you attached. See [Drafts](#drafts).
-- Point at a message of yours and press **Copy** to take its words.
-- Type `/` for commands: change the model or how hard it thinks, start afresh, set a goal, plan first, copy the last reply, save the chat as a file and more. The list offers each command's choices, with the one in use ticked. [Every command](../reference/slash-commands.md).
+- <kbd>↑</kbd> in an empty box brings back what you sent, newest first: this chat, then other recent chats. <kbd>↓</kbd> goes forward.
+- **Copy**, on a message of yours, takes its words.
+- Type `/` for [commands](../reference/slash-commands.md): the model, how hard it thinks, a goal, a plan and more.
 
 ### Drafts
 
-What you write and don't send stays in that chat as a draft: the words, the files and pictures you attached, and long pastes. The new chat page keeps one too, with the model and mode you chose for it.
+What you don't send stays in that chat: words, attached files and pictures, long pastes. The new chat page keeps one too, with the model and mode you chose.
 
-- Go to another chat, reload, close the tab or restart Conch, and it's there when you come back, with the cursor at the end. Press <kbd>enter</kbd> to send it.
-- Conch keeps it, not only this browser, so it's there on your phone and in another browser too. Open the chat, or come back to the tab, to see what you wrote elsewhere.
+- It survives reloads and restarts, and Conch keeps it, not the browser, so it's on your phone too.
 - Chats with a draft show a pencil and **Draft** in your list.
-- Sending clears it. Deleting the chat deletes its draft and its files.
-- A draft you don't touch for 30 days is let go, with its files. If a file is gone, its card says **No longer here**. Remove it, then attach it again.
-- Signing out on this device clears the copy kept here. The draft is still in Conch when you sign in again.
+- Sending clears it. Deleting the chat deletes its draft and files.
+- Signing out clears only this device's copy.
+- A draft untouched for 30 days goes, with its files. A missing file's card says **No longer here**: remove it and attach it again.
 
 ## Who answers
 
-A chat starts with your default [agent](./agents.md): **Talking to** its name, above the message box, says who. Press it to choose another before the first message. Later, press the name at the top of the chat (**‹name› answers this chat**), or type `/agent` and a name. The new agent answers from your next message, and a line marks where: **Atlas took over from Juniper**. Above each answer, a small line with the agent's face and name says who wrote it, and the words below take the chat's full width.
+A chat starts with your default [agent](./agents.md), named by **Talking to** above the message box. Press it to choose another before the first message. Later, press **‹name› answers this chat** at the top, or type `/agent` and a name.
+
+The new agent answers from your next message, marked by a line like **Atlas took over from Juniper**. Each answer shows its agent's face and name.
 
 ## While it works
 
-<kbd>esc</kbd> or the stop button stops the reply. It ends there at once with a **Stopped** mark (and how long it ran), and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
+<kbd>esc</kbd> or the stop button stops the reply at once, marked **Stopped** with how long it ran.
 
-While it works, the words above the reply say what it's doing after each step: reading a command's output, looking at a page, checking an edit. Beside them, a quiet tally: how long this step has taken, and what the reply has written so far, rolling up as it grows (**12s · 42.3k tokens**). The clock starts again with each step, so a long job reads step by step rather than as one big timer; each finished step keeps its own time on its row. Once a long reply is done, **Worked 12m · 412k tokens** among its buttons says what the whole of it took. The ring beside the **Model · Mode** chip keeps saying how full the chat is, and pressing it while a message runs shows what it has written and read so far.
+The words above the reply say what it's doing, with this step's time and what it has written so far (**12s · 42.3k tokens**).
+
+- A long reply ends with **Worked 12m · 412k tokens** among its buttons.
+- Press the ring beside the **Model · Mode** chip mid-reply to see what it has written and read so far.
 
 ### Long jobs
 
-Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it's plainly getting nowhere: the very same step coming back with the very same answer, again and again in quick succession. Checking on something that takes a while, failing tests on the way to fixing them, or a search that finds nothing are all work, never a reason to stop. It's told first, twice, and tries another way; only if it carries on does it pause, with **Carry on** to pick up where it was.
+A message you're watching has no limit on steps, time or reading. Your assistant stops only when plainly stuck, repeating the same step with the same answer. Slow waits, failing tests and empty searches don't count. It's warned twice and tries another way first, then pauses with one sentence saying why. Press **Carry on**, or say what to do differently.
 
-The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
+**To have it check in sooner**, turn on **Pause long turns to check in** in **Settings → Usage → Limits**:
 
-Want it to check in sooner? In **Settings → Usage → Limits**, turn on **Pause long turns to check in** and set your own limits: steps (starts at 100), minutes (30) and **Tokens used, in millions** (2), meaning what a message reads and writes that the provider hadn't already cached. A chat then pauses at the first one it reaches, with **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner still, but it never stops you.
+- Set steps (from 100), minutes (30) and **Tokens used, in millions** (2, uncached reading and writing). It pauses at the first one reached.
+- Over your [monthly budget](../care/offline.md) it checks in sooner still, but never stops you.
 
-Routines and background tasks have their own room (200 steps, an hour), since nobody is there to press **Carry on**. That doesn't change with the switch.
+Routines and background tasks always get 200 steps and an hour.
 
-You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box and goes by itself the moment the reply is over. Send more and each waits its turn, in order, one at a time: the next goes when the reply before it is done.
+### Queue your next message
 
-- **Drag** one by its handle to change the order (with a finger on a phone), or focus the handle and use the arrow keys.
-- **Steer** (the lightning) sends one now: the reply stops where it is, nothing it did is lost, and it reads your message next. <kbd>mod+enter</kbd> steers with what's in the box. The rest keep waiting and carry on after. It works the same with every provider.
-- The pencil takes one back into the box to change it, and the cross doesn't send it.
-- If you stop the reply, or it fails, the queue waits for you instead of going on, and each one offers to send now.
+Press <kbd>enter</kbd> while it works and the message waits above the box, then goes when the reply is over. More go in order.
+
+- **Drag** one by its handle to reorder, or focus the handle and use the arrow keys.
+- **Steer** (the lightning) sends one now: the reply stops, nothing is lost, and it reads your message next. <kbd>mod+enter</kbd> steers with what's in the box. Works with every provider.
+- The pencil takes one back into the box. The cross drops it.
+- If the reply stops or fails, the queue waits and each message offers to send now.
 
 ## What it did, in plain words
 
-Your assistant often takes many steps for one answer: it reads files, runs commands, looks at pages. The chat doesn't list them one by one. It tells them in a few short lines, each saying what that part of the work did and what it came to: **Ran the tests · 241 passed**, **Searched the web and read 3 pages**, **Pushed the fixes to main**. A small picture beside each line says what kind of work it was, and moves a little while the work goes on. The sites it looked at show their icons.
+The chat tells an answer's steps in a few short lines, like **Ran the tests · 241 passed**, with a picture for the kind of work and icons for sites visited. Under a running line, the current step shows, in italics when a provider wrote it.
 
-While a line is still going, the words under it say the step at hand, like "Reading the settings file". Some providers say this in their own words. Those are set in italics.
+- **Press a line** for its steps, each with what it found and how long it took.
+- **Press a step** for exactly what ran: the command, what came back, the change made. Nothing is hidden, only folded.
+- **Why?** beside a step asks why your assistant did it and what it learned. Asking again costs nothing.
 
-- **Press a line** to see its steps, each in plain words, with what it found and how long it took.
-- **Press a step** to see exactly what ran: the command, what came back, the change made. Nothing is hidden, only folded away.
-- **Why?** beside a step asks why your assistant did it and what it learned. The answer takes a moment and comes from what's in the chat. Your assistant keeps working meanwhile. Asking again about a finished step costs nothing.
+Repeats show once, with **×2** or a count. Retries say so ("Worked on the second try", "The same command failed 3 times").
 
-When a step is done again with the same result and nothing changed in between, it shows once: a line of one step says **×2**, and an opened line says how many repeats it folded. When something failed and then worked, the line says so: "Worked on the second try". When your assistant is going round in circles, the line says that too, like "The same command failed 3 times", so you can step in.
+**Better words.** When a part is done, a small model may rewrite its line; **Why?** uses it too. It follows the rules of [learning by itself](./memory.md#learning-by-itself):
 
-Once a part of the work is done, a small model may rewrite its line in better words. **Why?** asks it too. It follows the rules of [learning by itself](./memory.md#learning-by-itself). It asks the chat's own provider first, on its smallest model. If that plan is nearly used up, it asks another provider you connected that has room, then one on this computer. A chat marked **Don't learn from this chat** only goes to its own provider or one on this computer. Only when none has room does **Why?** say so, and it names the plan. Each answer costs a fraction of a cent on pay-as-you-go providers. It counts toward **Learning from your chats** in **Settings → Usage → Limits**, and stops when your [budget for the month](../care/what-it-costs.md#a-budget-for-the-month) is spent. To keep the lines as they are, turn off **Name new chats automatically** in **Settings → General**. That also stops Claude Code describing its steps in its own words, which costs a small call on your plan for each round of steps.
+- It asks the chat's own provider's smallest model first, then another connected provider with room, then one on this computer.
+- A chat marked **Don't learn from this chat** uses only its own provider or one on this computer.
+- If none has room, **Why?** says so and names the plan.
+- On pay-as-you-go, each costs a fraction of a cent toward **Learning from your chats** in **Settings → Usage → Limits**, and stops at your [budget for the month](../care/what-it-costs.md#a-budget-for-the-month).
+
+To keep the lines as they are, turn off **Name new chats automatically** in **Settings → General**. That also stops Claude Code describing its own steps (a small call per round).
 
 ### What changed
 
-At the end of a reply, one line sums up what it changed outside the chat: **Changed 4 files · committed · pushed to main**. Press it to see each change. Messages sent, money spent and things deleted come first. A change to your files has **Undo** beside it, and then **Redo**, as in [Undo](../care/undo.md).
+A reply ends with one line on what it changed outside the chat: **Changed 4 files · committed · pushed to main**. Press it for each change, messages sent, money spent and things deleted first. File changes have **Undo**, then **Redo**, as in [Undo](../care/undo.md).
 
 ### While you were away
 
-If you switch to another chat or another app while your assistant works, and two or more parts of the work finish meanwhile, a card at the top of the chat says **While you were away**: how long it worked, and one line for each part. Press a line to go to it in the chat, opened. The card goes when you close it with **Dismiss**, send a message, or read down to the end.
+If two or more parts finish while you're elsewhere, a **While you were away** card says how long it worked, with a line per part to jump to. The card goes when you press **Dismiss**, send a message, or read to the end.
 
 ### Site icons
 
-The icons of the sites your assistant visited come through Conch. Conch asks each site for its own icon, so no other company learns which sites you visit. A site without one shows its first letter. [Passwords](./passwords.md) never show site icons, so no site learns you have an account there.
+Conch fetches each icon from the site itself, so no other company learns where you go; without one, the first letter shows. [Passwords](./passwords.md) never show site icons.
 
 ## When it asks you something
 
-Sometimes your assistant needs your choice before it can go on: which day suits you, how you'd like to talk, how many people are coming. It asks with a card in the chat, and the reply waits for you.
+When your assistant needs a choice, it asks with a card and the reply waits.
 
-- Tap an answer. A question with one set of options goes as soon as you choose. Anything more has **Send**.
-- Pick a day from the row of days, or **Pick a date** for another. On a phone the row slides sideways for more days.
-- Pick a time from the few it suggests, or **Another time…** for any other. Numbers and a few words work the same way.
-- **Something else…** lets you write your own answer.
-- Or type your answer in the message box. While a question waits, it says **Answer above, or type it here**.
-- **Skip** lets your assistant carry on with its best guess. It tells you what it assumed.
+- Tap an answer. A single set of options sends as you choose; anything more has **Send**.
+- Pick a day or **Pick a date**, a time or **Another time…**.
+- **Something else…** lets you write your own, or type in the message box, which says **Answer above, or type it here**.
+- **Skip** lets your assistant carry on with its best guess and say what it assumed.
+- On a keyboard, <kbd>1</kbd> to <kbd>6</kbd> pick and <kbd>enter</kbd> sends.
 
-On a keyboard, <kbd>1</kbd> to <kbd>6</kbd> choose an option and <kbd>enter</kbd> sends.
+Once answered, the card folds to one line. Stopping the reply, or Conch restarting, skips the question.
 
-Once you answer, the card folds to one line with your answer. Stopping the reply skips the question, and so does Conch restarting while it waits.
+A waiting question shows in the sidebar and, with [notifications](../start/phone.md) on, on your phone. In **Talk**, your assistant reads it out and you answer aloud.
 
-A waiting question shows in the sidebar like anything else that needs you. With [notifications](../start/phone.md) on, your phone hears that your assistant has a question. In **Talk**, your assistant reads the question out, and what you say back answers it.
-
-Routines, background tasks and chats from your [chat apps](../channels/index.md) never stop to ask, because nobody is there to answer. Your assistant picks the sensible choice and says which.
+Routines, background tasks and [chat apps](../channels/index.md) never stop to ask; your assistant picks the sensible choice and says which.
 
 ## What to say next
 
-Under the latest reply, up to three small buttons hold what you might well say next: “Make it shorter”, “Add Ada to the invite”. Press one and it's sent, exactly as it reads, as if you'd typed it. The chat's model and settings stay as they are, and anything you were writing in the message box stays there.
+Under the latest reply, up to three buttons hold what you might say next, like “Make it shorter”. Press one to send it as written.
 
-They come from two places:
+- **Your assistant** offers them when the next step is clear.
+- **Conch** reads the reply. Under a table of numbers, **Show it as a chart** draws it beside the chat.
 
-- **Your assistant** offers them when the next step is clear. Most replies have none.
-- **Conch** reads the reply itself. Under a table of numbers, **Show it as a chart** draws it beside the chat.
+They go once anything newer arrives, and never show:
 
-They go as soon as anything newer is in the chat: a message from you, here or on another device, or a new reply. You'll never see them:
-
-- while something else is waiting for you in that reply, like a question or a card to connect an app, so there's one thing at a time;
-- from your assistant after the chat has read something from outside, like a web page or an email, because those words could be someone else's (Conch's own still show);
-- in [routines](./routines.md), background tasks or chats from your [chat apps](../channels/index.md), where nobody is there to press them.
+- while something in that reply waits for you;
+- from your assistant after the chat read a web page, email or other outside words (Conch's own still show);
+- in [routines](./routines.md), background tasks or [chat apps](../channels/index.md).
 
 ## Rename
 
-Choose **Rename**, type the new title and press <kbd>enter</kbd>. <kbd>esc</kbd> keeps the old one. A title you write is never replaced by the one Conch suggests.
+Choose **Rename**, type and press <kbd>enter</kbd>. <kbd>esc</kbd> keeps the old title. Conch never replaces a title you wrote.
 
 ## Archive
 
-Choose **Archive** to take a chat out of your list without deleting it. Nothing in it changes, and it still turns up when you [search](./find.md).
+**Archive** takes a chat out of your list without deleting it. [Search](./find.md) still finds it.
 
-- Archiving the chat you're reading takes you to a new chat.
-- **Undo**, in the note that appears, puts it straight back.
-- A chat that's still working carries on in the archive.
-- An archived chat comes back to your list by itself when you write in it, or when it needs you to allow or answer something.
-
-In <kbd>mod+k</kbd>, **Archive this chat** does the same for the chat you're in.
+- Archiving the chat you're reading opens a new one. **Undo**, in the note, puts it back.
+- A working chat carries on, and it returns to your list when you write in it or it needs you.
+- In <kbd>mod+k</kbd>, **Archive this chat** does the same.
 
 ## Find what you archived
 
-**Archived**, after the last chat in the sidebar, shows how many chats are in the archive. It opens **Archived chats**, most recently archived first. You can also type "archived" in <kbd>mod+k</kbd>.
+**Archived**, at the end of the sidebar, shows how many and opens **Archived chats**, newest first. Or type "archived" in <kbd>mod+k</kbd>.
 
-From there:
-
-- Choose a chat to read it. A note at the top says it's archived, with **Unarchive**.
-- **Unarchive** puts a chat back in your list, where it was.
+- Choose a chat to read it. A note at the top has **Unarchive**, which puts it back where it was.
 - The bin deletes it, after asking.
 - With many chats, a box finds one by name. **⋯** has **Unarchive all** and **Delete all…**.
 
 ## Delete
 
-Choose **Delete**, from the list or from **Archived chats**, and confirm. The chat and what was attached only to it are removed from Conch. Anything your assistant remembered from it stays in [memory](./memory.md), where you can forget it too.
+Choose **Delete**, from the list or **Archived chats**, and confirm. The chat and what was attached only to it leave Conch. What your assistant remembered from it stays in [memory](./memory.md), where you can forget it too.
 
 ## Its plan, as it works
 
-When something takes a few steps, like tidying a folder or fixing a bug, your assistant writes its plan into the reply as a short checklist. You see where it's up to while it works: finished steps get a tick, the one it's doing now shows what it's doing (“Running the tests”), and the rest wait their turn. A long plan shows the steps around the work, with **Show all** for the rest.
+For a job of a few steps, your assistant writes its plan into the reply as a checklist, ticking steps off. A long one has **Show all**.
 
-When the reply ends, the plan folds to one line, like **Plan · 5 of 5 done**. Press it to see the steps again. A reply you stopped keeps its plan as far as it got.
+When the reply ends, it folds to one line, like **Plan · 5 of 5 done**. Press it for the steps. A stopped reply keeps its plan as far as it got.
 
-Claude Code and Codex keep a plan of their own, and Conch draws it. Other providers that can use Conch's tools get the same checklist. A model that can only chat doesn't keep one.
+Claude Code and Codex keep their own plan, which Conch draws. A chat-only model has none.
 
 ### Read only
 
-In **Read only** mode, your assistant looks around and plans, but changes nothing. Type `/plan` to turn it on or off, or `/plan` and what you'd like done to plan it straight away. When the plan is ready it's shown to you in full, with two buttons:
+In **Read only** mode, your assistant looks around and plans but changes nothing. `/plan` turns it on or off; `/plan` and a task plans it straight away. The finished plan shows in full, with:
 
-- **Start** ends Read only and begins the work, in the mode the chat had before.
-- **Keep planning** stays in Read only, and puts you back in the message box to say what to change.
-
-This works with every provider that can use Conch's tools: Claude Code asks with its own plan, and the others ask through Conch, with the same card.
+- **Start**: ends Read only and begins, in the chat's previous mode.
+- **Keep planning**: stays in Read only and puts you in the message box to say what to change.
 
 ## A goal for the chat
 
-Type `/goal` and what the chat is for: `/goal move the photos into the family library`. Your assistant keeps it in mind in every reply, whichever model answers, and the goal stays when you clear the chat. It shows as one quiet line above the message box. Press it to see it whole, **Edit** it or **Clear goal**. A line in the chat marks where it was set.
+Type `/goal` and what the chat is for: `/goal move the photos into the family library`. Your assistant keeps it in mind every reply, whichever model answers, and it survives clearing the chat.
+
+It shows as a line above the message box. Press it to read it, **Edit** it or **Clear goal**.
 
 ## Start afresh
 
-Type `/clear` when a chat has wandered and you'd like your assistant to start over in the same place. A line marks where: **Context cleared**. From there on it reads nothing said above, with every provider. Every message stays for you, and so does the goal. **Undo**, on the line or in the note, puts it back until you send something new. In <kbd>mod+k</kbd>, **Start afresh in this chat** does the same.
+Type `/clear` for a fresh start in the same chat. A **Context cleared** line marks where, and your assistant reads nothing above it, with every provider.
+
+Your messages and the goal stay. **Undo**, on the line or in the note, restores it until you send something. In <kbd>mod+k</kbd>, **Start afresh in this chat** does the same.
 
 ## Long chats
 
-A chat can go on as long as you like, with any model. Each model reads only so much at once, so when a chat grows past that, Conch writes a short summary of its start. The model reads the summary instead of the oldest messages, and carries on.
+A chat can go on as long as you like, with any model. When it outgrows what the model reads at once, Conch summarises its start, and the model reads that instead of the oldest messages.
 
-- A quiet line in the chat shows where the summary starts: **Earlier messages are summarised for** the model's name. Press it to read exactly what the model keeps.
-- Every message stays in the chat for you. Only what the model reads gets shorter.
-- Before the start of a chat is summarised, Conch learns what you said there, as the [memory](./memory.md) tidy-up does.
-- If the model still says the chat is too long, Conch summarises more and sends your message again by itself. Only if that isn't enough does the chat offer a model that reads more at once, or a new chat.
+- A quiet line marks where: **Earlier messages are summarised for** and the model's name. Press it to read what the model keeps.
+- Every message stays for you.
+- Before summarising, Conch learns what you said there, as the [memory](./memory.md) tidy-up does.
+- If the model still says it's too long, Conch summarises more and resends. If that fails, the chat offers a model that reads more, or a new chat.
 
-**How full is it?** The ring beside the **Model · Mode** chip fills as the chat grows, with the share beside it (**35%**). It measures against the model you chose: a model that reads a million tokens fills ten times slower than one that reads 100k. It turns amber from three quarters and red from nine tenths. Press it to see how much the model reads each time, out of how much, and **Compact now**.
+**How full is it?** The ring beside the **Model · Mode** chip fills against your model's reading size (**35%**), amber at three quarters and red at nine tenths. Press it for the numbers and **Compact now**.
 
-Type `/compact`, or press **Compact now**, to summarise the start now. Add what matters most to you, and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex keep their own memory of the chat, so there `/compact` goes to them, and they summarise it their own way.
+Type `/compact`, or press **Compact now**, to summarise the start now. Add what matters most and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex keep their own memory of the chat, so there `/compact` goes to them.
 
 ## Good to know
 
 - Chats from your [chat apps](../channels/index.md) archive the same way. A new message from there brings the chat back.
-- Routines, tasks and pinned apps keep their runs on their own pages, so they're never in this list or the archive.
-- Archiving, pins and folders are kept with your chats, so they're in your [backups](../care/backups.md) too.
-- In <kbd>mod+k</kbd>, type a folder's name to open it, or **New chat in** and its name to start one inside it; or **Pin this chat**, **Move this chat to…** or **New folder**.
+- Routines, tasks and pinned apps keep their runs on their own pages, never in this list or the archive.
+- Archiving, pins and folders are in your [backups](../care/backups.md).
+- In <kbd>mod+k</kbd>, type a folder's name to open it, or **New chat in** and its name to start one there. Also **Pin this chat**, **Move this chat to…** and **New folder**.

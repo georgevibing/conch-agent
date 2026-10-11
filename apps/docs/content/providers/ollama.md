@@ -4,31 +4,27 @@ provider: ollama
 
 ## Set it up
 
-One button does all of it.
-
 1. Open **Settings → Providers → On this computer**.
-2. Press **Get** on the model Conch suggests for this computer. It shows the size and how long the download should take.
-3. If Ollama (the program that runs the model) isn't here, the same press installs it first, then carries on to the model. On Linux, Conch links to Ollama's installer instead, and notices by itself when it's there.
+2. Press **Get** on the suggested model, like **Get Qwen3 4B**. It shows the size and download time.
+3. If Ollama isn't here, the same press installs it. On Linux, Conch links to Ollama's installer and notices when it's there.
 
-You can pause the download and pick it up later. When it finishes, the model is in the picker like any other.
+You can pause the download. When it finishes, the model is in the picker.
 
 ## Which model
 
-Conch only offers models that can use tools, and suggests one by how much memory this computer has: about 2 GB of download on a small laptop, up to about 23 GB on a workstation.
-
-It never offers one that won't fit. If memory or disk is short, it says by how much, in one sentence, and there's no button to press.
+Conch offers only models that can use tools, sized to this computer's memory: under 2 GB on a small laptop, up to about 23 GB on a workstation. If memory or disk is short, it says by how much and offers no button.
 
 ## What it's for
 
-- **Private.** Your chats go to no AI company. The model only ever talks to this computer.
+- **Private.** Your chats go to no AI company.
 - **Free.** Nothing to pay, and no limit.
 - **Offline.** It answers on a train, and takes over when the internet drops. See [Offline and at a limit](../care/offline.md).
 
-It is slower and less capable than the big cloud models. Use it for everyday questions, drafts and quick jobs, and a cloud provider for hard ones. A chat can move between them.
+It's slower and less capable than the big cloud models. Use it for everyday questions and drafts, and a cloud provider for hard jobs.
 
 ## Good to know
 
-- **Thinking is off by default,** so small models answer straight away. Turn it up under **Thinking**, in the **Model · Mode** chip.
-- **It reads as much as this computer allows.** Conch works out how much of the chat the model can hold from the model itself and this computer's memory, between 16,000 and 64,000 tokens.
-- **A small model gets a lean setup.** When the model reads little at once, Conch gives it short instructions and hands it tools as it needs them, so the chat itself has room. It's automatic.
-- **Conch keeps Ollama running.** If it has stopped when you need it, Conch starts it quietly and leaves a note under **Settings → Health → Fixed on its own**.
+- **Thinking is off by default,** so small models answer straight away. Turn it up under **Thinking**, in the chip that shows the model and mode.
+- **It holds 16,000 to 64,000 tokens of the chat,** sized to the model and this computer's memory.
+- **A small model gets a lean setup:** short instructions, and tools as it needs them.
+- **Conch keeps Ollama running,** and notes a restart under **Settings → Health → Fixed on its own**.

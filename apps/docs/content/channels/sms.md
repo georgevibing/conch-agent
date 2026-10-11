@@ -4,28 +4,26 @@ channel: sms
 
 ## Connect it
 
-You need a phone number for your assistant. Conch uses **Twilio**, which rents numbers that can text, for about a dollar a month plus a cent or so per text. In Conch, open **Apps**, choose **Talk to me here**, then **SMS**.
+Your assistant gets a phone number from **Twilio**, for about a dollar a month plus a cent or so per text. Open **Apps → Talk to me here → SMS**.
 
 1. **Get a number.** Sign up at Twilio (a trial comes with some credit). In the Twilio Console, open **Phone Numbers → Buy a number**, tick **SMS**, and buy one.
-2. **Paste your keys.** On the Twilio Console's first page, under **Account Info**, copy the **Account SID** and the **Auth Token**, and paste them anywhere on Conch's page. Conch checks them with Twilio and finds your number. There is no Save button.
-3. **Give it an address Twilio can reach.** Twilio delivers texts to a web address, so Conch opens one, with one press. Then Conch tells Twilio to send your number's texts there: there is nothing to paste in Twilio.
-4. **Say hello.** Text the number anything from your own phone, then press **That's me** in Conch.
+2. **Paste your keys.** On the Console's first page, under **Account Info**, copy the **Account SID** and the **Auth Token** (press **Show**). Paste them anywhere in Conch. Conch checks them and finds your number.
+3. **Give it an address Twilio can reach.** Press the button in Conch. Conch points your number at it, with nothing to paste in Twilio.
+4. **Say hello.** Text the number "hi" from your phone, then press **That's me** in Conch. Your assistant texts back, by name.
 
 <!-- conch:channel-scene sms key -->
 
 ## Your first hello
 
-Text the number "hi". In Conch your message shows with **That's me**. Press it, and your assistant texts back, by name.
-
 <!-- conch:channel-scene sms hello -->
 
 ## Good to know
 
-- **Plain text.** Texts have no bold or buttons. When your assistant asks before doing something, reply with the answer's number.
-- **Long answers are cut at three texts**, since each one costs. The whole answer is in Conch.
-- **Pictures** you send by MMS (where your carrier and number allow it) become attachments.
-- **Pictures from Conch stay in Conch.** A picture by MMS has to be on a public web address, and Conch never puts your files on the internet: when your assistant makes a picture or a file, the text says it's in Conch.
-- **A trial account** only texts numbers you verified: the phone you signed up with is. Its texts start with "Sent from your Twilio trial account".
-- **In the US**, carriers block texts from numbers that aren't registered. Register yours for A2P 10DLC in Twilio (**Messaging → Regulatory Compliance**), or use a toll-free number and verify it. If texts stop arriving for this reason, the channel's page says so.
-- **Someone else** who texts the number gets one polite reply and shows up in Conch for you to let in or block.
-- **Groups.** Group texts are never answered.
+- **Plain text.** To approve, reply with the answer's number.
+- **Long answers stop at three texts**, since each costs. The whole answer is in Conch.
+- **Pictures you send** by MMS (where your carrier and number allow it) become attachments.
+- **Pictures and files from Conch stay in Conch**, since MMS needs a public web address. The text says so.
+- **A trial account** texts only numbers you verified, and its texts start with "Sent from your Twilio trial account".
+- **In the US**, carriers block unregistered numbers. Register yours for A2P 10DLC (**Messaging → Regulatory Compliance**), or verify a toll-free number. The channel's page says if that's why texts stop.
+- **Anyone else** gets one polite reply and waits for you to **Let them in** or **Block**.
+- **Group texts** are never answered.

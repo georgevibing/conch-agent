@@ -4,110 +4,102 @@ description: Connect Notion, Gmail, Slack and more from one gallery, talk to you
 order: 4
 ---
 
-Connect the apps you already use, and your assistant can look things up and act in them: find a page in Notion, open an issue in GitHub, catch up on Slack. Connect the ones you chat in, and you can talk to it from there too. Every app in the gallery belongs to Conch, so it works with every provider and every model that can use tools. There is no file to edit.
+Connect your apps, and your assistant looks things up and acts in them: find a Notion page, open a GitHub issue. Connect the ones you chat in, and you can talk to it from there. Gallery apps belong to Conch, so they work with every provider and every model that can use tools.
 
-Everything is on one page, **Apps**, in the sidebar. It used to be two, Integrations and Channels; old links still lead here.
+It's all on **Apps**, in the sidebar.
 
 ## One app, one card
 
-Each app is one card, whatever it does for you. Slack is one card whether your assistant reads it for you, you message your assistant in it, or both. The same goes for Gmail and the email address you write to, and for 1Password, which fills sign-ins and manages Environments. The card's switch turns the whole app on or off.
+Each app is one card, whatever it does: Slack for reading and for messaging your assistant, Gmail with the email address you write to, 1Password for sign-ins and Environments. The card's switch turns the whole app on or off. A card that needs you comes first, with one button such as **Sign in again** or **Say hello**, and the sidebar counts it.
 
-A card that needs you comes first, with its one button, such as **Sign in again** or **Say hello**. The sidebar shows how many need you.
-
-The page has three parts, top to bottom:
+The page, top to bottom:
 
 1. **Connected**: the apps you have.
-2. **Add another app**: what Conch offers, by kind. The kinds are **Work**, **Talk to me here**, **Files**, **Passwords**, **Design**, **Business**, **Developer** and **Home**. **Passwords** has the password managers Conch can read: turn one on from its page here or from **Passwords**, it's the same switch. Pick a kind above the gallery to see only that one, or type a name in **Find an app**.
-3. **Found in** and a provider's name: apps Conch came across there. See [Apps a provider set up by itself](#apps-a-provider-set-up-by-itself).
+2. **Add another app** (**Connect your first app** at the start), by kind: **Talk to me here**, **Work**, **Files**, **Passwords**, **Design**, **Business**, **Developer**, **Home**, **Browser** and **Other**. **Passwords** holds the password managers Conch can read; its switch is the one on **Passwords**.
+3. **Found in** and a provider's name: apps Conch found there ([below](#apps-a-provider-set-up-by-itself)).
 
-Type in **Find an app** to see apps people shared under **From the community**, or, when nothing matches, press **Make … with Conch**.
-
-Every app in the gallery is one Conch can really connect: before an app goes in, Conch's own sign-in is tried against the service. A few well-known services only let apps they already know sign in, so they aren't offered. **Zapier** reaches many of those, and **Add your own** takes any other.
+Pick a kind or type in **Find an app** (searches include **From the community**). When nothing matches, press **Make … with Conch**. Conch lists only services its own sign-in works with; for the rest, try **Zapier** or **Add your own**.
 
 ## What it does
 
-An app's page says where it is at the top of the window, **Apps › Gmail**: press **Apps** to go back to them all. The page where you talk to your assistant in an app sits under that app, as **Apps › Slack ›** and the bot's name.
+An app's page shows where you are (**Apps › Gmail**; **Apps** goes back). Talking to your assistant in an app has its page under it: **Apps › Slack ›** and the bot's name.
 
-An app's page starts with **What it does**: a plain switch for each thing, such as **Read & search**, **Draft**, **Send (asks first)** and **Talk to me here**. Turn off what you don't want. A part that isn't set up yet has a **Set up** button instead of a switch, so nothing looks on when it isn't.
-
-Setting up one part offers the other when it can. After you connect Slack, the dialog asks **Talk to Conch in Slack too?**. After you connect Gmail with an app password, it asks **Talk to Conch by email too?**, and one press uses the same password. Nothing is shared until you press it.
+**What it does** has a switch per part, such as **Read & search**, **Draft**, **Send (asks first)** and **Talk to me here**, or **Set up** for a part not set up yet. Setting up one part offers the other: after Slack, **Talk to Conch in Slack too?**; after Gmail with an app password, **Talk to Conch by email too?**, reusing the password. Nothing is shared until you press it.
 
 ## What it found, as it is
 
-When your assistant looks in Google Calendar, Gmail, Google Drive or Slack, the step says so in plain words beside the app's logo, like **Looked at your calendar** or **Read #design**. What it found shows under that step, the way the app itself would show it:
+Steps in Google Calendar, Gmail, Google Drive or Slack say so beside the app's logo (**Looked at your calendar**, **Read #design**), and the results look as the app shows them:
 
-- **Google Calendar**: the days you asked about, Today first. Each event has its time, a line in its calendar's colour, a camera for a video call and the place. A day with nothing on says **Free**, and today shows where now is.
-- **Gmail**: who each email is from, the subject, its first line and when it came, with a dot for unread and a clip for attachments. **Reply** puts "Draft a reply to …" in the box you type in. Nothing leaves without you: a draft waits in Gmail, and sending asks you with the finished email in front of you.
-- **Google Drive**: each file with its kind, whose it is and when it changed.
-- **Slack**: the channel, then who said what and when. A long message folds; **More** opens it.
+- **Google Calendar**: the days you asked about, Today first, each event with its time, calendar colour, a camera for a video call and the place. An empty day says **Free**.
+- **Gmail**: sender, subject, first line and time, a dot for unread, a clip for attachments. **Reply** puts "Draft a reply to …" in the message box.
+- **Google Drive**: each file's kind, owner and last change.
+- **Slack**: the channel, then who said what and when. **More** opens a long message.
 
-Press a row to open it in the app, in a new tab. Six rows show at first, and **Show all** has the rest. Your assistant still reads its own answer from the app, behind the step's arrow. Apps you connect by address show their results as text.
+A row opens the app in a new tab. Six show; **Show all** has the rest. The step's arrow shows what your assistant read; apps connected by address show text.
 
 ## Talk to me here
 
-**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk and QQ. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
+**Talk to me here** lists the apps you can message your assistant from, from Slack and email to Telegram, WhatsApp, iMessage, SMS and Microsoft Teams, each with its own steps ([Talk to me here](../channels/index.md)).
 
 ## Connect one
 
-1. Open **Apps** in the sidebar and pick an app.
-2. Press its one button. Most apps open their own sign-in page (**Continue with Notion**). A few take a token instead, with the steps and a link to the right page beside the field.
-3. When it says connected, press **Done**, or **Choose what it can do**.
+1. Open **Apps** and pick an app.
+2. Press its button. Most open their own sign-in page (**Continue with Notion**); a few take a token, with steps beside the field.
+3. When it says connected, press **Done** or **Choose what it can do**.
 
-You sign in on the app's own page, so Conch never sees your password. What it keeps stays on this computer, readable by you alone, and is never shown again.
-
-Gmail, Google Calendar, Google Drive and Slack are apps like the others: press their tile. Gmail connects with an app password; Calendar and Drive need your own Google Cloud app, once. Slack connects with your own Slack app. All are described below.
+You sign in on the app's page, so Conch never sees your password; what it keeps stays on this computer. Gmail, Google Calendar, Google Drive and Slack need a little more, below.
 
 ## Or connect from a chat
 
-When an app that isn't connected would answer what you asked, your assistant offers it under the reply. You don't have to name the app: ask "what's on my plate this week?" and it may offer Linear or Google Calendar, saying why in a sentence. Naming one ("what's assigned to me in Linear?") offers it too.
+When an unconnected app would help, your assistant offers it under the reply, with why: "What's on my plate this week?" may offer Linear. Naming an app offers it too.
 
-Press **Connect** and connect it right there. Once it's connected, the chat carries on by itself: a quiet line says **Connected Linear · carrying on**, and the answer follows. There's nothing to ask again. Under that answer, **Also try** shows a couple of things the app can do; a tap sends exactly those words.
+Press **Connect**: **Connected Linear · carrying on** appears, then the answer, with **Also try** ideas you can tap. On a phone, sign-in opens in the same tab and returns to the chat.
 
-On a phone, signing in opens the app's page in the same tab. When you're done it brings you back to the chat, which carries on the same way.
+- **Not now** hides the card for this chat.
+- **Don't suggest**, under **⋯**, stops offers for that app everywhere; **Settings → General → Chats → Suggest again** brings them back.
+- Another message folds the offer away.
 
-- **Not now** puts the card away for this chat.
-- **Don't suggest**, under **⋯** on the card, stops the offers for that app everywhere. To get them back, open **Settings → General → Chats** and press **Suggest again**.
-- Send another message instead, and the offer folds to a small line. The chat won't carry on from it.
-
-Only one offer shows under a reply, and the same app isn't offered twice in a chat. Your assistant never offers anything after the chat has read a web page or an email, or when nobody's there to press it, such as in a routine.
+One offer per reply, never the same app twice in a chat, and none after the chat has read a web page or an email, or in a routine.
 
 ## When a model can only chat
 
-Some models weren't made to use tools: many small models on this computer, a few at OpenRouter, some servers of your own. The model picker shows **Chat only — can't use your apps** under them.
+Some models can't use tools: many small local models, a few at OpenRouter, some of your own servers. The model picker marks them **Chat only — can't use your apps**. Ask one about a connected app, and your message waits with a card: "Chat Lite can't use Linear".
 
-Ask one of them about an app you connected, and your message waits with a card: "Chat Lite can't use Linear". Press **Switch to** and the model that can. The chat moves to that model, and your message goes by itself. Conch only offers models you've already set up, the same provider's first.
+- **Switch to** a model that can, the same provider's first: the chat moves and your message goes.
+- **Answer without it** sends anyway. Conch asks once per model in a chat.
+- **Connect a provider** shows when none of your models can use apps.
 
-**Answer without it** sends your message to the model you chose anyway. Conch asks once per model in a chat. If none of your models can use apps, the card offers **Connect a provider**.
-
-Even then, Conch doesn't leave the model without your apps. It lists their tools in the model's instructions and reads the model's requests from its reply, so many small models manage simple steps, like saving a memory or looking something up. A model made for tools is still more dependable. Only a model too small to read even a short list of tools answers without any, and the chat says so.
-
-When a model asks for a tool almost right, Conch reads what it meant: a number written as text, a missing quote, a field the tool doesn't take. When it can't, it tells the model exactly what to fix, so it gets a second try.
+Conch still lists your apps' tools in such a model's instructions and reads requests from its reply, enough for simple steps. When a model gets a tool call almost right (a number as text, a missing quote), Conch reads what it meant, or tells the model what to fix.
 
 ## Decide what it may do
 
-Choose how your assistant uses each app. Sending an email and saving a Gmail draft show you the exact email first, whatever you choose here, unless you set that one tool to **Allow**. A calendar change and a new Doc always ask, so those only offer **Ask** or **Off**:
+For each app:
 
 - **Ask every time.** It asks before every action.
-- **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.
-- **Don't ask.** It acts without asking. Something it reads could try to trick it, so Conch asks you to confirm it's you first.
+- **Ask before changes.** It looks things up on its own and asks before creating, sending, changing or deleting. Gallery apps start here.
+- **Don't ask.** It acts without asking. Conch has you confirm it's you first, since what it reads could try to trick it.
 
-Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough, and a line under it says what the choice means: **Allow** uses it without asking, **Ask** asks you each time, and **Off** means your assistant can't use it at all. A tool you turned off says **You turned this off**, with **Turn on** beside it. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, a calendar change and a new Doc only offer **Ask** or **Off**.
+**Each tool** sets every tool to **Allow**, **Ask** or **Off**; one you turned off says **You turned this off**, with **Turn on**. A calendar change, a new Doc and a Slack message offer only **Ask** or **Off**.
 
-**Send an email** and **Save a draft** start at **Ask**. Choose **Allow** to skip the question: the page says what that means, with **Undo**. Even then, once the chat has read something from outside (an email, a web page), sending still shows you the email first, because words from outside could try to make your assistant send something you didn't mean. So does an email from an account you didn't name, when several could send.
+**Send an email** and **Save a draft** start at **Ask** and show you the exact email first; **Allow** skips that, with **Undo**. The email still shows first after the chat has read something from outside, or when several accounts could send and you didn't name one. When every Google account is read only, **Draft & send** (or **Change events**, or **Make files**) says so; its **Allow** opens **Google accounts**.
 
-A Google app only offers the tools its accounts can do: when every account is read only, **Draft & send** (or **Change events**, or **Make files**) says so and offers **Allow**, which takes you to **Google accounts**.
+### Full trust and Auto
 
-**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider, and so do saving a Gmail draft, sending an email, changing a calendar event and sending a Slack message. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off.
+**Full trust** in a chat overrides every **Ask**, with every provider: drafts, emails, calendar changes and Slack messages go without asking. Tools set to **Off** stay off, and your app settings return when you leave it.
 
-**Auto** does the same, with three exceptions: a tool you set to **Ask** still asks, a tool that deletes asks (unless you set it to **Allow**, or the app to **Don’t ask**), and once the chat has read something from outside (an email, a page), anything that sends or changes something in an app shows you first. In Auto that's judged by what the step sends and does, not asked every time: an app you made in Conch looks things up and makes ordinary changes without asking, and any other app's lookups and changes go ahead once a second look sees nothing wrong (or when you set the tool to **Allow**). Paying, sending something to other people, deleting, giving someone access, or sending a key or pages of text still asks ([Permission modes](../reference/modes.md#auto)). Auto also asks, in any app, when a chat's numbers look wrong: one message to a crowd, a run of deletes, a big payment ([what a chat does, watched](../reference/modes.md#what-a-chat-does-watched)). With someone else's words in the chat, what goes to other people always shows you first, in every mode.
+**Auto** does the same, except:
 
-If an app later changes what one of its tools does, Conch stops allowing that tool by itself and tells you.
+- A tool set to **Ask** still asks, and one that deletes asks unless it's **Allow** or the app is **Don't ask**.
+- After the chat reads something from outside, a change goes ahead once a second look sees nothing wrong (apps you made in Conch can make ordinary changes). Paying, sending to other people, deleting, sharing access, or sending a key or pages of text still asks ([Permission modes](../reference/modes.md#auto)).
+- It asks when a chat's numbers look wrong: one message to a crowd, a run of deletes, a big payment ([what a chat does, watched](../reference/modes.md#what-a-chat-does-watched)).
 
-The switch at the top turns an app off and keeps its sign-in for later. **Disconnect** makes Conch forget the sign-in. To remove Conch on the app's side too, look for "connected apps" in that app's own settings.
+In every mode, with someone else's words in the chat, what goes to other people shows first. If an app changes what a tool does, Conch stops allowing it by itself and tells you.
+
+The switch at the top turns an app off; **Disconnect** forgets its sign-in. To remove Conch on the app's side, look for "connected apps" in its settings.
 
 ## When one stops working
 
-Conch checks your apps and keeps their sign-ins fresh. One that needs you moves to the top of **Connected** with the one button that fixes it, such as **Sign in again** or **Paste a new token**. The sidebar shows how many need you, and a chat that needed the app says so in place.
+Conch keeps sign-ins fresh. One that needs you moves to the top of **Connected** with its fix (**Sign in again**, **Paste a new token**), and a chat that needed it says so.
 
 ## The gallery
 
@@ -115,200 +107,133 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 
 ## 1Password
 
-1Password is one app with two parts, each with its own switch on its page:
+Two parts, each with its own switch:
 
-- **Fill sign-ins from 1Password.** Your 1Password logins show in **Passwords**, read where they are, and your assistant fills one in the browser when you say OK. Nothing is copied. It needs 1Password's command line on this computer, and either the 1Password app or a service account token for a computer without it (see [Passwords](./passwords.md#1password-on-a-computer-without-the-app)). **Settings** shows which is in use and changes it.
-- **Manage Environments.** For developers: your assistant sees the names of your 1Password Environments and their variables, and adds to them when you say yes. It never reads the secret values. **Set up** walks you through turning it on in 1Password.
+- **Fill sign-ins from 1Password.** Your logins show in **Passwords**, read in place, and your assistant fills one in the browser when you say OK. Nothing is copied. Needs 1Password's command line plus the app or a service account token ([Passwords](./passwords.md#1password-on-a-computer-without-the-app)), set in **Settings**.
+- **Manage Environments.** Your assistant sees your Environments and variable names and adds to them when you say yes, never reading secret values. **Set up** walks you through it.
 
 ## Something that isn't listed
 
-Press **Add your own**. It opens on **Describe it**: say what you want in your own words, press **Build it**, and Conch makes the app for you in a chat. See [Make an app](./make-apps.md).
+Press **Add your own**. On **Describe it**, say what you want and press **Build it** ([Make an app](./make-apps.md)). Or:
 
-The dialog's other tabs:
+- **From a link**: an app someone shared, from its GitHub page or a `.conchapp` file.
+- **By address**: any app that speaks MCP, the open standard for assistant tools. Conch opens its sign-in if needed.
+- **Run a program**: an MCP app that runs on this computer.
 
-- **From a link** adds an app someone shared, from its GitHub page or a `.conchapp` file.
-- **By address** connects any app that speaks MCP, the open standard assistants use for tools. Paste its address, and Conch opens its sign-in page if it needs one.
-- **Run a program** connects an MCP app that runs on this computer.
-
-What you add by address or as a program starts at **Ask every time**.
+These last two start at **Ask every time**.
 
 > [!WARNING]
 > A program you add runs as you and can do anything you can. Only add programs from people you trust.
 
 ## Apps a provider set up by itself
 
-A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Settings → Health → Fixed on its own** notes each one.
+When a provider has its own app (in its settings, a plugin or its account) that Conch can connect too, Conch brings it in for every model and notes it in **Settings → Health → Fixed on its own**. One with no sign-in goes to **Connected**; one that needs one waits under **Found in**, with **Sign in**, uncounted. Hover one and press **×** to leave it out.
 
-One that needs no sign-in goes straight to **Connected**. One you have to sign in to waits in its own section, **Found in** and the provider's name, at the bottom of the page, below the gallery. It says once where the apps came from, and each has one button: **Sign in**. They aren't problems, so the sidebar doesn't count them. Hover one and press **×** to leave it out of Conch.
-
-Conch only offers what it can really connect. Some services let only apps they already know sign in, and a provider's plugin is one of those. Conch can't sign in to these by itself, so it leaves them with the provider.
-
-What Conch can't connect (a program in the provider's settings, a plugin, a service that takes no new apps) only works with that provider. It's in **Settings → Providers → Set up inside a provider**, folded away. Something you leave out or disconnect stays out; to bring it back, press **Use with every model** there.
+Apps Conch can't connect stay with the provider, in **Settings → Providers → Set up inside a provider**. What you leave out or disconnect stays out until you press **Use with every model** there.
 
 ## Connect Slack
 
-Slack belongs to Conch too, so every model can read and send in it. You make a small Slack app in your own workspace, once, and paste one key.
+You make a small Slack app in your workspace once and paste one key.
 
-1. In **Apps**, choose **Slack**. If you already talk to your assistant in Slack, Conch offers to use the same app: press **Use it**.
-2. Otherwise press **Make the app in Slack**. Slack opens with everything filled in: pick your workspace, press **Next**, then **Create**.
+1. In **Apps**, choose **Slack**. If you already talk to your assistant in Slack, press **Use it** to reuse that app.
+2. Otherwise press **Make the app in Slack**. Slack opens filled in: pick your workspace, press **Next**, then **Create**.
 3. Open **Install App**, press **Install to Workspace** (or **Reinstall**), then **Allow**.
-4. Copy the **User OAuth Token**. It starts with `xoxp-`. Paste it in Conch, and it's connected.
+4. Copy the **User OAuth Token** (it starts `xoxp-`) and paste it in Conch.
 
-Your assistant can then see the channels you're in, search, and catch up on a channel. Sending a message always shows you the exact words and the channel, and asks; you can turn sending off, but never let it go by itself. What it reads in Slack is other people's words, so after reading, anything that could send something out asks first.
+Your assistant can read channels and search. Sending always shows the exact words and channel and asks; you can turn it off, never let it go by itself. After reading Slack, anything that could send something out asks first. An older app can't read yet: **No User OAuth Token there?** has the settings for its **App Manifest** page. **Disconnect** forgets the key and asks Slack to forget it too.
 
-An app made before Slack worked this way can't read for you yet. The dialog says so, and **No User OAuth Token there?** has the settings to paste on the app's **App Manifest** page. **Disconnect** makes Conch forget the key and asks Slack to forget it too.
-
-To message your assistant in Slack as well, turn on **Talk to me here** on Slack's page and press **Set up**. It uses the same Slack app, but needs two more keys from it, the bot token and an app-level token: they're separate from the one that reads as you, so Conch asks for them on purpose. See [Slack](../channels/slack.md).
+To message your assistant in Slack, turn on **Talk to me here** and press **Set up**. It asks for the bot token and an app-level token from the same app ([Slack](../channels/slack.md)).
 
 ## Your Google accounts
 
-Gmail, Google Calendar and Google Drive share one list of accounts. Add as many as you like — your own and your work one, or two of each — and say for every account what your assistant may do in each app:
+Gmail, Google Calendar and Google Drive share one list of accounts, under **Google accounts** on each app's page. For each account and app, choose:
 
-- **Off.** It isn't used there at all.
-- **Read.** It can look: search and read your mail, see your events, find your files.
-- **Read & write.** It can also make changes — save a draft or send an email, add, move or delete an event, make a new Doc. Each change shows you first, with the exact email or event in front of you (an email can skip that if you set **Send an email** to **Allow**).
+- **Off.**
+- **Read.** Search and read mail, see events, find files.
+- **Read & write.** Also drafts and email, adding, moving or deleting events, making a new Doc. Each change shows first (email can skip that with **Allow**).
 
-The list is the same on all three pages (**Apps → Gmail**, **Google Calendar** or **Google Drive**), under **Google accounts**, with the app you opened marked. Each account says how it's signed in and what that can do in one line — **App password · Gmail: read and send. Calendar and Drive need Google sign-in.**, or **Google sign-in · Gmail, Calendar and Drive.** — whether it's working, and what it may do in each app. An app-password account offers **Switch to Google sign-in**; a Google sign-in offers **Use an app password instead**, which moves Gmail to the app password and leaves Calendar and Drive on Google sign-in. A Google sign-in that Google only allowed to read Gmail says **Read only: this sign-in can't send**, and choosing **Read & write** asks Google once. Turning something down is one tap. Turning it up is one tap too, unless Google hasn't allowed Conch that much yet: then the row says **Read & write asks Google once**, and choosing it opens one Google sign-in for that account, right there. Nothing else about the account changes.
+Each account says how it's signed in (**App password · Gmail: read and send. Calendar and Drive need Google sign-in.** or **Google sign-in · Gmail, Calendar and Drive.**), whether it works, and what it may do.
 
-**Check now** looks at an account again. **Remove** forgets it: with Google sign-in, Conch asks Google to take its access back first; with an app password, Conch forgets the password, and Google’s app passwords page is where you remove it at Google too. To stop one app using an account but keep the account, set that app to **Off** on it instead.
+- An app-password account offers **Switch to Google sign-in**; a Google sign-in offers **Use an app password instead**, for Gmail only.
+- A sign-in Google only let read Gmail says **Read only: this sign-in can't send**.
+- Where Google hasn't allowed enough yet, the row says **Read & write asks Google once**, and choosing it opens one Google sign-in.
+
+**Check now** looks again. **Remove** forgets the account and, for Google sign-in, asks Google to revoke access; remove an app password on Google's app passwords page.
 
 ## Add a Google account
 
-Press **Add an account** under **Google accounts**, or press an app's tile in the gallery. Three short steps:
+Press **Add an account** under **Google accounts**, or an app's tile.
 
-1. **What should it help with?** Choose Off, Read or Read & write for Gmail, Calendar and Drive. You can change this any time.
-2. **How to connect.** Conch marks the simplest way for what you chose and says the trade-off in one line. An **app password** takes about two minutes and reaches Gmail only. **Google sign-in** reaches all three, and needs your own free Google Cloud app once — unless you've already set that up, when it's one press.
-3. **Connect.** The steps for whichever way you picked.
+1. **What should it help with?** Off, Read or Read & write for each app.
+2. **How to connect.** An **app password** takes about two minutes and reaches Gmail only. **Google sign-in** reaches all three and needs your own free Google Cloud app once.
+3. **Connect.** The steps for your choice. Google accounts belong to **Conch**, not your model provider.
 
 ### With an app password (Gmail only)
 
 1. Type your Gmail address and press **Next**.
-2. Press **Open Google’s app passwords page**. Google only offers app passwords once [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) is on; its page says how. Name the password “Conch” and press **Create**.
-3. Paste the 16 letters into **App password**. Conch checks them by signing in to Gmail as they land, and says so if Google refuses them.
+2. Press **Open Google’s app passwords page** (it needs [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification)). Name it “Conch” and press **Create**.
+3. Paste the 16 letters into **App password**; Conch checks them.
 
-An app password reaches Gmail, over IMAP for reading and SMTP for sending, and nothing else: on such an account, Calendar and Drive say so and offer **Use Google sign-in**. If you already talk to your assistant by email from Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. The other way round, turning on **Talk to me here** on Gmail's page uses Gmail's app password for writing to `you+conch@gmail.com`. It's never shared without asking.
-
-If Google stops taking the password (you removed it, or changed your Google password), the account says **Needs you** with the field to paste a new one, and Gmail moves to the top of **Connected** with **Sign in again**. What that account may do stays as you set it.
-
-### With Google sign-in
-
-Google accounts belong to **Conch**, not your model provider. Choose the personal or work account you want; Conch shows its address and what it may actually do. Signing in again keeps everything the account already has and adds the one thing you asked for.
+If you already email your assistant from Gmail, Conch offers **Use it for Gmail**; turning on **Talk to me here** reuses it for `you+conch@gmail.com`, after asking. If Google stops taking it, the account says **Needs you** with a field for a new one, and Gmail shows **Sign in again**. Its access settings stay.
 
 ### One-time setup, with no hosted connection service
 
-You need your own Google Cloud project and a **Desktop app** OAuth client.
-The same credential file works for a local Conch and a self-hosted server.
-There is no Conch cloud account, public callback address, or extra service to run.
+You need your own Google Cloud project and a **Desktop app** OAuth client. The same credential file works for a local Conch and a self-hosted server. No Conch cloud account, public callback or extra service.
 
-1. Follow the setup guide to create or choose a Google Cloud project. An optional **Project ID** makes subsequent links open the right project.
-2. Open each API linked for your job and press **Enable**. You do not need to enable unrelated Google apps.
-3. Open **Branding** in Google Auth Platform and complete the app details. In **Audience**, add your email under **Test users** while the app is in Testing, and every other address you'll connect, one per line: Google refuses anyone else. Personal Google accounts use **External**; **Internal** is for eligible Workspace organizations.
-4. Open **Clients**, press **Create client**, choose **Desktop app**, and download the JSON. Drop that file onto **Drop the file you downloaded**, press **Choose the file**, or press **Paste what’s in it instead** and paste its contents. Conch checks it here and says what kind of client it is before you save it.
-5. Press **Save and continue with Google**. Choose your account on Google’s own sign-in page and review its permissions.
+1. Follow the setup guide to create or choose a project. An optional **Project ID** makes links open it.
+2. Open each API linked for your job and press **Enable**.
+3. In Google Auth Platform, complete **Branding**. In **Audience**, list every address you'll connect under **Test users**, one per line. Personal accounts use **External**; **Internal** is for eligible Workspace organizations.
+4. Open **Clients**, press **Create client**, choose **Desktop app** and download the JSON. Drop it on **Drop the file you downloaded**, press **Choose the file**, or **Paste what’s in it instead**.
+5. Press **Save and continue with Google**, choose your account and review its permissions.
 
-Already have the file? Press **I already have a credential file**. No need to
-copy individual IDs or secrets. Credentials are encrypted on your Conch
-computer, never shared with your assistant or a Conch connection service.
-Keep the downloaded file private.
+Have the file? **I already have a credential file**. Credentials are encrypted on your Conch computer and never shared with your assistant or any service.
 
-On a local HTTP loopback address, Google returns to Conch automatically. On a
-remote address, it returns to a local address that your browser may refuse to
-open. That is expected. Copy the **complete address from the address bar**, paste
-it into **Return address from Google** in Conch, and press **Finish connecting**.
-Never paste it into chat. You do not need a terminal, port forwarding, or a public
-Google callback. On a phone that's awkward: it's easier to add the account from Conch
-on the computer it runs on, where Google finishes by itself, and the account shows on
-the phone too.
+Coming back from Google:
 
-An existing **Web application** client still works. Under **Advanced: existing Web
-client**, copy the exact callback into that client's **Authorized redirect URIs**.
-You can import its JSON after registering that address, or enter its ID and
-secret there. Remote Web-client callbacks require HTTPS. Desktop clients do not
-need a registered callback.
+- On a local address, it returns to Conch by itself.
+- On a remote address, the page Google returns to may not load. Copy the **complete address from the address bar** into **Return address from Google** and press **Finish connecting**. Never paste it into chat.
+- If Google opens another browser (Safari, from an installed iPhone Conch), it says **Almost done**: press **Finish connecting** in the Conch you started in.
 
-If Google sends you back to a different browser than the one you started in (Conch
-installed on an iPhone opens Google in Safari), that page says **Almost done**: go
-back to Conch and press **Finish connecting**. Only the Conch you started in can
-finish, so a stray sign-in link can't add someone else's account.
+An existing **Web application** client still works: under **Advanced: existing Web client**, copy the exact callback into its **Authorized redirect URIs**, then import its JSON or enter its ID and secret. Remote Web-client callbacks need HTTPS.
 
-Your current job stays open. If a popup is blocked, or you're on a phone, press **Open Google sign-in**.
-Reloading Conch resumes the pending flow in the same tab. If Google hasn't sent you back
-after two minutes, Conch says what usually stops it. A sign-in expires after ten
-minutes, and Conch says so; if Conch restarts, start a new sign-in without
-repeating app setup.
-Conch checks the account and actual API access before continuing. **Add an
-account** adds work and personal separately. Signing in again for an account
-refuses a different one, so nothing can quietly move to another mailbox.
+If a popup is blocked, press **Open Google sign-in**. A sign-in expires after ten minutes; Conch says what usually stops one after two. Signing in again refuses a different account, so nothing moves to another mailbox.
 
 ### If Google needs something changed
 
-Open **If Google says no** for links to the right project settings:
+**If Google says no** links to the right settings:
 
-- **API not enabled:** enable the named API, wait briefly, then press **Check now** on the account. Conch keeps your sign-in and does not ask you to grant access again unnecessarily.
-- **Test user missing or access blocked:** add the exact Google email under **Audience → Test users**, one line for each address you connect. Workspace administrators may need to allow the app.
-- **“400”, “malformed” or `redirect_uri_mismatch`:** start again from Conch rather than an old Google tab, since each sign-in works once. With a Web client, its **Authorized redirect URIs** must list exactly the address Conch shows, for the address you opened Conch at; a Desktop app client works from any address.
-- **Unverified app:** check that it is your own app in your own project before using Google's available personal-testing option. A policy block may need an administrator, not another sign-in attempt.
-- **Access expires every week:** Google Testing mode can expire refresh tokens after seven days. Review **Audience** before leaving Testing; sensitive access or public distribution may require verification. Conch does not publish your app for you.
-- **Wrong file or callback:** import a current Desktop app OAuth JSON, not a service-account key. Web clients must contain the callback displayed by this Conch installation.
+- **API not enabled:** enable it, wait briefly, press **Check now**.
+- **Test user missing or access blocked:** add the exact email under **Audience → Test users**. A Workspace admin may need to allow the app.
+- **“400”, “malformed” or `redirect_uri_mismatch`:** start again from Conch, not an old Google tab. A Web client must list exactly the address Conch shows.
+- **Unverified app:** confirm it's your own app before using Google's personal-testing option.
+- **Access expires every week:** Testing mode can expire access after seven days. Leaving Testing may need Google verification; Conch doesn't publish your app.
+- **Wrong file:** import a Desktop app OAuth JSON, not a service-account key.
 
 ### What read and write cover
 
-With **Read**, Gmail is searched and read, Calendar’s events are read, and
-Drive’s file names and details are read — not what’s inside a document.
+**Read** searches and reads Gmail and Calendar events, and Drive file names and details, not contents.
 
-With **Read & write**, each app can also do exactly this, showing you what
-will happen first:
+**Read & write** adds, shown to you first:
 
-- **Gmail:** save a draft in your **Drafts**, or send an email or a reply, with
-  an app password (over Gmail's SMTP) or Google sign-in alike. An email can carry
-  files from the chat — a document your assistant made, a picture, a file you
-  added — up to about 18 MB together. It goes from the account you name ("send it
-  from my work address"); if you don't name one and several can send, the first
-  is used and the card shows it under **From** before anything goes. Replies use
-  the original message’s verified thread, reply address and subject; sent-email
-  follow-ups go to the original recipients. Nothing else about your mailbox is
-  touched: no labels, no deleting, no settings.
-- **Google Calendar:** add an event, change its title, time, place or
-  description, or delete it. Guests are only emailed when you say so.
-- **Google Drive:** make a new Google Doc or text file. Conch can only touch
-  files it made itself: your other files can’t be changed or deleted, because
-  Google never gives Conch access to them.
+- **Gmail:** save a draft or send an email or reply, with files from the chat up to about 18 MB. It sends from the account you name, otherwise the first that can, shown under **From**. Replies keep the thread, reply address and subject. No labels, deleting or settings.
+- **Google Calendar:** add, change or delete an event. Guests are emailed only when you say so.
+- **Google Drive:** make a new Google Doc or text file. Conch can only touch files it made.
 
-**The email, before it goes.** When your assistant wants to send an email, the
-chat shows the email itself: who it's from, who it's to, the subject, every word
-and any files. Press **Send** (or <kbd>mod+enter</kbd>), or **Don’t send**. **Save as
-a draft instead** writes that request in the message box, for you to send.
+**Before it goes**, the chat shows the email: from, to, subject, words and files.
 
-To change it first, press **Edit**. Change who it goes to, **Add Cc**, change the
-subject and the words, or take a file off (you can't add one). **Done** keeps your
-change, and **Cancel** (or <kbd>esc</kbd>) drops it. The card then says **Edited by
-you**, and **Undo my changes** puts the original back. Conch checks your version
-again before it goes; if it can't be sent, nothing is, and your assistant asks you
-what to change. A reply always goes to the people in its thread, with its subject.
-A draft, an email from a [task](./tasks.md), and an email you set to **Allow** have
-no **Edit**.
+- **Send** (<kbd>mod+enter</kbd>), **Don’t send**, or **Save as a draft instead**.
+- **Edit** changes recipients, **Add Cc**, subject and words, or removes a file. **Done** keeps it, **Cancel** (<kbd>esc</kbd>) drops it. The card says **Edited by you**; **Undo my changes** restores it. Conch checks your version before it goes; if it can't be sent, nothing is. A reply keeps its thread's people and subject.
+- Drafts, [task](./tasks.md) emails and emails set to **Allow** have no **Edit**.
 
-**After it goes.** The card says **Sent to …** or **Replied to …**, with **Show the
-email**, **Open in Gmail** and **Follow up**. A draft says **In your Drafts · not
-sent**, with **Open the draft in Gmail** and **Send it now**. If Gmail didn't
-confirm it, the card says **Gmail may have sent this**, with **Look in Sent**. If it
-didn't go, it says so, with **Try again**. **Follow up**, **Send it now** and **Try
-again** only write a request in the message box: nothing is sent until you send it.
+**After it goes**, the card says:
 
-If Google doesn’t confirm a change, Conch looks for it rather than doing it
-again: an event Conch adds carries an id of its own, an email it sends carries
-its own Message-ID, and a file it makes carries a mark. A result that stays
-uncertain is said plainly, with where to look — it is never repeated.
+- **Sent to …** or **Replied to …**, with **Show the email**, **Open in Gmail** and **Follow up**.
+- **In your Drafts · not sent**, with **Open the draft in Gmail** and **Send it now**.
+- **Gmail may have sent this**, with **Look in Sent**.
+- That it didn't go, with **Try again**.
 
-The Google APIs must be enabled in the registered project. Google Workspace
-admins can restrict access. Public applications using Gmail or Drive scopes may
-require Google verification; a testing app’s refresh tokens can expire after
-seven days. Conch does not claim that a public OAuth application has been
-verified for you.
+**Follow up**, **Send it now** and **Try again** only write a request in the message box; nothing goes until you send it.
 
-**Disconnect** on one app keeps a Google account the other Google apps still
-use. When no app uses it any more, Conch revokes Google access before removing
-its local sign-in. If Google is offline, Conch keeps the entry so you can retry
-deliberately; you can also remove access in your Google account’s third-party
-connections. **Repair everything** checks connected accounts and refreshes
-access when it safely can.
+If Google doesn't confirm a change, Conch looks for it rather than repeating it, and says plainly when it can't tell.
+
+**Disconnect** keeps an account other Google apps still use; once none do, Conch revokes Google's access. If Google is offline, the entry stays so you can retry, or remove access in your Google account's third-party connections. **Repair everything** checks accounts and refreshes access when it safely can.

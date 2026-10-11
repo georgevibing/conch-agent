@@ -4,133 +4,128 @@ description: Run a job as a task, keep chatting, and get its result back in the 
 order: 9
 ---
 
-A chat does one thing at a time, and some jobs take a while. Run one as a task and it works while you get on with something else. You're told when it's done, and its result comes back to where you asked.
-
-Whether you start a task or your assistant splits a job into several, each one is a task: the same card, the same words, the same controls.
+Run a long job as a task and keep chatting. You're told when it's done, and the result comes back where you asked. Tasks you start and parts your assistant splits off look and work the same.
 
 ## Start a task
 
-1. Write what you'd like done in the message box, as you would any message.
-2. Press <kbd>mod+shift+enter</kbd>, or the **Run as a task** button that appears once you've written something.
-3. Carry on. A card in the chat shows what the task is doing.
+1. Write what you'd like done in the message box.
+2. Press <kbd>mod+shift+enter</kbd> or **Run as a task**.
+3. Carry on. A card in the chat shows its progress.
 
-You can also ask in words: "do this as a task and tell me when it's done". Or type `/task` and what to do, or press <kbd>mod+k</kbd> and choose **Run as a task**.
+Or type `/task` and what to do, choose **Run as a task** in <kbd>mod+k</kbd>, or ask: "do this as a task". To use another connected provider, say so: "have Codex CLI do this as a task". The card says who's doing it.
 
-A task uses the same [agent](./agents.md), provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't: if you chose **Full trust** there, it won't stop to ask here either; if that chat asks first, so does the task. Anything you've already allowed in that chat ("Always allow") counts for its tasks too, and nothing more. Change the mode in the chat and its tasks follow, including one already waiting for your OK.
+### What a task may do
 
-It also starts as careful as that chat. If the chat had read something from outside, such as a web page or an email, the task's chat says so in one line at the top: **The chat it came from had read 3 sites and one of your chats**. Press that line to see each one. What a task reads comes back to its chat in the same way.
+A task uses its chat's [agent](./agents.md), provider, model and [mode](../reference/modes.md), and can do nothing that chat couldn't.
 
-Every provider hands work off this way. Your assistant's own sub-agents are turned off wherever Conch can turn them off, so work always runs as a task you can see, answer and stop.
+- If the chat asks first, so does the task. In **Full trust**, neither does.
+- **Always allow** answers from the chat count for its tasks, and nothing more.
+- Change the chat's mode and its tasks follow, even one waiting for your OK.
+- If the chat had read something from outside, the task starts as careful, and says so at the top: **The chat it came from had read 3 sites and one of your chats**. Press it to see each one. What a task reads comes back to its chat the same way.
 
-To have another provider do it, say so: "have Codex CLI do this as a task". Any provider you've connected can take it. Its card says who's doing it.
+Conch turns off your assistant's own sub-agents wherever it can, so all handed-off work is a task you can see, answer and stop.
 
 ## Watch it work
 
-The card stays where it first appeared and keeps itself current: what the task is doing now, its last few steps, and how long it has been going. When the task finishes, the card shows its result, and the chat carries on with what it found.
+The card stays where it appeared and shows what the task is doing, its last few steps and how long it's been. When it finishes, the card shows the result and the chat carries on with it.
 
-In the chat list, a chat with tasks has a badge on its row saying how many there are and how they're going. Press it for a row per task: what it's doing now, how long it's been, a press to open its own chat, and **Stop** while it works. It opens by itself while something is going.
+- **Chat list:** a badge on the chat's row counts its tasks. Press it for a row each, with **Stop**. It opens by itself while something is going.
+- **The pearl** by your assistant's name (in the header on a phone) covers all chats. It breathes while tasks work, turns amber when one needs your OK, and glints when one finishes. Press it for a list, with **Allow** and **Deny**.
+- **No chat to return to?** A task started from a new chat or by another app becomes a chat of its own.
 
-The pearl by your assistant's name, at the top of the sidebar, says what your tasks are doing across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header.
+Tasks started together share one card: a bar for the batch, then a line each. What needs your OK rises to the top. When the last finishes, the lines become the result.
 
-A task you start from a new chat, or that another app starts, has no chat to come back to: it shows up in your chat list as a chat of its own, with its card at the top.
+### Open a task
 
-Tasks started together, by one reply or one job split into parts, share one card: how many, how they're going in a line and a bar, then a line each. What needs your OK rises to the top and is answered right there. When the last one finishes, the bar folds away and the lines are the result: what each did, or why it didn't.
-
-Every task is a chat of its own. Press one, on its card or under its chat in the chat list, and it opens over the chat you're in: from the bottom on a phone, from the side on a computer. Read along, answer what it asks, or **Stop** it. The tasks started with it sit along the top, a mark each: tap one, swipe sideways on a phone, or use the arrow keys. Close it, or go back, and you're where you were. **Continue in full** opens its own chat, to give it more to do.
+Every task is a chat. Press one to open it over the chat you're in. Read along, answer it or **Stop** it. Move between the tasks started with it from the marks along the top, by swiping on a phone, or with the arrow keys. **Continue in full** opens its own chat, to give it more to do.
 
 ## How many at once
 
-There's no fixed number. Conch starts as many tasks as your computer and your provider have room for right now, and starts the next one by itself as soon as there's room again.
+As many as your computer and provider have room for. The next starts by itself when there's room.
 
-- **It sizes up each task first.** From what the task says, Conch guesses whether it's light (reading, searching, writing), medium (changing a few files) or heavy (a build, a full test run, a big download), and what it changes. When it may, it also asks your provider's small, cheap model, once for all the tasks started together, and only shows it what the tasks say. Work never waits for that answer. **Name new chats automatically**, in **Settings → General**, turns this question off too.
-- **It looks at your computer as it is.** The processor, the memory that's free, and the commands already running. A busy computer takes fewer; a roomy one more. Nothing that's working is ever stopped to make room.
-- **It's fair.** One chat's six tasks can't keep another chat's one waiting. Tasks started together start together when they all fit. One that has waited a while goes next.
-- **Two that change the same file take turns.** Name the file in what you ask, and they won't trip over each other.
-- **Your provider sets a pace too.** If it asks Conch to slow down, or is overloaded, its tasks wait a little and come back gradually. Other providers carry on.
+- **Sized up first:** light (reading, writing), medium (a few files) or heavy (a build, a test run, a big download). When it may, Conch also asks your provider's small model, once per batch, without waiting for it. Turning off **Name new chats automatically** in **Settings → General** stops that.
+- **Fitted to your computer:** processor, free memory and running commands. Nothing working is stopped to make room.
+- **Fair:** one chat's six tasks can't keep another's one waiting. A batch starts together when it fits.
+- **Same file, one at a time.** Name the file in what you ask.
+- **Paced by your provider:** if it asks Conch to slow down, its tasks wait. Others carry on.
 
-A waiting task says why, on its card and its line:
+A waiting task says why:
 
-| It says                                                       | What it means                                                                |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Starts when “Fix the login” finishes**                      | Every place is taken. Usually with about how long that should take.          |
-| **Starts when “Fix the login” finishes: both change auth.ts** | Both change the same file, so they take turns.                               |
-| **Starts after “Read the README”**                            | It needs the other one's result first.                                       |
-| **Waiting for memory: 2 heavy tasks working**                 | Your computer is short of memory.                                            |
-| **Waiting for the processor: this computer is busy**          | Something else is using the processor. Tasks start again once it settles.    |
-| **Codex asked Conch to slow down · trying again in 20s**      | Your provider asked for a pause. It counts down, then tries again by itself. |
-| **Waiting while Conch recovers**                              | Conch is getting its breath back after a busy spell, and starts work gently. |
+| It says                                                       | What it means                                  |
+| ------------------------------------------------------------- | ---------------------------------------------- |
+| **Starts when “Fix the login” finishes**                      | Every place is taken. Usually with a time.     |
+| **Starts when “Fix the login” finishes: both change auth.ts** | Both change the same file.                     |
+| **Starts after “Read the README”**                            | It needs that result first.                    |
+| **Waiting for memory: 2 heavy tasks working**                 | Your computer is short of memory.              |
+| **Waiting for the processor: this computer is busy**          | It starts once the processor settles.          |
+| **Codex asked Conch to slow down · trying again in 20s**      | Your provider asked for a pause.               |
+| **Waiting while Conch recovers**                              | Conch restarts work gently after a busy spell. |
 
-While some wait for room, a card of several tasks says how many fit right now: **3 at once on this computer right now**.
+A batch card says how many fit: **3 at once on this computer right now**.
 
-A task that waits only for room has **Start now**, on its card and its line, and in <kbd>mod+k</kbd>. It starts at once, a little past what Conch would choose. It isn't offered when memory is short, while Conch recovers, when two tasks change the same file, or when your provider asked to slow down.
+**Start now** (on the card, its line and in <kbd>mod+k</kbd>) starts a task waiting only for room, a little past what Conch would choose. It isn't offered when memory is short, while Conch recovers, for the same file, or when your provider asked to slow down.
 
 ## When it needs you
 
-A task asks before it acts, as its chat would, and holds nothing else up. Its card says **Needs your OK** and shows the question right there, with **Allow** and **Deny** — you don't have to leave the chat. A question with a screen of its own (a website, a password, a draft to read) says **See what it's asking** instead, and opens the task's chat. Other tasks keep working. If nobody answers within an hour, the answer is no.
+A task asks before it acts, as its chat would, and holds nothing else up. Its card says **Needs your OK**, with **Allow** and **Deny**. A question with its own screen (a website, a password, a draft) shows **See what it's asking** instead. No answer within an hour means no.
 
 ## When it's done
 
-Conch tells you in the app, and on your devices when notifications are on: **Done**, or **Didn't finish** and why. Tasks started together are told about together, once the last one is over ("3 tasks done · 1 didn't finish"). A tap opens the chat they came from. A task waiting for your OK says so on your devices too, under **It needs you**; a notification can deny, but allowing always opens Conch. The switch for finished tasks is **A task finishes**, in **Settings → Notifications → Topics**. See [On your phone](../start/phone.md).
+Conch tells you in the app, and on your devices when notifications are on. A batch is reported once, when the last is over ("3 tasks done · 1 didn't finish"). A tap opens the chat. Asking for your OK notifies under **It needs you**: a notification can deny, but allowing opens Conch. Finished tasks are under **A task finishes**, in **Settings → Notifications → Topics** ([On your phone](../start/phone.md)).
 
-A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did. Steps it repeated show once, with how many times (**×6**), and a run of steps of one kind folds into one line, like **Read pager.ts and 3 more**. Press that line to see each step.
+The chevron opens **Details**: the whole result, what was confirmed and each step. Repeats show once (**×6**), and similar steps fold into one line, like **Read pager.ts and 3 more**.
 
-Once it's over, a task says how it went:
+| It says                 | What it means                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Done**                | It finished. **Details** lists confirmed changes and links, like a saved draft. A saved draft is not a sent message.                       |
+| **Done · Worth a look** | It finished, but something it did or was asked for isn't confirmed. Its summary isn't taken as proof. **Checked** clears it from the chat. |
+| **Didn't finish**       | Something went wrong, or Conch stopped mid-way. The card says why.                                                                         |
+| **Stopped**             | You stopped it.                                                                                                                            |
 
-| It says                 | What it means                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Done**                | It finished. Under Details are the changes Conch could confirm with the tool or provider itself, and links you can open, such as a saved draft. A saved draft is not a sent message.                                                 |
-| **Done · Worth a look** | It finished, and there's a reason to look, said in a few words: an action whose result it couldn't confirm, or something it was asked for that isn't confirmed. Its summary is kept, but not taken as proof, even if it says "done". |
-| **Didn't finish**       | Something went wrong, or Conch stopped while it was working. The card says why in a line.                                                                                                                                            |
-| **Stopped**             | You stopped it.                                                                                                                                                                                                                      |
+### What Conch checks
 
-For a task that only asks for an answer, Conch checks that a nonempty answer was saved for this attempt. An empty reply is flagged for inspection. This confirms delivery, not the factual accuracy of what the assistant wrote.
+- **An answer-only task:** that a nonempty answer was saved. That proves delivery, not accuracy.
+- **Reading and lookups** (`ls`, `git status`, loading a tool) are never checked. Neither are steps Conch held back, since they never happened.
+- **Checks set up front:** for tool work, your assistant can name which actions need receipts, and their exact target. Missing receipts stay visible whatever the assistant says. Checks survive a restart and grant no permissions.
+- When Conch can't vouch for a task, its chat hears why in a line.
 
-Looking things up is never an action to check: reading files, a command that only lists or reads (`ls`, `git status`), loading a tool. Neither is a step Conch held back before it started, because the computer was busy or a rule said no: it didn't happen, so it never stops the task from carrying on. When Conch can't vouch for a finished task, the chat it came from hears why in a line, such as no checks being set, or a command that gives no receipt. That's about what Conch could confirm, not whether the answer is right.
+## Pick up where it stopped
 
-When your assistant hands off work that needs tools, it can set checks before the task starts: which observations or actions must have receipts, and the exact target or content when known. Missing receipts remain visible even if the assistant says it finished. The checks carry through a restart and cannot grant permission to use a tool.
+Partial results stay. **Resume safely** carries on in the same chat from saved progress.
 
-Partial results stay visible after a task didn't finish or was stopped.
+- Confirmed writes aren't repeated.
+- If Conch can't prove whether a write happened, it stops rather than duplicate it. Check the original app. No search match isn't always proof it failed.
+- After a restart or backup restore, tasks wait for you to resume. Old approvals are cleared and asked afresh, under the chat's current limits. A lost network response is never treated as a decline.
+- An account change can't quietly reuse an earlier account's operations.
+- A resumed task keeps its work folder, branch and worktree. Conch never quietly swaps in a different folder.
 
-**Resume safely** continues in the same chat with saved progress. It does not restart from a blank conversation. Confirmed writes are not repeated. If Conch lost a provider's response and cannot prove whether a write happened, it stops rather than create a duplicate. Open the original app to inspect the result. A search returning no matches is not always proof that a write failed.
+Open a finished task and type to give it more to do. Its limits stay: a draft-only job can't start sending. Earlier results don't prove a changed goal.
 
-After a restart or backup restore, both running and queued tasks wait for you to resume. Their saved results and conversation remain available. Old approval cards are cleared, and anything needing approval asks afresh. The task checks the current permission limits and security restrictions of the chat it came from. Old approval answers do not carry over. A declined approval that provably prevented a write can be asked again; a lost network response cannot be treated as a decline. An account change or renewed consent cannot silently reuse an earlier account's operations.
-
-A resumed task keeps its original work folder even if you changed your default workspace. A task that changes code keeps its branch and worktree through an interruption. If Conch deliberately removed a clean worktree after completion, it can reopen it at the saved starting commit; a folder missing unexpectedly requires recovery instead of silently using a different folder.
-
-Open a finished task and type a clarification or revision to continue. The same tool and account boundaries remain; asking a draft-only job to send a message does not give it permission to send. Previous results remain inspectable, but do not by themselves verify a revised goal.
-
-In a task that's a chat of its own, **Remove** on its card hides the finished task. Conch retains its operation receipts and request identity to prevent repeated effects; removing a card does not undo changes in other apps. Task goals and receipts are included with chats in backups. Restoring merges newer local receipts rather than erasing them. A restored task cannot issue a new write when the historical backup cannot prove whether it already happened; inspect the original app before starting a new job.
+**Remove**, in a task's own chat, hides it. It doesn't undo anything in other apps. Conch keeps its receipts, in backups too, so effects aren't repeated. A restored task won't make a write the backup can't prove hasn't happened.
 
 ## Several at once
 
-When a job splits into parts that don't need each other, your assistant can run them at once, each as a task, and bring the results back together. Tasks started together share one card in the chat, a line each.
+When a job splits into independent parts, your assistant can run them as tasks on one card and bring the results together.
 
-- One job splits into at most six parts, and they start as there's room for them (see [How many at once](#how-many-at-once)). Helpers can't ask you a question with choices; anything that needs your OK still asks, as above.
-- They use the provider's faster model, unless a part needs the full one.
-- A task can go to another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.
-- A task that changes code can work in its own copy of the folder, on its own branch. If it changed something, its card names the branch. Conch never merges it for you.
-- Whichever provider does the work, they run in the chat's mode, stay as careful as their chat, keep to the same skills' limits, and stop when you stop the chat. A provider that can't work in that mode uses its safest one.
-- Once you've spent your monthly budget, your assistant does the parts itself, one at a time.
+- At most six parts, started as there's room.
+- Parts can't ask you multiple-choice questions. Anything needing your OK still asks.
+- They use the provider's faster model unless a part needs the full one.
+- A part can go to another connected provider ("have Codex write the tests"), or your assistant picks one that plainly suits. The card says **by** whom.
+- A code-changing part can work on its own branch, named on its card. Conch never merges it for you.
+- Every part keeps the chat's mode, caution and skill limits, and stops with the chat. A provider that can't use that mode uses its safest.
+- Past your monthly budget, your assistant does the parts itself, one at a time.
+
+## Control work from the chat
+
+Ask what a task is doing, to stop it, or to do more once it's done. Your assistant controls only tasks from that chat. Retrying keeps the task's evidence and limits.
+
+- A failed read doesn't stop the rest, and an old result can't stand in for it.
+- File edits and artifact updates are checked against their saved versions.
+- A write with an uncertain result is kept for you to check, never blindly repeated.
+- Times read with Conch's `current_time` tool are recorded too. A provider's success message alone doesn't prove an outside change.
 
 ## Good to know
 
 - A task can't take [attachments](./files.md) yet. Send those as a message.
-- Tasks stay out of your chat list; they sit under the chat that started them. <kbd>mod+k</kbd> finds one by name, whoever started it. See [Find anything](./find.md).
-- They tidy themselves away. One that finished while you were elsewhere stands out under its chat, with a dot, until you've seen it: open it, or open the chat it came from. Then it folds under **Earlier**. Once nothing is working or new, the chat is a single line again, and its tasks are on their cards in the chat. Seen on your phone is seen on your computer too.
-
-## Control work from the chat
-
-Ask what a task is doing, ask to stop it, or give it another instruction once it
-finishes. The assistant can list and control work started in that chat. It cannot
-reach tasks from a different chat. Retrying retains the task’s evidence and
-permission limits; it does not start with a clean slate.
-
-A failed exploratory read does not prevent the rest of a task from finishing.
-Conch keeps each read attempt, so an old result cannot stand in for a failed new
-read. Local file edits and artifact updates are checked against their saved
-contents or versions. A tool that finished without an independent check is shown
-as such; a write whose result is uncertain is kept for inspection, never blindly
-repeated. The assistant can use task status to see which results are missing and
-which tools lack independent checks.
-
-Time observations made with Conch’s `current_time` tool are recorded too. Codex clock requests use that same tool, and its reported native tool calls appear in the history. Each entry records what Conch observed; a provider’s success message alone does not prove an external change happened. Older providers that do not report an internal operation can use Conch’s tools when a recorded observation is needed.
+- Tasks sit under their chat, not in the chat list. <kbd>mod+k</kbd> finds any by name ([Find anything](./find.md)).
+- A task that finished while you were away shows a dot until you open it or its chat, then folds under **Earlier**. Seen on one device is seen on all.

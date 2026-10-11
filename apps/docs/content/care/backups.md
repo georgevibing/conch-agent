@@ -4,60 +4,59 @@ description: Conch backs itself up every day. Restore one to go back in time, or
 order: 2
 ---
 
-Conch backs itself up once a day without being asked. A backup holds what you would miss: your settings, memories, routines, skills, integrations and chats. Restore one to go back in time, or download one and take your Conch to a new computer.
+Conch backs itself up once a day: your settings, memories, routines, skills, integrations and chats. Restore one to go back in time, or download one to move to a new computer.
 
 ## Every day, by itself
 
-Open **Settings → Health** and find **Backups**. The card says **Backed up automatically**, and when the last one was made.
+**Settings → Health → Backups** says **Backed up automatically**, and when.
 
-- A backup is made once a day, when Conch isn't busy.
-- It stays on this computer, in the Conch folder.
-- Conch keeps one a day for a week, then one a week for a month.
-- It never holds your keys or sign-ins. Those are already on this computer.
+- One a day, when Conch isn't busy.
+- Kept in the Conch folder on this computer: one a day for a week, then one a week for a month.
+- Never your keys or sign-ins. Those are already here.
 
-The switch on the card turns daily backups off. If a backup can't be made, because the disk is full for example, the card says why in one sentence and Conch tries again later.
+The card's switch turns daily backups off. If one fails, for example on a full disk, the card says why and Conch tries again later.
 
 ## Back up to a file
 
-Press **Back up now**. You choose two things, then press **Download backup**:
+Press **Back up now**, choose, then press **Download backup**:
 
-- **Include chats** is on, and shows how much room your chats take. Turn it off for a smaller file.
-- **Include keys and sign-ins** is off. Turn it on and choose a passphrase of at least 15 characters, typed twice. Your keys are locked with it.
+- **Include chats** is on, and shows how much room they take. Turn it off for a smaller file.
+- **Include keys and sign-ins** is off. Turning it on asks for a passphrase of at least 15 characters, twice, which locks your keys.
 
-The file's name ends in `.conchbackup`. Keep it somewhere private: it holds your chats and memories. The download button beside a daily backup saves that one as a file too.
+The file ends in `.conchbackup`. Keep it private: it holds your chats and memories. The download button beside a daily backup saves that one as a file.
 
 > [!WARNING]
 > Conch can't recover a forgotten passphrase. Without it, everything except your keys and sign-ins still restores.
 
 ## Restore a backup
 
-1. Press **Restore…** beside a backup in the list, or **Restore from a file…** to choose one you downloaded.
-2. Read what comes back. Conch lists it in plain words, says what stays as it is, and names anything in the backup that can act for you, such as an integration that runs a program on this computer.
-3. If the backup's keys are locked, type its passphrase. Without it, choose **Forgot it? Restore without keys and sign-ins**.
-4. Press **Restore**. If you sign in to Conch, it asks you to confirm it's you.
+1. Press **Restore…** beside a backup, or **Restore from a file…**.
+2. Read what comes back, what stays, and anything that can act for you, such as an integration that runs a program here.
+3. If its keys are locked, type the passphrase, or choose **Forgot it? Restore without keys and sign-ins**.
+4. Press **Restore**. If you sign in to Conch, confirm it's you.
 
-Conch starts again and the page comes back by itself. Where Conch can't restart itself, it says so and waits for you to restart it.
+Conch restarts and the page comes back. Where it can't restart itself, it says so and waits for you.
 
-A restore replaces each kind of thing as a whole, so what you added since goes with it. What the backup doesn't hold, such as chats you left out, stays as it is. If this Conch already has a password or access keys for signing in, those stay too.
+Each kind of thing is replaced whole, so anything added since goes too. What the backup doesn't hold, such as chats you left out, stays. So does a password or access keys this Conch already uses for signing in.
 
 ## Undo a restore
 
-What was in your Conch is kept before anything is replaced. When the page comes back, a notice offers **Undo**, and the Backups section keeps an **Undo restore** button.
+Conch keeps a copy of what was there first. A notice then offers **Undo**, and Backups keeps an **Undo restore** button.
 
-That copy is marked **Before a restore** in the list. It never leaves this computer. Conch keeps the two newest, for up to 30 days.
+The copy, marked **Before a restore**, never leaves this computer. Conch keeps the two newest, for up to 30 days.
 
 ## Move to a new computer
 
-1. On the old computer, press **Back up now** with **Include keys and sign-ins** on.
+1. On the old one, press **Back up now** with **Include keys and sign-ins** on.
 2. On the new one, [install Conch](../start/install.md).
 3. Press **Restore from a file…** and choose the file.
 
-Your password comes with it, so you [sign in](../security/signing-in.md) as before. Access keys don't come over, so make new ones.
+Your password comes along, so you [sign in](../security/signing-in.md) as before. Access keys don't: make new ones.
 
 ## Good to know
 
-- Files in your work folder aren't in a backup. Neither are the browser's sign-ins to websites, or the copies [Undo](./undo.md) keeps.
-- Some providers keep their own record of a chat outside Conch. On a new computer a restored chat is all there to read, but such a provider may not remember it when the chat carries on.
+- Not in a backup: files in your work folder, the browser's sign-ins to websites, and [Undo](./undo.md)'s copies.
+- Some providers keep their own record of a chat. A restored chat reads in full, but such a provider may not remember it when the chat carries on.
 - Only restore a backup you made. One without a passphrase can't prove where it came from.
-- Conch restores backup files of up to 2 GB.
+- Backup files can be up to 2 GB.
 - [What's in the Conch folder](../reference/files.md) lists every file and what a backup does with it.

@@ -4,81 +4,84 @@ description: One button looks at every part of Conch, fixes what it can, and nam
 order: 1
 ---
 
-Conch looks after itself. It fixes most problems before you notice them, and what it can't fix ends in one plain sentence with one button. When something seems off, there is one place to look.
+Conch fixes most problems before you notice them. What it can't fix ends in one plain sentence with one button, in one place.
 
 ## The one button
 
-Open **Settings → Health** and press **Repair everything**. Conch looks at every part of itself at once and fixes what is safe to fix. The list fills in as each part answers, within a few seconds.
+Open **Settings → Health** and press **Repair everything**, or find it with <kbd>mod+k</kbd>. Conch checks every part of itself at once and fixes what is safe to fix. Results fill in within seconds.
 
-A repair never deletes anything and never signs you out. **Check again** only looks.
-
-From anywhere, press <kbd>mod+k</kbd> and choose **Repair everything**.
+A repair never deletes anything or signs you out. **Check again** only looks.
 
 ## What it looks at
 
-When all is well, it says **Everything's working**. Below it, each group is one line with how it's doing, like **5 working**. Press a group to open it. A group with something that needs you opens by itself, at the top. Conch remembers which groups you opened until you close the tab. The groups:
+When all is well, it says **Everything's working**. Each group is one line, like **5 working**. Press one to open it. A group that needs you opens by itself, at the top. Opened groups stay open until you close the tab.
 
-- **Providers**: each one you use is installed, signed in and answering.
-- **Apps** and **Talk to me here**: every app and chat app you connected still works.
-- **This computer**: the browser, search, the internet, disk space, and whether Conch's files are private to you.
-- **Staying responsive**: whether this computer has room for more work, and what Conch did after a slowdown or restart.
+- **Providers**: installed, signed in and answering.
+- **Apps**, **Other apps** and **Talk to me here**: your apps, chat apps and apps using Conch still work.
+- **This computer**: the browser, search, the internet, disk space, whether Conch's files are private, and **Staying responsive**: room for more work, and what Conch did after a slowdown or restart.
 - **Your data**: [backups](./backups.md), passwords, memory and [undo](./undo.md).
-- **Updates**: Conch and the programs it uses. See [Updates](./updates.md).
-- **Routines** and **Tasks**: anything that is waiting for you.
+- **Updates**: Conch and its programs. See [Updates](./updates.md).
+- **Conch**: your agents, outside agents and [dashboards](./dashboards.md).
+- **Skills**: skills you added from Discover.
+- **Routines** and **Tasks**: anything waiting for you.
 
 ## When it needs you
 
-What Conch couldn't fix opens by itself, first in its group. Each has one sentence and one button: sign in again, install or update a program, open the right page, copy the one command only you can run, or **Repair** when a repair fixes it. **Repair everything** stands out only while there's something to fix.
+What Conch couldn't fix opens first in its group, with one sentence and one button: sign in again, install or update a program, open the right page, copy the command only you can run, or **Repair**. **Repair everything** stands out only while there's something to fix.
 
-News, like a new version of Conch, never counts as a problem, and neither does something you turned off.
+News, like a new version, never counts as a problem. Neither does something you turned off.
 
 ## Fixed on its own
 
-At the foot of the same page, **Fixed on its own** says how many things Conch fixed this week, then lists the latest few in a few words each, like **Restarted the browser**, each with a small mark for the part of Conch it was in. Every part's fixes are here, the browser's and the terminal's too, and only here. The same fix again shows once, with how many times. **Show all** opens the rest. It's there to reassure you. Nothing in it needs you.
+At the foot of the page, **Fixed on its own** counts this week's fixes and lists the latest, like **Restarted the browser**, each marked with the part it was in. Every part's fixes are here, and only here. Repeats show once, with a count. **Show all** opens the rest. Nothing in it needs you.
 
 Without asking, Conch:
 
-- starts itself again after a crash;
-- waits to start heavy commands when this computer is busy, and stops a managed command if memory pressure stays high;
-- checks that its web connection still responds, reduces managed work when it does not, and restarts if that does not help;
-- starts on the next free port when another program has taken its usual one;
-- sets aside one of its own files that got damaged, and carries on with what still reads;
-- renews an expired sign-in to a connected app, and tries again when a service was down for a moment;
-- reconnects a bot whose connection dropped;
-- holds a message that couldn't go while you were [offline](./offline.md), and sends it when you're back.
+- starts again after a crash;
+- holds heavy commands while this computer is busy, and stops a managed command if memory pressure stays high;
+- checks its web connection responds, reduces managed work if not, and restarts if that doesn't help;
+- moves to the next free port when another program takes its usual one;
+- sets aside a damaged file of its own and carries on with what still reads;
+- renews an expired sign-in to a connected app, and retries a service that was briefly down;
+- reconnects a dropped bot;
+- sends a message held while you were [offline](./offline.md) once you're back.
 
 ## When this computer is busy
 
-Conch tells active assistants when this computer is approaching its memory or CPU budget. They can reduce parallel jobs, use smaller batches, or continue with reading and planning. These updates arrive as tools finish, so the chat keeps its progress. Providers that cannot receive an update between their own tools get it through the next Conch tool or at the start of the next turn.
+As this computer nears its memory or CPU budget, Conch tells active assistants. They can run fewer jobs at once, use smaller batches, or keep reading and planning.
 
-Commands can say **Waiting to start**, with a reason. They keep their place until there is room. Stopping the chat cancels its waiting commands too; a stopped or expired command will not start later.
+- **Progress is kept.** Updates arrive as tools finish. A provider that can't take one between its own tools gets it with the next Conch tool or the next turn.
+- **Commands wait.** They show **Waiting to start** with a reason, and keep their place. Stopping the chat cancels them. A stopped or expired command never starts later.
+- **The assistant knows why.** A held shell command is reported as not run, with why (busy processor or short memory) and when commands run again. So the assistant waits instead of retrying. A held command never counts against a task.
+- **Work returns gradually.** Once there's room for a while, Conch restores managed work step by step and tells the assistant to carry on. Chats share that allowance, so heavy work doesn't all restart at once.
+- **Settings → Health** shows whether managed commands are slowing, waiting or recovering.
 
-A command the assistant runs in its own shell can be held before it starts. The assistant is told that nothing happened, why (the processor is busy, or memory is short), and when commands run again, so it waits or queues the command rather than trying again and again. A held command never counts against a task: it didn't happen.
+Resource updates never answer an approval for you, or let an assistant raise system limits.
 
-Once there is sustained room again, Conch restores managed work gradually and tells the assistant to carry on. Chats share that allowance, so they do not all restart heavy work at once. **Settings → Health** shows whether managed commands are slowing, waiting, or recovering. Resource updates never answer an approval for you or give an assistant permission to raise system limits.
+If memory pressure stays high, Conch may stop one of its managed commands to protect the rest. Its output stays in the chat. Conch never stops other applications, or reruns the command by itself.
 
-If memory pressure stays high, Conch may stop one of its managed commands to protect the rest of your work. Its output stays available in the chat. Conch does not stop other applications or automatically run that command again.
+On Linux, Conch also checks memory limits shared with other services, since free memory elsewhere doesn't mean its own services have room. When a gateway stops, its supervisor cleans up its programs so they don't linger after a restart.
 
-On Linux, Conch also checks memory limits shared with other services. Free memory elsewhere on the computer does not mean its own services have room. When a gateway stops, its supervisor cleans up the programs that belonged to it so they do not keep consuming resources after a restart.
-
-After a restart, interrupted chats carry on gradually. When Conch cannot tell whether an action finished, it keeps that uncertainty and asks you to check before continuing. It does not automatically repeat a possibly completed change or approve a question for you.
+After a restart, interrupted chats resume gradually. If Conch can't tell whether an action finished, it asks you to check. It never repeats a change that may have happened, or answers a question for you.
 
 ## After repeated trouble
 
-Conch starts with background work paused so you can still open your chats and settings. Scheduled routines, automatic learning and managed commands wait. **Settings → Health** explains what happened.
+Conch starts with background work paused, so your chats and settings still open. Routines, automatic learning and managed commands wait, and **Settings → Health** explains why.
 
-Once Conch has responded with room to work for a full minute, it checks its recovery and lets waiting work continue automatically. **Repair everything** can check sooner. Conch keeps its recent crash history through a longer period of stable operation, so brief recoveries do not cause endless restarts. If Conch cannot start even with background work paused, its supervisor waits before trying again.
+- After a full minute responding with room to work, waiting work continues by itself. **Repair everything** checks sooner.
+- Crash history is kept through a longer calm stretch, so brief recoveries don't cause endless restarts.
+- If Conch can't start even paused, its supervisor waits before trying again.
 
-Freeze detection runs in the supervisor used by the installed background service, `pnpm start`, and the desktop app. A development gateway started directly has resource protection, but no outside process to restart it if its event loop freezes.
+Freeze detection runs in the supervisor behind the background service, `pnpm start` and the desktop app. A development gateway started directly has resource protection, but nothing to restart it if its event loop freezes.
 
 ## A program a feature needs
 
-Some features lean on a program that isn't part of Conch. When one is missing, Conch doesn't report an error. It offers one button.
+When a feature needs a program that isn't part of Conch, a missing one gets a button, not an error.
 
-- **It looks first.** Conch finds a program wherever it was installed, and runs the copy it found.
-- **It installs what it can.** The button says **Install** and the program's name. Conch shows the command it runs and the installer's progress, and only installs what needs no administrator. Whatever was waiting carries on by itself.
-- **It links to the rest.** When only you can install a program, Conch links to its website and notices when the program arrives.
-- **It points at the switch.** When a program is there but turned off inside another app, Conch names the setting and offers to open that app.
+- **It looks first**, and runs the copy it finds wherever it was installed.
+- **It installs what it can.** **Install** and the program's name, with the command and its progress. Only what needs no administrator. Whatever was waiting then carries on.
+- **It links to the rest.** For what only you can install, Conch links to its website and notices when it arrives.
+- **It points at the switch.** For a program turned off inside another app, Conch names the setting and offers to open that app.
 
 Only your press starts an install. Your assistant can't install anything. If you [sign in to Conch](../security/signing-in.md), it asks you to confirm it's you first.
 

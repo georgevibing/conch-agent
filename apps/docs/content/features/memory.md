@@ -4,167 +4,175 @@ description: Conch remembers what matters about you, shows every memory it keeps
 order: 1
 ---
 
-Your assistant remembers things from one chat to the next: what you like, who you work with, what you're building, how you correct it. It learns and tidies quietly, without asking. It only stops to ask when a memory looks unsafe. Every memory is a small file on your computer, and you can see, change or forget any of them. All your [agents](./agents.md) share it.
+Your assistant remembers what you like, who you work with, what you're building and how you correct it. It learns quietly and asks only when a memory looks unsafe. Each memory is a small file on your computer you can see, change or forget. All your [agents](./agents.md) share them.
 
 ## How it learns
 
-Mention something that will still matter next week ("I'm vegetarian", "my sister is called Maria") and your assistant saves a short note. The chat shows it as one of its steps, **Remembered something**: open it to read what it wrote, with **Undo** beside it.
+Mention something that will matter next week ("I'm vegetarian") and your assistant saves a short note. The chat shows the step **Remembered “…”**; open it to read the note, with **Undo**.
 
-- To save something yourself, type `/remember` and the fact.
+- `/remember` and a fact saves it yourself.
 - To have it remember only what you ask, turn off **Learn from your chats** in **Settings → What Conch knows**.
 
-It is told to leave out passwords, keys, and health or money details unless you ask.
+It leaves out passwords, keys, health and money unless asked.
 
 ## Learning by itself
 
-Some things only show once a chat is over: you corrected it ("no, I meant TypeScript"), you said something changed ("I moved to Lisbon"), or a command needed another program on this computer. So once a chat has been quiet for a few minutes, Conch reads your words in it once more and keeps what will still matter.
+When a chat has been quiet a few minutes, Conch rereads your words and keeps what will last: a correction ("no, I meant TypeScript"), a change, a command that needed another program.
 
-- **It doesn't interrupt.** Nothing appears in the chat. What it learned is in **Settings → What Conch knows**, where you can change or forget it.
-- **What changed replaces what was.** "Lives in Lisbon" replaces "Lives in Berlin". The old memory is kept under **What used to be true**, with the date it stopped being true, so your assistant can still answer questions about before.
-- **What you take back stays back.** A memory Conch wrote that you forget isn't learned again. The list is under **Won't learn again**, each with **Remove**. If you say it again yourself, Conch remembers it.
-- **What it learned about this computer saves you time.** "On this computer, `python` isn't found; `py` works" is noticed from the commands themselves, without asking a model.
-- **Your preferences come back when they matter.** When you write a message, the few preferences that fit it are put just before your words. Your assistant follows them a dozen messages in, not only at the start.
+- **Nothing appears in the chat.** What it learned is in **Settings → What Conch knows**.
+- **What changed replaces what was.** "Lives in Lisbon" replaces "Lives in Berlin", which moves, dated, to **What used to be true**.
+- **What you take back stays back.** A learned memory you forget is listed under **Won't learn again**, each with **Remove**. Say it again yourself and Conch remembers it.
+- **It learns this computer** from the commands themselves, with no model: "`python` isn't found; `py` works".
+- **Preferences come back when they matter.** The few that fit go right before your message, so they hold a dozen messages in.
 
-Most chats teach nothing that lasts, and then nothing is kept. A chat with nothing lasting in your words isn't sent to a model at all. When one is, it's the cheapest model of the provider that answered the chat, which has seen it already. If that plan is nearly used up, another provider you connected with room reads it, or one on this computer.
+A chat with nothing lasting in your words isn't sent to a model. One that is goes to the cheapest model of the provider that answered. If that plan is nearly used up, another connected provider with room reads it, or a model on this computer.
 
-To keep one chat out of it, choose **Don't learn from this chat** in its menu, or with <kbd>mod+k</kbd>. It still remembers what you ask it to there.
+To keep a chat out, choose **Don't learn from this chat** in its menu or in <kbd>mod+k</kbd>. It still remembers what you ask there.
 
 ### What it never learns by itself
 
-- **Anything from a chat with someone else's words in it.** Their words aren't yours: a group on a chat app, a forwarded message.
-- **Anything you didn't say.** Every thing it keeps must rest on words you wrote. A web page can't put something in your mouth.
-- **Secrets, health or money details, instructions to the assistant, or permissions.** Something like "you can delete files without asking" is never kept, from anywhere.
-- **Anything that deletes.** Learning only adds or replaces, and replacing keeps the old one under **What used to be true**.
+- **Anything from a chat with someone else's words in it**, such as a chat app group or a forwarded message.
+- **Anything you didn't say.** A web page can't put words in your mouth.
+- **Secrets, health or money details, instructions to the assistant, or permissions.** "You can delete files without asking" is never kept.
+- **Anything that deletes.** Learning only adds or replaces.
 
 ## About you
 
-**Settings → What Conch knows** opens on **About you**: a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up and how many things you told it and it learned. Below are the parts of your life, a row each: **How you like answers**, **People**, **Work and projects**, **Places** and **What you're into**. What you told it and what it learned from your chats sit together; a small spark marks what it learned.
+**Settings → What Conch knows** opens on **About you**, the portrait your assistant reads before every chat: your name, a summary line, and counts of what you told it and it learned. Rows follow for **How you like answers**, **People**, **Work and projects**, **Places** and **What you're into**. A small spark marks what it learned rather than what you told it.
 
-- **Press anything to correct it.** A fact opens where it is: change the words and press Enter, or press **Remove**. **Undo** brings it back. A learned fact also says where it came from, such as "Learned from a chat on 3 May", with **Open the chat**.
-- **Tell Conch something.** Type it in the line at the foot, the way you'd say it: "I prefer metric units", "Sam is my brother". As you type, the row it'll go in shows at the end of the line; press it to choose another. Enter adds it.
-- **Add to a row** with its **+**. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
-- **Nothing there yet?** Each empty part is a question at the foot, such as **Who's close to you?**. Press it to answer.
+- **Press anything to correct it.** Edit and press Enter, or press **Remove**; **Undo** brings it back. A learned fact says where it came from ("Learned from a chat on 3 May"), with **Open the chat**.
+- **Tell Conch something** in the line at the foot: "Sam is my brother". The row it'll go in shows at the end; press it to choose another. Enter adds it.
+- **Add to a row** with its **+**. A person can carry who they are to you and a date: "daughter · born 8 June 2025".
+- **Empty parts** are questions at the foot, such as **Who's close to you?**.
 
-**Your photo.** Press your initial, or drop a picture on it, to use a photo instead. It opens in a frame: drag it to move it, zoom until it looks like you, then press **Use this photo**. It shows on the portrait and at the foot of the sidebar. Press it again to choose a new one or **Remove photo**; **Undo** puts it back. Conch keeps it on your computer, framed and shrunk, and backs it up with your settings. PNG, JPEG and WebP all work.
+**Your photo.** Press your initial, or drop a picture on it.
 
-Under **Advanced** at the foot of the page:
+1. Drag and zoom the picture in the frame.
+2. Press **Use this photo**. It shows on the portrait and at the foot of the sidebar.
 
-- **In your own words** holds anything the portrait doesn't, the way you'd say it. Press **Lay it out on your portrait**, and your assistant reads it into facts. They arrive outlined: keep the right ones, dismiss the rest, or press **Keep all**. Nothing is saved that you didn't keep.
+Press it again for a new one or **Remove photo**; **Undo** puts it back. PNG, JPEG or WebP, kept on your computer and backed up with your settings.
+
+Under **Advanced**:
+
+- **In your own words** holds anything the portrait doesn't. **Lay it out on your portrait** turns it into facts; keep the right ones, dismiss the rest, or press **Keep all**. Only what you keep is saved.
 - **What every chat starts with** shows, word for word, what your assistant reads about you.
 
 ## See what it knows
 
-Open every memory with <kbd>mod+k</kbd> (**What Conch knows about you**), by typing `/memory`, or from **Settings → What Conch knows → Open memories**. It opens inside Settings, with **What Conch knows › All memories** above it: press **What Conch knows** to go back.
+Open every memory with <kbd>mod+k</kbd> (**What Conch knows about you**), `/memory`, or **Settings → What Conch knows → Open memories**. It opens under **What Conch knows › All memories**; press **What Conch knows** to go back.
 
-The page is short:
+- **A question** appears only if something looks unsafe. See [When a memory looks off](#when-a-memory-looks-off).
+- **A summary**: how many memories, in a bar split into **Preferences**, **People**, **Projects** and **Facts**. Press a kind to filter, again to show all. Beside it: whether Conch is learning, and its last tidy-up.
+- **Your memories**, newest first, each marked as added by you, learned in a chat, or changed by a tidy-up.
 
-- **A question, only if something looks unsafe.** See [When a memory looks off](#when-a-memory-looks-off).
-- **A summary.** How many memories Conch has, and one bar that shows how many are **Preferences**, **People**, **Projects** and **Facts**. Press a kind to show only that kind. Press it again to show them all. The line beside it says whether Conch is learning, and when it last tidied up.
-- **Your memories.** Newest first. Each one says whether you added it, Conch learned it in a chat, or a tidy-up changed it.
+Press a memory to change it: Enter saves, Escape cancels. To remove one, point at it and press the bin, or swipe left on a phone. **Undo** brings it back.
 
-Press a memory to change it. Enter saves your change, and Escape cancels it. To remove one, point at it and press the bin, or swipe it left on a phone. **Undo** brings it back.
+If nothing matches the search box, **Remember “…”** appears at the top. Press it, or Enter, to add it.
 
-The search box also adds memories. Type to search. If nothing says it already, **Remember “…”** appears at the top. Press it, or press Enter.
-
-The **⋯** menu holds the rest: **Tidy up now**, **Undo the last tidy-up**, **Edit About you**, **What used to be true**, **Won't learn again**, and **Export** as a document or as data.
+The **⋯** menu holds **Tidy up now**, **Undo the last tidy-up**, **Edit About you**, **What used to be true**, **Won't learn again**, and **Export** as a document or as data.
 
 ## Search that understands
 
-Search finds a memory by its words. Typos and other forms of a word still match, and so do a few everyday ideas: "my car" finds "Drives a red vehicle".
+Search matches words, typos, word forms and some everyday ideas: "my car" finds "Drives a red vehicle".
 
-To have search understand meaning, press **Get it** under the search box, or choose **Search memories by meaning** with <kbd>mod+k</kbd>. Conch downloads a small model once (23 MB, or 136 MB if you use a language other than English) and runs it on this computer, even offline. Then "anniversary" finds your wedding, and "which city is home" finds where you live. Nothing you've told Conch leaves your computer.
+For search by meaning, press **Get it** under the search box, or choose **Search memories by meaning** in <kbd>mod+k</kbd>. Conch downloads a small model once (23 MB, or 136 MB for languages other than English) and runs it on this computer, even offline. Then "which city is home" finds where you live, and nothing leaves your computer.
 
-If the download stops, Conch tries again by itself. If it still can't, the line under the search box says why, with **Try again**. Already have an embedding model in [Ollama](../providers/ollama.md)? Search uses that one instead, and there's nothing to download.
+- A stopped download retries by itself. If it still fails, the line under the search box says why, with **Try again**.
+- An embedding model in [Ollama](../providers/ollama.md) is used instead, with nothing to download.
 
-Your assistant uses the same search. While your memories are few, it has all of them in mind. Once there are many, it starts each reply with the ones that fit what you said, and looks up the rest when it needs them.
+Your assistant uses the same search: with many memories, each reply starts with the ones that fit.
 
 ## Your earlier chats
 
-Memories hold facts about you. Your chats hold everything else: the plan you made, the venue you picked, the command that fixed the build. Your assistant can look through them too.
-
-Say "like last time", "the Lisbon plan" or "what did we decide about the venue?" and it searches your other chats, the same way [Find anything](./find.md) does, then reads around the line it needs. The chat shows **Looked through your chats** with what it looked for. Open it to see each chat and line it found; choose one to go there.
+Your chats hold the rest: the plan you made, the command that fixed the build. Say "like last time" or "what did we decide about the venue?" and your assistant searches your other chats, like [Find anything](./find.md), then reads around the line it needs. The chat shows **Looked through your chats**; open it to see each line found and go there.
 
 - It finds [archived](./chats.md#archive) chats too, and knows they're archived. The chat you're in is left out.
-- It finds the [past chats you brought in](../care/past-chats.md) from Claude Code, Codex and other apps, and says which app each was in. They come from outside Conch, so reading one marks your chat like reading a web page, and nothing in them is learned by itself.
-- **Activity** lists every time it looked, beside what it remembered.
-- It never passes on a password or a key. Anything Passwords handed out, and anything shaped like a key or written as "password: …", comes back as •••.
-- A chat that read a web page or an email, or has someone else's words, could be trying to steer it. Reading one marks your chat the same way, so anything risky asks first. See [when the assistant reads something untrusted](../security/signing-in.md#when-the-assistant-reads-something-untrusted).
-- Someone you let in on a chat app can't use it. Their chat with your assistant never sees yours, and neither does a chat with a message you forwarded in. **New chat** starts one that can.
-- Routines and work sent to the background don't look back.
+- It finds [past chats you brought in](../care/past-chats.md) from Claude Code, Codex and other apps, and names the app. Reading one marks your chat like reading a web page, and nothing in them is learned by itself.
+- **Activity** lists every time it looked.
+- It never passes on a password or key. Anything Passwords handed out, shaped like a key, or written as "password: …" comes back as •••.
+- Reading a chat that read a web page or email, or has someone else's words, marks your chat the same way, so anything risky asks first. See [when the assistant reads something untrusted](../security/signing-in.md#when-the-assistant-reads-something-untrusted).
+- Someone you let in on a chat app can't use it, and nor can a chat with a message you forwarded in. **New chat** starts one that can.
+- Routines and background work don't look back.
 
 ## Tidy up
 
-Memories pile up. A tidy-up merges repeats, updates what has changed, and picks up lasting things you said in recent chats. It happens once a night, between 2 and 5 in the morning, when nothing else is running. To stop it, turn off **Tidy up every night** in **Settings → What Conch knows**. **Tidy up now** in the **⋯** menu starts one straight away.
+Once a night, between 2 and 5 am when nothing else runs, a tidy-up merges repeats, updates what changed, and picks up lasting things from recent chats.
+
+- Turn off **Tidy up every night** in **Settings → What Conch knows** to stop it.
+- **Tidy up now** in the **⋯** menu starts one.
+- **Undo the last tidy-up** puts back exactly what was there. There's no report and nothing to approve.
+
+It never loses a number or a name, and skips any change that would look planted.
+
+It asks your cheapest model and counts toward what learning may spend. With no model, or at the cap, it still merges exact repeats. With **Learn from your chats** off, it only tidies what's there.
+
+When a long chat is [summarised](./chats.md#long-chats), Conch first reads what you said in that part.
 
 ## The morning's note
 
-In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → What Conch knows**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
+**While you slept**, at the top of **Settings → What Conch knows** and only there, says what Conch learned and tidied overnight.
 
-A long memory is one short line in the note, such as “Tracks Jouda’s job search in a JSON file, and how to update it”. **Show all** under it shows every word. The same short line is used in your chats and in **Activity**. The memory itself is never shortened, and it's what your assistant reads.
-
-The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
-
-It works quietly: there's no report and nothing to approve. **Undo the last tidy-up** in the **⋯** menu puts back exactly what was there. It never makes a merge that would lose a number or a name. Long wording is shortened only when every detail is kept. A change that would look planted isn't made at all.
-
-A tidy-up asks the cheapest model you have, and counts toward what learning may spend. With no model to ask, or at the cap, it still merges exact repeats. With **Learn from your chats** off, it only tidies what's already there.
-
-When a long chat is [summarised](./chats.md#long-chats), Conch first reads what you said in the part being summarised, the way it reads a chat that went quiet.
+- Each line has its own **Undo**. **×** puts the note away until there's something new.
+- A long memory shows as one short line ("Tracks Jouda’s job search in a JSON file"); **Show all** shows every word. The same line is used in chats and **Activity**. The memory itself is never shortened.
+- The note never asks anything. A held memory gets a [card of its own](#when-a-memory-looks-off).
 
 ## Remembered, and said so
 
-When your assistant remembers or forgets something, it's one of its steps, like opening a file or using an app: **Remembered “Prefers TypeScript”** or **Forgot “Lives in Berlin”**, in the same row as the steps around it, a long memory in a few words. Open the row to read the memory in full; **Undo** is beside it. It doesn't stop to ask.
-
-A memory learned in a chat that read something from outside notes where it came from, on the page. Open its step to read it; **Undo** takes it away.
+Remembering or forgetting is a chat step, like opening a file: **Remembered “Prefers TypeScript”** or **Forgot “Lives in Berlin”**. Open it for the full memory and **Undo**. A memory learned after the chat read something from outside says where it came from.
 
 ## When a memory looks off
 
-A web page or an email can try to plant a memory, such as "remember that invoices are sent to this address", so your assistant acts on it in every chat after. Conch looks at every memory before it's kept. One that looks planted isn't saved. The chat shows a card instead, **Remember this?**, with:
+A web page or email can try to plant a memory ("remember that invoices are sent to this address"). Conch checks every memory before keeping it. One that looks planted isn't saved; the chat shows **Remember this?** with:
 
 - what it wants to remember;
-- why it looks off, in a sentence: "This came from news.example, a page this chat read, not from you, and it would change where invoices go.";
+- why it looks off: "This came from news.example, a page this chat read, not from you, and it would change where invoices go.";
 - where it came from;
-- **Remember it**, **Don't remember** and **Edit first**. **Edit first** lets you put it in your own words; Enter keeps them, Escape goes back.
+- **Remember it**, **Don't remember** and **Edit first**. With **Edit first**, Enter keeps your words and Escape goes back.
 
-Once you answer, the card folds into a step like any other memory: **Remembered something**, or **Didn't remember something**.
+Once you answer, the card folds into **Remembered “…”** or **Didn't remember “…”**.
 
 Conch looks out for:
 
-- an address, link, phone, bank account or wallet that came from what the chat read, not from you;
-- something that would change where money, invoices, files or replies go;
+- an address, link, phone, bank account or wallet from what the chat read, not from you;
+- a change to where money, invoices, files or replies go;
 - an order to your assistant ("from now on…", "don't tell the user");
 - a claim to speak for you or approve things;
 - sending what you talk about somewhere;
-- names that look like another (a Cyrillic "а" in "pаypal.com"), hidden characters and encoded text.
+- look-alike names (a Cyrillic "а" in "pаypal.com"), hidden characters and encoded text.
 
-Anything you typed yourself is yours: it's never questioned. A password, a key or a code is only asked about when you typed it, because it's safer in [Passwords](./passwords.md). When it didn't come from you, or it has hidden characters, the card says **I didn't remember this**, and only **Remember anyway** keeps it.
+What you typed is never questioned, except a password, key or code, which is safer in [Passwords](./passwords.md). When it didn't come from you, or has hidden characters, the card says **I didn't remember this**, and only **Remember anyway** keeps it.
 
-A held memory isn't used, isn't found by search and isn't in an export. The same card comes first on **Memories**, and your phone gets a notification like any approval. This is the only time memory asks you anything. **Activity** lists every memory that was held, and what you chose.
+- A held memory isn't used, found by search or exported.
+- The same card comes first on **Memories**, and your phone gets a notification like any approval. This is the only time memory asks you anything.
+- **Activity** lists every held memory and what you chose.
 
-Most memories never see the card. Where something from outside was read, Conch may also ask a cheap model for a second opinion; it can only hold a memory, never let one through.
+When something from outside was read, Conch may ask a cheap model for a second opinion. It can only hold a memory, never let one through. Why it works this way: [ADR 0087](../../../../docs/adr/0087-the-memory-check.md).
 
-To turn the check down, go to **Settings → Security → Advanced → Safety** and turn off **Check what it remembers**. Conch says what could happen and asks that it's you. Passwords, keys and hidden characters are still held.
+To turn the check down, turn off **Check what it remembers** in **Settings → Security → Advanced → Safety**. Conch says what could happen and asks that it's you. Passwords, keys and hidden characters are still held.
 
 ## Only security asks
 
-Your own preferences and corrections are saved without asking, including in your private chat apps and in chats that read websites or other apps. Reading a page doesn't turn what you say next into a question.
+Your own preferences and corrections are saved without asking, even in chats that read websites or other apps. Conch asks only for the risks above; anything else not clearly yours is left out silently:
 
-Conch asks only when a memory looks unsafe: a password or key, a name made to look like another, hidden characters, an instruction to the assistant, or something that would change where money, files or replies go. Anything else that isn't clearly yours is left out without asking:
-
-- something learned in a routine or a chat app, after reading something, that you didn't say yourself;
+- something learned in a routine or chat app, after reading something, that you didn't say;
 - something close to what you took back, unless you said it again;
-- a change to a memory that is waiting for your answer.
+- a change to a memory still waiting for your answer.
 
-A memory is context about you. It can't give permission to run commands, send messages or change security settings.
+A memory can't give permission to run commands, send messages or change security settings.
 
-Older questions about routine memories are checked again against your recent messages, and settled by themselves when your words support them. Security questions stay until you answer them.
+Older questions about routine memories settle by themselves when your recent messages support them. Security questions stay until you answer.
 
 ## What it costs
 
-Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. The short line for a long memory is written once, by the same small model, a few at a time, and counts toward the same limit; with no model to ask, it's the memory's first few words. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Limits**, under **Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
+Reading a quiet chat uses a small model, at most once per stretch of a chat. On a plan, or with a model on this computer, it's free.
+
+- A long memory's short line is written once by the same model, within the same limit; with no model, it's the first few words.
+- Pay-as-you-go spending is capped at $1 a month, set in **Settings → Usage → Limits** under **Learning from your chats**.
+- At the cap, learning rests until the 1st and **Settings → Health** says so. Your chats aren't affected.
 
 ## Good to know
 
-- Memories are Markdown files in `~/.conch/memory`, one each. Open, edit or delete them with any editor. What used to be true is in `memory/superseded`, and what Conch learned and where is in `~/.conch/learning`. All of it is part of every [backup](../care/backups.md). A file changed outside Conch, or brought back from a backup, is looked at again when Conch reads it, and one that looks off waits for your OK.
-- The model for meaning isn't in backups: on a new computer, press **Get it** again. **Repair everything** notices if any of it goes missing and gets it back.
-- Memory belongs to Conch, so every [agent](./agents.md) you make and every provider you connect knows the same things. Tell one agent something and the others know it too. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones itself.
-- Only your own words teach it. Routine runs, and messages from other people on a chat app, are left out.
+- Memories are Markdown files in `~/.conch/memory`, one each, editable with any editor. What used to be true is in `memory/superseded`; what Conch learned and where is in `~/.conch/learning`. All of it is in every [backup](../care/backups.md).
+- A file changed outside Conch, or restored from a backup, is checked again when read. One that looks off waits for your OK.
+- The model for meaning isn't backed up: on a new computer, press **Get it** again. **Repair everything** gets back anything missing.
+- Every [agent](./agents.md) and provider knows the same things. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones.

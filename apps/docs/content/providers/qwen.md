@@ -6,19 +6,14 @@ provider: qwen
 
 1. Open **Settings → Providers** and choose **Qwen**.
 2. Press **Open modelstudio.console.alibabacloud.com** and create a key in Alibaba Cloud Model Studio.
-3. Paste it. Conch checks it before keeping it.
+3. Paste it.
 
-Or paste the key anywhere on **Settings → Providers**. Conch knows a Model Studio key that starts with `sk-ws`; for a plain `sk-` key it asks whose it is. It checks the key before keeping it.
+Or paste it anywhere on **Settings → Providers**. Conch knows an `sk-ws` key, and asks whose a plain `sk-` key is.
 
-A key works only in the region it was made in. Conch tries Singapore, the United States, China and Hong Kong in turn, all Alibaba Cloud’s own addresses, and remembers the one that takes it.
+A key works only in its own region. Conch tries Singapore, the United States, China and Hong Kong in turn, and remembers which works.
 
 ## What you get
 
-Alibaba’s Qwen models, from tiny to frontier, with a free starter quota for new accounts in the Singapore region.
+Alibaba’s Qwen models, from tiny to frontier. New Singapore accounts get a free starter quota.
 
-Conch runs the conversation itself: it keeps the thread, hands the model the tools of your [apps](../features/apps.md), and asks you before anything changes. [Memory](../features/memory.md), [skills](../features/skills.md) and the [browser](../features/browser.md) all work with models that can call tools.
-
-## Good to know
-
-- **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled in the picker. If a model turns out not to take tools, Conch asks it again without them and says so.
-- **Spend is tracked.** Conch records each turn, and you can set a budget. See [Offline and at a limit](../care/offline.md).
+Conch runs the chat and supplies the tools: your [apps](../features/apps.md), [memory](../features/memory.md), [skills](../features/skills.md), the [browser](../features/browser.md), files with **Undo** and sealed commands. Anything that changes asks first. Models without tools show **Chat only**. Spend counts toward your [budget](../care/offline.md).

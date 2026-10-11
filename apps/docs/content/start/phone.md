@@ -6,52 +6,57 @@ order: 3
 
 ## Sign your phone in
 
-1. Install [Tailscale](https://tailscale.com/download) on your computer and your phone, and sign in to both. It's free, and nothing is opened to the internet.
-2. In Conch, choose how you sign in, in **Settings → Access**: a passkey (Touch ID, Windows Hello) or a password.
-3. In **Settings → Access**, press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
-4. Point your phone's camera at it. Your phone is signed in.
+1. Install [Tailscale](https://tailscale.com/download) on your computer and phone, and sign in to both. It's free, and opens nothing to the internet.
+2. In **Settings → Access**, choose a passkey (Touch ID, Windows Hello) or a password.
+3. Press **Add a device**. Conch turns on its secure address and shows a QR code.
+4. Scan it with your phone's camera. You're signed in.
 
-The code works once, for ten minutes. Whoever opens it is signed in, so don't share it.
+The code works once, for ten minutes, for whoever opens it. Don't share it.
 
-Prefer the terminal? `conch phone` turns the address on, and `conch pair` shows the code.
+In a terminal, `conch phone` turns the address on and `conch pair` shows the code.
 
 ## Make it an app
 
-In your phone's browser, add Conch to the Home Screen (in Safari: **Share → Add to Home Screen**). It opens like any app, with no app store.
+Add Conch to your Home Screen (in Safari: **Share → Add to Home Screen**). It opens like an app, no app store.
 
 ## Made for the small screen
 
-On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: one chip with the model and the mode in words ("Opus · Auto"; tap it for a sheet with both, and the folder), and **Talk** in Send's place until you type. To choose the working folder, press **Change** beside **Folder** in that sheet, type `/folder` or open **Settings → General**: your phone walks through the computer's folders, the same as at the computer. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
+On a phone, Conch keeps the chat's name in view and folds the rest away.
+
+- **Header:** your provider's mark, with a ring for how much of its limit is left. **⋯** holds **Find in chat**, the browser and the terminal.
+- **Message box:** one line. One chip shows model and mode ("Opus · Auto"); tap it for both, and the folder. **Talk** replaces Send until you type.
+- **Working folder:** **Change** beside **Folder** in that sheet, `/folder`, or **Settings → General**. You browse the computer's folders.
+- **Filters** that don't fit (**Apps**, **Activity** and elsewhere) slide sideways; the page never does.
 
 ## Let it reach you
 
-Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
+Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question, when an answer is ready while you're away, and when a routine has run. Never while you're looking at it.
 
-While it's on, **Topics** opens what this device hears about, one switch each. Turn off **Show what it's about** and a notification only says to open Conch. **Send a test** sends one now, to see it arrive.
+**Topics** sets what this device hears about. Turn off **Show what it’s about** and a notification only says to open Conch. **Send a test** sends one now.
 
 ### Answer from the notification
 
-When your assistant needs your OK, the notification says what it wants to do, in a few words: for a command, something like "Run git and Python in conch-agent", never the command itself.
+The notification says what your assistant wants in a few words: "Run git and Python in conch-agent", never the command itself.
 
-- **Allow** and **Deny** are right on it for everyday steps: running the tests, building, changing a file in the work folder. One tap, and it carries on. The notification says **Allowed** or **Denied**.
-- **Review** is there instead for a step that matters: anything that deletes, sends something to other people, spends money, uses your Passwords, acts on a website or in one of your apps, changes a file outside the work folder, is a plan to read, or comes after the chat read something from outside. It opens Conch at the question.
-- Tapping the notification opens the question in a sheet at the bottom of the screen: who's asking, what it would do in those few words, exactly what it would do under them, and two big buttons. A long command shows its first few lines; **Show all** opens the rest. For a step that matters, **Confirm and allow** asks for your passkey (Face ID, a fingerprint) or your password first.
-- The question in the chat itself works the same way: on your phone, or any device that isn't the computer Conch runs on, allowing a step that matters asks you to confirm it's you first. Once you have, it doesn't ask again for ten minutes. At the computer itself, nothing changes.
-- On an iPhone, notifications have no buttons, so a tap opens the sheet.
-- With **Show what it's about** off, there's no **Allow**: you'd be allowing something you can't see.
-- Each tap works once, only on the phone it was sent to, and only while the question waits. Answered somewhere else first, the notification says **Already answered**.
+- **Allow** and **Deny** are on it for everyday steps (running tests, building, changing a file in the work folder). It then says **Allowed** or **Denied**.
+- **Review** replaces them for steps that matter: deleting, sending to others, spending, using your Passwords, acting on a website or in your apps, changing files outside the work folder, a plan to read, or anything after the chat read something from outside. It opens Conch at the question.
+- **Tapping it** opens a sheet: who's asking, the few words, exactly what it would do, and two big buttons. **Show all** expands a long command. For a step that matters, **Confirm and allow** asks for your passkey (Face ID, a fingerprint) or password.
+- **In the chat**, on any device but the computer Conch runs on, allowing a step that matters asks you to confirm it's you, then not again for ten minutes.
+- **iPhone** notifications have no buttons; a tap opens the sheet.
+- **With Show what it’s about off**, there's no **Allow**: you'd be allowing something unseen.
+- **Each tap works once**, on the phone it was sent to, while the question waits. Answered elsewhere, it says **Already answered**.
 
-A question nobody answers in 30 minutes is a no, and the chat says so.
+Unanswered for 30 minutes is a no, and the chat says so.
 
-**Settings → Access → Devices** lists every phone, tablet and browser signed in to Conch. A bell beside one means it gets notifications; press **Stop notifications** to quiet it and leave it signed in, or **Sign out** to send it away.
+**Settings → Access → Devices** lists every signed-in phone, tablet and browser. A bell marks those that get notifications. **Stop notifications** quiets one; **Sign out** removes it.
 
 ## Talk to it
 
-Dictate into any message, have answers read aloud, or talk hands free. Your voice can stay on your own devices: on the phone itself, or on the computer Conch runs on. Say **“Hey Conch”** (or your assistant's name) while Conch is open on the phone, too. See [Voice](../features/voice.md).
+Dictate, hear answers read aloud, or talk hands free, with your voice kept on your phone or the computer Conch runs on. Say **“Hey Conch”** (or your assistant's name) while Conch is open. See [Voice](../features/voice.md).
 
 ## Or skip the browser
 
-Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk or QQ, and approve what it asks from there. It's in **Apps → Talk to me here**. See [Talk to me here](../channels/index.md).
+Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk or QQ, and approve from there. Set it up in [**Apps → Talk to me here**](../channels/index.md).
 
 > [!NOTE]
 > Other ways in, a second lock for new devices, and what to do about a lost phone are in [Signing in and staying safe](../security/signing-in.md).

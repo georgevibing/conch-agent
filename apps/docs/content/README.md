@@ -56,16 +56,13 @@ Don't repeat what another page says. Link to it.
 
 ## The voice
 
-Write for someone who has never opened a terminal, in the words Conch itself uses.
+The rules for the words are in
+[AGENTS.md § Writing the site and the docs](../../../AGENTS.md#writing-the-site-and-the-docs).
+Two more for these pages:
 
-- Short sentences. One idea each. Say what happens, then stop.
 - Name the button, in bold, exactly as the app does: **Settings → Health**, **Repair
   everything**.
 - "Your assistant" or "Conch", never a provider's name, unless the page is about it.
-- No "simply", "just", "easily", "powerful". No exclamation marks. No em dashes.
-- Lead with what the person gets. Leave how it's built to
-  [the decisions](../../../docs/adr).
-- A page is done when nothing more can be taken out.
 
 ## The front page
 

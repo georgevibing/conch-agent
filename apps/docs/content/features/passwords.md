@@ -1,100 +1,105 @@
 ---
 title: Passwords
-description: Keep passwords in Conch or show the manager you already use, and let your assistant sign in without ever seeing one.
+description: Keep passwords in Conch or show the manager you already use. Your assistant signs in for you without ever seeing one.
 order: 10
 ---
 
-Conch has a password manager of its own, encrypted on your computer. It also shows what's in the manager you already use. Your assistant can sign in to a site for you, with your OK, and never sees the password.
+Conch keeps passwords encrypted on your computer, and shows the manager you already use. With your OK, your assistant signs in for you and never sees the password.
 
 ## Add your passwords
 
-Open **Passwords** in the sidebar. There are three ways to fill it:
+Open **Passwords** in the sidebar:
 
 - **Add a password** saves one. **New** also makes cards, notes, API keys, Wi-Fi, bank accounts and more.
-- **Import passwords** takes the export file from a browser or another manager. Conch shows what's in the file and what's already here before it saves anything, and leaves duplicates out. Delete the export file afterwards: it isn't encrypted.
+- **Import passwords** takes an export file from a browser or another manager. You see what's new before it saves, and duplicates are left out. Delete the export file afterwards: it isn't encrypted.
 - **Connect a password manager** shows another manager's items here, and leaves them where they are.
 
-When you add or edit a password, **Make a strong password** in its field writes one for you.
+**Make a strong password**, in the password field, writes one for you.
 
 ## The managers you already use
 
-These are the password managers Conch reads beside its own vault:
-
 <!-- conch:password-managers -->
 
-Turn one on in **More → Password managers…**. Conch reads it through that manager's own program and its own unlock, and changes nothing there. If the program is missing, Conch offers to get it.
+Turn one on in **More → Password managers…**. Conch reads it through the manager's own program and unlock, and changes nothing there. If the program is missing, Conch offers to get it. One this computer can't run, like the macOS Keychain on Windows, isn't offered.
 
-A manager that asks for your OK in its own window, such as 1Password, is only asked while you have **Passwords** open. Anywhere else in Conch you see what it showed last, and nothing pops up. How long its OK lasts is the manager's to decide: 1Password asks again after ten minutes without use, and on Windows each time Conch restarts.
+A manager that asks for your OK in its own window, such as 1Password, only asks while **Passwords** is open. 1Password asks again after ten minutes unused, and on Windows each time Conch restarts.
+
+Apple Passwords and browsers like Chrome don't let other apps read them. Import from those instead.
 
 ### 1Password on a computer without the app
 
-1Password connects two ways. Choose one with **Turn on** (or **Settings**) beside 1Password in **More → Password managers…**:
+Choose how 1Password connects with **Turn on** (or **Settings**) beside it in **More → Password managers…**:
 
 - **Use the 1Password app on this computer.** Unlock with Touch ID or Windows Hello. In the 1Password app, turn on **Settings › Developer › Integrate with 1Password CLI**.
-- **Use a service account token.** For a computer without the 1Password app, such as a server. Conch reads only the vaults you give the service account, and asks nobody for an OK.
+- **Use a service account token.** For a computer without the app, such as a server. Conch reads only the vaults you give the service account, and never asks for an OK.
 
 To make a token:
 
 1. On 1Password.com, open **Developer › Service accounts**.
-2. Create a service account. Choose the vaults Conch may see, with read access.
-3. Copy the token it shows (it starts with `ops_`) and paste it in Conch.
+2. Create a service account with read access to the vaults Conch may see.
+3. Copy the token (it starts with `ops_`) and paste it in Conch.
 
-Conch tries the token first and says what it found: **Connected · 2 vaults**. It keeps the token sealed on this computer, hands it only to 1Password's command line, and never shows it again. 1Password's own steps are in [its guide](https://developer.1password.com/docs/service-accounts/get-started/).
+Conch tries it (**Connected · 2 vaults**), seals it on this computer and never shows it again. See [1Password's guide](https://developer.1password.com/docs/service-accounts/get-started/).
 
-The row then says **Service account · 2 vaults**. **Settings** chooses which of its vaults Passwords shows, replaces the token, switches back to the app, or disconnects, which forgets the token. If the token stops working, **Repair everything** says so, with **Replace the token**. Both ways need 1Password's command line tool; Conch offers to get it.
+The row's **Settings** then picks which vaults show, replaces the token, switches back to the app, or disconnects. If the token stops working, **Repair everything** offers **Replace the token**. Both ways need 1Password's command line tool, which Conch offers to get.
 
-Each of these managers is an app in **Apps** too, under **Passwords**. One you turned on has a card there, and its page has the same switch: **Fill sign-ins from** and its name. 1Password has a second switch, **Manage Environments**, for developers. See [Apps](./apps.md#1password). A manager this computer can't run, such as the macOS Keychain on Windows, isn't offered.
+### In Apps
 
-**Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. Copy them all from **More → Password managers…**, where Conch can keep them up to date, one way, every 30 minutes. Or copy one or a few: right-click an item, or press **Copy into Conch** on its page. No export file is made.
+Each manager you turned on also has a card in **Apps**, under **Passwords**, with the switch **Fill sign-ins from** and its name. 1Password adds **Manage Environments**, for developers. See [Apps](./apps.md#1password).
 
-It works the other way too. Right-click one of Conch's own and choose **Copy to 1Password** or **Copy to Bitwarden**: Conch makes a new item there through that manager's own program, in the vault you pick. Nothing already in the manager is changed. The copy is separate from then on, so a change in one place doesn't follow it to the other. One that's already there, with the same site and account, is left out.
+### Copy between managers
 
-Apple Passwords, Chrome and other browsers don't let other apps read them. Import from those instead.
+**Copy into Conch** makes a manager's items Conch's own, in your vault and your backups, with no export file.
+
+- **All of them:** from **More → Password managers…**. Conch can keep them up to date, one way, every 30 minutes.
+- **One or a few:** right-click an item, or press **Copy into Conch** on its page.
+
+The other way, right-click one of Conch's and choose **Copy to 1Password** or **Copy to Bitwarden**. It becomes a new item in the vault you pick, unless one with the same site and account is there. The copies are separate from then on.
 
 ## Find, check and tidy
 
-One search box finds an item by anything you'd remember: its name, the account, the site, a tag. Press <kbd>/</kbd> to go to it. The best match comes first, with the part that matched marked. <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found while you keep typing, and <kbd>Enter</kbd> opens the first one.
+The search box finds an item by name, account, site or tag. Press <kbd>/</kbd> to go to it. <kbd>↓</kbd> and <kbd>↑</kbd> walk the results, and <kbd>Enter</kbd> opens the first.
 
-Each item's tile has a small mark on its corner that says where it lives: Conch's pearl, or the mark of the manager it comes from. Its page says it in words. When the same account is in two places, its page says **Also in** and links to the other one.
+- A mark on each tile shows where it lives. An account in two places says **Also in** on its page.
+- The row under the search shows **All**, **Conch** or one manager. The filter narrows to one kind, one tag, **Favourites** or **One-time codes**.
+- Drag the line between list and item to resize it; double-click to reset.
 
-The row under the search shows one place at a press: **All**, **Conch**, or one manager, each with how many items it holds. The filter below it narrows the list further, to one kind, one tag, **Favourites** or **One-time codes**. Passwords remembers where you left them. A long list has a heading over each group: **Favourites**, then each letter, or how long ago when you sort by **Recently edited** or **Recently used**.
-
-On a phone, an item opens on a page of its own, with **Passwords ›** and its name at the top: press **Passwords** to go back to the list.
-
-Drag the line between the list and the item to make the list as wide as you like; Passwords remembers it, and a double-click puts it back. The list stays quick however many items it holds. An item's name shows the moment you choose it. Its fields follow, which can take a second when they come from another manager.
-
-**More → Check for breaches** looks for your passwords among known data breaches. No password leaves your computer for it, only a short piece of a scrambled copy. What needs attention shows at the top of the list, worst first: **In a data breach**, **Reused**, **Weak**, **Expired**, **Not secure**. Press one to see those items.
+**More → Check for breaches** looks for your passwords in known data breaches. Only a short piece of a scrambled copy leaves your computer. What needs attention shows at the top, worst first: **In a data breach**, **Reused**, **Weak**, **Expired**, **Not secure**.
 
 ## Do things to one item or many
 
-Right-click an item, or press and hold on a phone, for what you'd do with it: copy its username, password, one-time code or website, open the website, add it to **Favourites**, edit it, copy it to or from another manager, or delete it. With an item chosen or open, <kbd>mod+c</kbd> copies its password, <kbd>mod+shift+c</kbd> its username and <kbd>mod+alt+c</kbd> its one-time code.
+Right-click an item, or press and hold on a phone, for everything you can do with it. With an item chosen:
 
-To work on several, <kbd>mod</kbd>-click them, or <kbd>shift</kbd>-click to take everything in between. **Select** (the tick beside the sort button) and <kbd>mod+a</kbd> do the same. A bar over the list says how many are chosen and what can be done with them, such as **Copy into Conch**, **Copy to…** and **Delete**. A manager's items are deleted in that manager's own app, so **Delete** says how many of Conch's it will delete. <kbd>esc</kbd> or **Done** ends it.
+- <kbd>mod+c</kbd> copies its password.
+- <kbd>mod+shift+c</kbd> copies its username.
+- <kbd>mod+alt+c</kbd> copies its one-time code.
 
-A deleted item goes to **Recently deleted** for 30 days. **Undo** in the message brings it straight back, and **Restore** does later.
+To choose several, <kbd>mod</kbd>-click or <kbd>shift</kbd>-click them, or press **Select** or <kbd>mod+a</kbd>; <kbd>esc</kbd> or **Done** ends it. A bar offers **Copy into Conch**, **Copy to…** and **Delete** (only Conch's own; another manager's are deleted in its app).
+
+A deleted item stays in **Recently deleted** for 30 days. **Undo** brings it back at once, **Restore** later.
 
 ## What your assistant can do
 
-Your assistant sees the names and sites of your items, never a value. When it reaches a sign-in in [Conch's browser](./browser.md) and that site is saved, a card asks whether to fill it: **Fill**, **Not now**, or always for that site. Conch types the password into the page itself.
+Your assistant sees names and sites, never a value. At a saved sign-in in [Conch's browser](./browser.md), a card asks: **Fill**, **Not now**, or always for that site. Conch types the password into the page itself.
 
-- It fills a password only on the item's own websites, never on a lookalike.
-- Each item says how far your assistant may go, under **Your assistant** when you edit it: ask each time, fill without asking, or never.
+- It fills only on the item's own websites, never a lookalike.
+- Each item sets how far your assistant may go, under **Your assistant** when you edit it: ask each time, fill without asking, or never.
 - A payment card always asks.
-- For a sign-in you haven't saved, it can ask with a card in the chat. What you type there goes to Passwords, not into the chat.
-- To read something itself, such as a PIN or a note, it asks in the chat: **Don't**, **Always for this item** or **Allow once**.
-- Passkeys are kept with their logins. Your assistant signs in with one in Conch's browser, on that site only, after asking you. When a site offers to make a new passkey, your assistant can save it to your Passwords. It never sees the key.
+- For a sign-in you haven't saved, a card in the chat asks you. What you type goes to Passwords, not the chat.
+- To read something itself, such as a PIN or a note, it asks: **Don’t**, **Always for this item** or **Allow once**.
+- Passkeys are kept with their logins. After asking, your assistant signs in with one in Conch's browser, on that site only, and can save a new one a site offers. It never sees the key.
 
 ## Lock it and keep it safe
 
-A value stays hidden until you ask for it, and hides again after 30 seconds. A copied one is cleared from the clipboard after a minute. From another device, seeing a value needs a sign-in from the last five minutes.
+A value hides again 30 seconds after you show it. A copied one leaves the clipboard after a minute. On another device, seeing a value needs a sign-in from the last five minutes.
 
-For a lock of its own, open **More → Lock settings…** and turn on **Ask for a password to open Passwords**. It locks again by itself after 30 minutes unused, or the time you choose. If your assistant needs Passwords while it's locked, the chat shows **Passwords is locked**, with a place to unlock it.
+For a lock of its own, open **More → Lock settings…** and turn on **Ask for a password to open Passwords**. It locks after 30 minutes unused, or the time you choose. If your assistant needs Passwords while it's locked, the chat shows **Passwords is locked**, with a place to unlock it.
 
 > [!WARNING]
-> Nobody can reset that password, Conch included. If you forget it, your passwords only come back from a backup made with a passphrase.
+> Nobody can reset that password, Conch included. Forget it, and your passwords only come back from a backup made with a passphrase.
 
 ## Good to know
 
 - Passwords are in a [backup](../care/backups.md) only when you give it a passphrase.
-- The keys Conch itself uses, for providers, apps and channels, are listed as **Keys Conch uses**. They keep working while Passwords is locked.
+- The keys Conch uses for providers, apps and channels are listed as **Keys Conch uses**. They keep working while Passwords is locked.
 - <kbd>mod+k</kbd> has **New password**, **Generate a password**, **Import passwords** and **Check my passwords**. See [Find anything](./find.md).

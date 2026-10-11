@@ -24,7 +24,7 @@ const GROUPS: { id: ProviderRef['group']; title: string; lead: string }[] = [
   {
     id: 'agent',
     title: 'Coding agents',
-    lead: 'They bring their own tools and work in your folders, on your plan. They ask through Conch.',
+    lead: 'They bring their own tools and work in your folders, on your plan. They ask you through Conch.',
   },
   {
     id: 'subscription',
@@ -199,7 +199,7 @@ export function ProviderFacts({ id }: { id: string }) {
   if (provider.can.account)
     facts.push([
       'Also brings',
-      `The connectors of ${provider.can.account}; Conch brings in the ones it can connect, for every model`,
+      `The connectors in ${provider.can.account}. Conch brings in the ones it can, for every model`,
     ]);
   if (provider.key?.placeholder) facts.push(['A key looks like', provider.key.placeholder]);
   if (provider.free) facts.push(['To start', provider.free]);

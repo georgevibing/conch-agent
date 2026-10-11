@@ -12,7 +12,7 @@ No Google Cloud CLI here? Press **Install Google Cloud CLI** when Conch offers i
 
 ## Where it runs
 
-**Global** answers fastest and costs least. **United States** and **European Union** keep your data there. Change it under **Where it runs**.
+**Global (recommended)** serves every model and costs least. **United States** and **European Union** keep your data in that region. Change it under **Where it runs**.
 
 ## Good to know
 

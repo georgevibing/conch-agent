@@ -119,7 +119,7 @@ const PERSONAL: Record<string, string[]> = {
   ],
   microsoftteams: [
     'A bot of your own',
-    'A public address, just for its messages',
+    'A public address, only for its messages',
     'Private chats only',
     'Nobody gets in unless you let them',
   ],
@@ -131,7 +131,7 @@ const PERSONAL: Record<string, string[]> = {
   ],
   sms: [
     'A number of its own, from Twilio',
-    'A public address, just for its texts',
+    'A public address, only for its texts',
     'Plain text, from any phone',
     'Nobody gets in unless you let them',
   ],
