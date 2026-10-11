@@ -235,7 +235,7 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 - **Choose where work runs.** This computer, a locked-down container, a machine over
   SSH or a sandbox in the cloud.
   [Where work runs](./apps/docs/content/features/where-work-runs.md)
-- **See it, undo it.** **Activity** shows everything it did. **Undo** puts files back.
+- **See it, undo it.** **Settings → Activity** shows everything it did. **Undo** puts files back.
   [Undo](./apps/docs/content/care/undo.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID. A new device waits
   for your OK. [Signing in](./apps/docs/content/security/signing-in.md)

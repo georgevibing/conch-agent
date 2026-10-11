@@ -26,7 +26,7 @@ On a phone, Conch keeps the chat's name in view and folds the rest away.
 - **Header:** your provider's mark, with a ring for how much of its limit is left. **⋯** holds **Find in chat**, the browser and the terminal.
 - **Message box:** one line. One chip shows model and mode ("Opus · Auto"); tap it for both, and the folder. **Talk** replaces Send until you type.
 - **Working folder:** **Change** beside **Folder** in that sheet, `/folder`, or **Settings → General**. You browse the computer's folders.
-- **Filters** that don't fit (**Apps**, **Activity** and elsewhere) slide sideways; the page never does.
+- **Filters** that don't fit (**Apps** and elsewhere) slide sideways; the page never does.
 
 ## Let it reach you
 

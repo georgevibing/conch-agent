@@ -354,6 +354,14 @@ const settingsPlaces: {
     icon: <ChartLine />,
   },
   {
+    // Activity (ADR 0028), in Settings since it left the sidebar: found by its old name.
+    tab: 'activity',
+    label: 'Activity',
+    keywords:
+      'activity history log audit timeline what did it do commands ran files changed undo forget asked you made',
+    icon: <History />,
+  },
+  {
     tab: 'health',
     label: 'Health',
     keywords:
@@ -1183,13 +1191,6 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'export download save memories markdown json',
       icon: <Download />,
       run: () => downloadMemories('md'),
-    },
-    {
-      id: 'activity',
-      label: 'Activity',
-      keywords: 'activity history log audit timeline what did it do commands ran files changed',
-      icon: <History />,
-      run: () => void navigate('/activity'),
     },
     {
       id: 'new-agent',

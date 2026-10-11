@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { reduceAll } from '../../live/reducer';
 import { appState, mockFetch, renderApp } from '../../test/harness';
-import { ActivityView } from '../activity/ActivityView';
+import { ActivityTab } from '../activity/ActivityTab';
 import { Palette } from '../palette/Palette';
 import { turnChanges } from '../chat/telling';
 import { TurnChanges } from './TurnChanges';
@@ -257,7 +257,7 @@ describe('Activity', () => {
       ],
       'DELETE /api/memories/m1': () => ({ ok: true }),
     });
-    renderApp(<ActivityView />);
+    renderApp(<ActivityTab />);
     await user.click(await screen.findByRole('button', { name: 'Undo: Changed notes.md' }));
     expect(useUi.getState().undoing).toEqual({ ids: ['cs_a'], direction: 'undo' });
     expect(screen.queryByRole('button', { name: 'Undo: Changed old.md' })).not.toBeInTheDocument();

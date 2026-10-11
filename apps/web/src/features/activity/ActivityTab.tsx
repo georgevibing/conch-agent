@@ -12,15 +12,12 @@ import {
   ActivityTimeline,
   Button,
   EmptyState,
-  Heading,
   Highlight,
   InlineCode,
   Input,
-  Page,
-  SegmentedControl,
+  Select,
   Skeleton,
   Stack,
-  Text,
 } from '@conch/nacre';
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { Download, History, Search, SearchX } from 'lucide-react';
@@ -35,6 +32,7 @@ import { useMemories } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { dayGroup } from '../../lib/time';
 import { safetyApi, safetyKeys } from '../safety/api';
+import { Section } from '../settings/Section';
 import { ActivityAction } from '../undo/ActivityActions';
 
 const FILTERS: { value: ActivityKind | 'all'; label: string }[] = [
@@ -120,11 +118,11 @@ function rows(
 }
 
 /**
- * Activity (ADR 0028): everything the assistant did, across every chat and
- * routine, newest first. A row opens the chat at that moment; a change to
- * your files can be undone from here, and a memory forgotten (ADR 0030).
+ * Settings → Activity (ADR 0028): everything the assistant did, across every
+ * chat and routine, newest first. A row opens the chat at that moment; a
+ * change to your files can be undone from here, and a memory forgotten (ADR 0030).
  */
-export function ActivityView() {
+export function ActivityTab() {
   const [kind, setKind] = useState<ActivityKind | 'all'>('all');
   const [typed, setTyped] = useState('');
   // Searched on the server, so it finds things from long ago, not just what's shown.
@@ -150,6 +148,7 @@ export function ActivityView() {
   const open = (row: ActivityRow) => {
     const entry = entries.find((e) => e.id === row.id);
     if (!entry) return;
+    // Leaving Settings for the chat: the row is a way there, as a search result is.
     void navigate(`/c/${entry.conversation.id}`);
     // Lands on the moment itself, as a search result does.
     if (entry.anchor)
@@ -159,16 +158,21 @@ export function ActivityView() {
   };
 
   return (
-    <Page gap={5}>
-      <Stack gap={1}>
-        <Heading level={1} display size="3xl">
-          Activity
-        </Heading>
-        <Text tone="muted">
-          Everything your assistant did, in every chat and routine. Open any of it to see it where
-          it happened.
-        </Text>
-      </Stack>
+    <Section
+      title="Everything your assistant did"
+      description="In every chat and routine, newest first. Open any of it to see it where it happened."
+      status={
+        // Every chat's steps as a file: for training, research, or to read (ADR 0113).
+        <Button
+          variant="ghost"
+          size="sm"
+          leadingIcon={<Download />}
+          onClick={() => useHowItDidIt.getState().openSave({})}
+        >
+          Save as a file
+        </Button>
+      }
+    >
       <div className={styles.tools}>
         <Input
           className={styles.search}
@@ -181,25 +185,20 @@ export function ActivityView() {
           clearable
           onClear={() => setTyped('')}
         />
-        <SegmentedControl
+        <Select
           aria-label="Show"
+          variant="surface"
+          align="end"
+          className={styles.kind}
           value={kind}
-          onValueChange={(v) => v && setKind(v as ActivityKind | 'all')}
+          onValueChange={(v) => setKind(v as ActivityKind | 'all')}
         >
           {FILTERS.map((f) => (
-            <SegmentedControl.Item key={f.value} value={f.value}>
+            <Select.Item key={f.value} value={f.value}>
               {f.label}
-            </SegmentedControl.Item>
+            </Select.Item>
           ))}
-        </SegmentedControl>
-        {/* Every chat's steps as a file: for training, research, or to read (ADR 0113). */}
-        <Button
-          variant="ghost"
-          leadingIcon={<Download />}
-          onClick={() => useHowItDidIt.getState().openSave({})}
-        >
-          Save as a file
-        </Button>
+        </Select>
       </div>
       {query.isPending ? (
         <Skeleton lines={6} />
@@ -210,7 +209,7 @@ export function ActivityView() {
           description={
             kind === 'all'
               ? 'Try fewer or shorter words. It looks in what happened and the chat it happened in.'
-              : 'Try fewer or shorter words, or look in Everything.'
+              : 'Try fewer or shorter words, or show Everything.'
           }
         />
       ) : entries.length === 0 ? (
@@ -220,8 +219,12 @@ export function ActivityView() {
           description="Commands it runs, files it changes, pages it reads and what it asks you will all be here."
         />
       ) : (
-        <>
-          <ActivityTimeline groups={rows(entries, memories, searched)} onOpen={open} />
+        <Stack gap={4} align="start">
+          <ActivityTimeline
+            className={styles.timeline}
+            groups={rows(entries, memories, searched)}
+            onOpen={open}
+          />
           {query.hasNextPage && (
             <Button
               variant="surface"
@@ -231,8 +234,8 @@ export function ActivityView() {
               Show earlier
             </Button>
           )}
-        </>
+        </Stack>
       )}
-    </Page>
+    </Section>
   );
 }

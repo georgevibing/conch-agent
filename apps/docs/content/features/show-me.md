@@ -64,6 +64,6 @@ A page with links or code that could take you elsewhere opens with its code off,
 ## Good to know
 
 - <kbd>mod+k</kbd> finds anything made for you by name. See [Find anything](./find.md).
-- **Activity** in the sidebar has a **Made** filter.
+- **Settings → Activity** shows them under **Made**.
 - Deleting one removes every version, not the chat.
 - They're in your [backups](../care/backups.md), with your chats.

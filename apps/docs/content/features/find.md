@@ -54,7 +54,7 @@ in [Keyboard shortcuts](../reference/keyboard.md).
 
 ## What your assistant did
 
-**Find in activity**, in **Activity**, searches everything your assistant did in every
+**Find in activity**, in **Settings → Activity**, searches everything your assistant did in every
 chat and routine, not only what's on screen. `gpush` finds "git push", and a chat's
 name finds what happened in it.
 

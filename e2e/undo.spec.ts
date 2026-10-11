@@ -59,11 +59,8 @@ test('a file changed since is a conflict: Activity undoes it only when you say s
 
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('activity');
-  await page
-    .getByRole('option', { name: /^Activity/ })
-    .first()
-    .click();
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
+  await page.getByRole('option', { name: 'Settings: Activity' }).click();
+  await expect(page.getByRole('heading', { name: 'Everything your assistant did' })).toBeVisible();
   // This chat's first change (newest first): the note has changed since.
   await page
     .getByRole('button', { name: /^Undo: Created .*note\.md$/ })

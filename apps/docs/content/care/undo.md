@@ -20,7 +20,7 @@ What can't be put back, like a pushed commit or a sent email, is listed first.
 
 ## From Activity, or anywhere
 
-**Activity**, in the sidebar, shows everything your assistant did in every chat and routine, with **Undo** or **Redo** beside each file change. **Find in activity** searches loosely, so `gpush` finds "git push".
+**Settings → Activity** shows everything your assistant did in every chat and routine, with **Undo** or **Redo** beside each file change. **Find in activity** searches loosely, so `gpush` finds "git push".
 
 For the newest change, press <kbd>mod+k</kbd> and choose **Undo the last change**. The same preview comes first.
 

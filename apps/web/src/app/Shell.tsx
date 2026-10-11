@@ -12,7 +12,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
-import { ActivityView } from '../features/activity/ActivityView';
 import { BackgroundPulse } from '../features/tasks/BackgroundPulse';
 import { ArchiveView } from '../features/archive/ArchiveView';
 import { ARCHIVE_PATH } from '../features/archive/useArchive';
@@ -164,15 +163,13 @@ export function Shell() {
           ? 'Apps'
           : passwordsArea
             ? 'Passwords'
-            : activityArea
-              ? 'Activity'
-              : pinnedArea
-                ? (app?.title ?? '')
-                : memoryArea
-                  ? 'What Conch knows'
-                  : archiveArea
-                    ? 'Archived chats'
-                    : (current?.title ?? (conversationId ? '' : 'New chat'));
+            : pinnedArea
+              ? (app?.title ?? '')
+              : memoryArea
+                ? 'What Conch knows'
+                : archiveArea
+                  ? 'Archived chats'
+                  : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -354,7 +351,7 @@ export function Shell() {
             ) : archiveArea ? (
               <ArchiveView />
             ) : activityArea ? (
-              <ActivityView />
+              <ActivityMoved />
             ) : passwordsArea ? (
               <PasswordsView itemId={itemId} />
             ) : channelsArea ? (
@@ -411,6 +408,18 @@ export function Shell() {
       <PastChatSheet />
     </div>
   );
+}
+
+/**
+ * Activity is in Settings now, under Safe and sound. An old link (a bookmark, a
+ * notification) to `/activity` lands there, over the chats, as `/memory` does.
+ */
+function ActivityMoved() {
+  const openSettings = useUi((s) => s.openSettings);
+  useEffect(() => {
+    openSettings('activity', undefined, { replace: true, from: '/' });
+  }, [openSettings]);
+  return null;
 }
 
 /**

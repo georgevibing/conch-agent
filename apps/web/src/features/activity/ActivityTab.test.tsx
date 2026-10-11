@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
-import { ActivityView, matchedRanges } from './ActivityView';
+import { ActivityTab, matchedRanges } from './ActivityTab';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -32,7 +32,7 @@ describe('finding something in Activity', () => {
         return { entries: q ? all.filter((e) => e.title.includes('git')) : all };
       },
     });
-    renderApp(<ActivityView />);
+    renderApp(<ActivityTab />);
     expect(await screen.findByText(/Berlin weather/)).toBeInTheDocument();
 
     await user.type(screen.getByRole('searchbox', { name: 'Find in activity' }), 'gpush');
@@ -53,7 +53,7 @@ describe('finding something in Activity', () => {
       'GET /api/memories': () => [],
       'GET /api/activity': () => ({ entries: [] }),
     });
-    renderApp(<ActivityView />);
+    renderApp(<ActivityTab />);
     await user.type(await screen.findByRole('searchbox', { name: 'Find in activity' }), 'zzz');
     expect(await screen.findByText('Nothing matches “zzz”')).toBeInTheDocument();
   });

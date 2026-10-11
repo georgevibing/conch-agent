@@ -443,6 +443,13 @@ describe('Palette search', () => {
     );
     act(() => useUi.setState({ settingsFocus: undefined }));
 
+    // Activity left the sidebar for Settings → Safe and sound: found by its name, opened there.
+    act(() => useUi.getState().setPalette(true));
+    await user.clear(await screen.findByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'activity');
+    await user.click(await screen.findByRole('option', { name: 'Settings: Activity' }));
+    await waitFor(() => expect(where()).toBe('/settings/activity'));
+
     // Your commands left Settings for Skills.
     act(() => useUi.getState().setPalette(true));
     await user.clear(await screen.findByRole('combobox'));

@@ -125,7 +125,8 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
 
   // Activity has both.
   await page.goto('/activity');
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/activity$/);
+  await expect(page.getByRole('heading', { name: 'Everything your assistant did' })).toBeVisible();
   await expect(page.getByText('Held to Quick setup’s list')).toBeVisible();
   await expect(page.getByText('You stopped holding this chat to Quick setup’s list')).toBeVisible();
 });

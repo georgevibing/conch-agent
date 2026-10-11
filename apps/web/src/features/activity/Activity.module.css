@@ -1,12 +1,23 @@
+/* The search and what to show, on one line: the search takes the room left. */
 .tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nc-space-3);
+  gap: var(--nc-space-2);
 }
 
-/* The search takes the room the filters leave, and gets its own line when there's none. */
+/* It gets a line of its own when there's no room beside the choice. */
 .search {
   flex: 1 1 14rem;
   min-inline-size: 0;
+}
+
+.kind {
+  flex: 0 0 auto;
+  min-inline-size: 10rem;
+}
+
+/* The list keeps the column's width; Show earlier sits under it, at its start. */
+.timeline {
+  align-self: stretch;
 }

@@ -20,6 +20,7 @@ import {
   Mic,
   Globe,
   HeartPulse,
+  History,
   Laptop,
   SquareTerminal,
   Settings2,
@@ -33,6 +34,7 @@ import { useAppState } from '../../api/queries';
 import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
 import { NARROW } from '../../app/widths';
+import { ActivityTab } from '../activity/ActivityTab';
 import { AccessTab } from '../auth/AccessTab';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
@@ -67,7 +69,7 @@ interface Place {
 }
 
 /**
- * Fourteen places, read as five: the everyday basics, then who your assistant
+ * Fifteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  * The model, thinking and mode new chats start with aren't here: they're the
  * composer's own, with Make this my default.
@@ -109,6 +111,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     places: [
       { value: 'access', label: 'Access', icon: <KeyRound /> },
       { value: 'security', label: 'Security', icon: <ShieldCheck /> },
+      { value: 'activity', label: 'Activity', icon: <History /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
       { value: 'dashboards', label: 'Dashboards', icon: <ChartLine /> },
     ],
@@ -316,6 +319,8 @@ export function Settings() {
         return <HealthTab />;
       case 'security':
         return <SecurityTab />;
+      case 'activity':
+        return <ActivityTab />;
       case 'access':
         return <AccessTab />;
       case 'notifications':

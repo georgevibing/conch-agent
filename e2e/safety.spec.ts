@@ -54,15 +54,13 @@ test('after reading a page, a command asks — saying why — and “Always allo
   // Everything it did, in one place.
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('activity');
-  await page
-    .getByRole('option', { name: /Activity/ })
-    .first()
-    .click();
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
+  await page.getByRole('option', { name: 'Settings: Activity' }).click();
+  await expect(page.getByRole('heading', { name: 'Everything your assistant did' })).toBeVisible();
   await expect(page.getByText('Opened https://news.example/today')).toBeVisible();
   await expect(page.getByText('Read news.example')).toBeVisible();
   await expect(page.getByText(/You said no: run/)).toBeVisible();
-  await page.getByRole('radio', { name: 'Asked you' }).click();
+  await page.getByRole('combobox', { name: 'Show' }).click();
+  await page.getByRole('option', { name: 'Asked you' }).click();
   await expect(page.getByText('Opened https://news.example/today')).toHaveCount(0);
   await expect(page.getByText(/You said no: run/)).toBeVisible();
 });

@@ -200,13 +200,16 @@ test('pinned as an app: in the sidebar, opens on its own page, refreshes with fr
   await page.getByRole('option', { name: /Visitors this week.*Chart · pinned/ }).click();
   await expect(page).toHaveURL(/\/apps\/a_/);
 
-  // Activity says what was made.
+  // Activity says what was made: its old address lands in Settings.
   await page.goto('/activity');
-  await page.getByRole('radio', { name: 'Made' }).click();
+  await expect(page).toHaveURL(/\/settings\/activity$/);
+  await page.getByRole('combobox', { name: 'Show' }).click();
+  await page.getByRole('option', { name: 'Made' }).click();
   await expect(page.getByText('Made “Visitors this week”').first()).toBeVisible();
 
   // And finds it as you type, loosely, marking what matched.
-  await page.getByRole('radio', { name: 'Everything' }).click();
+  await page.getByRole('combobox', { name: 'Show' }).click();
+  await page.getByRole('option', { name: 'Everything' }).click();
   await page.getByRole('searchbox', { name: 'Find in activity' }).fill('vstrs');
   const found = page.getByRole('button', { name: /^Made “Visitors this week”/ }).first();
   await expect(found).toBeVisible();

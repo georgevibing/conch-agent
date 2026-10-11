@@ -95,7 +95,8 @@ test('a chart edited by hand: live preview, mistakes in words, undo, ⌘S, and t
 
   // Activity says it was you.
   await page.goto('/activity');
-  await page.getByRole('radio', { name: 'Made' }).click();
+  await page.getByRole('combobox', { name: 'Show' }).click();
+  await page.getByRole('option', { name: 'Made' }).click();
   await expect(page.getByText('You edited “Visitors this week” (version 2)').first()).toBeVisible();
 });
 

@@ -126,8 +126,8 @@ Turning any off:
 
 ### 4. Activity
 
-`/activity`, in the sidebar and in ⌘K, is everything the assistant did across
-every chat and routine, newest first, a day at a time:
+**Settings → Activity** (`/settings/activity`, under Safe and sound, and in ⌘K) is
+everything the assistant did across every chat and routine, newest first, a day at a time:
 
 - commands, file changes, pages, apps;
 - what it asked and what you said, and what's still waiting;

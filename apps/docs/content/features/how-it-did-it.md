@@ -34,7 +34,7 @@ appear live.
 
 1. Choose what to save:
    - one chat: **Save it** at the bottom of its timeline;
-   - many chats: **Save as a file** on **Activity**, or <kbd>mod+k</kbd> and **Save
+   - many chats: **Save as a file** in **Settings → Activity**, or <kbd>mod+k</kbd> and **Save
      chats as a file**. Choose how far back and, if you have several, which agent or
      provider. Routine runs and tasks are included unless you turn off **Routines and
      tasks too**.

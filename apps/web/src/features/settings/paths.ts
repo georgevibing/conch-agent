@@ -17,6 +17,7 @@ export const SETTINGS_TABS = [
   'computer',
   'access',
   'security',
+  'activity',
   'health',
   'dashboards',
 ] as const;
@@ -127,7 +128,6 @@ const BEHIND_NAMES: [prefix: string, name: string][] = [
   ['/apps', 'Apps'],
   ['/channels', 'Apps'],
   ['/passwords', 'Passwords'],
-  ['/activity', 'Activity'],
   ['/archived', 'Archived chats'],
 ];
 

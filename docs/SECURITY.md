@@ -511,8 +511,8 @@ command can reach what you can: Conch refuses one that names its keys or your
 sign-ins, but only a sandbox really keeps them out.
 
 Both are in **Settings → Security → Safety**, on unless you turn them off. Turning
-one off asks that it's you, and the checkup will say so. **Activity** (in the
-sidebar) shows everything the assistant did, in every chat and routine.
+one off asks that it's you, and the checkup will say so. **Settings → Activity**
+shows everything the assistant did, in every chat and routine.
 
 On Linux, sealing needs **bubblewrap** (a small sandbox program), with socat
 and ripgrep. Server systems don't come with them and only an administrator can

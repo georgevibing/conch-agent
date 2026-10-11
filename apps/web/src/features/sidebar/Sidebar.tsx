@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router';
 
 import { useAppState } from '../../api/queries';
 import { useUi } from '../../app/ui';
-import { ActivityLink } from '../activity/ActivityLink';
 import { ChatList } from '../chatlist/ChatList';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { AppsLink } from '../integrations/AppsLink';
@@ -91,7 +90,6 @@ export function Sidebar({
         <SkillsLink onNavigate={onNavigate} />
         <AppsLink onNavigate={onNavigate} />
         <PasswordsLink onNavigate={onNavigate} />
-        <ActivityLink onNavigate={onNavigate} />
       </div>
       <ChatList onNavigate={onNavigate} />
       <div className={styles.footer}>
