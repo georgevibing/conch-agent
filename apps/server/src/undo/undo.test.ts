@@ -150,6 +150,27 @@ describe('noticing what changed', () => {
     expect(usage.sets).toBe(0);
   });
 
+  it('the sandbox’s stand-ins for the files it guards are nobody’s files', async () => {
+    const { tracker } = setup();
+    const t = tracker();
+    await t.begin();
+    await t.before('b1', 'Bash', { command: 'curl https://example.com' });
+    // bwrap's mount points: empty and read-only, made as the command starts.
+    mkdirSync(join(work, '.claude'));
+    for (const name of ['.bashrc', '.claude/agents']) {
+      writeFileSync(join(work, name), '');
+      chmodSync(join(work, name), 0o444);
+    }
+    expect(await t.after('b1')).toBeUndefined();
+    await t.before('b2', 'Bash', { command: 'curl https://example.com' });
+    // Taken away after.
+    for (const name of ['.bashrc', '.claude/agents']) unlinkSync(join(work, name));
+    expect(await t.after('b2')).toBeUndefined();
+    // An empty file of your own (writable) still counts.
+    writeFileSync(join(work, '.keep'), '');
+    expect((await t.end())?.files.map((f) => f.shown)).toEqual(['.keep']);
+  });
+
   it('a work folder that’s the whole home folder: only file tools, and it says so', async () => {
     const { undo } = setup();
     const t = undo.tracker({

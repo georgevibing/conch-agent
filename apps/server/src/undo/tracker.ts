@@ -9,8 +9,9 @@
  *   Files a command changed are put down to that command; what changed in a
  *   turn some other way (a provider without tool events) to the turn.
  *
- * Never kept: where keys and passwords live, links, files over 5 MB, and
- * folders that are rebuilt anyway (`node_modules`, `.git`, build output).
+ * Never kept: where keys and passwords live, links, files over 5 MB, the
+ * sandbox's stand-ins (below), and folders that are rebuilt anyway
+ * (`node_modules`, `.git`, build output).
  * A work folder too big to keep a copy of (or the whole home folder) still
  * has its file-tool edits undoable, and says so.
  */
@@ -87,6 +88,15 @@ const toolPath = (toolName: string, input: Record<string, unknown>, workspace: s
 };
 
 type Snapshot = Map<string, IndexEntry>;
+
+/**
+ * An empty, read-only file the command sandbox stands in a work folder while a
+ * command runs, where `.bashrc`, `.claude/agents` and the like it guards aren't
+ * (bwrap, on Linux), and takes away after. Never anyone's file: kept, they read
+ * as dozens of files the turn deleted.
+ */
+const sandboxStandIn = (info: { size: number; mode: number; nlink: number }) =>
+  info.size === 0 && (info.mode & 0o222) === 0 && info.nlink === 1;
 
 export class TurnTracker {
   /** The work folder as it was last looked at; undefined when it can't be kept (`reason`). */
@@ -270,7 +280,7 @@ export class TurnTracker {
         }
         if (!entry.isFile()) continue;
         const info = await lstat(path).catch(() => undefined);
-        if (!info || info.size > MAX_FILE) continue;
+        if (!info || info.size > MAX_FILE || sandboxStandIn(info)) continue;
         total += info.size;
         if (out.size >= MAX_FILES || total > MAX_FOLDER) return false;
         const rel = relative(workspace, path);
