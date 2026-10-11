@@ -231,16 +231,21 @@ describe('RoutineService', () => {
     );
     const [slot = 0] = nextRuns(r.schedule, base.timezone, { from: Date.now() });
     const realNow = Date.now;
+    // The clock moves on from `at` (a run's own timing needs it to).
+    const from = (at: number) => {
+      const shift = at - realNow();
+      Date.now = () => realNow() + shift;
+    };
     try {
       // The timer lands a few ms after the slot, inside the same second.
-      Date.now = () => slot + 50;
+      from(slot + 50);
       await s.routines.checkNow();
       const run = await settled(s, r.id);
       expect(run).toMatchObject({ trigger: 'schedule', scheduledFor: slot });
       // The next wake-up a little later must not run it again for the week before.
-      Date.now = () => slot + 100_000;
+      from(slot + 100_000);
       await s.routines.checkNow();
-      Date.now = () => slot + 3 * HOUR;
+      from(slot + 3 * HOUR);
       await s.routines.checkNow();
       expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
     } finally {
@@ -259,7 +264,13 @@ describe('RoutineService', () => {
       { createdBy: 'user' },
     );
     await s.routines.runNow(r.id);
-    expect(await settled(s, r.id)).toMatchObject({
+    // `settled` waits past needs-you (a run asking you something); this one is over.
+    let run: RoutineRun | undefined;
+    for (let i = 0; i < 200 && !run?.finishedAt; i++) {
+      [run] = (await s.routines.detail(r.id)).runs;
+      if (!run?.finishedAt) await new Promise((done) => setTimeout(done, 20));
+    }
+    expect(run).toMatchObject({
       status: 'needs-you',
       outcome: 'It didn’t send the message its instructions asked for.',
     });
