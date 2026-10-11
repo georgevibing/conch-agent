@@ -511,8 +511,11 @@ function Screen({
   useEffect(() => {
     if (state.kind === 'gone') onGone();
   }, [state.kind, onGone]);
+  // Focused while it's still connecting: what's typed then waits for the shell, where
+  // focusing only once it ran let the first keys go to the page instead.
   useEffect(() => {
-    if (visible && state.kind === 'running') requestAnimationFrame(() => view.current?.focus());
+    if (visible && (state.kind === 'connecting' || state.kind === 'running'))
+      requestAnimationFrame(() => view.current?.focus());
   }, [visible, state.kind]);
 
   // Keys from the touch row.

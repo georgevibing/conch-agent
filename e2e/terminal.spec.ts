@@ -44,6 +44,8 @@ test('a real shell a keystroke away, still there when you come back', async ({ p
   const tabs = page.getByRole('tablist', { name: 'Terminals' });
   await expect(tabs.getByRole('tab')).toHaveCount(1);
   await expect(page.getByText('Connecting…')).toBeHidden({ timeout: 15_000 });
+  // The cursor is in it by then, so the first key typed is the shell's, not the page's.
+  await expect(page.locator('.xterm-helper-textarea').first()).toBeFocused();
 
   // Works in bash, zsh and PowerShell alike; only the shell can print 42.
   await page.keyboard.type('echo "conch-$((6*7))"');
