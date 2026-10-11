@@ -53,7 +53,7 @@ import { HeldMemoryItem } from './MemoryStep';
 import { useMemoryHeadlines } from '../memory/headlines';
 import { isMemoryStep, memoryCall } from './MemorySteps';
 import { LearnedChatLine } from '../learning/LearnedChatLine';
-import { HeldItem, RoutedItem } from './OfflineBits';
+import { HeldItem, RoutedItem, SwitchedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { StandingOrderChatCard } from '../checkins/StandingOrderChatCard';
@@ -492,6 +492,9 @@ export const Transcript = memo(function Transcript({
   const running = view.status === 'running' || view.status === 'awaiting-permission';
   // Only the latest move at a limit offers Switch back (ADR 0126).
   const lastLimitLine = view.items.findLast((i) => i.kind === 'routed' && i.reason === 'limit')?.id;
+  // Switch back is on the latest switch, while it's the last thing that happened (ADR 0132).
+  const lastSwitch = view.items.findLast((i) => i.kind === 'switched' || i.kind === 'user');
+  const lastSwitchLine = lastSwitch?.kind === 'switched' ? lastSwitch.id : undefined;
   const items: TranscriptItem[] = [
     ...view.items,
     ...pending.map((p) => ({
@@ -594,6 +597,7 @@ export const Transcript = memo(function Transcript({
       (last?.kind === 'wait' && last.wait.state !== 'watching') ||
       last?.kind === 'integration-issue' ||
       last?.kind === 'routed' ||
+      last?.kind === 'switched' ||
       last?.kind === 'plan' ||
       (last?.kind === 'browser' && last.step.status !== 'running') ||
       (last?.kind === 'handoff' && last.handoff.state !== 'waiting') ||
@@ -939,6 +943,13 @@ export const Transcript = memo(function Transcript({
           item={block.item}
           conversationId={conversationId}
           latest={block.item.id === lastLimitLine}
+        />
+      )}
+      {block.item?.kind === 'switched' && (
+        <SwitchedItem
+          item={block.item}
+          conversationId={conversationId}
+          latest={block.item.id === lastSwitchLine}
         />
       )}
       {block.item?.kind === 'cleared' && (

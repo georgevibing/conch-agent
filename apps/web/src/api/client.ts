@@ -294,6 +294,9 @@ export const api = {
       method: 'POST',
       body: { engine },
     }),
+  /** Switch back, on the line a switch left (ADR 0132): the chat answers with that model again. */
+  switchModel: (id: string, to: { engine: EngineId; model?: string }) =>
+    request(Ok, `/api/conversations/${id}/switch`, { method: 'POST', body: to }),
   settleCapped: (id: string, choice: 'raise' | 'switch' | 'stop') =>
     request(Ok, `/api/conversations/${id}/capped`, { method: 'POST', body: { choice } }),
   /** This chat's own spending limit (ADR 0079); `null` takes it off. */

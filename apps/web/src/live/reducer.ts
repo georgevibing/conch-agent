@@ -478,6 +478,20 @@ export type TranscriptItem =
       back?: { until?: number };
     }
   | {
+      /** The chat moved to another model because someone asked (ADR 0132). */
+      kind: 'switched';
+      id: string;
+      from: EngineId;
+      fromModel?: string;
+      to: EngineId;
+      model?: string;
+      /** "Switched to Opus 5.5 on your Claude Max plan" */
+      message: string;
+      /** What changed with it: "Ask first: Copilot can't do Auto". */
+      note?: string;
+      by: 'assistant' | 'person';
+    }
+  | {
       /** The assistant's plan for one turn (ADR 0060): kept current in place, folded once it ends. */
       kind: 'plan';
       id: string;
@@ -1213,6 +1227,28 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     }
+    // Switched when asked (ADR 0132): one quiet line where it happened.
+    case 'model.switched':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'switched',
+            id: `switched-${event.seq}`,
+            from: event.from,
+            ...(event.fromModel && { fromModel: event.fromModel }),
+            to: event.to,
+            ...(event.model && { model: event.model }),
+            message: event.message,
+            ...(event.note && { note: event.note }),
+            by: event.by,
+          },
+        ],
+      };
+    // The chips that go with it come as `replies`; a tap is the person's message.
+    case 'model.choices':
+      return base;
     case 'limit.back': {
       // Switch back folds the line it was pressed on: the chat waits for its own provider now.
       const at = items.findLastIndex(

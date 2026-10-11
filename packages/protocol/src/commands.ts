@@ -187,7 +187,8 @@ export const COMMANDS: readonly CommandDef[] = [
     name: 'model',
     section: 'answers',
     description: 'Choose the model',
-    argumentHint: '[name]',
+    // "opus 5.5", "cheaper", "my Claude plan", "back": read like the assistant reads them (ADR 0132).
+    argumentHint: '[name or words]',
     values: 'choose',
     chat: { who: 'owner' },
   },

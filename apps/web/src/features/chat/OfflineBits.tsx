@@ -118,6 +118,41 @@ export function RoutedItem({
   );
 }
 
+/**
+ * The chat moved to another model because someone asked (ADR 0132): one
+ * quiet line, with **Switch back** on the latest while nothing newer is in
+ * the chat. Pressed, the chat answers with the model it had before.
+ */
+export function SwitchedItem({
+  item,
+  conversationId,
+  latest = false,
+}: {
+  item: Extract<TranscriptItem, { kind: 'switched' }>;
+  conversationId?: string | undefined;
+  latest?: boolean;
+}) {
+  const back = useMutation({
+    mutationFn: () =>
+      api.switchModel(conversationId ?? '', {
+        engine: item.from,
+        ...(item.fromModel && { model: item.fromModel }),
+      }),
+    onError: (error: Error) => toast.error(error.message || 'That didn’t work. Try again.'),
+  });
+  const actions =
+    latest && conversationId && !back.isPending && !back.isSuccess
+      ? [{ label: 'Switch back', onClick: () => back.mutate() }]
+      : undefined;
+  return (
+    <div className={styles.aside}>
+      <RoutedNote reason="switched" {...(actions && { actions })}>
+        {item.note ? `${item.message} · ${item.note}` : item.message}
+      </RoutedNote>
+    </div>
+  );
+}
+
 /** Above the composer while offline: what will happen to what you send. */
 export function ComposerOffline() {
   const online = useOnline();

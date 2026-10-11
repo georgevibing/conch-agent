@@ -47,7 +47,14 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
-import { clipHeadline, findAgent, headlineOf, type Agent } from '@conch/protocol';
+import {
+  clipHeadline,
+  findAgent,
+  headlineOf,
+  resolveSwitch,
+  switchCandidates,
+  type Agent,
+} from '@conch/protocol';
 
 import { agentsApi, useAgents } from '../agents/api';
 import { api } from '../../api/client';
@@ -343,11 +350,36 @@ export function useSlashCommands(options: {
             Number(b.engine === turn.options.engine) - Number(a.engine === turn.options.engine),
         );
         const all = providers.flatMap((p) => p.models.map((m) => ({ provider: p, model: m })));
+        // Words the way the assistant reads them (ADR 0132): "opus 5.5", "cheaper", "my Claude plan".
+        const meant = resolveSwitch(switchCandidates({ providers }), args, {
+          ...(turn.options.engine && {
+            current: { engine: turn.options.engine, model: turn.options.model },
+          }),
+        });
+        const pick =
+          meant.kind === 'one' || meant.kind === 'already'
+            ? all.find(
+                (a) =>
+                  a.provider.engine === meant.choice.engine && a.model.id === meant.choice.model,
+              )
+            : undefined;
         const match =
           all.find(({ model: m }) => m.id.toLowerCase() === q) ??
-          all.find(({ model: m }) => m.label.toLowerCase().includes(q));
+          pick ??
+          (meant.kind === 'some'
+            ? undefined
+            : all.find(({ model: m }) => m.label.toLowerCase().includes(q)));
         if (!match) {
-          toast(`No model matches “${args}”`, { description: 'Pick one from the list instead.' });
+          if (meant.kind === 'some') {
+            toast(`Several models could be “${args}”`, {
+              description: meant.choices.map((c) => `${c.label} · ${c.provider}`).join(', '),
+            });
+            return ui.setPicker('model');
+          }
+          toast(`No connected model matches “${args}”`, {
+            description: 'Pick one from the list, or connect a provider.',
+            action: { label: 'Providers', onClick: () => ui.openSettings('providers') },
+          });
           return ui.setPicker('model');
         }
         turn.choose(modelKey(match.provider.engine, match.model.id));
