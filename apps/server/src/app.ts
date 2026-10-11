@@ -53,6 +53,7 @@ import {
   type SearchRepairResult,
   StartLoginBody,
   UpdateIntegrationBody,
+  TimezoneBody,
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
@@ -551,6 +552,20 @@ export async function buildApp(services: Services) {
     if (!learnedBefore && body.preferences?.autoMemory === true)
       await services.learning.resumed().catch(() => undefined);
     return appState();
+  });
+
+  // Where you are, as your device says: what the assistant schedules runs on your clock.
+  app.put('/api/timezone', async (request, reply) => {
+    const body = parse(TimezoneBody, request.body, reply);
+    if (!body) return;
+    try {
+      return { moved: await services.setTimezone(body.timezone) };
+    } catch {
+      return reply.code(400).send({
+        error: 'invalid',
+        message: `“${body.timezone}” isn’t a timezone Conch recognises.`,
+      });
+    }
   });
 
   // Your photo (About you): kept as you framed it, served only as the picture it is.

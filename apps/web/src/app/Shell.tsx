@@ -22,6 +22,7 @@ import { AppPageView } from '../features/conchapps/AppPage';
 import { appIdOf } from '../features/conchapps/words';
 import { useUnsavedGuard } from '../features/artifacts/edits';
 import { RestartWatch } from '../features/health/RestartWatch';
+import { useTellTimezone } from '../features/routines/useTellTimezone';
 import { NeedWatcher } from '../features/setup/NeedWatcher';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
@@ -141,6 +142,8 @@ export function Shell() {
   useProviderSignInResult();
   // An edit by hand not saved yet: leaving the page asks first (ADR 0046).
   useUnsavedGuard();
+  // Where you are: what the assistant schedules runs on your clock.
+  useTellTimezone();
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery(NARROW);
   // A phone: the header keeps the chat's name in view, and folds the rest away.

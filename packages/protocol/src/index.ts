@@ -254,6 +254,9 @@ const TipsPutAway = z
     ...new Set(ids.filter((id): id is NewChatTip => NewChatTip.safeParse(id).success)),
   ]);
 
+/** The device's timezone (`PUT /api/timezone`): an IANA name, like `Europe/Berlin`. */
+export const TimezoneBody = z.object({ timezone: z.string().min(1).max(64) });
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -263,6 +266,11 @@ export const Preferences = z.object({
   autoMemory: z.boolean().default(true),
   /** Name new conversations with a small, cheap model instead of their first line. */
   autoTitle: z.boolean().default(true),
+  /**
+   * Your timezone, as the device you use Conch on reports it. What the assistant
+   * schedules runs on this clock, not the gateway's (a server is often on UTC).
+   */
+  timezone: z.string().min(1).max(64).optional(),
   /** Default model for new chats — one of the default provider's; unset = its own default. */
   model: z.string().max(200).optional(),
   effort: EffortChoice.default('auto'),
@@ -456,6 +464,8 @@ export const UpdateSettingsBody = z.object({
       /** `null` goes back to the first natural voice here. */
       voice: ConchVoiceId.nullable(),
       turnLimits: TurnLimits,
+      /** Set by the device (`PUT /api/timezone`), not a settings page. */
+      timezone: z.string().min(1).max(64),
     })
     .partial()
     .optional(),

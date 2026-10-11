@@ -52,6 +52,12 @@ export const routinesApi = {
       method: 'POST',
       body: { when, ...(onlyIf?.trim() && { onlyIf: onlyIf.trim() }) },
     }),
+  /** Tells Conch where you are, so what the assistant schedules runs on your clock. */
+  timezone: (timezone: string) =>
+    request(z.object({ moved: z.number() }), '/api/timezone', {
+      method: 'PUT',
+      body: { timezone },
+    }),
   people: () => request(MailPeople, '/api/routines/people'),
   /** A new secret for another app's address, shown once. */
   newSecret: (id: string) =>

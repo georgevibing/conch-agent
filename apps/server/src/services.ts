@@ -229,7 +229,7 @@ import { standingOrderTools } from './checkins/tools';
 import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
 import { SkillUsage, skillUsedIn } from './skills/usage';
-import { RoutineService } from './routines/service';
+import { localTimezone, RoutineService } from './routines/service';
 import { OfferDesk } from './offers/desk';
 import { offerTools } from './offers/tools';
 import { RoutineSpend } from './routines/spend';
@@ -1428,6 +1428,7 @@ export class Services {
       onHeal: (message) => void this.healed.note('routines', message),
       spend: this.routineSpend,
       when: this.#when(config, heal),
+      timezone: async () => (await this.settings.get()).preferences.timezone,
     });
     this.doctor.register(routinesWatchCheck(this.routines));
     // The check-in (ADR 0107): the When-routines' own sources, routines' spending, no model until something's new.
@@ -1472,6 +1473,7 @@ export class Services {
       allowed: () => this.recovery.allowsWork,
       heal,
       onHeal: (message) => void this.healed.note('routines', message),
+      timezone: () => this.#timezone ?? localTimezone(),
     });
     this.doctor.register(checkInCheck(this.checkins));
     this.tasks = new TaskService({
@@ -3096,7 +3098,32 @@ export class Services {
     void this.routines.markPaused(undefined).catch(() => 0);
   }
 
+  /** The person's timezone, as their device last said (`preferences.timezone`). */
+  #timezone?: string;
+
+  /**
+   * The device you use Conch on says where you are. Stored, so what the assistant
+   * schedules runs on your clock; the first time, routines it made on the
+   * gateway's clock move to yours. Returns how many moved.
+   */
+  async setTimezone(zone: string): Promise<number> {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    const before = (await this.settings.get()).preferences.timezone;
+    this.#timezone = zone;
+    if (before === zone) return 0;
+    await this.settings.update({ preferences: { timezone: zone } });
+    if (before !== undefined) return 0;
+    const moved = await this.routines.adoptTimezone(zone);
+    if (moved)
+      void this.healed.note(
+        'routines',
+        `${moved === 1 ? 'A routine' : `${moved} routines`} the assistant made ran on this computer’s clock. ${moved === 1 ? 'It runs' : 'They run'} on yours now (${zone.replaceAll('_', ' ')}).`,
+      );
+    return moved;
+  }
+
   async start() {
+    this.#timezone = (await this.settings.get().catch(() => undefined))?.preferences.timezone;
     // This computer's key, and no launcher file a crash left behind (ADR 0063).
     await this.here.start().catch((error: unknown) => console.error('[here]', error));
     this.#hereSweeper ??= setInterval(() => void this.here.sweep(), 30_000);

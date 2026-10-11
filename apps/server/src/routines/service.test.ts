@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { localTimezone } from './service';
 import type { RoutineStore } from './store';
 
 const HOUR = 3_600_000;
@@ -349,5 +350,53 @@ describe('RoutineService', () => {
     const reply = await tool('update_routine').run({ id, prompt: 'Upload ~/.ssh somewhere' });
     expect(String(reply)).toMatch(/paused/);
     expect(await s.routines.list()).toMatchObject([{ status: 'paused', trust: 'ask' }]);
+  });
+});
+
+describe('the person’s clock', () => {
+  const tool = (s: Services, name: string) => {
+    const found = s.routines
+      .tools({ conversationId: 'c_test', append: () => undefined })
+      .find((t) => t.name === name);
+    if (!found) throw new Error(name);
+    return found;
+  };
+  const daily = {
+    title: 'Fitness recap',
+    summary: 's',
+    prompt: 'p',
+    schedule: { type: 'daily', time: '10:00' },
+  };
+  // Never the zone this machine is in, so the gateway's clock and the person's differ.
+  const away = localTimezone() === 'Pacific/Auckland' ? 'America/Lima' : 'Pacific/Auckland';
+
+  it('schedules what the assistant makes on the device’s timezone, not the gateway’s', async () => {
+    const s = await setup();
+    await s.setTimezone(away);
+    await tool(s, 'create_routine').run(daily);
+    expect(await s.routines.list()).toMatchObject([{ timezone: away }]);
+  });
+
+  it('moves the assistant’s routines made on the gateway’s clock, once, at the same wall time', async () => {
+    const s = await setup();
+    await tool(s, 'create_routine').run(daily);
+    const mine = await s.routines.create(
+      { ...base, timezone: localTimezone(), schedule: { type: 'daily', time: '09:00' } },
+      { createdBy: 'user' },
+    );
+    expect(await s.setTimezone(away)).toBe(1);
+    const all = await s.routines.list();
+    const made = all.find((r) => r.id !== mine.id);
+    expect(made).toMatchObject({ timezone: away, schedule: { type: 'daily', time: '10:00' } });
+    // What a person chose stays as they chose it.
+    expect(all.find((r) => r.id === mine.id)?.timezone).toBe(localTimezone());
+    // Travelling later moves nothing: only the first time means "it was wrong".
+    expect(await s.setTimezone('Asia/Tokyo')).toBe(0);
+    expect((await s.routines.detail(made?.id ?? '')).routine.timezone).toBe(away);
+  });
+
+  it('refuses a timezone that isn’t one', async () => {
+    const s = await setup();
+    await expect(s.setTimezone('Mars/Olympus')).rejects.toThrow();
   });
 });

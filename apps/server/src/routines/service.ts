@@ -99,6 +99,8 @@ export class RoutineService {
       /** When… (ADR 0056): triggers and the pulse. Absent: routines start at times only. */
       when?: WhenRoutines;
       spend?: RoutineSpend;
+      /** The person's timezone (their device's), for routines the assistant makes. */
+      timezone?: () => Promise<string | undefined>;
     },
   ) {
     deps.when?.bind({
@@ -121,6 +123,31 @@ export class RoutineService {
 
   get #now() {
     return this.deps.now?.() ?? Date.now();
+  }
+
+  async #zone(): Promise<string> {
+    return (await this.deps.timezone?.().catch(() => undefined)) ?? localTimezone();
+  }
+
+  /**
+   * The person's timezone is known for the first time. Routines the assistant
+   * made before it ran on the gateway's clock (UTC on many servers), so "10:00"
+   * fired hours off: they move to the person's clock, at the same wall time.
+   * Returns how many moved.
+   */
+  async adoptTimezone(zone: string, gateway = localTimezone()): Promise<number> {
+    if (zone === gateway) return 0;
+    let moved = 0;
+    for (const routine of await this.deps.store.all()) {
+      if (routine.createdBy !== 'agent' || routine.timezone !== gateway) continue;
+      if (routine.status === 'completed') continue;
+      // A one-off already past on the right clock stays as it is.
+      await this.update(routine.id, { timezone: zone }).then(
+        () => moved++,
+        () => undefined,
+      );
+    }
+    return moved;
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -1125,7 +1152,8 @@ export class RoutineService {
               // Only a person can grant trust — an agent that read something hostile
               // must not be able to schedule itself an unsupervised future.
               trust: 'ask',
-              timezone: localTimezone(),
+              // The person's clock, not the gateway's: "10:00" means 10:00 where they are.
+              timezone: await this.#zone(),
               status: 'draft',
               // Done by the agent it was asked of, in its voice (ADR 0101).
               ...(await this.#chatAgent(ctx.conversationId)),
@@ -1138,7 +1166,7 @@ export class RoutineService {
           const next = routine.nextRunAt
             ? new Date(routine.nextRunAt).toISOString()
             : 'not scheduled';
-          return `Drafted routine ${routine.id} “${routine.title}” — ${routine.scheduleText} (first run ${next}). The user now sees a card with “Turn on” and “Try it now”. Briefly confirm what it will do and when; don’t repeat the whole card.`;
+          return `Drafted routine ${routine.id} “${routine.title}” — ${routine.scheduleText}, ${routine.timezone.replaceAll('_', ' ')} time (first run ${next}). The user now sees a card with “Turn on” and “Try it now”. Briefly confirm what it will do and when; don’t repeat the whole card.`;
         } catch (error) {
           return `Couldn’t create the routine: ${(error as Error).message} Adjust and try again.`;
         }
