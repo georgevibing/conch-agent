@@ -18,6 +18,13 @@ export type SessionState =
 const QUEUE_LIMIT = 4_096;
 /** A shell that prints nothing when it starts still gets what was typed, after this. */
 const QUIET_SHELL_MS = 1_500;
+/**
+ * A shell can print before it reads (a login message, the title), and what's sent
+ * then is lost too: the prompt is what it prints last, so wait for a pause after it.
+ */
+const SETTLED_MS = 250;
+/** Bash and zsh turn on bracketed paste as they start reading a line: ready at once. */
+const READING = '\x1b[?2004h';
 
 /**
  * One terminal's live connection. Every connect asks for a fresh one-time
@@ -43,7 +50,7 @@ export function useTerminalSession(
   const socket = useRef<WebSocket | null>(null);
   const queue = useRef('');
   // A shell starting up drops what's typed before it's ready (bash loses the first
-  // keys), so keys wait until it first prints something, its prompt.
+  // keys), so keys wait until it has printed its prompt.
   const heard = useRef(false);
   const opts = useRef(options);
   useEffect(() => {
@@ -56,8 +63,10 @@ export function useTerminalSession(
     let attempt = 0;
     let noted = false;
     let quiet: ReturnType<typeof setTimeout> | undefined;
+    let settling: ReturnType<typeof setTimeout> | undefined;
     const listening = (ws: WebSocket) => {
       clearTimeout(quiet);
+      clearTimeout(settling);
       if (heard.current || socket.current !== ws) return;
       heard.current = true;
       if (queue.current && ws.readyState === WebSocket.OPEN) {
@@ -97,9 +106,13 @@ export function useTerminalSession(
       heard.current = false;
       ws.onmessage = (message: MessageEvent<string | ArrayBuffer>) => {
         if (typeof message.data !== 'string') {
-          view.current?.write(new Uint8Array(message.data));
+          const bytes = new Uint8Array(message.data);
+          view.current?.write(bytes);
           opts.current.onOutput?.();
-          listening(ws);
+          if (heard.current) return;
+          if (new TextDecoder().decode(bytes).includes(READING)) return listening(ws);
+          clearTimeout(settling);
+          settling = setTimeout(() => listening(ws), SETTLED_MS);
           return;
         }
         let json: unknown;
@@ -159,6 +172,7 @@ export function useTerminalSession(
       stopped = true;
       clearTimeout(retry);
       clearTimeout(quiet);
+      clearTimeout(settling);
       socket.current?.close();
       socket.current = null;
     };
