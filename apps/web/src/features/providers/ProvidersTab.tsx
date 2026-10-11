@@ -117,7 +117,7 @@ export function ProvidersTab() {
     <Stack gap={8}>
       <Section
         title="Providers"
-        description={`Where ${assistant}’s intelligence comes from. Connect as many as you like — every one joins the model picker.`}
+        description={`Where ${assistant}’s intelligence comes from. Connect as many as you like.`}
       >
         <Stack gap={6}>
           {data?.pinned && (

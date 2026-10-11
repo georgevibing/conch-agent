@@ -244,6 +244,8 @@ describe('The chat list, organised', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Select' }));
     await user.click(screen.getByRole('checkbox', { name: 'Two' }));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
+    // Delete is the one that can't be taken back, so it reads red.
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveAttribute('data-tone', 'danger');
     await user.click(screen.getByRole('button', { name: 'Archive' }));
 
     await waitFor(() =>

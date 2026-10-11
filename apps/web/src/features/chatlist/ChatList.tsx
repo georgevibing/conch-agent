@@ -517,6 +517,7 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
           <IconButton
             size="sm"
             label="Delete"
+            tone="danger"
             disabled={!chosen.length}
             onClick={() => setConfirmDelete(true)}
           >
