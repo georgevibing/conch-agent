@@ -239,14 +239,17 @@
    */
   .connected {
     display: grid;
-    /* The flexible rows above and below take the logo's extra height, so the lines stay together. */
+    /*
+     * The lines start level with the top of the logo and the last row takes what's
+     * left, so every card in a row has its name on the same line, however much
+     * each one says beneath it.
+     */
     grid-template-areas:
-      'logo . .'
       'logo title toggle'
       'logo status status'
       'logo action action'
       'logo . .';
-    grid-template-rows: 1fr auto auto auto 1fr;
+    grid-template-rows: auto auto auto 1fr;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 0 var(--nc-space-3);
     padding: var(--nc-space-4);
@@ -254,7 +257,7 @@
 
   .connected > :first-child {
     grid-area: logo;
-    align-self: center;
+    align-self: start;
   }
 
   .connected .text {
