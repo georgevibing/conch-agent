@@ -1,3 +1,4 @@
+import type { Schedule } from '@conch/protocol';
 import { describe as suite, expect, it } from 'vitest';
 
 import {
@@ -101,7 +102,7 @@ suite('schedules', () => {
   });
 
   it('counts a calendar slot as the previous run from the moment it comes', () => {
-    const weekly = { type: 'weekly', days: ['sun'], time: '12:00' } as const;
+    const weekly: Schedule = { type: 'weekly', days: ['sun'], time: '12:00' };
     const slot = Date.parse('2026-10-11T10:00:00Z'); // Sunday 12:00 CEST
     const before = slot - 7 * 86_400_000;
     // The scheduler wakes a few ms after the slot: that's still this week's.
