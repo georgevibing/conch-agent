@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import { BrowserApproval } from './BrowserApproval';
+import { BrowserFill } from './BrowserFill';
 import { BrowserHandoff } from './BrowserHandoff';
 import { BrowserStatusCard } from './BrowserStatusCard';
 import { BrowserTrail } from './BrowserTrail';
@@ -671,6 +672,130 @@ describe('BrowserApproval', () => {
       <BrowserApproval kind="site" site="booking.com" action="x" decision="allow-always" />,
     );
     expect(screen.getByRole('note')).toHaveTextContent('Always allowed on booking.com');
+  });
+
+  it('asks once for a sign-in from Passwords, with the account', async () => {
+    const user = userEvent.setup();
+    const onDecide = vi.fn();
+    const { container } = renderNacre(
+      <BrowserApproval
+        kind="fill"
+        fill="sign-in"
+        site="example.com"
+        action="Sign in as ada@example.com"
+        onDecide={onDecide}
+      />,
+    );
+    expect(screen.getByText('Sign in as ada@example.com on example.com?')).toBeInTheDocument();
+    expect(screen.getByText(/for this whole sign-in/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(onDecide).toHaveBeenCalledWith('allow');
+    await expectAccessible(container);
+  });
+
+  it('lets you pick one of several accounts in one tap, with no “always”', async () => {
+    const user = userEvent.setup();
+    const onDecide = vi.fn();
+    const onChoose = vi.fn();
+    const { container } = renderNacre(
+      <BrowserApproval
+        kind="fill"
+        fill="sign-in"
+        site="google.com"
+        action="Sign in"
+        savedFor="accounts.google.com"
+        accounts={[
+          { id: 'a', title: 'Google', account: 'ada@gmail.com' },
+          { id: 'b', title: 'Google (work)', account: 'ada@work.example' },
+        ]}
+        onDecide={onDecide}
+        onChoose={onChoose}
+      />,
+    );
+    expect(screen.getByText(/saved for accounts.google.com/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /ada@work.example/ }));
+    expect(onChoose).toHaveBeenCalledWith('b');
+    expect(onDecide).toHaveBeenCalledWith('allow');
+    await expectAccessible(container);
+  });
+
+  it('asks every time before making a new password or filling a card', () => {
+    const { rerender } = renderNacre(
+      <BrowserApproval
+        kind="fill"
+        fill="new-password"
+        site="shop.example"
+        action="Make a strong password for shop.example"
+      />,
+    );
+    expect(screen.getByText('Make a strong password for shop.example?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make and save it' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+    rerender(
+      <BrowserApproval kind="fill" fill="card" site="shop.example" action="Fill in “Visa”" />,
+    );
+    expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('BrowserFill', () => {
+  it('fills from one of the saved accounts, by name', async () => {
+    const user = userEvent.setup();
+    const onFill = vi.fn();
+    const { container } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'password',
+          site: 'example.com',
+          items: [{ id: 'pw_1', title: 'Example', account: 'ada@example.com' }],
+        }}
+        onFill={onFill}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Fill your password from Passwords')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /ada@example.com/ }));
+    expect(onFill).toHaveBeenCalledWith('pw_1');
+    await expectAccessible(container);
+  });
+
+  it('offers a strong password on a sign-up', async () => {
+    const user = userEvent.setup();
+    const onGenerate = vi.fn();
+    renderNacre(
+      <BrowserFill
+        offer={{ field: 'new-password', site: 'shop.example', items: [] }}
+        onGenerate={onGenerate}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Use a strong password' }));
+    expect(onGenerate).toHaveBeenCalled();
+  });
+
+  it('warns on a look-alike page and offers nothing', async () => {
+    const { container } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'password',
+          site: 'paypa1.com',
+          items: [{ id: 'x', title: 'Should not show' }],
+          lookalike: 'paypal.com',
+        }}
+        onFill={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('This isn’t paypal.com.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Should not show/ })).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('shows only while you drive', () => {
+    const offer = { field: 'password' as const, site: 'example.com', items: [] };
+    const { rerender } = renderNacre(<BrowserWindow tab={tab} fill={{ offer }} />);
+    expect(screen.queryByRole('group', { name: 'Passwords' })).not.toBeInTheDocument();
+    rerender(<BrowserWindow tab={{ ...tab, control: 'user' }} fill={{ offer }} />);
+    expect(screen.getByRole('group', { name: 'Passwords' })).toBeInTheDocument();
   });
 });
 

@@ -37,6 +37,7 @@ import { Progress } from '../../components/Progress';
 import { Spinner } from '../../components/Spinner';
 import { cx } from '../../utils/cx';
 import styles from './Browser.module.css';
+import { BrowserFill, type BrowserFillProps } from './BrowserFill';
 import {
   FindBar,
   PageDialog,
@@ -151,6 +152,8 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   onClose?: () => void;
   /** Extra controls at the end of the toolbar. */
   actions?: ReactNode;
+  /** While you drive, in a box Passwords can fill: what it can fill there (ADR 0130). */
+  fill?: BrowserFillProps;
 }
 
 /** `https://www.booking.com/hotels?x` → host and the rest, for the address bar. */
@@ -197,6 +200,7 @@ export function BrowserWindow({
   onStop,
   onClose,
   actions,
+  fill,
   className,
   ...props
 }: BrowserWindowProps) {
@@ -738,6 +742,8 @@ export function BrowserWindow({
           </div>
         </div>
       )}
+
+      {fill && driving && <BrowserFill {...fill} />}
 
       <div ref={stage} className={styles.stage}>
         <div

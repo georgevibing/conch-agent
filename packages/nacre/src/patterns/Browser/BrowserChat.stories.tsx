@@ -159,6 +159,51 @@ export const ConfirmAnUpload: Story = {
   ),
 };
 
+/** One question for a whole sign-in, from Passwords (ADR 0130). */
+export const SignInFromPasswords: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="fill"
+      fill="sign-in"
+      site="staylight.example"
+      action="Sign in as ada@example.com"
+      onDecide={fn()}
+    />
+  ),
+};
+
+/** Several accounts saved for the site: pick one, in one tap. */
+export const ChooseAnAccount: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="fill"
+      fill="sign-in"
+      site="google.com"
+      action="Sign in"
+      savedFor="accounts.google.com"
+      accounts={[
+        { id: 'pw_1', title: 'Google', account: 'ada@gmail.com' },
+        { id: 'op_2', title: 'Google (work)', account: 'ada@work.example', source: '1password' },
+      ]}
+      onDecide={fn()}
+      onChoose={fn()}
+    />
+  ),
+};
+
+/** A sign-up: Conch makes a strong password, saves it, and types it in. */
+export const MakeANewPassword: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="fill"
+      fill="new-password"
+      site="staylight.example"
+      action="Make a strong password for staylight.example"
+      onDecide={fn()}
+    />
+  ),
+};
+
 /** In your own Chrome: the card says so, and a site is never allowed for good. */
 export const AskInYourChrome: Story = {
   render: () => (

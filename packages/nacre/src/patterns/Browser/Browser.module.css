@@ -1212,6 +1212,84 @@
     margin-block-start: var(--nc-space-2);
   }
 
+  /* ── Saved accounts: one tap each (ADR 0130) ────────────────────────── */
+  .approvalAccounts,
+  .fillItems {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .approvalAccounts {
+    flex-direction: column;
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .approvalAccount {
+    justify-content: flex-start;
+    inline-size: 100%;
+  }
+
+  .approvalAccountName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .approvalAccountItem {
+    margin-inline-start: auto;
+    padding-inline-start: var(--nc-space-3);
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  /* ── Fill from Passwords, while you drive (ADR 0130) ─────────────────── */
+  .fillBar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    padding: var(--nc-space-2) var(--nc-space-4);
+    border-block-end: 1px solid var(--nc-border);
+    background: var(--nc-surface-hi);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .fillBar[data-tone='warning'] {
+    background: light-dark(
+      oklch(0.96 0.04 var(--nc-danger-h)),
+      oklch(0.27 0.06 var(--nc-danger-h))
+    );
+    color: light-dark(oklch(0.42 0.16 var(--nc-danger-h)), oklch(0.88 0.08 var(--nc-danger-h)));
+  }
+
+  .fillLabel {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .fillLabel > svg {
+    flex: none;
+    inline-size: 1em;
+    block-size: 1em;
+  }
+
+  .fillItems {
+    flex: 1 1 auto;
+  }
+
+  .fillHint {
+    color: var(--nc-text-muted);
+  }
+
   .approvalDone {
     display: inline-flex;
     align-items: center;

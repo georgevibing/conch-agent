@@ -17,7 +17,11 @@ export type {
   BrowserApprovalDecision,
   BrowserApprovalKind,
   BrowserApprovalProps,
+  BrowserFillAccount,
+  BrowserFillKind,
 } from './BrowserApproval';
+export { BrowserFill } from './BrowserFill';
+export type { BrowserFillOffer, BrowserFillProps } from './BrowserFill';
 export { BrowserHandoff } from './BrowserHandoff';
 export type { BrowserHandoffProps } from './BrowserHandoff';
 export { BrowserStatusCard } from './BrowserStatusCard';

@@ -9,6 +9,19 @@ import type { BrowserBox } from './BrowserWindow';
 
 export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download' | 'fill' | 'upload';
 export type BrowserApprovalDecision = 'allow' | 'allow-always' | 'deny';
+/** What a fill does: sign in, fill a code, make a new password, or fill in a card. */
+export type BrowserFillKind = 'sign-in' | 'code' | 'new-password' | 'card';
+
+/** A saved item to pick, by name: never a value. */
+export interface BrowserFillAccount {
+  id: string;
+  /** The item's name: "Google". */
+  title: string;
+  /** The account it signs in as, or a card's last four. */
+  account?: string;
+  /** Another password manager it lives in ("1password"). */
+  source?: string;
+}
 
 export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title'> {
   kind: BrowserApprovalKind;
@@ -31,16 +44,49 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
   busy?: boolean;
   /** It's your own signed-in Chrome (ADR 0080): said on the card, and never "Always". */
   ownChrome?: boolean;
+  /** For `fill`: what it does, for the card's words. Sign-ins and codes alone offer "Always". */
+  fill?: BrowserFillKind;
+  /**
+   * For `fill` with several saved accounts: one button each, and pressing one
+   * is the answer (`onChoose`, then `onDecide('allow')`).
+   */
+  accounts?: BrowserFillAccount[];
+  /** For `fill`: it's saved for another part of this site ("accounts.google.com"). */
+  savedFor?: string;
   onDecide?: (decision: BrowserApprovalDecision) => void;
+  /** One of `accounts` was pressed. */
+  onChoose?: (id: string) => void;
 }
 
-function heading(kind: BrowserApprovalKind, site: string, action: string, name: string) {
+function heading(
+  kind: BrowserApprovalKind,
+  site: string,
+  action: string,
+  name: string,
+  fill?: BrowserFillKind,
+) {
   if (kind === 'site') return `Let ${name} use ${site}?`;
+  if (kind === 'fill' && fill === 'new-password') return `${action}?`;
   if (kind === 'fill') return `${action} on ${site}?`;
   if (kind === 'download')
     return `${name} wants to ${action.charAt(0).toLowerCase()}${action.slice(1)}`;
   if (kind === 'upload') return `${action} to ${site}?`;
   return `${action}?`;
+}
+
+function fillDetail(fill: BrowserFillKind | undefined, name: string) {
+  switch (fill) {
+    case 'sign-in':
+      return `Conch types it in from your Passwords, for this whole sign-in. ${name} never sees it.`;
+    case 'code':
+      return `Conch types the code in from your Passwords. ${name} never sees it.`;
+    case 'new-password':
+      return `Conch makes it, saves it in your Passwords and types it in. ${name} never sees it.`;
+    case 'card':
+      return `Conch types the card in from your Passwords. ${name} never sees it.`;
+    default:
+      return `Conch types it into the page itself, from your Passwords. ${name} never sees it.`;
+  }
 }
 
 function detail(kind: BrowserApprovalKind, site: string, name: string, ownChrome: boolean) {
@@ -61,6 +107,7 @@ function resolvedText(
   kind: BrowserApprovalKind,
   site: string,
   action: string,
+  fill?: BrowserFillKind,
 ) {
   if (decision === 'expired') return `No answer needed any more · ${action}`;
   if (decision === 'deny') return kind === 'site' ? `Not on ${site}` : `Declined · ${action}`;
@@ -69,7 +116,9 @@ function resolvedText(
       ? `Always allowed on ${site}`
       : `Allowed on ${site} in this chat`;
   if (kind === 'fill')
-    return decision === 'allow-always' ? `Filled · always on ${site}` : `Filled · ${action}`;
+    return decision === 'allow-always'
+      ? `Filled · always on ${site}`
+      : `${fill === 'new-password' ? 'Saved' : 'Filled'} · ${action}`;
   return `Allowed once · ${action}`;
 }
 
@@ -89,10 +138,19 @@ export function BrowserApproval({
   guard,
   busy = false,
   ownChrome = false,
+  fill,
+  accounts,
+  savedFor,
   onDecide,
+  onChoose,
   className,
   ...props
 }: BrowserApprovalProps) {
+  const choosing = kind === 'fill' && (accounts?.length ?? 0) > 1;
+  // "Always" for a sign-in or a code: never a new password or a card, which ask each time.
+  const always =
+    (kind === 'site' && !ownChrome) ||
+    (kind === 'fill' && !choosing && fill !== 'new-password' && fill !== 'card');
   if (decision) {
     const allowed = decision === 'allow' || decision === 'allow-always';
     return (
@@ -103,7 +161,7 @@ export function BrowserApproval({
         {...props}
       >
         {allowed ? <Check aria-hidden /> : <X aria-hidden />}
-        <span>{resolvedText(decision, kind, site, action)}</span>
+        <span>{resolvedText(decision, kind, site, action, fill)}</span>
       </div>
     );
   }
@@ -124,7 +182,9 @@ export function BrowserApproval({
         kind === 'site'
           ? `Allow ${site}?`
           : kind === 'fill'
-            ? `Fill a saved password on ${site}?`
+            ? fill === 'new-password'
+              ? `Make a new password for ${site}?`
+              : `Fill from Passwords on ${site}?`
             : kind === 'upload'
               ? `Upload files to ${site}?`
               : 'Confirm an action in the browser'
@@ -156,11 +216,36 @@ export function BrowserApproval({
           <span className={styles.approvalIcon} aria-hidden>
             <Icon />
           </span>
-          <p className={styles.approvalTitle}>{heading(kind, site, action, name)}</p>
+          <p className={styles.approvalTitle}>{heading(kind, site, action, name, fill)}</p>
         </div>
         {kind === 'site' && <p className={styles.approvalAction}>First: {action}</p>}
-        <p className={styles.approvalDetail}>{detail(kind, site, name, ownChrome)}</p>
+        <p className={styles.approvalDetail}>
+          {kind === 'fill' ? fillDetail(fill, name) : detail(kind, site, name, ownChrome)}
+          {kind === 'fill' && savedFor && ` It’s saved for ${savedFor}.`}
+        </p>
         {guard && <GuardNote>{guard}</GuardNote>}
+        {choosing && (
+          <ul className={styles.approvalAccounts} aria-label="Saved accounts">
+            {accounts?.map((a) => (
+              <li key={a.id}>
+                <Button
+                  size="sm"
+                  variant="surface"
+                  disabled={busy}
+                  className={styles.approvalAccount}
+                  leadingIcon={<KeyRound />}
+                  onClick={() => {
+                    onChoose?.(a.id);
+                    onDecide?.('allow');
+                  }}
+                >
+                  <span className={styles.approvalAccountName}>{a.account || a.title}</span>
+                  {a.account && <span className={styles.approvalAccountItem}>{a.title}</span>}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className={styles.approvalActions}>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDecide?.('deny')}>
             {kind === 'site' || kind === 'fill'
@@ -171,7 +256,7 @@ export function BrowserApproval({
                   ? 'Don’t upload'
                   : 'Don’t'}
           </Button>
-          {(kind === 'site' || kind === 'fill') && !guard && !(ownChrome && kind === 'site') && (
+          {always && !guard && (
             <Button
               size="sm"
               variant="surface"
@@ -181,22 +266,28 @@ export function BrowserApproval({
               Always for {site}
             </Button>
           )}
-          <Button
-            size="sm"
-            tone={kind === 'high-stakes' ? 'danger' : undefined}
-            loading={busy}
-            onClick={() => onDecide?.('allow')}
-          >
-            {kind === 'site'
-              ? 'Allow in this chat'
-              : kind === 'download'
-                ? 'Download'
-                : kind === 'upload'
-                  ? 'Upload'
-                  : kind === 'fill'
-                    ? 'Fill'
-                    : 'Allow once'}
-          </Button>
+          {!choosing && (
+            <Button
+              size="sm"
+              tone={kind === 'high-stakes' ? 'danger' : undefined}
+              loading={busy}
+              onClick={() => onDecide?.('allow')}
+            >
+              {kind === 'site'
+                ? 'Allow in this chat'
+                : kind === 'download'
+                  ? 'Download'
+                  : kind === 'upload'
+                    ? 'Upload'
+                    : kind === 'fill'
+                      ? fill === 'new-password'
+                        ? 'Make and save it'
+                        : fill === 'sign-in'
+                          ? 'Sign in'
+                          : 'Fill'
+                      : 'Allow once'}
+            </Button>
+          )}
         </div>
       </div>
     </div>

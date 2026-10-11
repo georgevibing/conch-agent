@@ -141,6 +141,38 @@ export const ThePageAsks: Story = {
   },
 };
 
+const signingIn: BrowserWindowTab = {
+  url: 'https://accounts.example.com/signin',
+  title: 'Sign in',
+  control: 'user',
+  canGoBack: true,
+};
+
+/** You're in a sign-in box: one press fills it from Passwords (ADR 0130). */
+export const FillFromPasswords: Story = {
+  args: {
+    frame: signInPage,
+    tab: signingIn,
+    fill: {
+      offer: {
+        field: 'password',
+        site: 'accounts.example.com',
+        items: [
+          { id: 'pw_1', title: 'Staylight', account: 'ada@example.com' },
+          {
+            id: 'op_2',
+            title: 'Staylight (work)',
+            account: 'ada@work.example',
+            source: '1password',
+          },
+        ],
+      },
+      onFill: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
 /** A page's own box for a few words. */
 export const ThePageAsksForText: Story = {
   args: {
@@ -157,6 +189,19 @@ export const ThePageAsksForText: Story = {
         value: 'Gifts',
         site: 'shop.example',
       },
+    },
+  },
+};
+
+/** A sign-up form: a strong password, made and saved in one press. */
+export const SuggestAStrongPassword: Story = {
+  args: {
+    frame: signInPage,
+    tab: { ...signingIn, url: 'https://accounts.example.com/join', title: 'Join' },
+    fill: {
+      offer: { field: 'new-password', site: 'accounts.example.com', items: [] },
+      onGenerate: fn(),
+      onDismiss: fn(),
     },
   },
 };
@@ -187,6 +232,36 @@ export const FindOnPage: Story = {
 /** The assistant at work, with Stop at hand: on a phone the panel covers the chat's own. */
 export const Stoppable: Story = {
   args: { running: true, onStop: fn() },
+};
+
+/** A page dressed up as one of your sites: said plainly, and nothing is offered. */
+export const LooksLikeYourSite: Story = {
+  args: {
+    frame: signInPage,
+    tab: { ...signingIn, url: 'https://staylight.example.account-check.io/signin' },
+    fill: {
+      offer: {
+        field: 'password',
+        site: 'staylight.example.account-check.io',
+        items: [],
+        lookalike: 'staylight.example',
+      },
+      onDismiss: fn(),
+    },
+  },
+};
+
+/** Passwords is locked: unlock it, then fill. */
+export const PasswordsLocked: Story = {
+  args: {
+    frame: signInPage,
+    tab: signingIn,
+    fill: {
+      offer: { field: 'username', site: 'accounts.example.com', items: [], locked: true },
+      onUnlock: fn(),
+      onDismiss: fn(),
+    },
+  },
 };
 
 /** The site's icon, as the gateway sends it: a small image inline. */
