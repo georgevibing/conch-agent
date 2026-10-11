@@ -240,8 +240,12 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
     timeout: 30_000,
   });
   // It's still thinking: stop it, so the next journey's update finds nothing working.
-  const stop = page.getByRole('button', { name: /^Stop/ });
-  if (await stop.isVisible()) await stop.click();
+  // Escape in the box, not the Stop button: one that finishes as it's pressed turns into
+  // Talk, and the press would start talking instead.
+  await page.getByRole('textbox', { name: 'Message Conch' }).press('Escape');
+  await expect
+    .poll(async () => (await pickedUp()).detail.conversation?.status, { timeout: 30_000 })
+    .not.toBe('running');
   await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
   await settings.getByRole('tab', { name: 'Health' }).click();
   await expect(page.getByRole('button', { name: 'Go back to 0.1.0' })).toBeVisible();
