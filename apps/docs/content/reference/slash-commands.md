@@ -14,6 +14,7 @@ Keep typing to narrow it. A few letters are enough (`/cpt` finds `/compact`), an
 
 - <kbd>↑</kbd> and <kbd>↓</kbd> move, <kbd>tab</kbd> or <kbd>enter</kbd> chooses, <kbd>esc</kbd> closes.
 - A command with choices shows them in the same list. `/effort` shows the model's thinking levels, `/model` every model from every provider you connected, and `/mode`, `/fast` and `/theme` their own. The one in use is ticked and says **Current**. The arrow at the top goes back.
+- `/model` with words chooses the model they mean: `/model opus 5.5`, `/model cheaper`, `/model my Claude plan`.
 - `/goal` and `/plan` take your own words. The list only suggests (**Clear the goal**, **Plan first**); <kbd>enter</kbd> sends what you typed.
 - On a phone the list sits above the keyboard, with rows big enough for a thumb and **✕** to close it.
 
@@ -46,7 +47,7 @@ The same commands work from [a chat app](../channels/index.md): Telegram, Slack,
 <!-- conch:chat-commands -->
 
 - **Choices are buttons.** `/model` shows the models of the provider you use, the one in use ticked, and **Other providers** a step away. Tap one and it's done. `/effort`, `/fast` and `/mode` work the same way. Where an app has no buttons (WhatsApp, Signal, iMessage, email, SMS, DingTalk), the choices are numbered: reply with the number.
-- **Words after the name work too:** `/model opus`, `/effort high`, `/fast off`, `/goal get the 2.4 notes out`, `/plan tidy up this folder`.
+- **Words after the name work too:** `/model opus`, `/model cheaper`, `/model my Claude plan`, `/effort high`, `/fast off`, `/goal get the 2.4 notes out`, `/plan tidy up this folder`.
 - **`/clear` has an Undo** under it, and `/undo` does the same, until you send something. `/undo` in a chat app takes back a clear; to put back files, open the chat in Conch.
 - **`/plan`** turns **Read only** on or off at once, with a button to change it back (**Plan first** or **Act as usual**). The plan arrives as a message with **Start** and **Keep planning**, or reply `1` or `2`, `yes` or `no`.
 - **`/agent`** shows your agents, the one answering ticked, and the others as buttons (numbered where there are none). `/agent atlas` chooses by name. The choice stays for that chat app. Only you can change it.

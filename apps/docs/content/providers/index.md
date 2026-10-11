@@ -13,6 +13,7 @@ Each provider you connect adds its models to one picker, grouped by provider and
 
 - **One is the default.** New chats start there. Change it with **Make default** in **Settings → Providers**, or **Make this my default** in the chip that shows the model and mode.
 - **A chat can change provider mid-way.** The new one gets what it missed, word for word: the tools that ran, the browser's page, files changed, an open plan.
+- **Ask for one in words.** "Use Opus 5.5" or "something cheaper" switches the chat. See [Ask for another model](../features/chats.md#ask-for-another-model).
 - **Each provider carries its own chat on.** Claude Code, Codex, Codex CLI, Copilot, Gemini CLI and Grok pick up where they left off. Others get the whole conversation.
 - **What you set up belongs to Conch.** Your [apps](../features/apps.md), [skills](../features/skills.md), [memory](../features/memory.md) and [routines](../features/routines.md) work with every provider. What a provider brings by itself is shown apart.
 

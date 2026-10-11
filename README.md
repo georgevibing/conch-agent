@@ -148,8 +148,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   sign-in: Claude Code, Codex, GitHub Copilot, Gemini CLI, Grok. Keys from OpenRouter,
   Anthropic, OpenAI, Google, Mistral, DeepSeek and more. Ollama or LM Studio for a
   model that is private and offline. A chat can switch models without losing its
-  thread, and when a plan hits its limit or the internet goes, the next one carries
-  on. [Providers](./apps/docs/content/providers)
+  thread, or when you ask ("use Opus 5.5", "something cheaper"), and when a plan hits
+  its limit or the internet goes, the next one carries on. [Providers](./apps/docs/content/providers)
 - **It says what it is doing, in plain words.** Each run of work is one line, like
   "Ran the tests · 241 passed", that opens into its steps. Ask **Why?** about any of
   them. [Your chats](./apps/docs/content/features/chats.md)

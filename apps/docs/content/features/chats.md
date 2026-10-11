@@ -81,6 +81,17 @@ A chat starts with your default [agent](./agents.md), named by **Talking to** ab
 
 The new agent answers from your next message, marked by a line like **Atlas took over from Juniper**. Each answer shows its agent's face and name.
 
+### Ask for another model
+
+Say it in the chat: "use Opus 5.5", "try this with GPT", "use my Claude plan", "a cheaper one", "go back to Codex". Your assistant switches the chat to a model you connected, on any provider.
+
+- **One line says so:** **Switched to Opus 5.5 on your Claude Max plan**. Press **Switch back** to return.
+- **The request carries on.** "Try this with GPT" is answered by GPT, with the whole chat so far.
+- **Several fit?** They show as buttons under the reply. A tap switches.
+- **Not connected?** It says so, and offers to connect the provider. Once connected, the chat switches and carries on.
+- **It doesn't spend on a guess.** Asked for "stronger", it picks among your plans first. A model you pay per reply is used when you name it or tap it.
+- **Only this chat changes.** New chats still start with your default.
+
 ## While it works
 
 <kbd>esc</kbd> or the stop button stops the reply at once, marked **Stopped** with how long it ran.
