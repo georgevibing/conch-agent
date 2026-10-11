@@ -878,6 +878,8 @@ describe('Channel settings through Telegram', () => {
         (await s.conversations.eventsAfter(chat.id)).some((e) => e.type === 'turn.completed'),
       'turn completed',
     );
+    // The answer reaches Telegram after the turn ends: in before the next command, not after it.
+    await until(() => telegram.sent.some((m) => m.text.includes('Hello there')), 'first answer');
     await s.conversations.configure(chat.id, { effort: 'low' });
     telegram.say('/status');
     await until(() => telegram.last()?.text.includes('Effort: Low'), 'web choice reflected');
@@ -900,6 +902,7 @@ describe('Channel settings through Telegram', () => {
         (await s.conversations.eventsAfter(next.id)).some((e) => e.type === 'turn.completed'),
       'second turn completed',
     );
+    await until(() => telegram.sent.some((m) => m.text.includes('Another hello')), 'second answer');
     telegram.say('/settings');
     await until(() => telegram.last()?.buttons.some((b) => b.text === 'This chat'), 'settings');
     await choose(telegram, 'This chat');
