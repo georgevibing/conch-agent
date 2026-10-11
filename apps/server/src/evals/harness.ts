@@ -242,7 +242,7 @@ export async function runTask(task: EvalTask, options: RunOptions): Promise<Task
     }
     const world: World = { origins: [site.url], home, cwd: workspace, servers };
 
-    const seen: Scene['seen'] = { questions: [], handoffs: 0, toolInputs: [] };
+    const seen: Scene['seen'] = { questions: [], handoffs: 0, toolInputs: [], switches: [] };
     let answer: (question: Question) => QuestionAnswer | null = DEFAULT_ANSWER;
     let costKnown = true;
     let cost = 0;
@@ -312,6 +312,8 @@ export async function runTask(task: EvalTask, options: RunOptions): Promise<Task
           }
         }, 50);
       }
+      if (event.type === 'model.switched')
+        seen.switches.push({ to: event.to, ...(event.model && { model: event.model }) });
       if (event.type === 'browser.handoff' && event.handoff.state === 'waiting') {
         seen.handoffs++;
         void signIn(services, chat, site?.url ?? '').catch((e: unknown) =>

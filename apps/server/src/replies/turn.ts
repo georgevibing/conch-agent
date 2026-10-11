@@ -101,6 +101,8 @@ export function pickReplies(input: {
   unattended: boolean;
   /** The last `suggest_replies` the assistant made this turn. */
   assistant?: readonly ReplySuggestion[];
+  /** Conch's own, from one of its tools (ADR 0132): its words, so they win, even after reading. */
+  own?: readonly ReplySuggestion[];
   /** This turn's events so far. */
   turn: readonly ConversationEvent[];
   /** The chat has read something untrusted (ADR 0028). */
@@ -109,6 +111,7 @@ export function pickReplies(input: {
   tools: boolean;
 }): PickedReplies | undefined {
   if (input.outcome !== 'success' || input.unattended || waitingOnYou(input.turn)) return undefined;
+  if (input.own?.length) return { replies: [...input.own], by: 'conch' };
   if (input.assistant?.length && !input.tainted)
     return { replies: [...input.assistant], by: 'assistant' };
   const own = conchReplies(replyText(input.turn), { tools: input.tools });
@@ -122,6 +125,7 @@ export function pickReplies(input: {
  */
 export class TurnReplies {
   #assistant?: ReplySuggestion[];
+  #own?: ReplySuggestion[];
   readonly tools: HostTool[];
 
   constructor(private readonly turn: { engine: Engine; unattended: boolean }) {
@@ -129,6 +133,11 @@ export class TurnReplies {
       turn.unattended || turn.engine.hostTools === false
         ? []
         : [suggestRepliesTool((replies) => (this.#assistant = replies))];
+  }
+
+  /** Chips one of Conch's tools offers (ADR 0132): the last ones win, as with the assistant's. */
+  conch(replies: readonly ReplySuggestion[]): void {
+    if (!this.turn.unattended && replies.length) this.#own = replies.slice(0, 3);
   }
 
   /** What the turn ends with, if anything, given how it went. */
@@ -143,6 +152,7 @@ export class TurnReplies {
       ...input,
       unattended: this.turn.unattended,
       ...(this.#assistant && { assistant: this.#assistant }),
+      ...(this.#own && { own: this.#own }),
       tools: await this.#tools(input.model),
     });
   }

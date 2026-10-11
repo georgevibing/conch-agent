@@ -318,10 +318,26 @@ export class ProviderService {
               ).unref?.(),
             ),
           ]);
+          // How it's paid for (ADR 0132), from its sign-in: switching prefers a plan to a key.
+          const status = await this.#detect(engine).catch(() => undefined);
+          const method = status?.auth?.method;
+          const billing = engine.local
+            ? ('free' as const)
+            : method === 'subscription'
+              ? ('plan' as const)
+              : method && method !== 'other'
+                ? ('metered' as const)
+                : undefined;
+          const account =
+            billing === 'plan'
+              ? status?.auth?.description.split(' · ')[0]?.trim().slice(0, 80)
+              : undefined;
           // The id a choice is saved under is the provider's, whatever a stand-in calls itself.
           return {
             ...capabilities,
             engine: engine.id,
+            ...(billing && { billing }),
+            ...(account && { account }),
             local: Boolean(engine.local),
             places: engine.places === true,
             ...(engine.attachments && { attachments: engine.attachments }),

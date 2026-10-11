@@ -657,8 +657,23 @@ export const SwitchChoice = z.object({
   model: z.string().min(1).max(200),
   /** The chip's words, exactly what it sends. */
   text: z.string().min(1).max(120),
+  /** The model's name, for the words it's handed. */
+  label: z.string().min(1).max(200),
+  /** The chat's line once it's chosen: "Switched to Opus 5.5 on your Claude Max plan". */
+  line: z.string().min(1).max(300),
 });
 export type SwitchChoice = z.infer<typeof SwitchChoice>;
+
+/** A candidate as a chip: its words, its name and the line it leaves. */
+export function choiceOf(c: SwitchCandidate): SwitchChoice {
+  return {
+    engine: c.engine,
+    model: c.model.slice(0, 200),
+    text: choiceText(c),
+    label: c.label.slice(0, 200),
+    line: switchedLine(c).slice(0, 300),
+  };
+}
 
 /** Switch this chat's model, by the person (**Switch back** on the line). */
 export const SwitchModelBody = z

@@ -67,6 +67,12 @@ export const Offer = z.object({
     .optional(),
   /** The request to carry on with once it's on; absent when there's nothing to resume. */
   resume: z.object({ request: z.string().min(1).max(4000) }).optional(),
+  /**
+   * A provider offered because the person asked for a model it serves (ADR
+   * 0132): once it's connected, the chat switches to it before carrying on,
+   * to the model those `words` mean there ("Opus 5.5"), else its default.
+   */
+  switchTo: z.object({ words: z.string().min(1).max(200) }).optional(),
 });
 export type Offer = z.infer<typeof Offer>;
 

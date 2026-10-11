@@ -29,12 +29,16 @@ import type {
   ContextFill,
   ChatChange,
   MailEdit,
+  ModelRef,
+  ReplySuggestion,
   RoundEnd,
   RoundSpeaker,
+  SwitchChoice,
 } from '@conch/protocol';
 
 import {
   FIRST_AGENT_ID,
+  MODE_WORDS,
   OutsideAgentId,
   approvalOf,
   chatGoal,
@@ -133,7 +137,8 @@ import { goalPrompt } from './goal';
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
 import { unansweredOnRestart, type QuestionDesk } from '../questions/desk';
-import { type CarryOn, OfferDesk, offerState, openOffers } from '../offers/desk';
+import { type CarryOn, OfferDesk, offerState, openOffers, requestOf } from '../offers/desk';
+import { carryPrompt, chipTapped, previousModel, refOf } from './switching';
 import { HostToolRows } from './views';
 import { cleanNarration, NarrationPacer } from './stories/narration';
 import { redactLabel, toolLabel } from './stories/labels';
@@ -369,6 +374,8 @@ export interface TurnResult {
   problem?: TurnProblem;
   /** Who answers instead, when the failure was one someone else can answer (ADR 0023). */
   next?: TurnRoute;
+  /** The chat was switched mid-turn (ADR 0132): `next` answers these words, not the message again. */
+  carry?: string;
   /** Text of the last assistant message in the turn. */
   finalText: string;
   /** Who answered, and with which model, when known: what it cost depends on it (ADR 0057). */
@@ -569,6 +576,11 @@ export interface ToolContext {
    * call meets, the same as a call the model made itself.
    */
   script?: ScriptTurn;
+  /**
+   * Conch's own chips under this turn's reply (ADR 0132): words Conch wrote,
+   * so they show even after the chat read something untrusted. Never for nobody.
+   */
+  chips?: (replies: ReplySuggestion[]) => void;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -638,6 +650,11 @@ interface Live {
    * restart forgets it, and the next turn starts the instructions again.
    */
   given?: Given;
+  /**
+   * Switched mid-turn with the request still to do (ADR 0132): when this turn
+   * ends well, the model switched to answers next, with these words.
+   */
+  carry?: { engine: EngineId; model?: string; prompt: string };
 }
 
 /**
@@ -1517,6 +1534,29 @@ export class ConversationManager {
       );
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
+    // A chip that names a model (ADR 0132): the chat switches to it first, and that model
+    // answers, carrying on with the request that was waiting, if any.
+    const tapped =
+      existing && !input.options?.engine && !input.untrusted
+        ? chipTapped(existing.events, input.text)
+        : undefined;
+    const switchedFrom =
+      existing && tapped
+        ? refOf(
+            this.deps.engine(existing.record.options.engine).id,
+            await this.#modelFor(
+              existing.record.options,
+              this.deps.engine(existing.record.options.engine).id,
+            ),
+          )
+        : undefined;
+    if (tapped) {
+      const { effort: _effort, fastMode: _fast, ...kept } = existing?.record.options ?? {};
+      input = {
+        ...input,
+        options: { ...kept, engine: tapped.choice.engine, model: tapped.choice.model },
+      };
+    }
     // A new chat is with the agent chosen for it, else the default (ADR 0101). Started
     // here in Conch, it begins with that agent's choices of provider, model and mode,
     // under what this message chose; a chat app or a routine keeps its own.
@@ -1575,7 +1615,14 @@ export class ConversationManager {
       if (existing.abort)
         throw new ConversationError('busy', 'Still replying to your last message.');
       live = existing;
-      if (input.options) this.#applyOptions(live, input.options);
+      // A tapped chip's model replaces the old one whole: its thinking level was the old model's.
+      if (tapped && input.options) {
+        const options = clean(input.options);
+        if (JSON.stringify(options) !== JSON.stringify(live.record.options)) {
+          live.record = { ...live.record, options };
+          this.#append(live, { type: 'options', options });
+        }
+      } else if (input.options) this.#applyOptions(live, input.options);
       unarchived = this.#unarchive(live);
     } else {
       const now = Date.now();
@@ -1633,6 +1680,24 @@ export class ConversationManager {
       ...(attachments.length && { attachments }),
     });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
+    if (tapped && switchedFrom) {
+      this.#append(live, {
+        type: 'model.switched',
+        from: switchedFrom.engine,
+        ...(switchedFrom.model && { fromModel: switchedFrom.model.slice(0, 200) }),
+        to: tapped.choice.engine,
+        model: tapped.choice.model,
+        message: tapped.choice.line,
+        by: 'person',
+      });
+      this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+      // Nothing waited to be done: the line is the answer, and the next message goes to it.
+      if (!tapped.request) {
+        live.record = { ...live.record, updatedAt: Date.now() };
+        await this.#persist(live);
+        return summary(live.record);
+      }
+    }
     if (input.untrusted) this.#taint(live, input.untrusted);
     if (input.round) {
       const { roundId, speakers, room, first } = input.round;
@@ -1652,7 +1717,9 @@ export class ConversationManager {
     }
     const { prompt, attachments: sending } = joinHeld(waiting, {
       engine: chosen.id,
-      prompt: expanded?.prompt ?? input.text,
+      prompt: tapped?.request
+        ? carryPrompt(tapped.choice.label, tapped.request)
+        : (expanded?.prompt ?? input.text),
       attachments,
     });
     if (route.kind === 'hold') {
@@ -2883,6 +2950,9 @@ export class ConversationManager {
     // Held: it waits (set as the turn ended). Handed on: one second chance only —
     // the next provider's own failure stands.
     const { next } = result;
+    // Switched when asked (ADR 0132): the new model carries on with the request, with its own second chance.
+    if (next?.kind === 'use' && result.carry !== undefined)
+      return this.#answer(live, next.engine, result.carry, [], next.model);
     if (next?.kind === 'use')
       return this.#runTurn(live, next.engine, prompt, attachments, undefined, next.model);
     return result;
@@ -2942,6 +3012,8 @@ export class ConversationManager {
       { usage?: Usage; error?: string; problem?: TurnProblem; paused?: TurnPause } | undefined;
     let heldProblem: TurnProblem | undefined;
     let next: TurnRoute | undefined;
+    /** What the model switched to carries on with (ADR 0132). */
+    let carried: string | undefined;
     const extras = live.extras;
     // Replies to send next (ADR 0060): the assistant's tool now, the chips as the turn ends.
     const turnSeq = live.seq;
@@ -3438,6 +3510,7 @@ export class ConversationManager {
             workspace: () =>
               extras?.cwd ? Promise.resolve(extras.cwd) : this.deps.settings.workspace(),
             script: scriptTurn,
+            chips: (offered) => replies.conch(offered),
           }) ?? [])),
       ...(extras?.tools ?? []),
       ...replies.tools,
@@ -4586,6 +4659,18 @@ export class ConversationManager {
           this.#append(live, { type: 'turn.capped', ...event }, tail);
         }
       }
+      // Switched when asked, with the request still to do (ADR 0132): the model switched to
+      // answers it next, in the same run. Not after a stop, a failure, a pause or a limit.
+      const carry = live.carry;
+      live.carry = undefined;
+      if (carry && !next && !capped && outcome === 'success' && !completed?.paused) {
+        next = {
+          kind: 'use',
+          engine: this.deps.engine(carry.engine),
+          ...(carry.model && { model: carry.model }),
+        };
+        carried = carry.prompt;
+      }
       // A finished reply ends with what you might say next, when that helps (ADR 0060).
       // A pause has its own Carry on: chips would be a second thing asking (ADR 0060).
       const picked =
@@ -4638,6 +4723,7 @@ export class ConversationManager {
       error: completed?.error ?? cappedWords,
       ...(heldProblem && { problem: heldProblem }),
       ...(next && { next }),
+      ...(carried !== undefined && { carry: carried }),
       finalText,
       engine: engine.id,
       ...((answeredWith ?? resolved.model) && { model: answeredWith ?? resolved.model }),
@@ -4830,6 +4916,27 @@ export class ConversationManager {
       if (offerState(live.events, offerId) !== 'open') return;
       this.#append(live, { type: 'offer.resolved', offerId, outcome: 'accepted' });
       if (turn.skill) this.#append(live, { type: 'skill.used', ...turn.skill, by: 'user' });
+      // Connected because a model it serves was asked for (ADR 0132): the chat moves to it.
+      if (turn.switchTo) {
+        const { engine: to, model, line } = turn.switchTo;
+        const fromEngine = this.deps.engine(live.record.options.engine).id;
+        const fromModel = await this.#modelFor(live.record.options, fromEngine);
+        const { effort: _effort, fastMode: _fast, ...kept } = live.record.options;
+        const options = clean({ ...kept, engine: to, ...(model && { model }) });
+        if (!model) delete options.model;
+        live.record = { ...live.record, options };
+        this.#append(live, { type: 'options', options });
+        this.#append(live, {
+          type: 'model.switched',
+          from: fromEngine,
+          ...(fromModel && { fromModel: fromModel.slice(0, 200) }),
+          to,
+          ...(model && { model: model.slice(0, 200) }),
+          message: line.slice(0, 300),
+          by: 'person',
+        });
+        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+      }
       if (!turn.prompt) {
         await this.#persist(live);
         return;
@@ -4971,6 +5078,110 @@ export class ConversationManager {
     else await this.#persist(live);
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
     return summary(live.record);
+  }
+
+  /**
+   * What switching models reads (ADR 0132): the model the chat answers with
+   * now (its choice, else the default), the one it had before, and whether
+   * it has read something untrusted.
+   */
+  async switchContext(
+    id: string,
+  ): Promise<{ current: ModelRef; previous?: ModelRef; tainted: boolean }> {
+    const live = await this.#get(id);
+    const engine = this.deps.engine(live.record.options.engine).id;
+    const current = refOf(engine, await this.#modelFor(live.record.options, engine));
+    const previous = previousModel(live.events, current);
+    return { current, ...(previous && { previous }), tainted: this.#tainted(live).length > 0 };
+  }
+
+  /**
+   * The chat answers with another model from its next turn (ADR 0132),
+   * because someone asked: the assistant on the person's words, or the
+   * person. The chat says so in one line, and the picker follows. In the
+   * middle of a turn, `carry` has the new model carry on with the person's
+   * request, as they typed it, once this turn ends well. A spending limit
+   * holds it, and its permission mode is never more than the chat's.
+   */
+  async switchModel(
+    id: string,
+    to: ModelRef,
+    how: { by: 'assistant' | 'person'; label: string; message: string; carry?: boolean },
+  ): Promise<
+    { switched: true; carrying: boolean; note?: string } | { switched: false; why: string }
+  > {
+    const live = await this.#get(id);
+    const engine = this.deps.engine(to.engine);
+    if (engine.id !== to.engine)
+      return { switched: false, why: 'That provider isn’t connected any more.' };
+    if ((await engine.detect().catch(() => undefined))?.state !== 'ready')
+      return { switched: false, why: `${engine.label} isn’t ready. It may need signing in again.` };
+    const capped = await this.#capped(live, engine, to.model);
+    if (capped)
+      return {
+        switched: false,
+        why:
+          capped.limit === 'chat'
+            ? 'This chat is at its spending limit, and that model is paid per use. The person can raise the limit under the chat’s spending.'
+            : 'This month’s budget is used up, and that model is paid per use. The person can raise it in Settings → Usage.',
+      };
+    const { preferences } = await this.deps.settings.get();
+    const defaults = { ...preferences, engine: this.deps.engine().id };
+    const fromEngine = this.deps.engine(live.record.options.engine).id;
+    const was = resolveOptions(live.record.options, defaults, fromEngine);
+    // Its mode: the chat's, or the new provider's safest when it can't run that one (never more).
+    const mode = honouredMode(was.permissionMode, await honouredModes(engine));
+    const note =
+      mode !== was.permissionMode
+        ? `${modeLabel(mode)}: ${engine.label} can’t do ${modeLabel(was.permissionMode)}`
+        : undefined;
+    // A thinking level or fast mode was the old model's: the new one starts from its default.
+    const { effort: _effort, fastMode: _fast, ...kept } = live.record.options;
+    const options = clean({ ...kept, engine: to.engine, ...(to.model && { model: to.model }) });
+    if (!to.model) delete options.model;
+    if (JSON.stringify(options) !== JSON.stringify(live.record.options)) {
+      live.record = { ...live.record, options };
+      this.#append(live, { type: 'options', options });
+    }
+    this.#append(live, {
+      type: 'model.switched',
+      from: fromEngine,
+      ...(was.model && { fromModel: was.model.slice(0, 200) }),
+      to: to.engine,
+      ...(to.model && { model: to.model.slice(0, 200) }),
+      message: how.message.slice(0, 300),
+      by: how.by,
+      ...(note && { note }),
+    });
+    const request = how.carry && live.abort ? requestOf(live.events) : undefined;
+    live.carry = request
+      ? {
+          engine: to.engine,
+          ...(to.model && { model: to.model }),
+          prompt: carryPrompt(how.label, request),
+        }
+      : undefined;
+    // A running turn saves the log when it ends; writing it now as well could race.
+    if (live.abort) await this.deps.store.upsert(live.record);
+    else await this.#persist(live);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    return { switched: true, carrying: Boolean(live.carry), ...(note && { note }) };
+  }
+
+  /**
+   * A few models the person's words could mean, as chips (ADR 0132). The one
+   * tapped switches the chat at once; with `carry`, the request goes with it.
+   */
+  async modelChoices(id: string, choices: readonly SwitchChoice[], carry: boolean): Promise<void> {
+    const live = await this.#get(id);
+    if (!choices.length) return;
+    const request = carry ? requestOf(live.events) : undefined;
+    this.#append(live, {
+      type: 'model.choices',
+      choices: choices.slice(0, 3),
+      ...(request && { request }),
+    });
+    if (!live.abort) await this.#persist(live);
   }
 
   #append(live: Live, input: ConversationEventInput, defer?: ConversationEvent[]) {
@@ -5368,6 +5579,11 @@ export function sameRouteAsLast(
     if (e.type === 'turn.completed' && e.engine === from && e.outcome === 'success') return false;
   }
   return false;
+}
+
+/** A permission mode by the name the chat shows it with: "Ask first". */
+function modeLabel(mode: PermissionMode): string {
+  return MODE_WORDS.find((m) => m.value === mode)?.label ?? mode;
 }
 
 function clean(options: TurnOptions): TurnOptions {

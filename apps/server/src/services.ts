@@ -232,6 +232,16 @@ import { SkillUsage, skillUsedIn } from './skills/usage';
 import { localTimezone, RoutineService } from './routines/service';
 import { OfferDesk } from './offers/desk';
 import { offerTools } from './offers/tools';
+import {
+  candidateOf,
+  type ModelRef,
+  resolveSwitch,
+  switchCandidates,
+  switchedLine,
+} from '@conch/protocol';
+import { PROVIDER_COPY } from './providers/catalog';
+import { perReply } from './usage/prices';
+import { switchSection, switchTools, type SwitchDeps } from './switching/tools';
 import { RoutineSpend } from './routines/spend';
 import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
 import { SearchService } from './search/service';
@@ -1055,9 +1065,33 @@ export class Services {
         dismiss: (id, offerId) => this.conversations.dismissOffer(id, offerId),
       },
       providers: {
-        connected: async (id) =>
-          id === 'openrouter' &&
-          (await this.providers.engineFor('openrouter').detect()).state === 'ready',
+        // OpenRouter for pictures; any provider offered for a model it serves (ADR 0132).
+        connected: async (id) => {
+          if (!this.providers.listed().includes(id as EngineId)) return false;
+          const engine = this.providers.engineFor(id as EngineId);
+          return engine.id === id && (await engine.detect()).state === 'ready';
+        },
+        offerable: async (id) => {
+          const copy = PROVIDER_COPY.get(id as EngineId);
+          if (!copy || copy.internal || !this.providers.listed().includes(copy.id))
+            return undefined;
+          return {
+            id: copy.id,
+            name: copy.name,
+            tagline: copy.tagline,
+            description: copy.description,
+            featured: Boolean(copy.featured),
+          };
+        },
+        switchTo: async (id, words) => {
+          const own = (await this.#switchCandidates()).filter((c) => c.engine === id);
+          const found = resolveSwitch(own, words);
+          const choice =
+            found.kind === 'one' || found.kind === 'already'
+              ? found.choice
+              : (own.find((c) => c.lead) ?? own[0]);
+          return choice && { model: choice.model, label: choice.label, line: switchedLine(choice) };
+        },
       },
       apps: { connected: (id) => this.integrations.connected(id) },
       skills: {
@@ -1278,6 +1312,8 @@ export class Services {
                   )?.events.findLast((e) => e.type === 'user.message')?.text,
               }),
               ...questionTools(this.questions, ctx),
+              // Another model when the person asks for one (ADR 0132).
+              ...switchTools(this.#switchDeps(), ctx),
               // One script that calls the tools above, every call through the same gate (ADR 0123).
               ...scriptTools(ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
@@ -1333,6 +1369,9 @@ export class Services {
           ? ''
           : QUESTIONS_PROMPT,
         engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
+        // Which models this chat can move to (ADR 0132): only where `switch_model` is. Last, so
+        // the parts before it keep their places in a session's instructions (ADR 0085).
+        engine.hostTools === false ? '' : await this.#switchPrompt(conversationId).catch(() => ''),
       ],
       expand: (text) => this.skills.expand(text),
       // A chat-only model and a message that needs an app: offer one that can (ADR 0050).
@@ -3462,6 +3501,63 @@ export class Services {
       void this.usage.refresh({ force: true });
     }
     return status;
+  }
+
+  /** Every model a chat could switch to now, with how it's paid for (ADR 0132). */
+  async #switchCandidates() {
+    return switchCandidates(await this.providers.models(), perReply);
+  }
+
+  /**
+   * The person moves a chat to a model (ADR 0132): **Switch back** on the
+   * line a switch left. Why it couldn't, in words, when it can't.
+   */
+  async switchChat(id: string, to: ModelRef): Promise<{ ok: true } | { ok: false; why: string }> {
+    const choice = candidateOf(await this.#switchCandidates(), to);
+    if (!choice) return { ok: false, why: 'That model isn’t connected any more.' };
+    const done = await this.conversations.switchModel(id, choice, {
+      by: 'person',
+      label: choice.label,
+      message: switchedLine(choice, true),
+    });
+    return done.switched ? { ok: true } : { ok: false, why: done.why };
+  }
+
+  /** What `switch_model` needs (ADR 0132). */
+  #switchDeps(): SwitchDeps {
+    return {
+      candidates: () => this.#switchCandidates(),
+      chat: {
+        switchContext: (id) => this.conversations.switchContext(id),
+        switchModel: (id, to, how) => this.conversations.switchModel(id, to, how),
+        modelChoices: (id, choices, carry) => this.conversations.modelChoices(id, choices, carry),
+      },
+      providerName: (engine) => PROVIDER_COPY.get(engine)?.name,
+      // Connect-from-chat (ADR 0021) for the provider that serves what was asked for.
+      offerProvider: async (ctx, engine, words) => {
+        const result = await this.offers.propose({
+          conversationId: ctx.conversationId,
+          engine: ctx.engine,
+          ...(ctx.unattended && { unattended: true }),
+          kind: 'provider',
+          target: engine,
+          why: `It serves ${words.slice(0, 80)}, which isn’t connected yet.`,
+          switchTo: { words },
+        });
+        if (!('offer' in result)) return false;
+        ctx.append({ type: 'offer', offer: result.offer });
+        return true;
+      },
+    };
+  }
+
+  /** The few lines that tell the assistant which models it can switch to (ADR 0132). */
+  async #switchPrompt(conversationId: string): Promise<string> {
+    const [candidates, chat] = await Promise.all([
+      this.#switchCandidates(),
+      this.conversations.switchContext(conversationId),
+    ]);
+    return switchSection(candidates, chat.current);
   }
 
   async #fileAccess(ctx: ToolContext) {

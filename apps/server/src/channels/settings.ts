@@ -6,6 +6,8 @@ import {
   MODE_WORDS,
   parseEffortArg,
   parseSwitch,
+  resolveSwitch,
+  switchCandidates,
   EffortChoice,
   PermissionMode,
   UpdateSettingsBody,
@@ -480,6 +482,38 @@ export class ChannelSettingsMenu {
     if (exact.length === 1 && exact[0]) {
       await this.#pick(ctx, scope, exact[0].provider, exact[0].model);
       return;
+    }
+    // Nothing by its letters: read the words as the chat does (ADR 0132), "cheaper", "my Claude plan".
+    const meant = resolveSwitch(switchCandidates({ providers }), query, {
+      current: { engine: options.engine, ...(options.model && { model: options.model }) },
+    });
+    const listed = (c: { engine: string; model: string }) => {
+      const provider = providers.find((p) => p.engine === c.engine);
+      const model = provider?.models.find((m) => m.id === c.model);
+      return provider && model ? { provider, model } : undefined;
+    };
+    if (!found.length && (meant.kind === 'one' || meant.kind === 'already')) {
+      const one = listed(meant.choice);
+      if (one) {
+        await this.#pick(ctx, scope, one.provider, one.model);
+        return;
+      }
+    }
+    if (!found.length && meant.kind === 'some') {
+      const some = meant.choices.flatMap((c) => listed(c) ?? []);
+      if (some.length) {
+        await this.#page(
+          ctx,
+          `Models that could be “${query}”.`,
+          some.map(({ provider, model }) => ({
+            label: `${model.label} · ${provider.label}`,
+            run: (c: SettingsContext) => this.#pick(c, scope, provider, model),
+          })),
+          0,
+          (c) => this.#models(c, scope, null),
+        );
+        return;
+      }
     }
     const choices: Choice[] = found.map(({ provider, model }) => ({
       label: mark(

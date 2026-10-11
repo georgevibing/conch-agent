@@ -51,7 +51,13 @@ export interface Scene {
   /** How to answer a question card; the default picks the first option. */
   onQuestion(answer: (question: Question) => QuestionAnswer | null): void;
   /** What happened so far: questions asked, handoffs, every tool call's input. */
-  seen: { questions: Question[]; handoffs: number; toolInputs: { name: string; input: unknown }[] };
+  seen: {
+    questions: Question[];
+    handoffs: number;
+    toolInputs: { name: string; input: unknown }[];
+    /** Every switch of a chat's model (ADR 0132): the provider and model it moved to. */
+    switches: { to: string; model?: string }[];
+  };
   /** The model a chat is handed over from, for the switch task. */
   partner?: Target;
 }
@@ -527,6 +533,29 @@ export const TASKS: readonly EvalTask[] = [
           ? `named the hotel, but not ${left} left`
           : 'lost track of the hotel after the switch',
       );
+    },
+  },
+  {
+    id: 'switch-asked',
+    title: 'Switch model when asked',
+    about: 'Asked by name for another connected model, it moves the chat there itself (ADR 0132).',
+    needs: ['partner'],
+    async run(scene) {
+      if (!scene.partner) return { status: 'error', reason: 'no other model to switch to' };
+      const name = scene.partner.model ?? scene.partner.engine;
+      const turn = await scene.say(`Please switch this chat to ${name} from now on.`);
+      const missed = unanswered(turn);
+      if (missed) return missed;
+      const moved = scene.seen.switches.at(-1);
+      if (!moved)
+        return fail(
+          scene.seen.toolInputs.some((t) => t.name === 'switch_model')
+            ? 'called switch_model, but the chat didn’t move'
+            : 'never called switch_model',
+        );
+      return moved.to === scene.partner.engine
+        ? pass('switched the chat itself')
+        : fail(`switched to ${moved.to} instead`);
     },
   },
   ...PERSISTENCE_TASKS,

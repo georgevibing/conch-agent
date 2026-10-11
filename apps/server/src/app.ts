@@ -58,6 +58,7 @@ import {
   UpdateSkillBody,
   UsageBudgetBody,
   LimitBackBody,
+  SwitchModelBody,
   RoutineSpendingBody,
   UpdateConchBody,
   RestartBody,
@@ -1445,6 +1446,17 @@ export async function buildApp(services: Services) {
       }
     },
   );
+  // Switch back, on the line a switch left (ADR 0132): the person's own choice of model.
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/switch', async (request, reply) => {
+    const body = parse(SwitchModelBody, request.body, reply);
+    if (!body) return;
+    try {
+      const done = await services.switchChat(request.params.id, body);
+      return done.ok ? done : reply.code(409).send({ error: 'conflict', message: done.why });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
   app.post<{ Params: { id: string } }>('/api/conversations/:id/capped', async (request, reply) => {
     const body = parse(CappedChoiceBody, request.body, reply);
     if (!body) return;

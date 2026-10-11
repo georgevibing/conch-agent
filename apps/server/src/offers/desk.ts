@@ -1,6 +1,7 @@
 import {
   MUTED_MARKET,
   type ConversationEvent,
+  type EngineId,
   type MarketListing,
   type Offer,
   type OfferKind,
@@ -12,7 +13,7 @@ import {
 import type { IntegrationSuggestionInput } from '../conversations/manager';
 import type { Engine } from '../engines/types';
 import { newId } from '../lib/ids';
-import { mapSection, type OfferMap } from './map';
+import { mapSection, type MapApp, type OfferMap } from './map';
 
 /**
  * Why an offer wasn't shown (ADR 0060 §2). Each is a rule the chat keeps:
@@ -38,6 +39,8 @@ export interface CarryOn {
   prompt?: string;
   /** A skill whose instructions the prompt carries (logged as `skill.used`). */
   skill?: { skillId: string; name: string; title: string; permissions: SkillPermissions };
+  /** The provider just connected answers from here (ADR 0132): this model, and the chat's line. */
+  switchTo?: { engine: EngineId; model?: string; label: string; line: string };
 }
 
 export interface OfferDeskDeps {
@@ -62,7 +65,19 @@ export interface OfferDeskDeps {
   };
   /** Whether what was offered is on, now. */
   apps?: { connected(catalogId: string): Promise<boolean> };
-  providers?: { connected(id: string): Promise<boolean> };
+  providers?: {
+    connected(id: string): Promise<boolean>;
+    /**
+     * A provider that isn't connected, to offer because a model it serves was
+     * asked for (ADR 0132), though the map doesn't list it.
+     */
+    offerable?(id: string): Promise<MapApp | undefined>;
+    /** Once it's connected: the model `words` mean there, else its default, and the chat's line. */
+    switchTo?(
+      id: string,
+      words: string,
+    ): Promise<{ model?: string; label: string; line: string } | undefined>;
+  };
   skills?: {
     modeOf(id: string): Promise<SkillMode | undefined>;
     turnOn(id: string): Promise<void>;
@@ -264,6 +279,8 @@ export class OfferDesk {
     kind: OfferKind;
     target: string;
     why?: string;
+    /** A provider for a model the person asked for (ADR 0132): connected, the chat moves to it. */
+    switchTo?: { words: string };
   }): Promise<{ offer: Offer } | { dropped: OfferDrop; name?: string }> {
     const chat = this.deps.chat;
     if (input.unattended || !chat || (await chat.unattended(input.conversationId)))
@@ -274,7 +291,10 @@ export class OfferDesk {
     const map = await this.deps.map?.(input.engine).catch(() => undefined);
     const found =
       input.kind === 'provider'
-        ? map?.providers?.find((p) => p.id === input.target)
+        ? (map?.providers?.find((p) => p.id === input.target) ??
+          (input.switchTo
+            ? await this.deps.providers?.offerable?.(input.target).catch(() => undefined)
+            : undefined))
         : input.kind === 'app'
           ? map?.apps.find((a) => a.id === input.target)
           : map?.skills.find((s) => s.id === input.target || s.name === input.target);
@@ -299,6 +319,8 @@ export class OfferDesk {
       by: 'assistant',
       ...('mode' in found && { skillMode: found.mode }),
       ...(request && { resume: { request } }),
+      ...(input.kind === 'provider' &&
+        input.switchTo && { switchTo: { words: input.switchTo.words.slice(0, 200) } }),
     };
     return { offer };
   }
@@ -396,6 +418,21 @@ export class OfferDesk {
   async #provider(offer: Offer): Promise<CarryOn> {
     if (!(await this.deps.providers?.connected(offer.target).catch(() => false)))
       throw new OfferError('not-ready', `${offer.name} needs connecting first.`);
+    // Asked for a model it serves (ADR 0132): the chat moves to it, then carries on there.
+    const moved = offer.switchTo
+      ? await this.deps.providers
+          ?.switchTo?.(offer.target, offer.switchTo.words)
+          .catch(() => undefined)
+      : undefined;
+    if (moved) {
+      const switchTo = { engine: offer.target as EngineId, ...moved };
+      return offer.resume?.request
+        ? {
+            prompt: `${offer.name} is connected now, and this chat answers with ${moved.label} on it. Carry on with what I asked, and don't switch again:\n\n${offer.resume.request}`,
+            switchTo,
+          }
+        : { switchTo };
+    }
     return offer.resume?.request
       ? {
           prompt: `${offer.name} is connected now. Carry on with what I asked:\n\n${offer.resume.request}`,
