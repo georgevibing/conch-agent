@@ -71,19 +71,21 @@
 
   /* ── Cores ─────────────────────────────────────────────────────────── */
 
+  /* Every core shares the whole row, however wide the column: a slim
+   * column per core, tall enough to read as a meter, with a sliver of fill
+   * when idle so a quiet core still shows. */
   .cores {
     display: flex;
-    gap: 2px;
-    block-size: 1.25rem;
+    gap: var(--nc-space-1);
+    block-size: var(--nc-space-10);
   }
 
   .core {
     position: relative;
     flex: 1 1 0;
     min-inline-size: 2px;
-    max-inline-size: 0.625rem;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: var(--nc-radius-xs);
     background: var(--nc-gray-3);
   }
 
@@ -92,31 +94,14 @@
     inset: 0;
     border-radius: inherit;
     background: var(--nc-chart-1);
-    opacity: 0.85;
     transform-origin: bottom;
-    transform: scaleY(var(--core));
+    transform: scaleY(max(var(--core), 0.06));
     transition: transform var(--nc-spring-soft);
   }
 
-  /* On a phone the slim columns would huddle at the start of the row: let them
-   * share the whole width, stand taller, and keep a sliver of fill when idle
-   * so every core still reads as a meter. */
-  @media (max-width: 30rem) {
-    .cores {
-      gap: var(--nc-space-1);
-      block-size: var(--nc-space-10);
-    }
-
-    .core {
-      max-inline-size: none;
-      border-radius: var(--nc-radius-xs);
-      background: var(--nc-gray-4);
-    }
-
-    .coreFill {
-      opacity: 1;
-      transform: scaleY(max(var(--core), 0.06));
-    }
+  /* Many cores on a narrow column: tighter gaps so the columns keep some width. */
+  .cores:has(> :nth-child(17)) {
+    gap: 2px;
   }
 
   /* ── What's running ────────────────────────────────────────────────── */
