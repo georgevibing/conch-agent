@@ -71,6 +71,12 @@ export const Routed: Story = {
       <RoutedNote reason="limit">
         Back to Claude Code: this chat waits for it until 6:00 PM.
       </RoutedNote>
+      <RoutedNote reason="switched" actions={[{ label: 'Switch back', onClick: () => {} }]}>
+        Switched to Opus 5.5 on your Claude Max plan
+      </RoutedNote>
+      <RoutedNote reason="switched">
+        Switched to GPT-5.5 on your ChatGPT Plus plan · Ask first: Codex can’t do Auto
+      </RoutedNote>
     </>
   ),
 };

@@ -64,4 +64,19 @@ describe('RoutedNote', () => {
     expect(onClick).toHaveBeenCalledOnce();
     await expectAccessible(container);
   });
+
+  it('says the chat switched model, with Switch back (ADR 0132)', async () => {
+    const onClick = vi.fn();
+    const { container } = renderNacre(
+      <RoutedNote reason="switched" actions={[{ label: 'Switch back', onClick }]}>
+        Switched to Opus 5.5 on your Claude Max plan
+      </RoutedNote>,
+    );
+    const note = screen.getByRole('note');
+    expect(note).toHaveAttribute('data-reason', 'switched');
+    expect(note).toHaveTextContent('Switched to Opus 5.5 on your Claude Max plan');
+    await userEvent.click(screen.getByRole('button', { name: 'Switch back' }));
+    expect(onClick).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
 });

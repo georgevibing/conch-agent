@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, CloudOff, Laptop, WifiOff } from 'lucide-react';
+import { ArrowLeftRight, Check, CloudOff, Laptop, Sparkles, WifiOff } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -95,8 +95,11 @@ export function WaitingMessage({
 }
 
 export interface RoutedNoteProps extends Omit<ComponentProps<'div'>, 'children'> {
-  /** Why another provider answered: offline (the model on this computer) or a usage limit. */
-  reason: 'offline' | 'limit';
+  /**
+   * Why another provider answered: offline (the model on this computer), a
+   * usage limit, or someone asked for another model (`switched`, ADR 0132).
+   */
+  reason: 'offline' | 'limit' | 'switched';
   /** One sentence, e.g. "Claude reached its limit until 15:00, so OpenRouter answered." */
   children: ReactNode;
   /** Where to change it (e.g. the setting that chose it). */
@@ -105,7 +108,10 @@ export interface RoutedNoteProps extends Omit<ComponentProps<'div'>, 'children'>
   actions?: readonly { label: string; onClick: () => void }[];
 }
 
-/** A quiet line where another provider answered for this chat's own, saying why. */
+/**
+ * A quiet line where another provider answered for this chat's own, saying
+ * why, or where the chat moved to another model because someone asked.
+ */
 export function RoutedNote({
   reason,
   children,
@@ -114,7 +120,7 @@ export function RoutedNote({
   className,
   ...props
 }: RoutedNoteProps) {
-  const Icon = reason === 'offline' ? Laptop : ArrowLeftRight;
+  const Icon = reason === 'offline' ? Laptop : reason === 'switched' ? Sparkles : ArrowLeftRight;
   const all = [...(action ? [action] : []), ...(actions ?? [])];
   return (
     <div role="note" data-reason={reason} className={cx(styles.routed, className)} {...props}>
