@@ -1376,6 +1376,11 @@ export const ClientCommand = z.discriminatedUnion('type', [
      * tool checks it again and does exactly this, or nothing.
      */
     edit: MailEdit.optional(),
+    /**
+     * Allowed with one of the question's choices (a browser fill's `accounts`,
+     * ADR 0130). One the question didn't offer is a no.
+     */
+    choice: z.string().min(1).max(300).optional(),
   }),
   z.object({ type: z.literal('ping') }),
   /** This page is in front of someone, or isn't: nothing is pushed while one is (ADR 0027). */

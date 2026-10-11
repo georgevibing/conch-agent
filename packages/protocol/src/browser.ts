@@ -218,6 +218,39 @@ export const BrowserHandoff = z.object({
 });
 export type BrowserHandoff = z.infer<typeof BrowserHandoff>;
 
+/** A saved item to pick on a card or in the live view: names only, never a value (ADR 0130). */
+export const BrowserFillAccount = z.object({
+  id: z.string().min(1).max(300),
+  /** The item's name: "Google". */
+  title: z.string().max(200),
+  /** The account it signs in as, or a card's last four: "ada@example.com", "•••• 4242". */
+  account: z.string().max(200).optional(),
+  /** Another password manager it lives in. */
+  source: z.string().max(40).optional(),
+});
+export type BrowserFillAccount = z.infer<typeof BrowserFillAccount>;
+
+/** What a fill does: sign in (username, password, a code), make a new password, or pay. */
+export const BrowserFillKind = z.enum(['sign-in', 'code', 'new-password', 'card']);
+export type BrowserFillKind = z.infer<typeof BrowserFillKind>;
+
+/**
+ * You're in a box Passwords can fill (ADR 0130): the live view offers it.
+ * `lookalike` is the saved site this page only pretends to be; `blocked`
+ * says why nothing is offered (not https, a box from another site).
+ */
+export const BrowserFillOffer = z.object({
+  field: z.enum(['username', 'password', 'new-password', 'code', 'card']),
+  /** The page's host, as shown. */
+  site: z.string().max(253),
+  items: z.array(BrowserFillAccount).max(8).default([]),
+  lookalike: z.string().max(253).optional(),
+  blocked: z.enum(['insecure', 'frame']).optional(),
+  /** Passwords is locked: unlock it first. */
+  locked: z.boolean().optional(),
+});
+export type BrowserFillOffer = z.infer<typeof BrowserFillOffer>;
+
 /** Extra detail on a `permission.requested` for the browser, so the prompt can show the site and the control. */
 export const BrowserPermission = z.object({
   /** `fill`: Conch types a saved password into the page (ADR 0025); the agent never sees it. */
@@ -234,6 +267,15 @@ export const BrowserPermission = z.object({
   shot: z.string().optional(),
   /** It's the person's own signed-in Chrome (ADR 0080): said, and a site is never allowed for good. */
   ownChrome: z.boolean().optional(),
+  /** For `fill`: what it does, for the card's words (ADR 0130). */
+  fill: BrowserFillKind.optional(),
+  /**
+   * For `fill` with more than one saved account: each is a button, and the
+   * answer carries the one chosen (`permission.respond` `choice`).
+   */
+  accounts: z.array(BrowserFillAccount).max(8).optional(),
+  /** For `fill`: the item is saved for another part of this site ("accounts.google.com"). */
+  savedFor: z.string().max(253).optional(),
 });
 export type BrowserPermission = z.infer<typeof BrowserPermission>;
 
@@ -332,9 +374,14 @@ export const BrowserLiveEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('error'), message: z.string() }),
   /**
    * After your click: whether the page's focus is now somewhere that takes
-   * typing, so a phone's keyboard stays up only then.
+   * typing, so a phone's keyboard stays up only then. In a sign-in, sign-up,
+   * code or card box, what Passwords can fill there (ADR 0130).
    */
-  z.object({ type: z.literal('typing'), editable: z.boolean() }),
+  z.object({
+    type: z.literal('typing'),
+    editable: z.boolean(),
+    fill: BrowserFillOffer.optional(),
+  }),
   /** Find on page (ADR 0131): how many times the words are there, and which one is shown (1-based, 0: none). */
   z.object({
     type: z.literal('found'),
@@ -420,6 +467,16 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
     type: z.literal('find'),
     text: z.string().max(200),
     direction: z.enum(['next', 'previous']).optional(),
+  }),
+  /**
+   * Fill the box you're in from Passwords (ADR 0130): `item` is one of the
+   * offer's, or `generate` makes a strong password and saves it. The gateway
+   * finds the box itself and checks the site again; nothing comes back.
+   */
+  z.object({
+    type: z.literal('fill'),
+    item: z.string().max(300).optional(),
+    generate: z.boolean().optional(),
   }),
 ]);
 export type BrowserLiveCommand = z.infer<typeof BrowserLiveCommand>;
