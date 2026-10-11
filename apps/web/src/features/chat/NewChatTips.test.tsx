@@ -1,6 +1,6 @@
 import type { NewChatTip, UpdateSettingsBody } from '@conch/protocol';
-import { Toaster } from '@conch/nacre';
-import { screen, waitFor } from '@testing-library/react';
+import { toast, Toaster } from '@conch/nacre';
+import { act, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,11 @@ import { NewChatTips, pickTip, type Tip, type TipFound } from './NewChatTips';
  * enough for a phone, each put away for good with its ×, on every device.
  */
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // Toasts outlive a test: one left from putting a tip away would answer the next test's Undo.
+  act(() => toast.dismiss());
+});
 
 const openclaw = { id: 'openclaw', label: 'OpenClaw', summary: '3 memories', path: '/x' };
 const claude = { id: 'claude-code', label: 'Claude Code', found: 130, projects: [] };
