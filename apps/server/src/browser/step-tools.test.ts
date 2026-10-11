@@ -49,6 +49,9 @@ function setup(timeoutMs = 100) {
     touched: false,
     opened: [],
     evicted: [],
+    dialogNotes: [],
+    dialogsOpened: 0,
+    dialogsSettled: vi.fn(async () => undefined),
     sites: new Set(),
     whenFree: vi.fn(async () => undefined),
     setControl: vi.fn((control: string) => {

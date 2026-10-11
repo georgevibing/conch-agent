@@ -694,6 +694,29 @@ export class BrowserService {
       case 'control':
         tab.setControl(command.to === 'user' ? 'user' : 'idle');
         return;
+      case 'dialog':
+        // The agent answers the dialogs of its own steps; yours are yours (ADR 0131).
+        if (tab.control === 'agent')
+          return watcher.send({
+            type: 'error',
+            message: 'The assistant is using the browser. Take over to drive.',
+          });
+        if (!tab.answerDialog(command.id, { accept: command.accept, text: command.text }))
+          return watcher.send({ type: 'error', message: 'The page isn’t asking that any more.' });
+        tab.touched = true;
+        return;
+      case 'find': {
+        if (tab.control === 'agent' && command.text)
+          return watcher.send({
+            type: 'error',
+            message: 'The assistant is using the browser. Find on the page once it’s done.',
+          });
+        const found = await tab.find(command.text, command.direction);
+        // Finding scrolls the page: the agent hears that you used it.
+        if (command.text) tab.touched = true;
+        watcher.send({ type: 'found', text: command.text, ...found });
+        return;
+      }
       case 'navigate': {
         const url = toUrl(command.url);
         const verdict = await this.guard.navigation(url);
@@ -721,6 +744,13 @@ export class BrowserService {
             type: 'error',
             message: 'The assistant is using the browser. Take over to drive.',
           });
+        }
+        // A page with a question showing is frozen: the answer comes first.
+        if (tab.dialog) {
+          // Said once per press, not for every move of the mouse.
+          if (command.type === 'mouse' && command.action !== 'down') return;
+          if (command.type === 'key' && command.action === 'up') return;
+          return watcher.send({ type: 'error', message: 'Answer the page’s question first.' });
         }
         // Touching the page while nobody drives is taking the wheel.
         if (tab.control === 'idle') tab.setControl('user');
@@ -789,8 +819,10 @@ export class BrowserService {
 
 const BROWSER_PROMPT = [
   '# The browser',
-  'You have a real web browser. The tools are browser_open, browser_read, browser_click, browser_type, browser_press, browser_select, browser_scroll, browser_back, browser_wait, browser_screenshot, browser_tabs, browser_upload, browser_click_at and browser_handoff. The user can watch it live in the chat and take the wheel at any time.',
+  'You have a real web browser. The tools are browser_open, browser_read, browser_click, browser_type, browser_form, browser_press, browser_select, browser_scroll, browser_back, browser_wait, browser_screenshot, browser_tabs, browser_upload, browser_click_at and browser_handoff. The user can watch it live in the chat and take the wheel at any time.',
   '- Open a page, then act on elements by the [ref] handles in the page text. Refs change when the page changes; read again if unsure.',
+  '- A form with several fields: fill them all with one browser_form, then click its button. A long page comes in parts: browser_read with `part` reads on (scrolling doesn’t), and `find` searches it.',
+  '- When a page shows its own dialog (“Are you sure?”), Conch answers it and your result says what it asked and how it was answered.',
   '- browser_click also hovers, double-clicks, right-clicks and drags (`how`). browser_scroll scrolls the page, or inside a list or panel. Links that open a new tab come into view as a tab of their own; browser_tabs lists, opens, switches and closes tabs.',
   '- Only when there is no ref to use (a canvas, a map, an unlabelled control): take a browser_screenshot and use browser_click_at with x,y in its pixels.',
   '- browser_upload puts files into a file box: ones the user attached in this chat, things you made here, or files in the work folder. The user is asked every time.',

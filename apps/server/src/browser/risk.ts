@@ -200,11 +200,26 @@ const HIGH_STAKES = new RegExp(
   'i',
 );
 
+/**
+ * The same acts anywhere in a sentence: a site's own question, "Are you sure
+ * you want to delete 3 items?" (ADR 0131). A word, not part of one.
+ */
+const HIGH_STAKES_IN_WORDS = new RegExp(
+  HIGH_STAKES.source.replaceAll('^\\s*', '(?:^|[^\\p{L}\\p{N}])'),
+  'iu',
+);
+
 /** Is clicking a control with this accessible name a significant act? */
 export function isHighStakes(name: string | undefined): boolean {
   if (!name) return false;
   // Control names can carry prices and icons: "Place order · $42.10".
   return HIGH_STAKES.test(name.replace(/[^\p{L}\p{N}\s'’-]+/gu, ' ').trim());
+}
+
+/** Does a sentence (a page's "Are you sure?") ask for a significant act anywhere in it? */
+export function asksHighStakes(sentence: string | undefined): boolean {
+  if (!sentence) return false;
+  return HIGH_STAKES_IN_WORDS.test(sentence.replace(/[^\p{L}\p{N}\s'’-]+/gu, ' '));
 }
 
 /** Plain words for a secret kind, for the message that asks you to take over. */

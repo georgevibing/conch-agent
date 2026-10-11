@@ -6,12 +6,14 @@ import {
   type BrowserHandoff,
   type BrowserLiveCommand,
   type BrowserLiveEvent,
+  type BrowserPageDialog,
   type BrowserTabEntry,
   type BrowserTab as TabState,
 } from '@conch/protocol';
-import type { CDPSession, Locator, Page } from 'playwright-core';
+import type { CDPSession, Dialog, Locator, Page } from 'playwright-core';
 
 import { VIEWPORT } from './runtime';
+import { displayHost } from './site';
 
 /** Someone looking at a conversation's tab through `/api/browser/live`. */
 export interface Watcher {
@@ -41,6 +43,34 @@ export const MAX_TABS = 8;
 
 /** Closed tabs remembered for "Reopen closed tab". */
 const CLOSED_KEPT = 10;
+
+/** How a page's dialog is answered: OK (with a prompt's text), or Cancel. */
+export interface DialogAnswer {
+  accept: boolean;
+  text?: string;
+}
+
+/** A dialog's words in a sentence: quoted, on one line, and short. */
+export function quoteDialog(message: string): string {
+  const flat = message.replace(/\s+/g, ' ').trim();
+  return `“${flat.length > 300 ? `${flat.slice(0, 300)}…` : flat}”`;
+}
+
+/**
+ * What the agent hears about a dialog nobody was there to answer: a message is
+ * closed (OK), a question gets Cancel, as a browser with nobody at it would.
+ */
+function unattended(dialog: BrowserPageDialog): string {
+  const said = quoteDialog(dialog.message);
+  switch (dialog.kind) {
+    case 'alert':
+      return `(${dialog.site} showed a message: ${said}. Conch closed it.)`;
+    case 'leave':
+      return `(${dialog.site} asked whether to leave the page, and nobody was there to say yes, so it stayed.)`;
+    default:
+      return `(${dialog.site} asked ${said} while nobody was at the browser, so Conch answered Cancel.)`;
+  }
+}
 
 /**
  * The page's size for a panel's screen (CSS px). Width stays desktop-like (so
@@ -111,6 +141,8 @@ export interface TabEntry {
   icon?: string;
   /** Where it's opening again (a restored tab), until the page gets there. */
   pending?: string;
+  /** Its title as last read. */
+  title?: string;
 }
 
 export interface TabHooks {
@@ -158,6 +190,27 @@ export class Tab {
   #recentlyClosed: string[] = [];
   /** Icons already fetched this session, by site. */
   #icons = new Map<string, string>();
+  /**
+   * The agent's answer to the page's dialogs while its step acts (ADR 0131).
+   * Without one, a dialog goes to you while you drive, or gets the page's
+   * default (OK to a message, Cancel to a question).
+   */
+  answerer?: (dialog: BrowserPageDialog) => Promise<DialogAnswer>;
+  /** What the page's dialogs said, and how they were answered, for the agent's next result. */
+  readonly dialogNotes: string[] = [];
+  /** Dialogs the pages opened so far: an action that waited behind one didn't fail. */
+  dialogsOpened = 0;
+  /** The dialog shown to you, while you drive. */
+  #dialog?: {
+    info: BrowserPageDialog;
+    page: Page;
+    reply: (answer: DialogAnswer) => Promise<void>;
+  };
+  /** Dialogs being answered: their page is frozen until they are. */
+  #answering = new Set<Promise<void>>();
+  #nextDialog = 1;
+  /** Back and Forward as last read, for while a dialog freezes the page. */
+  #lastHistory = { back: false, forward: false };
 
   constructor(
     readonly conversationId: string,
@@ -248,6 +301,9 @@ export class Tab {
       this.hooks.loaded(page);
       void this.#fetchIcon(entry);
     });
+    // Every dialog is answered here: left alone, a page freezes, and Playwright's
+    // own default (Cancel) would hide the site's question from everyone.
+    page.on('dialog', (dialog) => void this.#onDialog(page, dialog));
     page.on('popup', (popup) => {
       if (this.#closed) return;
       const child = this.#adopt(popup, entry.id);
@@ -261,6 +317,8 @@ export class Tab {
       if (url && url !== 'about:blank')
         this.#recentlyClosed = [...this.#recentlyClosed, url].slice(-CLOSED_KEPT);
       this.#tabs = this.#tabs.filter((t) => t.page !== page);
+      // Its dialog went with it.
+      if (this.#dialog?.page === page) void this.#dialog.reply({ accept: false });
       if (this.#tabs.length === 0) {
         this.#active = undefined;
         this.#closed = true;
@@ -339,6 +397,89 @@ export class Tab {
     return this.#recentlyClosed.pop();
   }
 
+  // ── The page's own dialogs (ADR 0131) ───────────────────────────────
+
+  /** The dialog waiting for you, if any. */
+  get dialog(): BrowserPageDialog | undefined {
+    return this.#dialog?.info;
+  }
+
+  /** Resolves once no dialog is waiting for an answer (the page can be read again). */
+  async dialogsSettled(): Promise<void> {
+    while (this.#answering.size) await Promise.all(this.#answering);
+  }
+
+  /** Your answer to the dialog in the panel. False if it's gone (or another one shows now). */
+  answerDialog(id: string, answer: DialogAnswer): boolean {
+    const shown = this.#dialog;
+    if (!shown || shown.info.id !== id) return false;
+    void shown.reply(answer);
+    return true;
+  }
+
+  async #onDialog(page: Page, dialog: Dialog): Promise<void> {
+    this.dialogsOpened += 1;
+    const type = dialog.type();
+    const kind: BrowserPageDialog['kind'] =
+      type === 'beforeunload' ? 'leave' : type === 'confirm' || type === 'prompt' ? type : 'alert';
+    const info: BrowserPageDialog = {
+      id: `d${this.#nextDialog++}`,
+      kind,
+      message: dialog.message().slice(0, 1000),
+      ...(kind === 'prompt' && { value: dialog.defaultValue().slice(0, 1000) }),
+      site: displayHost(page.url()).slice(0, 253) || 'The page',
+    };
+    let settled: () => void = () => undefined;
+    const answering = new Promise<void>((resolve) => (settled = resolve));
+    this.#answering.add(answering);
+    const reply = (answer: DialogAnswer) =>
+      (answer.accept ? dialog.accept(answer.text) : dialog.dismiss()).catch(() => undefined);
+    try {
+      if (this.control === 'agent' && this.answerer) {
+        await reply(await this.answerer(info).catch(() => ({ accept: false })));
+      } else if (this.control === 'user' && !this.#dialog && !this.#closed) {
+        // Yours: in the panel until you answer it, hand back, or the page goes.
+        await new Promise<void>((resolve) => {
+          this.#dialog = {
+            info,
+            page,
+            reply: async (answer) => {
+              if (this.#dialog?.info.id !== info.id) return;
+              this.#dialog = undefined;
+              await reply(answer);
+              resolve();
+              this.hooks.changed(this);
+            },
+          };
+          this.hooks.changed(this);
+        });
+      } else {
+        this.dialogNotes.push(unattended(info));
+        await reply({ accept: kind === 'alert' });
+      }
+    } finally {
+      this.#answering.delete(answering);
+      settled();
+    }
+  }
+
+  /**
+   * Find on page, for you: the first match from the top, or the next or
+   * previous one, selected and scrolled into view by the browser itself. How
+   * many there are, and which one shows (1-based; 0: none).
+   */
+  async find(
+    text: string,
+    direction?: 'next' | 'previous',
+  ): Promise<{ matches: number; current: number }> {
+    // A frozen page (a dialog waiting) can't be searched.
+    if (this.#answering.size) return { matches: 0, current: 0 };
+    const found = (await this.page
+      .evaluate(FIND_SCRIPT, [text, direction ?? ''] as [string, string])
+      .catch(() => [0, 0])) as [number, number];
+    return { matches: found[0] ?? 0, current: found[1] ?? 0 };
+  }
+
   /** Stop loading the page in view. */
   async stop(): Promise<void> {
     const entry = this.#active;
@@ -400,6 +541,22 @@ export class Tab {
     return 'closed';
   }
 
+  /**
+   * What a page says right now, or what it said last while a dialog freezes
+   * it: asking a frozen page anything waits as long as the dialog does.
+   */
+  async #unfrozen<T>(ask: () => Promise<T>, last: T): Promise<T> {
+    if (!this.#answering.size) return ask();
+    return Promise.race([ask(), new Promise<T>((r) => setTimeout(() => r(last), 300))]);
+  }
+
+  /** A tab's title, the last one known while its page is frozen. */
+  async #titleOf(entry: TabEntry): Promise<string> {
+    const title = await this.#unfrozen(() => entry.page.title().catch(() => ''), entry.title ?? '');
+    entry.title = title;
+    return title;
+  }
+
   /** Each tab's title and address, for the agent and the strip. */
   async list(): Promise<BrowserTabEntry[]> {
     return Promise.all(
@@ -407,7 +564,7 @@ export class Tab {
         const url = this.#urlOf(t);
         return {
           id: t.id,
-          title: await t.page.title().catch(() => ''),
+          title: await this.#titleOf(t),
           url: url === 'about:blank' ? '' : url,
           active: t === this.#active,
           ...(t.loading && { loading: true }),
@@ -420,11 +577,13 @@ export class Tab {
   async state(): Promise<TabState> {
     const page = this.page;
     const url = page.url();
-    const history = await this.#history(page);
+    const history = await this.#unfrozen(() => this.#history(page), this.#lastHistory);
+    this.#lastHistory = history;
+    const active = this.#active;
     return {
       conversationId: this.conversationId,
       url: url === 'about:blank' ? '' : url,
-      title: await page.title().catch(() => ''),
+      title: active ? await this.#titleOf(active) : '',
       loading: Boolean(this.#active?.loading),
       canGoBack: history.back,
       canGoForward: history.forward,
@@ -433,6 +592,7 @@ export class Tab {
       handoff: this.handoff,
       tabs: await this.list(),
       ...(this.options.backend && { backend: this.options.backend }),
+      ...(this.#dialog && { dialog: this.#dialog.info }),
     };
   }
 
@@ -485,6 +645,12 @@ export class Tab {
     if (this.control === control) return;
     this.control = control;
     if (control === 'user') this.touched = true;
+    // Handed back with the page's question unanswered: its default, and the agent hears so.
+    const left = control !== 'user' ? this.#dialog : undefined;
+    if (left) {
+      this.dialogNotes.push(unattended(left.info));
+      void left.reply({ accept: left.info.kind === 'alert' });
+    }
     if (control !== 'user') {
       for (const wake of this.#waiters) wake();
       this.#waiters.clear();
@@ -693,6 +859,7 @@ export class Tab {
 
   async close({ confirm = false } = {}): Promise<void> {
     this.#closed = true;
+    void this.#dialog?.reply({ accept: false });
     for (const wake of this.#waiters) wake();
     this.#waiters.clear();
     const pages = this.#tabs.map((t) => t.page);
@@ -718,6 +885,57 @@ function originOf(url: string): string {
     return '';
   }
 }
+
+/**
+ * Run in the page: find on page with the browser's own `window.find` (it
+ * selects the words and scrolls to them), then count the matches in the text
+ * that shows, and which one is selected. Empty words clear the selection.
+ */
+const FIND_SCRIPT = ([text, direction]: [string, string]): [number, number] => {
+  interface TextNode {
+    data: string;
+    parentElement: { tagName: string; getClientRects(): { length: number } } | null;
+  }
+  interface Range {
+    comparePoint(node: unknown, offset: number): number;
+  }
+  const page = globalThis as unknown as {
+    find(text: string, caseSensitive: boolean, backwards: boolean, wrap: boolean): boolean;
+    getSelection(): {
+      removeAllRanges(): void;
+      rangeCount: number;
+      getRangeAt(i: number): Range;
+    } | null;
+    document: {
+      body: unknown;
+      createTreeWalker(root: unknown, show: number): { nextNode(): TextNode | null };
+    };
+  };
+  const selection = page.getSelection();
+  // New words start from the top.
+  if (!text || !direction) selection?.removeAllRanges();
+  if (!text || !page.document.body) return [0, 0];
+  const found = page.find(text, false, direction === 'previous', true);
+  const range = found && selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  const needle = text.toLowerCase();
+  // 4: NodeFilter.SHOW_TEXT.
+  const walker = page.document.createTreeWalker(page.document.body, 4);
+  let matches = 0;
+  let before = 0;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const parent = node.parentElement;
+    if (!parent || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(parent.tagName)) continue;
+    if (!parent.getClientRects().length) continue;
+    const hay = node.data.toLowerCase();
+    for (let at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length)) {
+      matches++;
+      if (range && range.comparePoint(node, at) < 0) before++;
+    }
+  }
+  // Words split across elements are found but not counted: there's at least the one shown.
+  const total = Math.max(matches, found ? 1 : 0);
+  return [total, found ? Math.min(before + 1, total) : 0];
+};
 
 /** Run in the page: is its focus (through open shadow roots) somewhere that takes typing? */
 const TAKES_TYPING = `(() => {

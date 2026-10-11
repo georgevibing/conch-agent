@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
-import { isHighStakes } from './risk';
+import { asksHighStakes, isHighStakes } from './risk';
 import { displayHost, siteOf } from './site';
+
+describe('asksHighStakes (a page’s own question, ADR 0131)', () => {
+  it('finds the act anywhere in the sentence', () => {
+    for (const sentence of [
+      'Are you sure you want to delete 3 items?',
+      'Möchten Sie das wirklich löschen?',
+      'Place your order now?',
+      'Do you want to send this message?',
+    ])
+      expect(asksHighStakes(sentence), sentence).toBe(true);
+  });
+
+  it('only as a word, and not everyday questions', () => {
+    for (const sentence of [
+      'Leave without saving?',
+      'Visit Facebook?',
+      'Remove this from your list?',
+      'Show the postcode field?',
+      undefined,
+    ])
+      expect(asksHighStakes(sentence), String(sentence)).toBe(false);
+  });
+});
 
 describe('isHighStakes', () => {
   it('flags controls that spend, send, publish or delete', () => {

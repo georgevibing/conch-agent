@@ -3,10 +3,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   BrowserActionKind,
   BrowserBox,
+  BrowserPageDialog,
   BrowserPermission,
   VaultRequest,
 } from '@conch/protocol';
-import type { Download, Locator, Page } from 'playwright-core';
+import type { Download, Locator, Page, Response } from 'playwright-core';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
@@ -14,15 +15,16 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
 import { focused, targetAt } from './point';
-import { isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk';
+import { asksHighStakes, isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk';
 import { BrowserProblemError } from './runtime';
 import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
 import { armCreate, armSignIn } from './passkeys';
 import { markSecrets, readChanges, readPage } from './snapshot';
-import { MAX_TABS, type Tab } from './tab';
+import { MAX_TABS, quoteDialog, type DialogAnswer, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
 import { watchHandoff } from './handoff';
+import { throughBotCheck } from './bot-check';
 import { shootPage } from './shot';
 import { BrowserStepBudget, BrowserStepStopped } from './step-budget';
 
@@ -133,6 +135,8 @@ export function browserTools(
     ctx.signal.throwIfAborted();
   };
   const { conversationId } = ctx;
+  /** The person said yes to something significant in this step: the site's own "Are you sure?" after it doesn't ask again. */
+  let vouched = false;
 
   const locate = (tab: Tab, ref: string): Locator => tab.page.locator(`aria-ref=${ref}`);
 
@@ -211,6 +215,9 @@ export function browserTools(
               const touched = current.touched;
               current.touched = false;
               current.setControl('agent');
+              // The page's dialogs during this step are the agent's to answer (ADR 0131).
+              vouched = false;
+              current.answerer = (dialog) => answerDialog(current, dialog);
               current.lastUsed = Date.now();
               log('running', labels.running);
               current.opened.length = 0;
@@ -219,6 +226,7 @@ export function browserTools(
               // the result or saving a thumbnail fails. Never replay the whole action.
               workStarted = true;
               const outcome = await work(current);
+              await current.dialogsSettled();
               check();
               const shot = current.closed
                 ? undefined
@@ -241,6 +249,7 @@ export function browserTools(
                 notes.push(
                   `(A chat keeps ${MAX_TABS} tabs, so Conch closed the one unused longest: ${evicted.join(', ')}.)`,
                 );
+              notes.push(...current.dialogNotes.splice(0));
               const note = notes.length ? `${notes.join('\n')}\n` : '';
               return outcome.images
                 ? { text: note + outcome.text, images: outcome.images }
@@ -264,6 +273,7 @@ export function browserTools(
               }
               throw error;
             } finally {
+              if (tab) tab.answerer = undefined;
               if (tab?.control === 'agent') tab.setControl('idle');
             }
           };
@@ -298,6 +308,8 @@ export function browserTools(
       kind?: 'download' | 'upload';
       /** Typing a long text: after reading, it could carry what was read (ADR 0117). */
       carries?: boolean;
+      /** No thumbnail: a page with a dialog showing is frozen, and can't be pictured. */
+      picture?: false;
     },
   ): Promise<void> => {
     check();
@@ -344,7 +356,7 @@ export function browserTools(
       if (!untrusted && !own && (await service.store.trusts(site))) return;
     }
     if ((kind === 'download' || kind === 'upload') && goesAhead) return;
-    const picture = await tab.thumbnail(request.box);
+    const picture = request.picture === false ? undefined : await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
     const title = await tab.page.title().catch(() => '');
     const decision = await ctx.ask({
@@ -374,6 +386,7 @@ export function browserTools(
       );
     }
     if (kind === 'site' || kind === 'high-stakes') tab.sites.add(site);
+    if (kind === 'high-stakes') vouched = true;
     // "Always" in your own Chrome stays this chat's: it never grants a site for good there.
     if (decision === 'allow-always' && kind === 'site' && !own) await service.grantSite(site);
   };
@@ -580,13 +593,72 @@ export function browserTools(
     return outcome;
   };
 
+  /**
+   * The page's own dialog during the agent's step (ADR 0131). A message is
+   * closed and passed on. "Leave this page?" leaves: going was the agent's step.
+   * A question ("Remove 3 items?") is answering the site, so it's asked like any
+   * act there: the site question, and the person's yes when its words are
+   * significant (unless they just said yes to this very thing). A text box of
+   * the page's own gets Cancel: Conch never types into one.
+   */
+  const answerDialog = async (tab: Tab, dialog: BrowserPageDialog): Promise<DialogAnswer> => {
+    const said = quoteDialog(dialog.message);
+    const note = (text: string) => tab.dialogNotes.push(text);
+    if (dialog.kind === 'alert') {
+      note(`(The page showed a message: ${said}. Conch closed it.)`);
+      return { accept: true };
+    }
+    if (dialog.kind === 'leave') {
+      note('(The page warned that leaving could lose what was typed there. Conch left it.)');
+      return { accept: true };
+    }
+    if (dialog.kind === 'prompt') {
+      note(
+        `(The page asked for text in a box of its own: ${said}. Conch can’t type there, so it answered Cancel. Look for another way on the page, or ask the user.)`,
+      );
+      return { accept: false };
+    }
+    try {
+      await permit(tab, {
+        action: `Say OK to ${said}`,
+        highStakes: !vouched && asksHighStakes(dialog.message),
+        picture: false,
+      });
+    } catch (error) {
+      if (!(error instanceof Refusal)) throw error;
+      note(
+        ctx.permissionMode === 'plan'
+          ? `(The page asked ${said}. This chat is in Read only mode, so Conch answered Cancel.)`
+          : `(The page asked ${said}. The user said no, so Conch answered Cancel. Don’t try another way; ask what they’d like instead.)`,
+      );
+      return { accept: false };
+    }
+    note(`(The page asked ${said}, and Conch answered OK.)`);
+    return { accept: true };
+  };
+
+  /**
+   * An action the page's dialog held up: it waited behind the question (a
+   * click times out there), which isn't a failure once the question is answered.
+   */
+  const throughDialogs = async (tab: Tab, act: () => Promise<unknown>): Promise<void> => {
+    const before = tab.dialogsOpened;
+    try {
+      await act();
+    } catch (error) {
+      if (tab.dialogsOpened === before || !/Timeout/i.test(String((error as Error)?.message)))
+        throw error;
+    }
+    await tab.dialogsSettled();
+  };
+
   /** A click (or Enter) that might start a download: offer to keep it. */
   const catchDownload = async (tab: Tab, act: () => Promise<void>): Promise<string> => {
     let download: Download | undefined;
     const onDownload = (d: Download) => (download = d);
     tab.page.on('download', onDownload);
     try {
-      await act();
+      await throughDialogs(tab, act);
       await tab.page
         .waitForLoadState('domcontentloaded', { timeout: 5_000 })
         .catch(() => undefined);
@@ -607,6 +679,16 @@ export function browserTools(
     return `Downloaded ${name} to ${path}.\n`;
   };
 
+  /** Open an address; a heavy page settles for its first byte, and is read as it is. */
+  const goTo = async (page: Page, url: string): Promise<Response | null> => {
+    try {
+      return await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    } catch (error) {
+      if (!/Timeout/i.test(String((error as Error).message))) throw error;
+      return page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
+    }
+  };
+
   const settle = async (page: Page) => {
     await page.waitForLoadState('domcontentloaded', { timeout: 8_000 }).catch(() => undefined);
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
@@ -622,10 +704,15 @@ export function browserTools(
     return `Tabs: ${tabs}\n${text}`;
   };
   /** After an action: only what changed on the page (the whole page when it's a new one). */
-  const pageText = async (tab: Tab) => withTabs(tab, (await readChanges(tab.page)).text);
-  /** The whole page: on opening one, or when the agent asks for it. */
-  const wholePage = async (tab: Tab, find?: string) =>
-    withTabs(tab, (await readPage(tab.page, { find })).text);
+  const pageText = async (tab: Tab) => {
+    await tab.dialogsSettled();
+    return withTabs(tab, (await readChanges(tab.page)).text);
+  };
+  /** The whole page: on opening one, or when the agent asks for it (a part at a time when it's long). */
+  const wholePage = async (tab: Tab, options: { find?: string; part?: number } = {}) => {
+    await tab.dialogsSettled();
+    return withTabs(tab, (await readPage(tab.page, options)).text);
+  };
 
   const secretOf = async (locator: Locator): Promise<SecretKind | undefined> => {
     const value = await locator.getAttribute(SECRET_ATTR, { timeout: 2_000 }).catch(() => null);
@@ -668,35 +755,44 @@ export function browserTools(
           const verdict = await service.guard.navigation(url);
           if (!verdict.ok) throw new Refusal(verdict.message);
           await point(tab, 'open', `Opening ${host}`);
-          try {
-            await tab.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-          } catch (error) {
-            // Heavy pages: settle for the first byte, then read what's there.
-            if (!/Timeout/i.test(String((error as Error).message))) throw error;
-            await tab.page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
-          }
+          const response = await goTo(tab.page, url);
           await settle(tab.page);
+          const checked = await throughBotCheck(tab.page, response, { signal: ctx.signal });
           const declined = await service.declined(tab.page);
           return {
-            text: `${declined ? `(Declined ${declined}’s cookie banner for the user.)\n` : ''}${await wholePage(tab)}`,
+            text: `${checked}${declined ? `(Declined ${declined}’s cookie banner for the user.)\n` : ''}${await wholePage(tab)}`,
           };
         },
       );
     },
   };
 
-  const read: HostTool<{ find: z.ZodOptional<z.ZodString> }> = {
+  const read: HostTool<{ find: z.ZodOptional<z.ZodString>; part: z.ZodOptional<z.ZodNumber> }> = {
     name: 'browser_read',
     description:
-      'Read the whole page that’s open now: its text and controls with [ref] handles. Other browser actions answer with only what changed, so use this when you need to see everything again. Pass `find` to see only the parts that mention something.',
+      'Read the whole page that’s open now: its text and controls with [ref] handles. Other browser actions answer with only what changed, so use this when you need to see everything again. Pass `find` to see only the parts that mention something. A long page comes in parts: `part` reads the next one.',
     input: {
       find: z.string().max(200).optional().describe('Only show lines mentioning this.'),
+      part: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('For a long page: which part to read (1 is the start).'),
     },
-    run: ({ find }) =>
+    run: ({ find, part }) =>
       step(
         'read',
-        { running: 'Reading the page', done: find ? `Looked for “${find}”` : 'Read the page' },
-        async (tab) => ({ text: await wholePage(tab, find) }),
+        {
+          running: part && part > 1 ? `Reading part ${part} of the page` : 'Reading the page',
+          done: find
+            ? `Looked for “${find}”`
+            : part && part > 1
+              ? `Read part ${part} of the page`
+              : 'Read the page',
+        },
+        async (tab) => ({ text: await wholePage(tab, { find, part }) }),
       ),
   };
 
@@ -950,11 +1046,167 @@ export function browserTools(
             box,
           });
           await point(tab, 'select', `Choosing “${option}”`, box);
-          await target
-            .selectOption({ label: option }, { timeout: 6_000 })
-            .catch(() => target.selectOption(option, { timeout: 6_000 }));
+          await throughDialogs(tab, () =>
+            target
+              .selectOption({ label: option }, { timeout: 6_000 })
+              .catch(() => target.selectOption(option, { timeout: 6_000 })),
+          );
           await settle(tab.page);
           return { text: await pageText(tab) };
+        },
+      ),
+  };
+
+  const FormField = z.object({
+    ref: Ref,
+    element: Element,
+    value: z
+      .string()
+      .max(5_000)
+      .optional()
+      .describe('What to type (it replaces what’s there), or the option to choose in a list.'),
+    checked: z
+      .boolean()
+      .optional()
+      .describe('For a checkbox, switch or radio button: true to tick it, false to clear it.'),
+  });
+
+  /**
+   * Many fields in one step (ADR 0131): a long form is one question and one
+   * look at the page, not one per box. It never sends the form; the agent
+   * clicks the form's own button next, and that's judged like any click.
+   */
+  const form: HostTool<{ fields: z.ZodArray<typeof FormField> }> = {
+    name: 'browser_form',
+    description:
+      'Fill in several fields of a form in one go, by their refs: text boxes (`value`), drop-down lists (`value`: the option as it reads) and checkboxes or radio buttons (`checked`). It doesn’t send the form: click its button afterwards. Password, code and card fields are left for browser_type, and file boxes for browser_upload.',
+    input: {
+      fields: z.array(FormField).min(1).max(40).describe('The fields to fill in, in order.'),
+    },
+    run: ({ fields }) =>
+      step(
+        'type',
+        {
+          running: `Filling in ${fields.length === 1 ? 'a field' : `${fields.length} fields`}`,
+          done: `Filled in ${fields.length === 1 ? 'a field' : `${fields.length} fields`}`,
+        },
+        async (tab) => {
+          await markSecrets(tab.page);
+          const planned: {
+            field: z.infer<typeof FormField>;
+            target: Locator;
+            how: 'choose' | 'tick' | 'type';
+          }[] = [];
+          const skipped: string[] = [];
+          let significant = false;
+          for (const field of fields) {
+            const target = locate(tab, field.ref);
+            const kind = await target
+              .evaluate(
+                (el: { tagName: string; getAttribute(n: string): string | null }) => ({
+                  tag: el.tagName.toLowerCase(),
+                  type: (el.getAttribute('type') ?? '').toLowerCase(),
+                  role: (el.getAttribute('role') ?? '').toLowerCase(),
+                }),
+                undefined,
+                { timeout: 3_000 },
+              )
+              .catch(() => undefined);
+            if (!kind) {
+              skipped.push(`“${field.element}” (it isn’t on the page any more: read it again)`);
+              continue;
+            }
+            // Secrets never pass through the model: browser_type fills them from Passwords or hands them over.
+            if (await secretOf(target)) {
+              skipped.push(`“${field.element}” (a password, code or card field: use browser_type)`);
+              continue;
+            }
+            if (kind.type === 'file') {
+              skipped.push(`“${field.element}” (a file box: use browser_upload)`);
+              continue;
+            }
+            const ticks =
+              kind.type === 'checkbox' ||
+              kind.type === 'radio' ||
+              ['checkbox', 'radio', 'switch', 'menuitemcheckbox'].includes(kind.role);
+            if (ticks ? field.checked === undefined : field.value === undefined) {
+              skipped.push(
+                `“${field.element}” (${ticks ? 'say `checked` for a box to tick' : 'say its `value`'})`,
+              );
+              continue;
+            }
+            // Ticking "Delete my account", or agreeing to pay, is significant, as clicking it would be.
+            if (
+              ticks &&
+              field.checked &&
+              (isHighStakes(await wordsOf(target)) || isHighStakes(field.element))
+            )
+              significant = true;
+            planned.push({
+              field,
+              target,
+              how: kind.tag === 'select' ? 'choose' : ticks ? 'tick' : 'type',
+            });
+          }
+          if (!planned.length)
+            throw new Refusal(
+              `Nothing to fill in: ${skipped.join('; ')}. Read the page again for fresh refs.`,
+            );
+          const first = planned[0];
+          const box = first ? await tab.boxOf(first.target) : undefined;
+          await permit(tab, {
+            action:
+              planned.length === 1
+                ? `Fill in “${first?.field.element}”`
+                : `Fill in ${planned.length} fields (${planned
+                    .slice(0, 4)
+                    .map((p) => `“${p.field.element}”`)
+                    .join(', ')}${planned.length > 4 ? '…' : ''})`,
+            highStakes: significant,
+            box,
+            carries: planned.some((p) => (p.field.value?.length ?? 0) > LONG_TYPING),
+          });
+          const filled: string[] = [];
+          for (const [i, { field, target, how }] of planned.entries()) {
+            check();
+            const at = await tab.boxOf(target);
+            const label = `Filling in “${field.element}”`;
+            // The cursor visits each field; only the first waits the watched beat.
+            if (i === 0) await point(tab, 'type', label, at);
+            else tab.announce({ type: 'action', action: 'type', label, box: at });
+            try {
+              await throughDialogs(tab, async () => {
+                if (how === 'choose') {
+                  const option = field.value ?? '';
+                  await target
+                    .selectOption({ label: option }, { timeout: 5_000 })
+                    .catch(() => target.selectOption(option, { timeout: 5_000 }));
+                } else if (how === 'tick') {
+                  await target.setChecked(field.checked ?? true, { timeout: 5_000 });
+                } else {
+                  const text = field.value ?? '';
+                  await target.fill(text, { timeout: 5_000 }).catch(async () => {
+                    // Rich editors don't take `fill`: type it like a person.
+                    await target.click({ timeout: 4_000 });
+                    await target.pressSequentially(text, { delay: 8 });
+                  });
+                }
+              });
+              filled.push(field.element);
+            } catch (error) {
+              skipped.push(`“${field.element}” (${explain(error)})`);
+            }
+          }
+          await settle(tab.page);
+          const said = [
+            `Filled in ${filled.length} of ${fields.length} field${fields.length === 1 ? '' : 's'}${filled.length ? `: ${filled.map((f) => `“${f}”`).join(', ')}` : ''}.`,
+            ...(skipped.length ? [`Not filled: ${skipped.join('; ')}.`] : []),
+            'The form isn’t sent yet: click its button when it’s ready.',
+          ].join(' ');
+          return {
+            label: `Filled in ${filled.length === 1 ? '1 field' : `${filled.length} fields`}`,
+            text: `${said}\n${await pageText(tab)}`,
+          };
         },
       ),
   };
@@ -1381,19 +1633,16 @@ export function browserTools(
               throw new Refusal(
                 `This chat already has ${MAX_TABS} tabs open. Close one first (browser_tabs close).`,
               );
+            let checked = '';
             if (url) {
               await point(tab, 'open', `Opening ${displayHost(url)}`);
-              await tab.page
-                .goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-                .catch(async (error: Error) => {
-                  if (!/Timeout/i.test(error.message)) throw error;
-                  await tab.page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
-                });
+              const response = await goTo(tab.page, url);
               await settle(tab.page);
+              checked = await throughBotCheck(tab.page, response, { signal: ctx.signal });
             }
             return {
               label: url ? `Opened ${displayHost(url)} in a new tab` : 'Opened a new tab',
-              text: `Opened tab ${opened}.\n${await pageText(tab)}`,
+              text: `Opened tab ${opened}.\n${checked}${await pageText(tab)}`,
             };
           }
           if (!id)
@@ -1671,6 +1920,7 @@ export function browserTools(
     read,
     click,
     type,
+    form,
     passkey,
     press,
     select,

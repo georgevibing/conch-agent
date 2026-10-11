@@ -144,7 +144,7 @@ const inside = (dir: string, path: string) => {
 
 const BROWSER_READS = /^(?:mcp__conch__)?browser_(?:open|read|screenshot|back|scroll|wait|tabs)$/;
 const BROWSER_ACTS =
-  /^(?:mcp__conch__)?browser_(?:click|click_at|type|select|press|handoff|passkey|upload)$/;
+  /^(?:mcp__conch__)?browser_(?:click|click_at|type|form|select|press|handoff|passkey|upload)$/;
 
 /**
  * What this tool call needs from a skill, and whether the skill's list has

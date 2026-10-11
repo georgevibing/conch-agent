@@ -38,6 +38,7 @@ export const BROWSER_TOOLS: ReadonlySet<string> = new Set([
   'browser_read',
   'browser_click',
   'browser_type',
+  'browser_form',
   'browser_press',
   'browser_select',
   'browser_scroll',

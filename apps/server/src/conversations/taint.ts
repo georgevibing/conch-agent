@@ -50,7 +50,7 @@ const linksLabel = (urls: unknown): string => {
 };
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
-  /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|tabs|upload)$/;
+  /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|form|tabs|upload)$/;
 const DOWNLOADS =
   /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
 /**

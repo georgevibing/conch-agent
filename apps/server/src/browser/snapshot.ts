@@ -107,20 +107,56 @@ function framed(title: string, url: string, open: string, body: string, close: s
   ].join('\n');
 }
 
+/** What changed, when it's more than one read: the start, and where the rest is. */
 function capped(body: string): string {
   if (body.length <= MAX_CHARS) return body;
   const cut = body.lastIndexOf('\n', MAX_CHARS);
   const rest = body.slice(cut + 1).split('\n').length;
-  return `${body.slice(0, cut)}\n  … (${rest} more lines: use browser_read with \`find\` to search the page, or browser_scroll)`;
+  return `${body.slice(0, cut)}\n  … (${rest} more lines: browser_read shows the whole page, a part at a time, and \`find\` searches it)`;
+}
+
+/**
+ * A long page in parts of at most `MAX_CHARS`, cut between lines (ADR 0131).
+ * The snapshot covers the whole page whatever is scrolled into view, so
+ * scrolling never reaches what's past the first part: reading the next part does.
+ */
+export function pageParts(body: string, max = MAX_CHARS): string[] {
+  const parts: string[] = [];
+  let rest = body;
+  while (rest.length > max) {
+    const cut = rest.lastIndexOf('\n', max);
+    // One line longer than a part: cut it where it is.
+    const at = cut > 0 ? cut : max;
+    parts.push(rest.slice(0, at));
+    rest = rest.slice(at + (cut > 0 ? 1 : 0));
+  }
+  parts.push(rest);
+  return parts;
+}
+
+/** One part of the page, and where the others are. */
+function partOf(body: string, wanted = 1): string {
+  const parts = pageParts(body);
+  if (parts.length === 1) return body;
+  if (wanted > parts.length)
+    return `(This page has ${parts.length} parts, so there’s no part ${wanted}. browser_read with part=${parts.length} reads the last one.)`;
+  const next =
+    wanted < parts.length
+      ? ` browser_read with part=${wanted + 1} reads the next one, and \`find\` searches the whole page.`
+      : ' That’s the end of the page.';
+  return `${wanted > 1 ? `(Part ${wanted} of ${parts.length}, carrying on from part ${wanted - 1}.)\n` : ''}${parts[wanted - 1] ?? ''}\n  … (Part ${wanted} of ${parts.length} of this page.${next})`;
 }
 
 /** The page as the agent reads it, whole: after opening a page, or when it asks (`browser_read`). */
-export async function readPage(page: Page, options: { find?: string } = {}): Promise<PageText> {
+export async function readPage(
+  page: Page,
+  options: { find?: string; part?: number } = {},
+): Promise<PageText> {
   const url = page.url();
   const title = await page.title().catch(() => '');
   const snapshot = await snapshotOf(page);
   if (snapshot !== LOADING) lastSeen.set(page, { url, lines: snapshot.split('\n') });
-  const body = capped(options.find ? around(snapshot, options.find) : snapshot);
+  const body = partOf(options.find ? around(snapshot, options.find) : snapshot, options.part);
   return { url, title, text: framed(title, url, PAGE_OPEN, body, PAGE_CLOSE) };
 }
 
