@@ -1603,10 +1603,13 @@ function browserDraft(tool: string, input: Input): Draft | undefined {
     }
     case 'browser_read': {
       const find = str(input, 'find');
+      const part = typeof input.part === 'number' && input.part > 1 ? input.part : undefined;
       return b(
         find
           ? words(`Looking for ${quote(find)}`, `Looked for ${quote(find)}`)
-          : words('Reading the page', 'Read the page'),
+          : part
+            ? words(`Reading part ${part} of the page`, `Read part ${part} of the page`)
+            : words('Reading the page', 'Read the page'),
       );
     }
     case 'browser_click': {
@@ -1618,6 +1621,11 @@ function browserDraft(tool: string, input: Input): Draft | undefined {
       return b(words('Clicking on the page', 'Clicked on the page', 'Couldn’t click on the page'));
     case 'browser_type':
       return b(words(`Typing in ${el}`, `Typed in ${el}`, `Couldn’t type in ${el}`));
+    case 'browser_form': {
+      const fields = Array.isArray(input.fields) ? input.fields.length : 0;
+      const what = fields === 1 ? 'a field' : fields > 1 ? `${fields} fields` : 'a form';
+      return b(words(`Filling in ${what}`, `Filled in ${what}`, `Couldn’t fill in ${what}`));
+    }
     case 'browser_press': {
       const key = str(input, 'key');
       return b(say('press', key ? clip(key, 30) : 'a key'));

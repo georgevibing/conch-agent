@@ -2216,6 +2216,25 @@ const TOOLS: Case[] = [
     undefined,
     { done: 'Typed in “Search box”' },
   ],
+  [
+    'browser_form',
+    'browser_form',
+    {
+      fields: [
+        { ref: 'e3', element: 'Name', value: 'Ada' },
+        { ref: 'e4', element: 'Email', value: 'ada@example.com' },
+      ],
+    },
+    undefined,
+    { family: 'browse', doing: 'Filling in 2 fields', done: 'Filled in 2 fields' },
+  ],
+  [
+    'browser_read part',
+    'browser_read',
+    { part: 2 },
+    undefined,
+    { done: 'Read part 2 of the page' },
+  ],
   ['browser_read', 'browser_read', { find: 'price' }, undefined, { done: 'Looked for “price”' }],
   ['browser_screenshot', 'browser_screenshot', {}, undefined, { done: 'Looked at the page' }],
   ['browser_press', 'browser_press', { key: 'Enter' }, undefined, { done: 'Pressed Enter' }],

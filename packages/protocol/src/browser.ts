@@ -268,6 +268,24 @@ export const BrowserTabEntry = z.object({
 });
 export type BrowserTabEntry = z.infer<typeof BrowserTabEntry>;
 
+/**
+ * A page's own dialog (ADR 0131): `alert`, `confirm`, `prompt`, or `leave`
+ * ("Leave site? Changes may not be saved"). Shown in the panel while you drive;
+ * the page is frozen until it's answered. Its words are the site's, drawn as
+ * text only, under the site's name.
+ */
+export const BrowserPageDialog = z.object({
+  id: z.string().max(16),
+  kind: z.enum(['alert', 'confirm', 'prompt', 'leave']),
+  /** What the page says, as it said it (untrusted). */
+  message: z.string().max(1000),
+  /** A `prompt`'s text to start with. */
+  value: z.string().max(1000).optional(),
+  /** Whose dialog: the page's host. */
+  site: z.string().max(253),
+});
+export type BrowserPageDialog = z.infer<typeof BrowserPageDialog>;
+
 export const BrowserTab = z.object({
   conversationId: Id,
   url: z.string(),
@@ -283,6 +301,8 @@ export const BrowserTab = z.object({
   tabs: z.array(BrowserTabEntry).default([]),
   /** Where it runs, when it isn't Conch's own browser here ("In your Chrome"). */
   backend: BrowserBackendKind.optional(),
+  /** The page asks you something (ADR 0131): answer it with `{ type: 'dialog' }`. */
+  dialog: BrowserPageDialog.optional(),
 });
 export type BrowserTab = z.infer<typeof BrowserTab>;
 
@@ -315,6 +335,13 @@ export const BrowserLiveEvent = z.discriminatedUnion('type', [
    * typing, so a phone's keyboard stays up only then.
    */
   z.object({ type: z.literal('typing'), editable: z.boolean() }),
+  /** Find on page (ADR 0131): how many times the words are there, and which one is shown (1-based, 0: none). */
+  z.object({
+    type: z.literal('found'),
+    text: z.string().max(200),
+    matches: z.number().int().min(0),
+    current: z.number().int().min(0),
+  }),
 ]);
 export type BrowserLiveEvent = z.infer<typeof BrowserLiveEvent>;
 
@@ -377,6 +404,22 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
     type: z.literal('tab'),
     action: z.enum(['switch', 'close', 'new', 'others', 'reopen']),
     id: z.string().max(8).optional(),
+  }),
+  /** Answer the page's dialog (`BrowserTab.dialog`): OK (`accept`) or Cancel, with a prompt's text. */
+  z.object({
+    type: z.literal('dialog'),
+    id: z.string().max(16),
+    accept: z.boolean(),
+    text: z.string().max(10_000).optional(),
+  }),
+  /**
+   * Find on page: words to look for (from the top, the first one shown), then
+   * `next` or `previous` to move between them. Empty words: stop finding.
+   */
+  z.object({
+    type: z.literal('find'),
+    text: z.string().max(200),
+    direction: z.enum(['next', 'previous']).optional(),
   }),
 ]);
 export type BrowserLiveCommand = z.infer<typeof BrowserLiveCommand>;
