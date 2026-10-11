@@ -1173,7 +1173,7 @@ export function RepairDemo() {
   );
 }
 
-// ── Your own address: getting its certificate, then answering with a lock ───
+// ── Your own domain: getting its certificate, then answering with a lock ───
 
 const ADDRESS = { ready: 3_200, end: 7_600 } as const;
 

@@ -447,7 +447,7 @@ export function Landing() {
             <Bento.Tile
               span={3}
               index={6}
-              title="Your own address"
+              title="Your own domain"
               text="On a server, one line installs Conch and asks a few questions. It gets its own certificate, and a link you open on your laptop makes it yours."
               picture="Conch gets its own certificate, then answers at conch.yourname.com"
             >
