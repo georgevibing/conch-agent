@@ -49,6 +49,23 @@ describe('offline (ADR 0023)', () => {
     await waitFor(() => expect(screen.queryByText('You’re offline.')).toBeNull());
   });
 
+  it('hears what changed while it wasn’t listening, once it’s connected again', async () => {
+    let online = true;
+    mockFetch({
+      'GET /api/state': () => appState({ network: { online } }),
+      'GET /api/conversations': () => [],
+      'GET /api/providers': () => baseProviders,
+    });
+    renderApp(<ChatView />);
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    expect(screen.queryByText('You’re offline.')).toBeNull();
+
+    // The internet went while the page was away, so no word of it came.
+    online = false;
+    act(() => FakeSocket.last?.onopen?.());
+    expect(await screen.findByText(/Messages wait here, and go by themselves/)).toBeVisible();
+  });
+
   it('a waiting message can be answered now by the model on this computer', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState({ network: { online: false } }),
