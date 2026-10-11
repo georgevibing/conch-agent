@@ -34,6 +34,7 @@ In a question your assistant asks, <kbd>1</kbd> to <kbd>6</kbd> choose an option
 <kbd>shift+esc</kbd> gives the keyboard back to Conch. The browser's own keys work there too:
 
 - <kbd>mod+l</kbd>: the address
+- <kbd>mod+f</kbd>: find on the page; <kbd>Enter</kbd> and <kbd>shift+enter</kbd> for the next and previous
 - <kbd>mod+t</kbd>: a new tab
 - <kbd>mod+w</kbd>: close the tab
 - <kbd>mod+shift+t</kbd>: reopen it

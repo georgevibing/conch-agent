@@ -21,6 +21,10 @@ and see what it saw. Hover a frame to see it bigger.
   the panel's shape, so a bigger panel means bigger text.
 - **Turn off auto-opening:** Settings → Browser → _Show the browser when it starts
   browsing_. It still opens when it needs you.
+- **Stop it:** the square button in the panel's toolbar, while the assistant works. On a phone
+  the panel covers the chat, so Stop is there too.
+- **Find on the page:** <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>F</kbd> in the panel, or
+  **Find on the page** in ⌘K. <kbd>Enter</kbd> goes to the next one.
 
 ## Tabs
 
@@ -53,6 +57,16 @@ to open it, drag something onto something else, press shortcuts like <kbd>Ctrl</
 point at by name — a map, a drawing, a game — an assistant that can see screenshots clicks where
 it sees things. It asks exactly the same questions either way.
 
+- **Long forms in one go.** It fills every field it can in one step and asks once. It never sends
+  the form: pressing the form's button is a step of its own. Passwords and files are left for
+  their own steps.
+- **Long pages.** It reads a long page part by part, to the end.
+- **The page's own questions.** When a site asks "Are you sure?", the assistant hears what it
+  asked and answers it. If the question is about paying, sending or deleting, you're asked
+  first, unless you just said yes to that very thing.
+- **Sites that check for bots.** A "Just a moment…" check that passes by itself is waited out.
+  One that wants a person becomes **Your turn**.
+
 ## Uploading files
 
 It can put a file into a page's **Upload** or **Choose file** box: a file you attached in the
@@ -69,6 +83,10 @@ you're done, press **Hand back** and it carries on from wherever you left things
 
 Pressing <kbd>Shift</kbd> + <kbd>Esc</kbd> leaves the page if your keyboard is inside
 it.
+
+When the page asks you something while you drive ("Remove this item?"), the question shows over
+the page, under the site's name. Answer it there. If you hand back first, the page gets
+**Cancel**.
 
 ## "Your turn"
 
@@ -183,9 +201,11 @@ only an administrator can install; Conch then shows the one command to run.
 
 - Code lives in `apps/server/src/browser/` (gateway), `apps/web/src/features/browser/`
   (app) and `packages/nacre/src/patterns/Browser/` (design system). The decision
-  records are [ADR 0014](./adr/0014-browser.md) and
+  records are [ADR 0014](./adr/0014-browser.md),
   [ADR 0080](./adr/0080-the-browser-does-what-you-do.md) (tabs, uploads, clicking by
-  position, your own Chrome and the cloud).
+  position, your own Chrome and the cloud) and
+  [ADR 0131](./adr/0131-everyday-browsing.md) (the page's own questions, forms in one step,
+  long pages, bot checks, find on page, Stop in the panel).
 - Testing your own app on `localhost`? Turn on **Open local apps** (under Advanced). Conch's own port
   stays blocked either way.
 - `pnpm dev:mock` has a scripted assistant that browses: try _"Open example.com and
