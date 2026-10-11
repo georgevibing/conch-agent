@@ -34,10 +34,15 @@ function phaseOf(
 export function BrowserPanel({
   conversationId,
   visible = true,
+  running,
+  onStop,
   onClose,
 }: {
   conversationId: string;
   visible?: boolean;
+  /** The chat's turn is running: the panel has Stop too. */
+  running?: boolean;
+  onStop?: () => void;
   onClose?: () => void;
 }) {
   const { data: status } = useBrowserStatus();
@@ -45,9 +50,20 @@ export function BrowserPanel({
   const name = useAssistantName();
   const repair = useRepairBrowser();
   const openSettings = useUi((s) => s.openSettings);
+  const findKey = useUi((s) => s.browserFind);
+  const tookFind = useUi((s) => s.tookBrowserFind);
+  // ⌘K asked for find on page: the window opens it on this render, then the ask is done.
+  useEffect(() => {
+    if (findKey !== null) tookFind();
+  }, [findKey, tookFind]);
   const { send } = live;
   const fit = useCallback(
     (size: { width: number; height: number }) => send({ type: 'fit', ...size }),
+    [send],
+  );
+  const find = useCallback(
+    (text: string, direction?: 'next' | 'previous') =>
+      send({ type: 'find', text, ...(direction && { direction }) }),
     [send],
   );
 
@@ -94,6 +110,14 @@ export function BrowserPanel({
       onFit={fit}
       {...(live.typing && { typing: live.typing })}
       onTab={(action, id) => live.send({ type: 'tab', action, ...(id && { id }) })}
+      onDialog={(id, accept, text) =>
+        live.send({ type: 'dialog', id, accept, ...(text !== undefined && { text }) })
+      }
+      onFind={find}
+      found={live.found}
+      findKey={findKey ?? undefined}
+      running={running}
+      onStop={onStop}
       onClose={onClose}
     />
   );

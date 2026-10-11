@@ -78,4 +78,31 @@ describe('the live view', () => {
     expect(result.current.restoring).toBe(false);
     expect(result.current.tab?.url).toBe('https://example.com/');
   });
+
+  it('hears what find on page found, and the page’s question (ADR 0131)', () => {
+    const { result } = renderHook(() => useBrowserLive('conv_1', true));
+    const socket = FakeSocket.all[0];
+    act(() => socket?.open());
+    act(() => socket?.receive({ type: 'found', text: 'pearl', matches: 3, current: 2 }));
+    expect(result.current.found).toEqual({ text: 'pearl', matches: 3, current: 2 });
+    const dialog = { id: 'd1', kind: 'confirm', message: 'Remove it?', site: 'shop.example' };
+    act(() =>
+      socket?.receive({
+        type: 'tab',
+        tab: {
+          conversationId: 'conv_1',
+          url: 'https://shop.example/',
+          title: 'Shop',
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          control: 'user',
+          viewport: { width: 960, height: 1440 },
+          tabs: [],
+          dialog,
+        },
+      }),
+    );
+    expect(result.current.tab?.dialog).toEqual(dialog);
+  });
 });

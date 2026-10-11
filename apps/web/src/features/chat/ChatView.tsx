@@ -1168,7 +1168,11 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   // Wrapped the same before and after a new chat gets its id, so the transcript
   // and the composer stay where they are and nothing in them plays twice.
   return (
-    <BrowserDock conversationId={conversationId} view={view}>
+    <BrowserDock
+      conversationId={conversationId}
+      view={view}
+      onStop={() => conversationId && live.interrupt(conversationId)}
+    >
       <ArtifactDock conversationId={conversationId} view={view}>
         {chat}
       </ArtifactDock>

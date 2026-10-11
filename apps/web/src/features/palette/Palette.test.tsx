@@ -874,6 +874,27 @@ describe('Palette search', () => {
     act(() => useUi.setState({ chatSpendOpen: null }));
   });
 
+  it('finds words on the browser’s page by name (ADR 0131)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'find on the page');
+    await user.click(await screen.findByRole('option', { name: /Find on the page/ }));
+    expect(useUi.getState().browserFor).toBe('c7');
+    expect(useUi.getState().browserFind).not.toBeNull();
+    act(() => useUi.setState({ browserFor: null, browserFind: null }));
+  });
+
   it('summarises the start of the open chat by name, as /compact does (ADR 0055)', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({

@@ -92,6 +92,7 @@ import {
   Compass,
   Sunrise,
   Lightbulb,
+  TextSearch,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -1440,6 +1441,14 @@ export function useFindables(query: string, conversationId: string | undefined):
             keywords: 'web browse page watch take over',
             icon: <Globe />,
             run: () => openBrowser(conversationId),
+          },
+          // Find on the browser's page (ADR 0131): ⌘F in the panel does the same.
+          {
+            id: 'browser-find',
+            label: 'Find on the page',
+            keywords: 'find search look for words text in the browser page website ctrl f',
+            icon: <TextSearch />,
+            run: () => useUi.getState().findInBrowser(conversationId),
           },
           // What this chat spent, and a limit of its own (ADR 0079).
           {

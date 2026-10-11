@@ -25,6 +25,8 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
   const [error, setError] = useState<string>();
   /** After your last click: whether the page's focus takes typing (`key` changes each time). */
   const [typing, setTyping] = useState<{ editable: boolean; key: number }>();
+  /** What find on page found last (ADR 0131). */
+  const [found, setFound] = useState<{ text: string; matches: number; current: number }>();
   /** The panel's last size: said again on every (re)connect, so the page always has its shape. */
   const fitted = useRef<Extract<BrowserLiveCommand, { type: 'fit' }> | undefined>(undefined);
   const socket = useRef<WebSocket | null>(null);
@@ -109,6 +111,9 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
         } else if (event.data.type === 'action') {
           actions.current += 1;
           setAction({ ...event.data, key: actions.current });
+        } else if (event.data.type === 'found') {
+          const { text, matches, current } = event.data;
+          setFound({ text, matches, current });
         } else setError(event.data.message);
       };
       ws.onclose = (event) => {
@@ -154,6 +159,7 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     heard,
     error,
     typing,
+    found,
     send,
     control,
     screenRef,

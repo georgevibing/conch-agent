@@ -150,6 +150,12 @@ interface UiState {
   /** The panel's width in pixels (remembered). */
   browserWidth: number;
   openBrowser(conversationId: string): void;
+  /** Find on the browser's page was asked for (ADR 0131), from ⌘K: a new number each time, till the panel takes it. */
+  browserFind: number | null;
+  /** Open a chat's browser with find on its page ready to type. */
+  findInBrowser(conversationId: string): void;
+  /** The panel opened find: the ask is done. */
+  tookBrowserFind(): void;
   closeBrowser(): void;
   setBrowserWidth(width: number): void;
   /** Something the assistant made, open beside a chat (ADR 0034). `version`: a past one. */
@@ -340,6 +346,16 @@ export const useUi = create<UiState>((set) => ({
   // One panel beside the chat at a time: the browser or something made.
   openBrowser: (browserFor) =>
     set({ browserFor, artifactOpen: null, appPageOpen: null, paletteOpen: false }),
+  browserFind: null,
+  findInBrowser: (browserFor) =>
+    set({
+      browserFor,
+      browserFind: Date.now(),
+      artifactOpen: null,
+      appPageOpen: null,
+      paletteOpen: false,
+    }),
+  tookBrowserFind: () => set({ browserFind: null }),
   closeBrowser: () =>
     set((s) =>
       s.browserFor

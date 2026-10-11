@@ -35,12 +35,16 @@ function browsing(view: ConversationView) {
 export function BrowserDock({
   conversationId,
   view,
+  onStop,
   children,
 }: {
   conversationId: string | undefined;
   view: ConversationView;
+  /** Stop the chat's turn: the panel has its own Stop (on a phone it covers the chat's). */
+  onStop?: () => void;
   children: ReactNode;
 }) {
+  const running = view.status === 'running' || view.status === 'awaiting-permission';
   const open = useUi((s) => conversationId !== undefined && s.browserFor === conversationId);
   const openBrowser = useUi((s) => s.openBrowser);
   const closeBrowser = useUi((s) => s.closeBrowser);
@@ -128,7 +132,12 @@ export function BrowserDock({
           >
             <Sheet.Title className={styles.srOnly}>Browser</Sheet.Title>
             {conversationId && (
-              <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+              <BrowserPanel
+                conversationId={conversationId}
+                running={running}
+                onStop={onStop}
+                onClose={closeBrowser}
+              />
             )}
           </Sheet.Content>
         </Sheet.Root>
@@ -151,7 +160,12 @@ export function BrowserDock({
         />
         <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Browser panel">
           {conversationId && (
-            <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+            <BrowserPanel
+              conversationId={conversationId}
+              running={running}
+              onStop={onStop}
+              onClose={closeBrowser}
+            />
           )}
         </aside>
       </PanelPresence>
