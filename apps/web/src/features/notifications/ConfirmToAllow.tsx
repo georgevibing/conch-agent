@@ -23,7 +23,7 @@ export function ConfirmToAllow() {
   useEffect(() => {
     if (!stepUp || asked.current === stepUp.permissionId) return;
     asked.current = stepUp.permissionId;
-    const { conversationId, permissionId, decision, edit, message } = stepUp;
+    const { conversationId, permissionId, decision, edit, choice, message } = stepUp;
     let first = true;
     void guard(async () => {
       // The gateway already said it needs you to confirm: ask, then send it again.
@@ -31,7 +31,7 @@ export function ConfirmToAllow() {
         first = false;
         throw new ApiError(403, 'verify-required', message);
       }
-      live.respond(conversationId, permissionId, decision, edit);
+      live.respond(conversationId, permissionId, decision, edit, choice);
     })
       .catch(() => undefined)
       .finally(() => {

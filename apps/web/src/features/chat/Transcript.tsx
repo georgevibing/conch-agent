@@ -95,6 +95,8 @@ export interface TranscriptProps {
     permissionId: string,
     decision: 'allow' | 'allow-always' | 'deny',
     edit?: MailEdit,
+    /** The account picked on a browser fill (ADR 0130). */
+    choice?: string,
   ) => void;
   onRetry: () => void;
   /** What the chat can offer about the last failed turn (sign in, another provider…). */
@@ -841,7 +843,9 @@ export const Transcript = memo(function Transcript({
           conversationId={conversationId}
           item={block.item}
           name={name}
-          onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+          onRespond={(d, choice) =>
+            onRespond((block.item as { id: string }).id, d, undefined, choice)
+          }
         />
       )}
       {block.item?.kind === 'permission' && block.item.vault && (

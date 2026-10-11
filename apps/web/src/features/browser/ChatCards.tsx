@@ -1,5 +1,5 @@
 import { BrowserApproval, BrowserHandoff, BrowserTrail, toast } from '@conch/nacre';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useUi } from '../../app/ui';
 import type { TranscriptItem } from '../../live/reducer';
@@ -75,9 +75,12 @@ export function BrowserApprovalItem({
   conversationId: string;
   item: Of<'permission'>;
   name: string;
-  onRespond: (decision: 'allow' | 'allow-always' | 'deny') => void;
+  /** `choice`: the account pressed on a fill with several (ADR 0130). */
+  onRespond: (decision: 'allow' | 'allow-always' | 'deny', choice?: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // Pressing an account is the answer: the choice goes with it.
+  const chosen = useRef<string | undefined>(undefined);
   const detail = item.browser;
   if (!detail) return null;
   return (
@@ -91,10 +94,16 @@ export function BrowserApprovalItem({
       decision={item.decision}
       guard={item.caution ?? item.taint}
       ownChrome={detail.ownChrome}
+      fill={detail.fill}
+      accounts={detail.accounts}
+      savedFor={detail.savedFor}
       busy={busy}
+      onChoose={(id) => {
+        chosen.current = id;
+      }}
       onDecide={(decision) => {
         setBusy(true);
-        onRespond(decision);
+        onRespond(decision, decision === 'deny' ? undefined : chosen.current);
       }}
     />
   );

@@ -24,6 +24,8 @@ export interface StepUp {
   permissionId: string;
   decision: 'allow' | 'allow-always';
   edit?: MailEdit;
+  /** One of the question's choices (a browser fill's account, ADR 0130). */
+  choice?: string;
   /** The gateway's words: what it needs, and why. */
   message: string;
 }

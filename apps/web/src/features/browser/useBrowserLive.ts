@@ -1,4 +1,9 @@
-import { BrowserLiveEvent, type BrowserLiveCommand, type BrowserTab } from '@conch/protocol';
+import {
+  BrowserLiveEvent,
+  type BrowserFillOffer,
+  type BrowserLiveCommand,
+  type BrowserTab,
+} from '@conch/protocol';
 import type { BrowserWindowAction } from '@conch/nacre';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -27,6 +32,9 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
   const [typing, setTyping] = useState<{ editable: boolean; key: number }>();
   /** What find on page found last (ADR 0131). */
   const [found, setFound] = useState<{ text: string; matches: number; current: number }>();
+  /** The box you're in can be filled from Passwords (ADR 0130): what it offers. */
+  const [fill, setFill] = useState<BrowserFillOffer>();
+  const shown = useRef<BrowserTab | null>(null);
   /** The panel's last size: said again on every (re)connect, so the page always has its shape. */
   const fitted = useRef<Extract<BrowserLiveCommand, { type: 'fit' }> | undefined>(undefined);
   const socket = useRef<WebSocket | null>(null);
@@ -102,12 +110,19 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
         const event = BrowserLiveEvent.safeParse(json);
         if (!event.success) return;
         if (event.data.type === 'tab') {
-          setTab(event.data.tab);
+          const next = event.data.tab;
+          // Another page, or the wheel handed back: the offer was for the box you left.
+          if (!next || next.url !== shown.current?.url || next.control !== 'user')
+            setFill(undefined);
+          shown.current = next;
+          setTab(next);
           setHeard(true);
           setRestoring(Boolean(event.data.restoring) && !event.data.tab);
         } else if (event.data.type === 'typing') {
           const { editable } = event.data;
           setTyping((t) => ({ editable, key: (t?.key ?? 0) + 1 }));
+          // In a box Passwords can fill: what it offers there, until you click elsewhere.
+          setFill(event.data.fill);
         } else if (event.data.type === 'action') {
           actions.current += 1;
           setAction({ ...event.data, key: actions.current });
@@ -135,6 +150,8 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
       for (const url of urls.current) URL.revokeObjectURL(url);
       urls.current = [];
       setTab(null);
+      shown.current = null;
+      setFill(undefined);
       setRestoring(false);
       setHeard(false);
     };
@@ -160,6 +177,9 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     error,
     typing,
     found,
+    /** What Passwords can fill into the box you're in (ADR 0130). */
+    fill,
+    clearFill: () => setFill(undefined),
     send,
     control,
     screenRef,

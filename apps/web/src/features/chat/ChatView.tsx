@@ -832,8 +832,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
 
   // The transcript draws again only when the chat does, not with every keystroke here.
   const onRespond = useStable(
-    (permissionId: string, decision: 'allow' | 'allow-always' | 'deny', edit?: MailEdit) =>
-      conversationId && live.respond(conversationId, permissionId, decision, edit),
+    (
+      permissionId: string,
+      decision: 'allow' | 'allow-always' | 'deny',
+      edit?: MailEdit,
+      choice?: string,
+    ) => conversationId && live.respond(conversationId, permissionId, decision, edit, choice),
   );
   const onRetry = useStable(() => {
     const last = lastUserMessage(view);

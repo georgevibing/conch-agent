@@ -1,6 +1,7 @@
 import type { BrowserStatus } from '@conch/protocol';
 import { BrowserWindow, toast, type BrowserWindowPhase } from '@conch/nacre';
 import { useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
 import { useUi } from '../../app/ui';
@@ -49,6 +50,7 @@ export function BrowserPanel({
   const live = useBrowserLive(conversationId, visible);
   const name = useAssistantName();
   const repair = useRepairBrowser();
+  const navigate = useNavigate();
   const openSettings = useUi((s) => s.openSettings);
   const findKey = useUi((s) => s.browserFind);
   const tookFind = useUi((s) => s.tookBrowserFind);
@@ -119,6 +121,22 @@ export function BrowserPanel({
       running={running}
       onStop={onStop}
       onClose={onClose}
+      // In a sign-in, sign-up, code or card box: fill it from Passwords in one press (ADR 0130).
+      {...(live.fill && {
+        fill: {
+          offer: live.fill,
+          onFill: (item: string) => {
+            live.send({ type: 'fill', item });
+            live.clearFill();
+          },
+          onGenerate: () => {
+            live.send({ type: 'fill', generate: true });
+            live.clearFill();
+          },
+          onUnlock: () => void navigate('/passwords'),
+          onDismiss: live.clearFill,
+        },
+      })}
     />
   );
 }

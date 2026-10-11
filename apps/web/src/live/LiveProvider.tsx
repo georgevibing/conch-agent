@@ -55,12 +55,16 @@ interface LiveApi {
   configure(conversationId: string, options: TurnOptions): void;
   /** Stop the running reply. A new chat's (no id yet) stops as soon as it has one. */
   interrupt(conversationId: string | undefined): void;
-  /** Answer a question; `edit` is the email as the person changed it on an `editable` card. */
+  /**
+   * Answer a question; `edit` is the email as the person changed it on an
+   * `editable` card, `choice` the account picked on a browser fill (ADR 0130).
+   */
   respond(
     conversationId: string,
     permissionId: string,
     decision: 'allow' | 'allow-always' | 'deny',
     edit?: MailEdit,
+    choice?: string,
   ): void;
   watch(conversationId: string): () => void;
 }
@@ -68,7 +72,10 @@ interface LiveApi {
 const LiveContext = createContext<LiveApi | null>(null);
 
 /** Allows on their way, by question: sent again once you confirm it's you (ADR 0108). */
-const allowsSent = new Map<string, { decision: 'allow' | 'allow-always'; edit?: MailEdit }>();
+const allowsSent = new Map<
+  string,
+  { decision: 'allow' | 'allow-always'; edit?: MailEdit; choice?: string }
+>();
 
 function upsertSummary(list: ConversationSummary[] | undefined, next: ConversationSummary) {
   const rest = (list ?? []).filter((c) => c.id !== next.id);
@@ -453,10 +460,15 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           stopWhenCreated.current.add(message.clientMessageId);
         startedNew.current = [];
       },
-      respond(conversationId, permissionId, decision, edit) {
+      respond(conversationId, permissionId, decision, edit, choice) {
         useLiveStore.getState().decide(conversationId, permissionId, decision);
         if (decision === 'deny') allowsSent.delete(permissionId);
-        else allowsSent.set(permissionId, { decision, ...(edit && { edit }) });
+        else
+          allowsSent.set(permissionId, {
+            decision,
+            ...(edit && { edit }),
+            ...(choice && { choice }),
+          });
         if (allowsSent.size > 50) allowsSent.delete(allowsSent.keys().next().value ?? '');
         socketRef.current?.send({
           type: 'permission.respond',
@@ -464,6 +476,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           permissionId,
           decision,
           ...(edit && { edit }),
+          ...(choice && { choice }),
         });
       },
       watch(conversationId) {
