@@ -844,7 +844,9 @@ export const Transcript = memo(function Transcript({
           item={block.item}
           name={name}
           onRespond={(d, choice) =>
-            onRespond((block.item as { id: string }).id, d, undefined, choice)
+            choice
+              ? onRespond((block.item as { id: string }).id, d, undefined, choice)
+              : onRespond((block.item as { id: string }).id, d)
           }
         />
       )}

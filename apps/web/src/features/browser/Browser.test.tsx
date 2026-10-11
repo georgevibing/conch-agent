@@ -159,6 +159,35 @@ describe('browser cards in the transcript', () => {
     expect(onRespond).toHaveBeenCalledWith('p1', 'allow-always');
   });
 
+  it('answers a sign-in card with the account you tapped (ADR 0130)', async () => {
+    const onRespond = vi.fn();
+    const view = reduceAll(
+      log({
+        type: 'permission.requested',
+        permissionId: 'p2',
+        toolName: 'browser_fill',
+        input: {},
+        summary: 'sign in on example.com',
+        browser: {
+          kind: 'fill',
+          fill: 'sign-in',
+          site: 'example.com',
+          url: 'https://example.com/login',
+          title: 'Sign in',
+          action: 'Sign in',
+          accounts: [
+            { id: 'pw_a', title: 'Example', account: 'ada@home.example' },
+            { id: 'pw_b', title: 'Example (work)', account: 'ada@work.example' },
+          ],
+        },
+      }),
+    );
+    show(view, onRespond);
+    expect(screen.getByText('Sign in on example.com?')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /ada@work.example/ }));
+    expect(onRespond).toHaveBeenCalledWith('p2', 'allow', undefined, 'pw_b');
+  });
+
   it('hands the browser back from the transcript with “I’m done”', async () => {
     const view = reduceAll(
       log({
