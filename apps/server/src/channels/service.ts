@@ -3555,6 +3555,11 @@ export class ChannelService {
       }));
   }
 
+  /** Whether a conversation wrote to you in any chat app (`message_user`). */
+  messaged(conversationId: string | undefined): boolean {
+    return Boolean(conversationId && this.#messaged.get(conversationId)?.size);
+  }
+
   /**
    * Write to you in one of your chat apps (the assistant's `message_user`):
    * always your own private chat with Conch there, never anyone else. `app`
@@ -3714,13 +3719,9 @@ export class ChannelService {
       if (!live || !owner) continue;
       const chat = await live.connection.directChat(owner.id).catch(() => undefined);
       if (!chat) continue;
-      // The run already wrote to you here itself: its result needn't be said again.
-      if (
-        run.status === 'succeeded' &&
-        run.conversationId &&
-        this.#messaged.get(run.conversationId)?.has(channel.id)
-      )
-        continue;
+      // The run already wrote to you itself, where its instructions said: its
+      // result needn't be said again, there or in your other apps.
+      if (run.status === 'succeeded' && this.messaged(run.conversationId)) continue;
       if (run.status === 'needs-you' && run.conversationId && pending.length) {
         for (const question of pending)
           await this.#ask(

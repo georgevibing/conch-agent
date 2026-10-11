@@ -1468,6 +1468,7 @@ export class Services {
       spend: this.routineSpend,
       when: this.#when(config, heal),
       timezone: async () => (await this.settings.get()).preferences.timezone,
+      messaged: (conversationId) => this.channels.messaged(conversationId),
     });
     this.doctor.register(routinesWatchCheck(this.routines));
     // The check-in (ADR 0107): the When-routines' own sources, routines' spending, no model until something's new.

@@ -162,7 +162,13 @@ export function previousRun(
     default: {
       try {
         const cron = new Cron(toCron(schedule) ?? '', { timezone, paused: true });
-        return cron.previousRuns(1, new Date(now))[0]?.getTime();
+        // croner leaves out the whole current second, and the scheduler wakes a
+        // few ms after a slot: asked from the next second, the slot itself counts.
+        const [at] = cron
+          .previousRuns(2, new Date(Math.floor(now / 1000) * 1000 + 1000))
+          .map((d) => d.getTime())
+          .filter((t) => t <= now);
+        return at;
       } catch {
         return undefined;
       }

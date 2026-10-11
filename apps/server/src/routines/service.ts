@@ -101,6 +101,8 @@ export class RoutineService {
       spend?: RoutineSpend;
       /** The person's timezone (their device's), for routines the assistant makes. */
       timezone?: () => Promise<string | undefined>;
+      /** Whether a run's conversation wrote to you in a chat app (`message_user`). */
+      messaged?: (conversationId: string) => boolean;
     },
   ) {
     deps.when?.bind({
@@ -690,7 +692,11 @@ export class RoutineService {
       });
       if (firstDue === undefined || firstDue > now) continue;
       // …and the most recent one, which is what we run (a single catch-up, never a backlog).
-      const due = previousRun(routine.schedule, routine.timezone, now, routine.anchor) ?? firstDue;
+      // Never earlier than the first unhandled one: going back would run it again.
+      const due = Math.max(
+        firstDue,
+        previousRun(routine.schedule, routine.timezone, now, routine.anchor) ?? firstDue,
+      );
       if (this.deps.allowed && !this.deps.allowed()) {
         if (routine.resourceDeferredFor === undefined)
           await this.deps.store.save({ ...routine, resourceDeferredFor: due });
@@ -845,6 +851,7 @@ export class RoutineService {
     this.#running.set(routine.id, run.id);
     let reported:
       { status: 'done' | 'nothing-to-do' | 'needs-attention'; summary: string } | undefined;
+    let nudged = false;
 
     const report: HostTool<{
       status: z.ZodEnum<{
@@ -861,8 +868,21 @@ export class RoutineService {
         status: z.enum(['done', 'nothing-to-do', 'needs-attention']),
         summary: z.string().min(1).max(200),
       },
-      async run(args) {
-        reported = args;
+      run: async (args) => {
+        // Told to write to you in a chat app, it says it did: hold it to that, once.
+        // (A run carried on after a restart may have sent before it: not known here.)
+        const unsent =
+          !resume &&
+          args.status === 'done' &&
+          routine.prompt.includes('message_user') &&
+          conversationId !== undefined &&
+          this.deps.messaged !== undefined &&
+          !this.deps.messaged(conversationId);
+        if (unsent && !nudged) {
+          nudged = true;
+          return 'Not recorded: the instructions say to send the result with message_user, and nothing has been sent in this run. Send it with message_user now (the message itself, as they should read it), then call report_outcome again. If it can’t be sent, report "needs-attention" and say why.';
+        }
+        reported = unsent ? { status: 'needs-attention', summary: NOT_SENT } : args;
         return 'Recorded.';
       },
     };
@@ -955,18 +975,24 @@ export class RoutineService {
             ? { status: 'stopped', outcome: 'Stopped before it finished.' }
             : turn.outcome === 'error'
               ? { status: 'failed', error: turn.error ?? 'Something went wrong.' }
-              : {
-                  status:
-                    reported?.status === 'nothing-to-do'
-                      ? 'nothing-to-do'
-                      : reported?.status === 'needs-attention'
-                        ? 'needs-you'
-                        : 'succeeded',
-                  outcome: tidySentence(
-                    reported?.summary ?? firstLine(turn.finalText) ?? 'Done.',
-                    160,
-                  ),
-                };
+              : nudged && !reported
+                ? {
+                    // Held to sending, it still didn't: never "done" for a message nobody got.
+                    status: 'needs-you',
+                    outcome: NOT_SENT,
+                  }
+                : {
+                    status:
+                      reported?.status === 'nothing-to-do'
+                        ? 'nothing-to-do'
+                        : reported?.status === 'needs-attention'
+                          ? 'needs-you'
+                          : 'succeeded',
+                    outcome: tidySentence(
+                      reported?.summary ?? firstLine(turn.finalText) ?? 'Done.',
+                      160,
+                    ),
+                  };
       await update({
         ...final,
         finishedAt: this.#now,
@@ -1391,6 +1417,9 @@ export class RoutineService {
     return routine;
   }
 }
+
+/** A run told to write to you in a chat app that ended without doing it. */
+const NOT_SENT = 'It didn’t send the message its instructions asked for.';
 
 /** The system prompt addition for an unattended run. */
 function runBrief(

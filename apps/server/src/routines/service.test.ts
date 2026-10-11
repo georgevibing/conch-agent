@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { nextRuns } from './schedule';
 import { localTimezone } from './service';
 import type { RoutineStore } from './store';
 
@@ -220,6 +221,48 @@ describe('RoutineService', () => {
     } finally {
       Date.now = realNow;
     }
+  });
+
+  it('runs a calendar routine once when it wakes just after its time', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'weekly', days: ['sun'], time: '12:00' } },
+      { createdBy: 'user' },
+    );
+    const [slot = 0] = nextRuns(r.schedule, base.timezone, { from: Date.now() });
+    const realNow = Date.now;
+    try {
+      // The timer lands a few ms after the slot, inside the same second.
+      Date.now = () => slot + 50;
+      await s.routines.checkNow();
+      const run = await settled(s, r.id);
+      expect(run).toMatchObject({ trigger: 'schedule', scheduledFor: slot });
+      // The next wake-up a little later must not run it again for the week before.
+      Date.now = () => slot + 100_000;
+      await s.routines.checkNow();
+      Date.now = () => slot + 3 * HOUR;
+      await s.routines.checkNow();
+      expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('won’t call a run done when it was told to message you and didn’t', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      {
+        ...base,
+        prompt: 'Summarise my day. Send it to the user with message_user (Telegram).',
+        schedule: { type: 'daily', time: '08:00' },
+      },
+      { createdBy: 'user' },
+    );
+    await s.routines.runNow(r.id);
+    expect(await settled(s, r.id)).toMatchObject({
+      status: 'needs-you',
+      outcome: 'It didn’t send the message its instructions asked for.',
+    });
   });
 
   it('records missed runs, or catches up once, after Conch was off', async () => {

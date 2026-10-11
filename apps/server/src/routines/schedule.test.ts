@@ -99,4 +99,15 @@ suite('schedules', () => {
     expect(onceAt('2030-01-15T09:00:00', TZ)).toBe(Date.parse('2030-01-15T08:00:00Z')); // CET
     expect(onceAt('2030-01-15T09:00:00Z', TZ)).toBe(Date.parse('2030-01-15T09:00:00Z'));
   });
+
+  it('counts a calendar slot as the previous run from the moment it comes', () => {
+    const weekly = { type: 'weekly', days: ['sun'], time: '12:00' } as const;
+    const slot = Date.parse('2026-10-11T10:00:00Z'); // Sunday 12:00 CEST
+    const before = slot - 7 * 86_400_000;
+    // The scheduler wakes a few ms after the slot: that's still this week's.
+    for (const late of [0, 50, 403, 999, 1000, 60_000])
+      expect(previousRun(weekly, TZ, slot + late)).toBe(slot);
+    expect(previousRun(weekly, TZ, slot - 1)).toBe(before);
+    expect(previousRun({ type: 'daily', time: '12:00' }, TZ, slot + 50)).toBe(slot);
+  });
 });
