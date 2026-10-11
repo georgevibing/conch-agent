@@ -278,12 +278,18 @@ describe('switching models when asked (ADR 0132)', () => {
     await idle(manager, chat.id);
     const context = await manager.switchContext(chat.id);
     expect(context.current).toEqual({ engine: 'claude-code', model: 'sonnet' });
-    expect(context.previous).toEqual({ engine: 'codex-agent', model: 'gpt-5.5' });
-    const back = await manager.switchModel(chat.id, context.previous ?? { engine: 'codex-agent' }, {
-      by: 'person',
-      label: 'GPT-5.5',
-      message: 'Back to GPT-5.5 on your Codex plan',
-    });
+    // It began on the default with no model of its own: the provider's default is the one before.
+    expect(context.previous).toEqual({ engine: 'codex-agent' });
+    // Switch back names the model (`candidateOf` reads the provider's default as its lead).
+    const back = await manager.switchModel(
+      chat.id,
+      { engine: 'codex-agent', model: 'gpt-5.5' },
+      {
+        by: 'person',
+        label: 'GPT-5.5',
+        message: 'Back to GPT-5.5 on your Codex plan',
+      },
+    );
     expect(back).toMatchObject({ switched: true, carrying: false });
     expect((await manager.detail(chat.id)).conversation.options).toMatchObject({
       engine: 'codex-agent',
