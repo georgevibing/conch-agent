@@ -1729,6 +1729,7 @@ export async function buildApp(services: Services) {
               command.permissionId,
               command.decision,
               command.edit,
+              command.choice,
             );
           }
         }

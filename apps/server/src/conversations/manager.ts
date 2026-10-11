@@ -209,6 +209,8 @@ interface PendingPermission {
   everywhere?: boolean;
   /** The question's own check of a change the person made before allowing it (`AskRequest.edit`). */
   edit?: (proposed: MailEdit) => void;
+  /** The question takes one of its choices (`AskRequest.choose`). */
+  choose?: (choice: string) => void;
 }
 
 /**
@@ -300,6 +302,13 @@ export interface AskRequest {
    * called when nobody was asked (Full trust), so the call goes as it was.
    */
   edit?: (proposed: MailEdit) => void;
+  /**
+   * The person picked one of the question's choices (a browser fill's
+   * accounts, ADR 0130). Called before the answer is given: it keeps the
+   * choice, or throws for one it didn't offer, and then the answer is no.
+   * Not called when the person allowed without picking (a chat app's Allow).
+   */
+  choose?: (choice: string) => void;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -2248,8 +2257,14 @@ export class ConversationManager {
     await this.#persist(live);
   }
 
-  async respond(id: string, permissionId: string, decision: PermissionDecision, edit?: MailEdit) {
-    await this.#resolvePermission(await this.#get(id), permissionId, decision, edit);
+  async respond(
+    id: string,
+    permissionId: string,
+    decision: PermissionDecision,
+    edit?: MailEdit,
+    choice?: string,
+  ) {
+    await this.#resolvePermission(await this.#get(id), permissionId, decision, edit, choice);
   }
 
   async #resolvePermission(
@@ -2257,6 +2272,7 @@ export class ConversationManager {
     permissionId: string,
     asked: PermissionDecision,
     edit?: MailEdit,
+    choice?: string,
   ) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
@@ -2270,6 +2286,15 @@ export class ConversationManager {
       try {
         if (!pending.edit) throw new Error('This question can’t be changed.');
         pending.edit(edit);
+      } catch {
+        decision = 'deny';
+      }
+    }
+    // Allowed with one of its choices (ADR 0130): the question takes it, or it's a no.
+    if (choice && decision !== 'deny') {
+      try {
+        if (!pending.choose) throw new Error('This question has no choices.');
+        pending.choose(choice);
       } catch {
         decision = 'deny';
       }
@@ -3121,6 +3146,7 @@ export class ConversationManager {
           ...(everywhere && { everywhere: true }),
           ...(request.explicit && { explicit: true }),
           ...(request.edit && { edit: request.edit }),
+          ...(request.choose && { choose: request.choose }),
         });
         const expire = (waited?: number) => {
           clearTimeout(timer);

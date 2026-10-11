@@ -4,13 +4,14 @@ import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ConversationEventInput, PermissionMode } from '@conch/protocol';
+import type { BrowserLiveEvent, ConversationEventInput, PermissionMode } from '@conch/protocol';
 import { chromium } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { AskRequest, ToolContext } from '../conversations/manager';
 import type { Engine, HostTool, PermissionDecision } from '../engines/types';
 import { hostToolText } from '../engines/types';
+import type { VaultService as VaultServiceType } from '../vault/service';
 import { findBrowsers } from './locate';
 import { BrowserService } from './service';
 
@@ -27,6 +28,18 @@ const pages: Record<string, string> = {
   '/login': `<title>Sign in</title><form><label>Email <input name=email></label>
     <label>Password <input type=password name=password value="hunter2"></label>
     <button type=button>Sign in</button></form>`,
+  '/step1': `<title>Sign in</title><form><label>Email or phone <input name=identifier autocomplete=username></label>
+    <button type=button onclick="location.href='/step2'">Next</button></form>`,
+  '/step2': `<title>Welcome</title><form><label>Enter your password <input type=password name=pw autocomplete=current-password></label>
+    <button type=button>Sign in</button></form>`,
+  '/otp': `<title>2-Step Verification</title><form><label>Enter the code <input name=otp autocomplete=one-time-code inputmode=numeric></label>
+    <button type=button>Verify</button></form>`,
+  '/signup': `<title>Join</title><form><label>Email <input type=email name=email></label>
+    <label>Password <input type=password name=new></label><label>Confirm password <input type=password name=confirm></label>
+    <button type=button>Create account</button></form>`,
+  '/change': `<title>Security</title><form><label>Current password <input type=password name=cur autocomplete=current-password></label>
+    <label>New password <input type=password name=n1 autocomplete=new-password></label>
+    <label>Confirm new password <input type=password name=n2 autocomplete=new-password></label><button type=button>Save</button></form>`,
   '/cookies': `<title>News</title><div id="onetrust-banner-sdk" class="cookie-consent">We use cookies
     <button id="onetrust-reject-all-handler" onclick="this.parentElement.remove();document.title='Rejected'">Reject all</button>
     <button id="onetrust-accept-btn-handler">Accept all</button></div><h1>Today’s news</h1>`,
@@ -39,6 +52,11 @@ let browser: BrowserService;
 
 beforeAll(async () => {
   site = createServer((req, res) => {
+    // A sign-in box from another origin (localhost, not 127.0.0.1) inside the page.
+    const port = (site.address() as { port: number }).port;
+    if (req.url === '/framed')
+      pages[req.url] = `<title>Shop</title><h1>Shop</h1>
+      <iframe title="Sign in" src="http://localhost:${port}/login" width=600 height=300></iframe>`;
     const body = pages[req.url ?? ''] ?? '<title>Not found</title><h1>Nope</h1>';
     res.writeHead(pages[req.url ?? ''] ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
     res.end(`<!doctype html>${body}`);
@@ -64,8 +82,11 @@ afterAll(async () => {
   await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
 });
 
+/** An answer to a card: a decision, or the person's press (which may pick one of its choices). */
+type Answer = PermissionDecision | ((request: AskRequest) => PermissionDecision);
+
 function harness(
-  answers: PermissionDecision[] = [],
+  answers: Answer[] = [],
   mode: PermissionMode = 'default',
   conversationId = 'conv_test',
 ) {
@@ -78,7 +99,8 @@ function harness(
     permissionMode: mode,
     ask: (request) => {
       asked.push(request);
-      return Promise.resolve(answers.shift() ?? 'deny');
+      const answer = answers.shift() ?? 'deny';
+      return Promise.resolve(typeof answer === 'function' ? answer(request) : answer);
     },
     signal: new AbortController().signal,
   };
@@ -220,7 +242,8 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
         });
         expect(no.asked[0]?.browser).toMatchObject({
           kind: 'fill',
-          action: 'Fill the password for “Test site”',
+          fill: 'sign-in',
+          action: 'Sign in as ada@example.com',
         });
         expect(declined).toMatch(/doesn’t want Conch to fill that/);
         expect(
@@ -238,9 +261,8 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
           element: 'Password',
           text: '',
         });
-        expect(filled).toContain(
-          'Conch filled the password from the user’s saved item “Test site”',
-        );
+        expect(filled).toContain('Conch filled the password (and the username)');
+        expect(filled).toContain('from the user’s saved item “Test site”');
         expect(filled).not.toContain('river-otter');
         const page = browser.tabIfOpen('conv_fill_yes')?.page;
         expect(await page?.locator('input[type=password]').inputValue()).toBe(
@@ -286,6 +308,329 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
       }
     },
   );
+
+  describe('Passwords in the browser (ADR 0130)', () => {
+    const TOTP = 'JBSWY3DPEHPK3PXP';
+    async function withVault<T>(work: (vault: VaultServiceType) => Promise<T>): Promise<T> {
+      const { VaultService } = await import('../vault/service');
+      const vault = new VaultService({
+        home: await mkdtemp(join(tmpdir(), 'conch-fill-')),
+        keystore: 'file',
+      });
+      browser.passwords = vault;
+      try {
+        return await work(vault);
+      } finally {
+        browser.passwords = undefined;
+      }
+    }
+    const login = (title: string, user: string, password: string, more: object = {}) => ({
+      type: 'login' as const,
+      title,
+      fields: [
+        { label: 'Username', kind: 'text' as const, role: 'username' as const, value: user },
+        { label: 'Password', kind: 'secret' as const, role: 'password' as const, value: password },
+        ...('totp' in more
+          ? [{ label: 'One-time code', kind: 'totp' as const, value: String(more.totp) }]
+          : []),
+      ],
+      urls: [origin],
+      tags: [],
+      notes: '',
+      favorite: false,
+      agentAccess: 'ask' as const,
+      allowedSites: [],
+    });
+
+    it(
+      'asks once for a sign-in that spans pages: the username, then the password, then the code',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          await vault.create(login('Mail', 'ada@example.com', 'violet-heron-57!', { totp: TOTP }));
+          const h = harness(['allow'], 'default', 'conv_steps');
+          let text = await h.call('browser_open', { url: `${origin}/step1` });
+          const user = await h.call('browser_type', {
+            ref: refOf(text, /textbox "Email or phone"/),
+            element: 'Email or phone',
+            text: '',
+          });
+          expect(h.asked).toHaveLength(1);
+          expect(h.asked[0]?.browser).toMatchObject({
+            kind: 'fill',
+            fill: 'sign-in',
+            action: 'Sign in as ada@example.com',
+          });
+          expect(user).toContain('Conch filled the username');
+          const page = () => browser.tabIfOpen('conv_steps')?.page;
+          expect(await page()?.locator('input[name=identifier]').inputValue()).toBe(
+            'ada@example.com',
+          );
+          // The next page: the same sign-in, so no second question.
+          text = await h.call('browser_open', { url: `${origin}/step2` });
+          const password = await h.call('browser_type', {
+            ref: refOf(text, /textbox "Enter your password"/),
+            element: 'Password',
+            text: '',
+          });
+          expect(h.asked).toHaveLength(1);
+          expect(password).toContain('Conch filled the password');
+          expect(password).not.toContain('violet-heron');
+          expect(await page()?.locator('input[type=password]').inputValue()).toBe(
+            'violet-heron-57!',
+          );
+          // And its code, computed in the gateway.
+          text = await h.call('browser_open', { url: `${origin}/otp` });
+          const code = await h.call('browser_type', {
+            ref: refOf(text, /textbox "Enter the code"/),
+            element: 'Code',
+            text: '',
+          });
+          expect(h.asked).toHaveLength(1);
+          expect(code).toContain('Conch filled the one-time code');
+          const { parseTotp, totpNow } = await import('../vault/totp');
+          const now = Date.now();
+          const filled = await page()?.locator('input[name=otp]').inputValue();
+          expect([
+            totpNow(parseTotp(TOTP), now).code,
+            totpNow(parseTotp(TOTP), now - 30_000).code,
+          ]).toContain(filled);
+          expect(code).not.toContain(filled ?? '------');
+        });
+      },
+    );
+
+    it(
+      'lets the person pick between saved accounts on the card, in one tap',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          await vault.create(login('Work', 'ada@work.example', 'work-pass-1!'));
+          const home = await vault.create(login('Home', 'ada@home.example', 'home-pass-2!'));
+          const h = harness(
+            [
+              (request) => {
+                request.choose?.(home.id);
+                return 'allow';
+              },
+            ],
+            'default',
+            'conv_choose',
+          );
+          const text = await h.call('browser_open', { url: `${origin}/login` });
+          const result = await h.call('browser_type', {
+            ref: refOf(text, /textbox "Password"/),
+            element: 'Password',
+            text: '',
+          });
+          const accounts = h.asked[0]?.browser?.accounts ?? [];
+          expect(accounts.map((a) => a.account).sort()).toEqual([
+            'ada@home.example',
+            'ada@work.example',
+          ]);
+          // Names only on the card: never a value.
+          expect(JSON.stringify(h.asked[0])).not.toMatch(/pass-[12]/);
+          expect(result).toContain('“Home”');
+          const page = browser.tabIfOpen('conv_choose')?.page;
+          expect(await page?.locator('input[type=password]').inputValue()).toBe('home-pass-2!');
+          expect(await page?.locator('input[name=email]').inputValue()).toBe('ada@home.example');
+          // A choice the card never offered is refused.
+          expect(() => h.asked[0]?.choose?.('pw_someone_else')).toThrow();
+        });
+      },
+    );
+
+    it(
+      'makes, saves and fills a strong password on a sign-up form',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          // The site's question for typing the email, then the new password's.
+          const h = harness(['allow', 'allow'], 'default', 'conv_signup');
+          const text = await h.call('browser_open', { url: `${origin}/signup` });
+          await h.call('browser_type', {
+            ref: refOf(text, /textbox "Email"/),
+            element: 'Email',
+            text: 'new@example.com',
+          });
+          const made = await h.call('browser_type', {
+            ref: refOf(text, /textbox "Password"/),
+            element: 'Password',
+            text: '',
+          });
+          expect(h.asked.at(-1)?.browser).toMatchObject({
+            kind: 'fill',
+            fill: 'new-password',
+            action: 'Make a strong password for 127.0.0.1',
+          });
+          expect(made).toContain('saved it in the user’s Passwords');
+          const page = browser.tabIfOpen('conv_signup')?.page;
+          const first = await page?.locator('input[name=new]').inputValue();
+          expect(first?.length).toBeGreaterThanOrEqual(20);
+          expect(await page?.locator('input[name=confirm]').inputValue()).toBe(first);
+          expect(made).not.toContain(first ?? '-');
+          const { items } = await vault.list();
+          const saved = items.find((i) => i.domains.includes('127.0.0.1'));
+          expect(saved?.subtitle).toBe('new@example.com');
+          expect(
+            await vault.fillValue({ itemId: saved?.id ?? '', host: '127.0.0.1', want: 'password' }),
+          ).toBe(first);
+        });
+      },
+    );
+
+    it(
+      'changes a saved password: the old one in the current box, the new one kept with its history',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          const item = await vault.create(login('Account', 'ada@example.com', 'old-secret-123!'));
+          const h = harness(['allow'], 'default', 'conv_change');
+          const text = await h.call('browser_open', { url: `${origin}/change` });
+          const changed = await h.call('browser_type', {
+            ref: refOf(text, /textbox "New password"/),
+            element: 'New password',
+            text: '',
+          });
+          expect(h.asked[0]?.browser).toMatchObject({
+            fill: 'new-password',
+            action: 'Make a new password for “Account”',
+          });
+          expect(changed).toContain('the old one is kept in its history');
+          const page = browser.tabIfOpen('conv_change')?.page;
+          expect(await page?.locator('input[name=cur]').inputValue()).toBe('old-secret-123!');
+          const next = await page?.locator('input[name=n1]').inputValue();
+          expect(next).not.toBe('old-secret-123!');
+          expect(await page?.locator('input[name=n2]').inputValue()).toBe(next);
+          expect(
+            await vault.fillValue({ itemId: item.id, host: '127.0.0.1', want: 'password' }),
+          ).toBe(next);
+          expect((await vault.detail(item.id)).history).toBe(1);
+        });
+      },
+    );
+
+    it(
+      'never fills a sign-in box from another origin inside the page',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          await vault.create({
+            ...login('Local', 'ada@example.com', 'framed-pass-9!'),
+            urls: [origin, origin.replace('127.0.0.1', 'localhost')],
+          });
+          const h = harness(['allow'], 'default', 'conv_framed');
+          const text = await h.call('browser_open', { url: `${origin}/framed` });
+          const typing = h.call('browser_type', {
+            ref: refOf(text, /textbox "Password"/),
+            element: 'Password',
+            text: '',
+          });
+          await expect
+            .poll(() =>
+              h.events.some((e) => e.type === 'browser.handoff' && e.handoff.state === 'waiting'),
+            )
+            .toBe(true);
+          const waiting = h.events.find(
+            (e) => e.type === 'browser.handoff' && e.handoff.state === 'waiting',
+          );
+          expect(waiting?.type === 'browser.handoff' && waiting.handoff.reason).toMatch(
+            /comes from another site inside the page/,
+          );
+          expect(h.asked).toHaveLength(0);
+          browser.tabIfOpen('conv_framed')?.setControl('idle');
+          await typing;
+          const frame = browser.tabIfOpen('conv_framed')?.page.frames()[1];
+          expect(await frame?.locator('input[type=password]').inputValue()).toBe('hunter2');
+        });
+      },
+    );
+
+    it('fills nothing in Read only mode', { timeout: 60_000 }, async () => {
+      await withVault(async (vault) => {
+        await vault.create(login('Mail', 'ada@example.com', 'violet-heron-57!'));
+        const h = harness(['allow'], 'plan', 'conv_fill_plan');
+        const text = await h.call('browser_open', { url: `${origin}/login` });
+        const result = await h.call('browser_type', {
+          ref: refOf(text, /textbox "Password"/),
+          element: 'Password',
+          text: '',
+        });
+        expect(result).toContain('Read only mode');
+        expect(h.asked).toHaveLength(0);
+        expect(
+          await browser
+            .tabIfOpen('conv_fill_plan')
+            ?.page.locator('input[type=password]')
+            .inputValue(),
+        ).toBe('hunter2');
+      });
+    });
+
+    it(
+      'offers Passwords in the live view, and fills only what you pressed, on its own site',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          const item = await vault.create(login('Mail', 'ada@example.com', 'violet-heron-57!'));
+          const other = await vault.create({
+            ...login('Elsewhere', 'bob@example.com', 'not-for-here-1!'),
+            urls: ['https://example.com'],
+          });
+          const sent: BrowserLiveEvent[] = [];
+          const watcher = {
+            visible: true,
+            send: (e: BrowserLiveEvent) => sent.push(e),
+            frame: () => undefined,
+          };
+          const h = harness([], 'default', 'conv_live_fill');
+          await h.call('browser_open', { url: `${origin}/login` });
+          const tab = browser.tabIfOpen('conv_live_fill');
+          if (!tab) throw new Error('no tab');
+          // The assistant has the wheel: a press from the panel fills nothing.
+          tab.setControl('agent');
+          await browser.command('conv_live_fill', watcher, { type: 'fill', item: item.id });
+          expect(sent.at(-1)).toMatchObject({ type: 'error' });
+          // You click into the password box: the panel is offered what's saved, by name.
+          tab.setControl('user');
+          const box = await tab.page.locator('input[type=password]').boundingBox();
+          const viewport = tab.page.viewportSize() ?? { width: 1280, height: 800 };
+          const at = {
+            x: ((box?.x ?? 0) + 5) / viewport.width,
+            y: ((box?.y ?? 0) + 5) / viewport.height,
+          };
+          await browser.command('conv_live_fill', watcher, {
+            type: 'mouse',
+            action: 'down',
+            ...at,
+          });
+          await browser.command('conv_live_fill', watcher, { type: 'mouse', action: 'up', ...at });
+          const offer = sent.findLast((e) => e.type === 'typing');
+          expect(offer).toMatchObject({
+            type: 'typing',
+            editable: true,
+            fill: {
+              field: 'password',
+              items: [{ id: item.id, title: 'Mail', account: 'ada@example.com' }],
+            },
+          });
+          expect(JSON.stringify(offer)).not.toContain('violet');
+          // An item saved for another site is refused, whatever the panel sends.
+          await browser.command('conv_live_fill', watcher, { type: 'fill', item: other.id });
+          expect(sent.at(-1)).toMatchObject({ type: 'error' });
+          expect(await tab.page.locator('input[type=password]').inputValue()).toBe('hunter2');
+          // The one you pressed goes in, with its username.
+          await tab.page.locator('input[type=password]').focus();
+          await browser.command('conv_live_fill', watcher, { type: 'fill', item: item.id });
+          expect(await tab.page.locator('input[type=password]').inputValue()).toBe(
+            'violet-heron-57!',
+          );
+          expect(await tab.page.locator('input[name=email]').inputValue()).toBe('ada@example.com');
+          expect((await vault.detail(item.id)).usedAt).toBeDefined();
+        });
+      },
+    );
+  });
 
   it(
     'keeps the browser away from Conch itself, even with local apps on',
