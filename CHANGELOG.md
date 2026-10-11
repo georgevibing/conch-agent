@@ -4,10 +4,9 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.8](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2026-10-11)
 
+### Fixed
 
-### Bug Fixes
-
-* **server:** the sandbox's stand-in files aren't counted as files a turn deleted ([1f45c3b](https://github.com/georgevibing/conch-agent/commit/1f45c3bd333daa3362ef5cf4f310fbeeeb109ea0))
+- On Linux, a chat no longer says it deleted files like .bashrc or .claude/agents that it never touched, after a command ran in the sandbox
 
 ## [0.1.0-alpha.7](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2026-10-11)
 
