@@ -2,6 +2,14 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.5](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2026-10-11)
+
+
+### Bug Fixes
+
+* **server:** a chat deleted as it starts doesn't answer out of sight ([86c68ae](https://github.com/georgevibing/conch-agent/commit/86c68ae07e369aa6eb8407836a5027083b7e4704))
+* **server:** every Feishu or Lark code to scan can be followed, not 31 in 32 ([e7aa97c](https://github.com/georgevibing/conch-agent/commit/e7aa97c4e99f8cff18c96fdcf4b11be59bc970e5))
+
 ## [0.1.0-alpha.4](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-10-11)
 
 ### New
