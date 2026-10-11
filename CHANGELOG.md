@@ -2,6 +2,16 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.7](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2026-10-11)
+
+
+### Bug Fixes
+
+* **routines:** run a calendar routine once, and hold runs to sending what they're told ([7075a22](https://github.com/georgevibing/conch-agent/commit/7075a227b8db7a6eb33870acc3d3f8971f63b011))
+* **web:** a new terminal has the cursor before it says it's running ([03b064a](https://github.com/georgevibing/conch-agent/commit/03b064a01563d653f0a769cd334e3d226838ff77))
+* **web:** the first keys typed in a new terminal reach the shell ([6b61522](https://github.com/georgevibing/conch-agent/commit/6b61522b70788a9261e708e9fefb01938dc64e1b))
+* **web:** the page hears the internet go while its first read is on its way ([11cb58d](https://github.com/georgevibing/conch-agent/commit/11cb58d28dbecf540c13aa706b457f54bbd0e5fc))
+
 ## [0.1.0-alpha.6](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2026-10-11)
 
 ### Fixed
