@@ -10,6 +10,7 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  Square,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -36,6 +37,12 @@ import { Progress } from '../../components/Progress';
 import { Spinner } from '../../components/Spinner';
 import { cx } from '../../utils/cx';
 import styles from './Browser.module.css';
+import {
+  FindBar,
+  PageDialog,
+  type BrowserWindowDialog,
+  type BrowserWindowFound,
+} from './PageDialog';
 import {
   browserShortcut,
   buttonOf,
@@ -69,6 +76,8 @@ export interface BrowserWindowTab {
   tabs?: BrowserWindowTabEntry[];
   /** Where it runs, when it isn't the assistant's own browser here. */
   backend?: 'chrome' | 'browserbase' | 'steel' | 'cdp';
+  /** The page asks you something while you drive: shown over it until you answer. */
+  dialog?: BrowserWindowDialog;
 }
 
 export interface BrowserWindowTabEntry {
@@ -128,6 +137,17 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   typing?: { editable: boolean; key: string | number };
   /** Show a tab, close one, open a new one, close the others, or reopen the last closed. */
   onTab?: (action: BrowserTabAction, id?: string) => void;
+  /** Your answer to the page's dialog (`tab.dialog`): OK or Cancel, with a text box's words. */
+  onDialog?: (id: string, accept: boolean, text?: string) => void;
+  /** Find on page: words to look for, then the next or previous one. Empty words: stop. */
+  onFind?: (text: string, direction?: 'next' | 'previous') => void;
+  /** What find on page found last. */
+  found?: BrowserWindowFound;
+  /** Change it to open find on page from outside (the command palette). */
+  findKey?: string | number;
+  /** The assistant is working in this chat: a Stop button stops it from here. */
+  running?: boolean;
+  onStop?: () => void;
   onClose?: () => void;
   /** Extra controls at the end of the toolbar. */
   actions?: ReactNode;
@@ -169,6 +189,12 @@ export function BrowserWindow({
   onFit,
   typing,
   onTab,
+  onDialog,
+  onFind,
+  found,
+  findKey,
+  running,
+  onStop,
   onClose,
   actions,
   className,
@@ -177,6 +203,20 @@ export function BrowserWindow({
   const control = tab?.control ?? 'idle';
   const driving = control === 'user';
   const handoff = tab?.handoff;
+  // The page waits for its question to be answered: your hands wait too.
+  const asking = driving ? tab?.dialog : undefined;
+  // A new `findKey` (including the first) opens find on page.
+  const [finding, setFinding] = useState(findKey !== undefined && Boolean(onFind));
+  const [findOpenedBy, setFindOpenedBy] = useState(findKey);
+  if (findKey !== findOpenedBy) {
+    setFindOpenedBy(findKey);
+    if (findKey !== undefined && onFind) setFinding(true);
+  }
+  const closeFind = () => {
+    setFinding(false);
+    onFind?.('');
+    if (driving) keys.current?.focus({ preventScroll: true });
+  };
   const { host, rest, secure } = splitUrl(tab?.url ?? '');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -374,6 +414,7 @@ export function BrowserWindow({
   }
 
   function pointer(kind: 'down' | 'up' | 'move', event: PointerEvent<HTMLButtonElement>) {
+    if (asking) return;
     if (event.pointerType === 'touch') return touch(kind, event);
     if (kind === 'down') tapped.current = false;
     if (!driving) {
@@ -410,7 +451,7 @@ export function BrowserWindow({
   }
 
   const onWheel = (event: WheelEvent<HTMLButtonElement>) => {
-    if (!driving) return;
+    if (!driving || asking) return;
     const rect = pageRect();
     if (!rect) return;
     send({
@@ -422,7 +463,7 @@ export function BrowserWindow({
   };
 
   function key(kind: 'down' | 'up', event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (!driving) return;
+    if (!driving || asking) return;
     if (kind === 'down' && isReleaseKey(event)) {
       // The way out of the page: focus the hand-back button.
       event.preventDefault();
@@ -478,6 +519,10 @@ export function BrowserWindow({
     switch (shortcut.kind) {
       case 'address':
         typeAddress(tab?.url ?? '');
+        break;
+      case 'find':
+        if (onFind && tab?.url) setFinding(true);
+        else handled = false;
         break;
       case 'new':
         if (onTab) newTab();
@@ -645,6 +690,12 @@ export function BrowserWindow({
               <Pearl size="xs" state="thinking" label={null} />
               <span className={styles.driverText}>{name} is browsing</span>
             </span>
+          )}
+          {/* Stop is here too: on a phone the panel covers the chat's own. */}
+          {running && onStop && (
+            <IconButton size="sm" variant="soft" label={`Stop ${name}`} onClick={onStop}>
+              <Square />
+            </IconButton>
           )}
           {driving ? (
             <Button
@@ -850,7 +901,18 @@ export function BrowserWindow({
               <MousePointerClick /> Click to take over
             </span>
           )}
+          {asking && onDialog && (
+            <PageDialog
+              key={asking.id}
+              dialog={asking}
+              onAnswer={(accept, text) => {
+                onDialog(asking.id, accept, text);
+                keys.current?.focus({ preventScroll: true });
+              }}
+            />
+          )}
         </div>
+        {finding && onFind && <FindBar found={found} onFind={onFind} onClose={closeFind} />}
         <p id={hintId} className="nc-visually-hidden">
           {driving
             ? 'You’re driving: mouse and keyboard go to the page. Press Shift+Escape to leave the page.'

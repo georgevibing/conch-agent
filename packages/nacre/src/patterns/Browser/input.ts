@@ -122,13 +122,16 @@ export function isReleaseKey(event: { key: string; shiftKey: boolean }): boolean
 
 /** A browser's own key, not the page's: what it does. */
 export type BrowserShortcut =
-  | { kind: 'address' | 'new' | 'close' | 'reopen' | 'next' | 'previous' | 'back' | 'forward' }
+  | {
+      kind:
+        'address' | 'new' | 'close' | 'reopen' | 'next' | 'previous' | 'back' | 'forward' | 'find';
+    }
   | { kind: 'nth'; index: number };
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /**
- * The keys every browser has: ⌘L the address, ⌘T a new tab, ⌘W close it,
+ * The keys every browser has: ⌘L the address, ⌘F find on page, ⌘T a new tab, ⌘W close it,
  * ⌘⇧T bring it back, Ctrl+Tab the next, ⌘1–8 a tab, ⌘9 the last, Alt+←/→
  * (⌘[ / ⌘] on a Mac) back and forward. ⌘ is Ctrl off a Mac.
  */
@@ -142,6 +145,7 @@ export function browserShortcut(
     return { kind: event.shiftKey ? 'previous' : 'next' };
   if (mod && !event.altKey) {
     if (!event.shiftKey && key === 'l') return { kind: 'address' };
+    if (!event.shiftKey && key === 'f') return { kind: 'find' };
     if (!event.shiftKey && key === 't') return { kind: 'new' };
     if (event.shiftKey && key === 't') return { kind: 'reopen' };
     if (!event.shiftKey && key === 'w') return { kind: 'close' };

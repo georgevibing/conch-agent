@@ -118,6 +118,77 @@ export const YourTurn: Story = {
   },
 };
 
+/**
+ * The page asks you something while you drive (“Remove the mug?”). Conch draws
+ * it over the page, under the site's name; the page waits for your answer.
+ */
+export const ThePageAsks: Story = {
+  args: {
+    frame: checkoutPage,
+    onDialog: fn(),
+    tab: {
+      url: 'https://shop.example/basket',
+      title: 'Your basket',
+      control: 'user',
+      canGoBack: true,
+      dialog: {
+        id: 'd1',
+        kind: 'confirm',
+        message: 'Remove the pearl mug from your basket?',
+        site: 'shop.example',
+      },
+    },
+  },
+};
+
+/** A page's own box for a few words. */
+export const ThePageAsksForText: Story = {
+  args: {
+    frame: checkoutPage,
+    onDialog: fn(),
+    tab: {
+      url: 'https://shop.example/basket',
+      title: 'Your basket',
+      control: 'user',
+      dialog: {
+        id: 'd2',
+        kind: 'prompt',
+        message: 'Name your list',
+        value: 'Gifts',
+        site: 'shop.example',
+      },
+    },
+  },
+};
+
+/** Find on page, opened with ⌘F (or Ctrl+F): how many, and which one shows. */
+export const FindOnPage: Story = {
+  render: function Render(args) {
+    const [found, setFound] = useState<{ text: string; matches: number; current: number }>();
+    return (
+      <BrowserWindow
+        {...args}
+        findKey={1}
+        found={found}
+        onFind={(text, direction) => {
+          args.onFind?.(text, direction);
+          setFound((was) => ({
+            text,
+            matches: text ? 4 : 0,
+            current: !text ? 0 : direction && was ? (was.current % 4) + 1 : 1,
+          }));
+        }}
+      />
+    );
+  },
+  args: { tab: { ...hotels, control: 'idle' }, onFind: fn() },
+};
+
+/** The assistant at work, with Stop at hand: on a phone the panel covers the chat's own. */
+export const Stoppable: Story = {
+  args: { running: true, onStop: fn() },
+};
+
 /** The site's icon, as the gateway sends it: a small image inline. */
 const staylightIcon =
   'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iNCIgZmlsbD0iIzBiNmU0ZiIvPjxwYXRoIGQ9Ik00IDExVjVoM2EyIDIgMCAwIDEgMCA0SDUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjYiIGZpbGw9Im5vbmUiLz48L3N2Zz4=';

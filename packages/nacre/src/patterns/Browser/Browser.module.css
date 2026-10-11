@@ -1353,6 +1353,90 @@
     user-select: all;
   }
 
+  /* ── The page's own question ───────────────────────────────────────── */
+  /* Over the frozen page, near its top as a browser shows one, in Conch's own hand. */
+  .pageDialog {
+    position: absolute;
+    inset-block-start: var(--nc-space-4);
+    inset-inline: 0;
+    inline-size: min(26rem, calc(100% - 2 * var(--nc-space-4)));
+    max-block-size: calc(100% - 2 * var(--nc-space-4));
+    margin-inline: auto;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-elevation-3);
+    color: var(--nc-text);
+    cursor: default;
+    overflow: auto;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .pageDialogForm {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin: 0;
+  }
+
+  .pageDialogSite {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .pageDialogMessage {
+    margin: 0;
+    max-block-size: 12rem;
+    overflow: auto;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .pageDialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  /* ── Find on page ──────────────────────────────────────────────────── */
+  .findBar {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    max-inline-size: calc(100% - 2 * var(--nc-space-3));
+    padding: var(--nc-space-1);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-elevation-3);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .findInput {
+    inline-size: 14rem;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+  }
+
+  .findCount {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   /* ── Motion off ────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .loading[data-on],
@@ -1361,6 +1445,8 @@
     .thumb[data-status='running']::after,
     .trail[data-running] .trailIcon > svg,
     .approvalBox,
+    .pageDialog,
+    .findBar,
     .captionDots i {
       animation: none;
     }
@@ -1371,6 +1457,8 @@
   :global([data-nacre-motion='reduced']) .window[data-handoff] .screen::after,
   :global([data-nacre-motion='reduced']) .thumb[data-status='running']::after,
   :global([data-nacre-motion='reduced']) .approvalBox,
+  :global([data-nacre-motion='reduced']) .pageDialog,
+  :global([data-nacre-motion='reduced']) .findBar,
   :global([data-nacre-motion='reduced']) .captionDots i {
     animation: none;
   }

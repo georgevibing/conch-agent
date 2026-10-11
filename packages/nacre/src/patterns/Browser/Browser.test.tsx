@@ -55,6 +55,129 @@ describe('browser keys', () => {
     // Copy, paste, select all: the page's.
     for (const k of ['c', 'v', 'a', 'r'])
       expect(browserShortcut(key({ key: k, ctrlKey: true }), false)).toBeUndefined();
+    expect(browserShortcut(key({ key: 'f', metaKey: true }), true)).toEqual({ kind: 'find' });
+    expect(browserShortcut(key({ key: 'f', ctrlKey: true }), false)).toEqual({ kind: 'find' });
+  });
+});
+
+describe('the page’s own question, find on page and Stop (ADR 0131)', () => {
+  const asking: BrowserWindowTab = {
+    ...tab,
+    control: 'user',
+    dialog: { id: 'd1', kind: 'confirm', message: 'Remove the mug?', site: 'shop.example' },
+  };
+
+  it('shows the site’s question while you drive, answered OK or Cancel', async () => {
+    const onDialog = vi.fn();
+    const onInput = vi.fn();
+    const { container } = renderNacre(
+      <BrowserWindow tab={asking} frame={hotelsPage} onDialog={onDialog} onInput={onInput} />,
+    );
+    const dialog = screen.getByRole('alertdialog', { name: 'shop.example says' });
+    expect(dialog).toHaveTextContent('Remove the mug?');
+    // OK has the focus: Enter answers it.
+    expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus();
+    // The page is frozen: your hands wait for the answer.
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Page/ }), { button: 0 });
+    expect(onInput).not.toHaveBeenCalled();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onDialog).toHaveBeenCalledWith('d1', false, undefined);
+    await expectAccessible(container);
+  });
+
+  it('Escape is Cancel; a text box sends its words', async () => {
+    const onDialog = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = renderNacre(
+      <BrowserWindow tab={asking} frame={hotelsPage} onDialog={onDialog} />,
+    );
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+    expect(onDialog).toHaveBeenLastCalledWith('d1', false, undefined);
+    rerender(
+      <BrowserWindow
+        tab={{
+          ...asking,
+          dialog: {
+            id: 'd2',
+            kind: 'prompt',
+            message: 'Name it',
+            value: 'Gifts',
+            site: 'x.example',
+          },
+        }}
+        frame={hotelsPage}
+        onDialog={onDialog}
+      />,
+    );
+    const box = screen.getByRole('textbox', { name: 'Your answer' });
+    await user.clear(box);
+    await user.type(box, 'Birthday{Enter}');
+    expect(onDialog).toHaveBeenLastCalledWith('d2', true, 'Birthday');
+  });
+
+  it('only while you drive: the assistant answers its own', () => {
+    renderNacre(
+      <BrowserWindow tab={{ ...asking, control: 'agent' }} frame={hotelsPage} onDialog={vi.fn()} />,
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('⌘F opens find on page: as you type, Enter for the next, Escape closes', async () => {
+    const onFind = vi.fn();
+    const user = userEvent.setup();
+    const { rerender, container } = renderNacre(
+      <BrowserWindow tab={tab} frame={hotelsPage} onFind={onFind} />,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: /Take over the page/ }), {
+      key: 'f',
+      code: 'KeyF',
+      ctrlKey: !/Mac|iPhone|iPad/.test(navigator.platform),
+      metaKey: /Mac|iPhone|iPad/.test(navigator.platform),
+    });
+    const box = screen.getByRole('textbox', { name: 'Find on page' });
+    expect(box).toHaveFocus();
+    await user.type(box, 'pearl');
+    await vi.waitFor(() => expect(onFind).toHaveBeenLastCalledWith('pearl'));
+    rerender(
+      <BrowserWindow
+        tab={tab}
+        frame={hotelsPage}
+        onFind={onFind}
+        found={{ text: 'pearl', matches: 3, current: 1 }}
+      />,
+    );
+    expect(screen.getByText('1 of 3')).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    expect(onFind).toHaveBeenLastCalledWith('pearl', 'next');
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(onFind).toHaveBeenLastCalledWith('pearl', 'previous');
+    await expectAccessible(container);
+    await user.keyboard('{Escape}');
+    expect(onFind).toHaveBeenLastCalledWith('');
+    expect(screen.queryByRole('search')).toBeNull();
+  });
+
+  it('opens find from outside (the command palette)', () => {
+    renderNacre(<BrowserWindow tab={tab} frame={hotelsPage} onFind={vi.fn()} findKey={1} />);
+    expect(screen.getByRole('search', { name: 'Find on page' })).toBeInTheDocument();
+  });
+
+  it('has Stop while the assistant works', async () => {
+    const onStop = vi.fn();
+    const { rerender } = renderNacre(
+      <BrowserWindow tab={{ ...tab, control: 'agent' }} frame={hotelsPage} onStop={onStop} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Stop Conch' })).toBeNull();
+    rerender(
+      <BrowserWindow
+        tab={{ ...tab, control: 'agent' }}
+        frame={hotelsPage}
+        running
+        onStop={onStop}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Stop Conch' }));
+    expect(onStop).toHaveBeenCalled();
   });
 });
 

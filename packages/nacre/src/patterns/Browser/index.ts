@@ -9,6 +9,7 @@ export type {
   BrowserWindowTab,
   BrowserWindowTabEntry,
 } from './BrowserWindow';
+export type { BrowserWindowDialog, BrowserWindowFound } from './PageDialog';
 export { BrowserTrail } from './BrowserTrail';
 export type { BrowserTrailProps, BrowserTrailStep } from './BrowserTrail';
 export { BrowserApproval } from './BrowserApproval';
