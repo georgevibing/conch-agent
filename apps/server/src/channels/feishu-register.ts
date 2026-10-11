@@ -135,7 +135,9 @@ export class FeishuRegistrations {
     url.searchParams.set('desc', 'Your assistant, on Conch');
     url.searchParams.set('addons', gzipSync(JSON.stringify(FEISHU_APP)).toString('base64url'));
     const expiresAt = Date.now() + (Number(body.expires_in) || 600) * 1000;
-    const id = randomBytes(12).toString('base64url');
+    // Led by letters: an id in a URL starts with a letter or digit, and base64url
+    // starts with - or _ one time in 32, a code the page could never look up.
+    const id = `fs_${randomBytes(12).toString('base64url')}`;
     const scan: Scan = {
       status: { state: 'waiting', url: url.toString(), expiresAt },
       stop: new AbortController(),

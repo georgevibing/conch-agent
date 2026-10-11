@@ -2,6 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { Id } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
@@ -377,6 +378,9 @@ describe('Making a Feishu bot by scanning a code', { timeout: 30_000 }, () => {
     expect(addons.events.items.tenant).toContain('im.message.receive_v1');
     expect(addons.callbacks.items).toEqual(['card.action.trigger']);
     expect(s.feishuScans.status(begun.id)).toMatchObject({ state: 'waiting' });
+    // The page looks it up by this id in a URL, where an id can't start with - or _.
+    expect(begun.id).toMatch(/^fs_/);
+    expect(Id.safeParse(begun.id).success).toBe(true);
     expect(feishu.scan(begun.url)).toBe(true);
     const done = await until(() => {
       const status = s.feishuScans.status(begun.id);
