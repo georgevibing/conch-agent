@@ -282,10 +282,11 @@ export function BrowserWindow({
     };
   }, [onFit]);
 
-  // Driving: keyboard focus goes to the page.
+  // Driving: keyboard focus goes to the page, unless the page's question has it.
+  const questioned = Boolean(asking);
   useEffect(() => {
-    if (driving) keys.current?.focus({ preventScroll: true });
-  }, [driving]);
+    if (driving && !questioned) keys.current?.focus({ preventScroll: true });
+  }, [driving, questioned]);
 
   // A tap's own click would take the focus off the keys again on a phone, and
   // its keyboard with it: the tap is handled on its pointer events instead.
