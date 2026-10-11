@@ -251,6 +251,21 @@ describe('ChannelService — Telegram', () => {
     await until(async () => (await channelChats()).length === 2, 'replacement chat');
   });
 
+  it('starts fresh when the chat is deleted in Conch as its first message goes in', async () => {
+    const { s, telegram } = await paired();
+    const channelChats = async () =>
+      (await s.conversations.list()).filter((c) => c.origin?.kind === 'channel');
+    telegram.say('hello');
+    const first = await until(async () => (await channelChats())[0], 'chat');
+    // Often before its turn has begun: then it stops as it starts, rather than answering out of sight.
+    await s.conversations.remove(first.id);
+    telegram.say('still there?');
+    await until(
+      async () => (await channelChats()).some((c) => c.id !== first.id),
+      'replacement chat',
+    );
+  });
+
   it('takes photos as attachments', async () => {
     const { s, telegram } = await paired();
     telegram.photo('What is this?');

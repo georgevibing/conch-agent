@@ -2208,6 +2208,9 @@ export class ConversationManager {
       (since === undefined || live.stopAt >= since - STOP_ORDER_MS)
     )
       abort.abort();
+    // Deleted while the message was on its way in: it stops as it starts, rather
+    // than answering in a chat nobody can see.
+    if (this.#gone.has(live.record.id)) abort.abort();
     live.stopAt = undefined;
     live.abort = abort;
     return abort;
@@ -5476,6 +5479,7 @@ export class ConversationManager {
   }
 
   async #get(id: string): Promise<Live> {
+    if (this.#gone.has(id)) throw new ConversationError('not-found', 'Conversation not found.');
     const cached = this.#live.get(id);
     if (cached) {
       // Most recently used last, so eviction drops the stalest first.

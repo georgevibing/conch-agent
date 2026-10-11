@@ -223,6 +223,26 @@ describe('a chat started in a folder', () => {
   });
 });
 
+describe('a chat deleted as it starts', () => {
+  it('doesn’t answer out of sight, and the next message to it is refused', async () => {
+    const { services } = await setup();
+    const said: string[] = [];
+    services.broadcast.on((e: ServerEvent) => {
+      // Deleted the moment it's listed, before its turn has begun.
+      if (e.type === 'conversation.created') void services.conversations.remove(e.conversation.id);
+      if (e.type === 'conversation.event' && e.event.type === 'assistant.done')
+        said.push(e.event.conversationId);
+    });
+    const made = await services.conversations.send({ clientMessageId: 'u-gone', text: 'hello' });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(said).toEqual([]);
+    expect(await services.conversations.list()).toEqual([]);
+    await expect(
+      services.conversations.send({ conversationId: made.id, clientMessageId: 'u-2', text: 'hi' }),
+    ).rejects.toMatchObject({ code: 'not-found' });
+  });
+});
+
 describe('the routes', () => {
   it('PATCH pins, files and marks seen; a folder that isn’t there is refused', async () => {
     const { services } = await setup();
