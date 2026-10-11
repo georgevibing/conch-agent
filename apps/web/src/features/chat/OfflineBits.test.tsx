@@ -66,6 +66,27 @@ describe('offline (ADR 0023)', () => {
     expect(await screen.findByText(/Messages wait here, and go by themselves/)).toBeVisible();
   });
 
+  it('hears the internet go while its first read of the state is still on its way', async () => {
+    let online = true;
+    let answerStale: (() => void) | undefined;
+    mockFetch({
+      'GET /api/state': () => {
+        const answer = appState({ network: { online } });
+        // The first read was answered before the internet went, and arrives after word of it.
+        if (!answerStale) return new Promise((done) => (answerStale = () => done(answer)));
+        return answer;
+      },
+      'GET /api/conversations': () => [],
+      'GET /api/providers': () => baseProviders,
+    });
+    renderApp(<ChatView />);
+    await waitFor(() => expect(answerStale).toBeDefined());
+    online = false;
+    act(() => FakeSocket.last?.push({ type: 'network.status', network: { online: false } }));
+    act(() => answerStale?.());
+    expect(await screen.findByText(/Messages wait here, and go by themselves/)).toBeVisible();
+  });
+
   it('a waiting message can be answered now by the model on this computer', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState({ network: { online: false } }),

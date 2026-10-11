@@ -309,6 +309,13 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           client.setQueryData<AppState>(keys.state, (state) =>
             state ? { ...state, network: event.network } : state,
           );
+          // A read already on its way was answered before this changed (or there's
+          // nothing to change yet): read again, or the page says the opposite. Dropped
+          // first: a page's first read is otherwise shared, stale answer and all.
+          if (!client.getQueryData(keys.state) || client.isFetching({ queryKey: keys.state }))
+            void client
+              .cancelQueries({ queryKey: keys.state })
+              .then(() => client.invalidateQueries({ queryKey: keys.state }));
           break;
         case 'access.changed': {
           void client.invalidateQueries({ queryKey: keys.access });
