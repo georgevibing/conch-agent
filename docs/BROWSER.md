@@ -88,11 +88,27 @@ When the page asks you something while you drive ("Remove this item?"), the ques
 the page, under the site's name. Answer it there. If you hand back first, the page gets
 **Cancel**.
 
+## Signing in
+
+The assistant never sees a password, code or card number. When a site asks for one and it's
+saved in **Passwords** (or a password manager you connected), Conch fills it:
+
+- One question covers the whole sign-in: _Sign in as ada@example.com on example.com?_ The
+  username page, the password page and the code page don't ask again.
+- With several accounts for the site, the card shows each one. Tap the one to use.
+- On a sign-up or change-password form, Conch makes a strong password, saves it in Passwords and
+  types it in, after asking.
+- A page that only looks like one of your sites (`paypa1.com`) gets nothing, and the assistant
+  tells you.
+- Conch fills only over https, and never into a sign-in box from another site inside a page.
+
+Driving yourself? Click a sign-in box and a bar offers what's saved for that site, or **Use a
+strong password** on a sign-up form.
+
 ## "Your turn"
 
-Some things only you should do: signing in, a captcha, a payment, anything
-personal. The assistant never types passwords, codes or card numbers. When a site
-needs one, it hands the browser to you instead. You'll see **Your turn** in the chat
+Some things only you should do: a sign-in that isn't saved, a captcha, a payment, anything
+personal. The assistant hands the browser to you. You'll see **Your turn** in the chat
 and in the panel, with what to do, and your phone gets a notification with **Take over** if
 you're away. Type it yourself. When it's a sign-in or a captcha, the assistant notices once
 you're through and carries on by itself; otherwise press **I'm done**.
@@ -129,9 +145,9 @@ Conch keeps the questions few, and makes each one count:
 - **Downloads.** It asks, and saves them in the Downloads folder of your working
   folder.
 
-In **Read only** mode it reads but never clicks or types. In **Full trust** mode it
+In **Read only** mode it reads but never clicks, types or fills. In **Full trust** mode it
 skips the "new site" question, but never the "anything significant" one, and never
-types your secrets.
+fills a password you didn't allow.
 
 ## Where it runs
 
@@ -203,7 +219,8 @@ only an administrator can install; Conch then shows the one command to run.
   (app) and `packages/nacre/src/patterns/Browser/` (design system). The decision
   records are [ADR 0014](./adr/0014-browser.md),
   [ADR 0080](./adr/0080-the-browser-does-what-you-do.md) (tabs, uploads, clicking by
-  position, your own Chrome and the cloud) and
+  position, your own Chrome and the cloud),
+  [ADR 0130](./adr/0130-passwords-in-the-browser.md) (signing in from Passwords) and
   [ADR 0131](./adr/0131-everyday-browsing.md) (the page's own questions, forms in one step,
   long pages, bot checks, find on page, Stop in the panel).
 - Testing your own app on `localhost`? Turn on **Open local apps** (under Advanced). Conch's own port

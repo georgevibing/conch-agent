@@ -203,8 +203,10 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   page changes. [Routines](./apps/docs/content/features/routines.md)
 - **Standing orders.** Say once "always tell me if a flight changes". Conch looks now
   and then, for free until something is new. [Check-ins](./apps/docs/content/features/check-ins.md)
-- **A browser you can watch** and take over, and a real terminal a keystroke away.
+- **A browser you can watch** and take over. It signs in from your passwords without seeing
+  one. A real terminal is a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
+  [Passwords](./apps/docs/content/features/passwords.md) ·
   [Terminal](./apps/docs/content/features/terminal.md)
 - **Your apps, while you watch.** On a Mac it can click and type in the apps you
   allow, one at a time, with Stop one press away.

@@ -80,14 +80,24 @@ A deleted item stays in **Recently deleted** for 30 days. **Undo** brings it bac
 
 ## What your assistant can do
 
-Your assistant sees names and sites, never a value. At a saved sign-in in [Conch's browser](./browser.md), a card asks: **Fill**, **Not now**, or always for that site. Conch types the password into the page itself.
+Your assistant sees names and sites, never a value. In [Conch's browser](./browser.md), Conch fills sign-ins from Passwords itself, from the managers you connected too.
 
-- It fills only on the item's own websites, never a lookalike.
+- **One question per sign-in.** A card asks _Sign in as ada@example.com on example.com?_ Your OK covers the username, the password and the code, page after page. Choose **Sign in**, **Not now**, or **Always for** that site.
+- **Several accounts** for one site: the card shows each one. Tap the one to use.
+- **Signing up or changing a password:** Conch makes a strong one, saves it in Passwords and types it in. It asks each time. A changed password keeps the old one in its history.
+- **One-time codes** come from the item, made on your computer.
+- It fills only on the item's own site. Another part of the same site, such as `mail.google.com` for a login saved at `accounts.google.com`, always asks and says where it's saved.
+- A page that only looks like one of your sites, such as `paypa1.com`, gets nothing. Your assistant tells you instead.
+- It never fills a page without https, or a sign-in box from another site inside a page.
 - Each item sets how far your assistant may go, under **Your assistant** when you edit it: ask each time, fill without asking, or never.
-- A payment card always asks.
+- A payment card always asks, and fills the card's boxes together.
 - For a sign-in you haven't saved, a card in the chat asks you. What you type goes to Passwords, not the chat.
 - To read something itself, such as a PIN or a note, it asks: **Don’t**, **Always for this item** or **Allow once**.
 - Passkeys are kept with their logins. After asking, your assistant signs in with one in Conch's browser, on that site only, and can save a new one a site offers. It never sees the key.
+
+### When you drive the browser
+
+Take over and click a sign-in box: a bar offers what's saved for that site. Press an account to fill it, or **Use a strong password** on a sign-up form. On a page that only looks like one of your sites, the bar warns you instead.
 
 ## Lock it and keep it safe
 
