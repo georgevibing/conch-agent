@@ -4,10 +4,9 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.6](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2026-10-11)
 
+### Fixed
 
-### Bug Fixes
-
-* **web:** the page hears what changed while it wasn't connected ([20b1211](https://github.com/georgevibing/conch-agent/commit/20b12119b5fa5f2ae4d3559c3bad773fe87585e3))
+- The page hears what changed while it wasn't connected
 
 ## [0.1.0-alpha.5](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2026-10-11)
 
