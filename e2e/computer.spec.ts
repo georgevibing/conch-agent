@@ -47,11 +47,16 @@ test('shows this computer, live, and only while someone is looking', async ({ pa
   );
 
   // Readings keep arriving while it's open.
+  // Two asks can land before the next sample is taken, so wait for a newer one.
+  type Reading = { samples: { at: number }[] };
+  const latest = (r: Reading) => r.samples.at(-1)?.at ?? 0;
   const asks = () =>
     page.waitForResponse((r) => r.url().endsWith('/api/computer') && r.status() === 200);
-  const first = await (await asks()).json();
-  const second = await (await asks()).json();
-  expect(second.samples.at(-1).at).toBeGreaterThan(first.samples.at(-1).at);
+  const first = latest((await (await asks()).json()) as Reading);
+  let next = first;
+  for (let i = 0; i < 10 && next <= first; i++)
+    next = latest((await (await asks()).json()) as Reading);
+  expect(next).toBeGreaterThan(first);
 
   // The pointer reads a moment.
   const box = await cpu.locator('svg').boundingBox();
