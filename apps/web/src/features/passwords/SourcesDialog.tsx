@@ -238,10 +238,7 @@ export function SourcesDialog({
       <Dialog.Content size="lg">
         <Dialog.Header>
           <Dialog.Title>Password managers</Dialog.Title>
-          <Dialog.Description>
-            See your other password managers here, beside Conch’s own. Items stay where they are, or
-            copy them into Conch.
-          </Dialog.Description>
+          <Dialog.Description>Your other password managers, beside Conch’s own.</Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
           <Stack gap={4}>
@@ -282,10 +279,6 @@ export function SourcesDialog({
                 {error}
               </Callout>
             )}
-            <Text size="xs" tone="subtle">
-              Apple Passwords, Chrome and other browsers can’t be read by other apps: import from
-              them instead.
-            </Text>
           </Stack>
         </Dialog.Body>
       </Dialog.Content>

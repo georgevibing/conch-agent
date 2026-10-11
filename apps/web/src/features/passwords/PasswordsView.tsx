@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   EmptyState,
   IconButton,
+  Kbd,
   ResizeHandle,
   Input,
   Stack,
@@ -106,6 +107,13 @@ const HEADING_REM = 2;
 const rowHeight = (row: VaultListRow) => (row.kind === 'header' ? HEADING_REM : ROW_REM);
 const rowKey = (row: VaultListRow) => (row.kind === 'header' ? row.id : row.item.id);
 const isHeading = (row: VaultListRow) => row.kind === 'header';
+
+/** The start screen's hint: the page's own keys, nothing else. */
+const KEY_HINTS = [
+  { keys: ['/'], label: 'Search' },
+  { keys: ['up', 'down'], label: 'Move' },
+  { keys: ['mod+c'], label: 'Copy password' },
+];
 
 /** How long the pointer rests on a row before its item is fetched, ahead of the click. */
 const HOVER_MS = 80;
@@ -1130,7 +1138,14 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               description={
                 empty
                   ? 'Conch keeps them encrypted on this computer, fills them in for your assistant when you say so, and tells you when one turns up in a breach.'
-                  : 'Choose one on the left, press / to search, or add another. They’re encrypted on this computer, and your assistant only uses them with your OK.'
+                  : KEY_HINTS.map(({ keys, label }) => (
+                      <span key={label} className={styles.keyHint}>
+                        {keys.map((k) => (
+                          <Kbd key={k} keys={k} size="sm" />
+                        ))}
+                        {label}
+                      </span>
+                    ))
               }
               actions={
                 <Stack direction="row" gap={2} wrap justify="center">
