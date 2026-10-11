@@ -43,6 +43,7 @@ import { deviceSealer } from '../lib/sealed';
 import { newId } from '../lib/ids';
 import { Emitter } from '../lib/emitter';
 import { fingerprint } from './crypto';
+import { bestMatch, byMatch, lookalikeOf, matchSite, normalHost, type SiteMatch } from './match';
 import { formatName, ImportError, parseImport, toCsv, type Imported } from './importers';
 import { chooseKeystore, type Keystore } from './keystore';
 import { type CdpCredential, cdpIdToVault, fromCdp, toCdp, toPasskey } from './passkeys';
@@ -177,7 +178,27 @@ export interface FillRequest {
   /** The page's hostname. */
   host: string;
   /** The field's role on the page. */
-  want: 'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder';
+  want: FillWant;
+}
+
+export type FillWant =
+  'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder';
+
+/** Whether a fill may happen here, whether it asks first, and what the card says (ADR 0130). */
+export interface FillPolicy {
+  ask: boolean;
+  title: string;
+  /** The saved site that matched, as the person knows it. */
+  site: string;
+  /** How close that site is to the page: `related` always asks. */
+  match: SiteMatch;
+  type: VaultItemType;
+  /** What the item can fill. */
+  has: FillWant[];
+  /** The account it signs in as (a username or an email), never a secret. */
+  account?: string;
+  /** Another manager it lives in. */
+  source?: VaultSourceId;
 }
 
 function lastFour(value: string): string {
@@ -1865,33 +1886,61 @@ export class VaultService {
     return open;
   }
 
-  /** Items that belong on a page, best match first (for the browser's sign-in fields). */
-  async matching(host: string): Promise<VaultItemSummary[]> {
+  /**
+   * Items that belong on a page, closest match first (ADR 0130): the same
+   * host, a page under a saved site, then another part of the same site.
+   * Names only. Items from other managers come from their last list, so this
+   * never raises a prompt in another app.
+   */
+  async matching(host: string): Promise<(VaultItemSummary & { match: SiteMatch })[]> {
     const { items } = await this.list();
     const records = new Map((await this.#records()).map((r) => [r.id, r]));
-    return items.filter(
-      (i) =>
-        !i.deletedAt &&
-        i.source !== 'system' &&
-        records.get(i.id)?.agentAccess !== 'never' &&
-        [...i.domains, ...(records.get(i.id)?.allowedSites ?? [])].some((d) =>
-          siteMatches(d, host),
-        ),
-    );
+    const found: (VaultItemSummary & { match: SiteMatch })[] = [];
+    for (const item of items) {
+      if (item.deletedAt || item.source === 'system' || item.type === 'card') continue;
+      const record = records.get(item.id);
+      if (record?.agentAccess === 'never') continue;
+      const match = bestMatch([...item.domains, ...(record?.allowedSites ?? [])], host);
+      if (match) found.push({ ...item, match });
+    }
+    return byMatch(found);
+  }
+
+  /**
+   * The saved site a page pretends to be, if it does (ADR 0130 § Look-alikes):
+   * `paypa1.com` when you keep a PayPal login. Only when nothing saved
+   * belongs on the page.
+   */
+  async lookalike(host: string): Promise<string | undefined> {
+    const { items } = await this.list();
+    const records = new Map((await this.#records()).map((r) => [r.id, r]));
+    const sites: string[] = [];
+    for (const item of items) {
+      if (item.deletedAt || item.source === 'system') continue;
+      const allowed = records.get(item.id)?.allowedSites ?? [];
+      if (bestMatch([...item.domains, ...allowed], host)) return undefined;
+      sites.push(...item.domains, ...allowed);
+    }
+    return lookalikeOf(host, sites);
+  }
+
+  /** An item from another manager, from its last list when there is one (no prompt). */
+  async #externalSummary(source: PasswordSource, id: string) {
+    const listed = this.#listed.get(source.id) ?? (await source.list());
+    const item = listed.find((i) => i.ref === id);
+    return item && this.#external(source, item);
   }
 
   /**
    * Whether the agent may fill this item here, and if so whether to ask first.
    * Refuses outright on a site the item doesn't belong to: a password for
-   * netflix.com is never typed into netflix.com.evil.example.
+   * netflix.com is never typed into netflix.com.evil.example. Another part of
+   * the item's own site (`app.example.com` for `login.example.com`) always
+   * asks, until the person says "Always" there (ADR 0130).
    */
-  async fillPolicy(request: FillRequest): Promise<{ ask: boolean; title: string; site: string }> {
+  async fillPolicy(request: FillRequest): Promise<FillPolicy> {
     const source = this.#sourceOf(request.itemId);
-    const summary = source
-      ? (await source.list())
-          .map((i) => this.#external(source, i))
-          .find((i) => i.id === request.itemId)
-      : undefined;
+    const summary = source ? await this.#externalSummary(source, request.itemId) : undefined;
     const record = source ? undefined : await this.#record(request.itemId).catch(() => undefined);
     if (!summary && !record)
       throw new VaultError('not-found', 'There’s no saved item with that id.');
@@ -1901,29 +1950,51 @@ export class VaultService {
         'refused',
         'The user said this item is never to be used by the assistant.',
       );
+    const view = record ? this.#summary(record, []) : summary;
+    const type = view?.type ?? 'login';
+    const title = view?.title ?? 'that item';
     // A card isn't for one site: it may go into any secure checkout, and always with your OK.
-    if ((record?.type ?? summary?.type) === 'card') {
+    if (type === 'card') {
       if (!/\./.test(request.host) && request.host !== 'localhost')
         throw new VaultError('refused', 'Cards are only filled on a real website.');
       return {
         ask: true,
-        title: record?.title ?? summary?.title ?? 'that card',
+        title,
         site: request.host,
+        match: 'exact',
+        type,
+        has: ['cardNumber', 'cvv', 'expiry', 'cardholder'],
       };
     }
     const sites = record
-      ? [...record.urls.map((u) => siteOf(u) ?? ''), ...record.allowedSites]
+      ? [...record.urls.map((u) => siteOf(u) ?? ''), ...record.allowedSites].filter(Boolean)
       : (summary?.domains ?? []);
-    const site = sites.find((s) => s && siteMatches(s, request.host));
-    if (!site)
+    const match = bestMatch(sites, request.host);
+    if (!match)
       throw new VaultError(
         'refused',
-        `That item is for ${sites.filter(Boolean).join(', ') || 'no website'}, not ${request.host}. Conch only fills a password on the site it belongs to.`,
+        `That item is for ${sites.join(', ') || 'no website'}, not ${request.host}. Conch only fills a password on the site it belongs to.`,
       );
+    const site = sites.find((s) => matchSite(s, request.host) === match) ?? request.host;
+    const has: FillWant[] = [];
+    if (record) {
+      if (record.fields.some((f) => f.role === 'username' && f.value)) has.push('username');
+      if (record.fields.some((f) => f.role === 'password' && f.value)) has.push('password');
+      if (record.fields.some((f) => f.kind === 'totp' && f.value)) has.push('totp');
+    } else {
+      if (summary?.subtitle) has.push('username');
+      has.push('password');
+      if (summary?.totp) has.push('totp');
+    }
     return {
-      ask: record?.agentAccess !== 'allow',
-      title: record?.title ?? summary?.title ?? 'that item',
+      ask: record?.agentAccess !== 'allow' || match === 'related',
+      title,
       site,
+      match,
+      type,
+      has,
+      ...(view?.subtitle && { account: view.subtitle }),
+      ...(source && { source: source.id }),
     };
   }
 
@@ -1936,8 +2007,10 @@ export class VaultService {
       if (request.want === 'totp') value = await source.totp(request.itemId);
       else {
         const { fields } = await source.fields(request.itemId);
+        // Only a password falls back to "the secret": a username box never gets one.
         const field =
-          fields.find((f) => f.role === request.want) ?? fields.find((f) => f.kind === 'secret');
+          fields.find((f) => f.role === request.want) ??
+          (request.want === 'password' ? fields.find((f) => f.kind === 'secret') : undefined);
         if (field) value = field.value ?? (await source.value(request.itemId, field.id));
       }
       if (value) await this.#useExternal(request.itemId);
@@ -1958,14 +2031,126 @@ export class VaultService {
     return value;
   }
 
-  /** The person chose "Always" on a fill: the agent may use this item on its own sites without asking. */
-  async allowAgent(id: string) {
+  /**
+   * The person chose "Always" on a fill: the agent may use this item on its
+   * own sites without asking. Said on another part of its site, that host
+   * joins the item's sites (ADR 0130).
+   */
+  async allowAgent(id: string, host?: string) {
     if (this.#sourceOf(id)) return;
     await this.#mutex.run(async () => {
       const record = await this.#record(id);
-      await this.store.put({ ...record, agentAccess: 'allow' });
+      const sites = [...record.urls.map((u) => siteOf(u) ?? ''), ...record.allowedSites];
+      const join = host && bestMatch(sites, host) === 'related' ? [normalHost(host)] : [];
+      await this.store.put({
+        ...record,
+        agentAccess: 'allow',
+        allowedSites: [...new Set([...record.allowedSites, ...join])],
+      });
     });
     this.#changed();
+  }
+
+  /**
+   * A strong password Conch made for a sign-up or a change on a page (ADR
+   * 0130), saved before it's typed in so it's never lost: into the login it
+   * replaces (the old one goes to its history), or a new login for the site.
+   * Another manager's item can't be written here, so a new login is made in
+   * Conch. Returns the old password too, for the form's "current password"
+   * box. Nothing here ever reaches the agent.
+   */
+  async saveNewPassword(input: {
+    origin: string;
+    host: string;
+    password: string;
+    username?: string;
+    itemId?: string;
+  }): Promise<{ itemId: string; title: string; created: boolean; previous?: string }> {
+    if (await this.isLocked()) throw new VaultError('unavailable', 'Passwords is locked.');
+    this.#remember(input.password);
+    const own =
+      input.itemId && !this.#sourceOf(input.itemId)
+        ? await this.#record(input.itemId).catch(() => undefined)
+        : undefined;
+    if (own && !own.deletedAt && own.type === 'login') {
+      const sites = [...own.urls.map((u) => siteOf(u) ?? ''), ...own.allowedSites];
+      if (!bestMatch(sites, input.host))
+        throw new VaultError('refused', 'That item isn’t for this site.');
+      let previous: string | undefined;
+      await this.#mutex.run(async () => {
+        const before = await this.#record(own.id);
+        const now = Date.now();
+        const old = before.fields.find((f) => f.role === 'password');
+        previous = old?.value || undefined;
+        const fields: VaultField[] = old
+          ? before.fields.map((f) => (f.id === old.id ? { ...f, value: input.password } : f))
+          : [
+              ...before.fields,
+              {
+                id: newId('f'),
+                label: 'Password',
+                kind: 'secret',
+                role: 'password',
+                value: input.password,
+              },
+            ];
+        const history =
+          old?.value && old.value !== input.password
+            ? [{ fieldId: old.id, value: old.value, changedAt: now }, ...before.history]
+            : before.history;
+        await this.store.put({
+          ...before,
+          fields,
+          updatedAt: now,
+          history: history.slice(0, VAULT_LIMITS.maxHistory),
+          // Changed here: a sync from the manager it came from leaves it alone now.
+          ...(before.origin && { origin: { ...before.origin, detached: true } }),
+        });
+      });
+      await this.#use(own.id, { at: Date.now(), how: 'filled', where: input.host });
+      this.#changed();
+      return { itemId: own.id, title: own.title, created: false, ...(previous && { previous }) };
+    }
+    let title = normalHost(input.host);
+    let username = input.username;
+    let previous: string | undefined;
+    if (input.itemId && this.#sourceOf(input.itemId)) {
+      const request = { itemId: input.itemId, host: input.host, want: 'password' as const };
+      const policy = await this.fillPolicy(request);
+      title = policy.title;
+      username ||= policy.account;
+      previous = await this.fillValue(request).catch(() => undefined);
+    }
+    const created = await this.create({
+      type: 'login',
+      title,
+      fields: [
+        ...(username
+          ? [
+              {
+                label: 'Username',
+                kind: 'text' as const,
+                role: 'username' as const,
+                value: username,
+              },
+            ]
+          : []),
+        { label: 'Password', kind: 'secret', role: 'password', value: input.password },
+      ],
+      urls: [input.origin],
+      tags: [],
+      notes: '',
+      favorite: false,
+      agentAccess: 'ask',
+      allowedSites: [],
+    });
+    await this.#use(created.id, { at: Date.now(), how: 'filled', where: input.host });
+    return {
+      itemId: created.id,
+      title: created.title,
+      created: true,
+      ...(previous && { previous }),
+    };
   }
 
   /**
@@ -1998,7 +2183,7 @@ export class VaultService {
     return [
       '## Passwords',
       'The user keeps passwords, cards, notes and keys in Conch’s Passwords. You never see a password unless the user agrees, and must never ask them to type or paste a secret into the chat.',
-      '- Signing in or paying on a website: use browser_type on the password, code or card field with an empty text. Conch fills it from Passwords after the user agrees (the username too); you never see it. passwords_find lists what’s saved (names and sites only); pass `item` when there’s more than one.',
+      '- Signing in, signing up or paying on a website: use browser_type with an empty text on the username, password, new password, code or card field. Conch fills it from Passwords after the user agrees (one question covers the whole sign-in, and they pick the account when there are several), and makes and saves a strong password on a sign-up form; you never see it. passwords_find lists what’s saved (names and sites only).',
       '- Missing a credential you need: call passwords_request with a short reason. The user types it into a secure card in the chat and it’s saved; you get its id, never the value.',
       '- Needing a value yourself (a PIN for a phone menu, a note, a key for a command): passwords_read, with a reason; the user is asked first. Use it for that and never repeat it in a reply.',
       '- Passkeys: when a site offers “Sign in with a passkey” and passwords_find shows one saved for it, call browser_passkey with sign_in, then click that button. When a site offers to create a passkey and the user wants one, call browser_passkey with save first.',

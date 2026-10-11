@@ -233,7 +233,7 @@ const OTHER = /[\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Armenian}\p{Script=
 const FULLWIDTH = /[\u{FF01}-\u{FF5E}]/u;
 
 /** The Latin a lookalike passes for: “paypal.com” spelled with a Cyrillic “a” (U+0430) → “paypal.com”. */
-function skeleton(word: string): string {
+export function skeleton(word: string): string {
   return [...word]
     .map((ch) => CONFUSABLE[ch] ?? ch)
     .join('')

@@ -579,3 +579,147 @@ describe('Repair everything', () => {
     });
   });
 });
+
+describe('passwords in the browser (ADR 0130)', () => {
+  const at = (urls: string[], over: Record<string, unknown> = {}) => login({ urls, ...over });
+
+  it('offers the closest match first: the same host, a page under it, then the same site', async () => {
+    const { service } = await vault();
+    const related = await service.create(at(['https://login.example.com'], { title: 'Related' }));
+    const exact = await service.create(at(['https://app.example.com'], { title: 'Exact' }));
+    const within = await service.create(at(['https://example.com'], { title: 'Within' }));
+    await service.create(at(['https://example.org'], { title: 'Elsewhere' }));
+    await service.create(at(['https://app.example.com'], { title: 'Never', agentAccess: 'never' }));
+    const found = await service.matching('app.example.com');
+    expect(found.map((i) => [i.id, i.match])).toEqual([
+      [exact.id, 'exact'],
+      [within.id, 'within'],
+      [related.id, 'related'],
+    ]);
+    // Names only, as ever.
+    expect(JSON.stringify(found)).not.toContain('correct-horse');
+  });
+
+  it('keeps shared hosting and public suffixes apart', async () => {
+    const { service } = await vault();
+    await service.create(at(['https://alice.github.io'], { title: 'Alice' }));
+    expect(await service.matching('bob.github.io')).toEqual([]);
+    expect((await service.matching('alice.github.io')).map((i) => i.title)).toEqual(['Alice']);
+  });
+
+  it('asks on another part of the site, even for an item allowed without asking', async () => {
+    const { service } = await vault();
+    const item = await service.create(
+      at(['https://accounts.google.com'], { title: 'Google', agentAccess: 'allow' }),
+    );
+    const want = 'password' as const;
+    expect(
+      await service.fillPolicy({ itemId: item.id, host: 'accounts.google.com', want }),
+    ).toMatchObject({ ask: false, match: 'exact', account: 'ada@example.com' });
+    expect(
+      await service.fillPolicy({ itemId: item.id, host: 'mail.google.com', want }),
+    ).toMatchObject({ ask: true, match: 'related', site: 'accounts.google.com' });
+    // "Always" there makes that host one of the item's own.
+    await service.allowAgent(item.id, 'mail.google.com');
+    expect(
+      await service.fillPolicy({ itemId: item.id, host: 'mail.google.com', want }),
+    ).toMatchObject({ ask: false, match: 'exact' });
+    expect((await service.detail(item.id)).allowedSites).toEqual(['mail.google.com']);
+    // An unrelated host is never added that way.
+    await service.allowAgent(item.id, 'evil.example');
+    expect((await service.detail(item.id)).allowedSites).toEqual(['mail.google.com']);
+  });
+
+  it('says what an item can fill, and never a value', async () => {
+    const { service } = await vault();
+    const item = await service.create(
+      login({
+        fields: [
+          ...login().fields,
+          { label: 'One-time code', kind: 'totp', value: 'JBSWY3DPEHPK3PXP' },
+        ],
+      }),
+    );
+    const policy = await service.fillPolicy({
+      itemId: item.id,
+      host: 'netflix.com',
+      want: 'totp',
+    });
+    expect(policy.has).toEqual(['username', 'password', 'totp']);
+    expect(JSON.stringify(policy)).not.toContain('correct-horse');
+  });
+
+  it('names the saved site a look-alike page pretends to be', async () => {
+    const { service } = await vault();
+    await service.create(at(['https://www.paypal.com'], { title: 'PayPal' }));
+    expect(await service.lookalike('paypa1.com')).toBe('paypal.com');
+    expect(await service.lookalike('paypal.com.account-check.io')).toBe('paypal.com');
+    expect(await service.lookalike('www.paypal.com')).toBeUndefined();
+    expect(await service.lookalike('example.com')).toBeUndefined();
+  });
+
+  it('saves a new password for a sign-up before it is typed in', async () => {
+    const { service } = await vault();
+    const made = generatePassword();
+    const saved = await service.saveNewPassword({
+      origin: 'https://shop.example',
+      host: 'shop.example',
+      password: made,
+      username: 'new@example.com',
+    });
+    expect(saved).toMatchObject({ created: true, title: 'shop.example' });
+    expect(saved.previous).toBeUndefined();
+    const detail = await service.detail(saved.itemId);
+    expect(detail).toMatchObject({ subtitle: 'new@example.com', urls: ['https://shop.example'] });
+    expect(
+      await service.fillValue({ itemId: saved.itemId, host: 'shop.example', want: 'password' }),
+    ).toBe(made);
+    // Known for redaction from the moment it's made.
+    expect(await service.secretValues()).toContain(made);
+  });
+
+  it('changes a saved password, keeping the old one in its history', async () => {
+    const { service } = await vault();
+    const item = await service.create(login());
+    const saved = await service.saveNewPassword({
+      origin: 'https://www.netflix.com',
+      host: 'www.netflix.com',
+      password: 'brand-new-password-1!',
+      itemId: item.id,
+    });
+    expect(saved).toMatchObject({
+      itemId: item.id,
+      created: false,
+      previous: 'correct-horse-battery-staple-9',
+    });
+    expect(
+      await service.fillValue({ itemId: item.id, host: 'netflix.com', want: 'password' }),
+    ).toBe('brand-new-password-1!');
+    expect((await service.detail(item.id)).history).toBe(1);
+    // Never into an item for another site.
+    await expect(
+      service.saveNewPassword({
+        origin: 'https://evil.example',
+        host: 'evil.example',
+        password: 'x-y-z-1234567',
+        itemId: item.id,
+      }),
+    ).rejects.toThrow(/isn’t for this site/);
+  });
+
+  it('reads another manager’s item for a fill from its last list, without asking again', async () => {
+    const calls: { args: string[] }[] = [];
+    const { service } = await vault({ exec: fakeExec(calls) });
+    await service.setSource('1password', { enabled: true });
+    const bank = (await service.list({ looking: true })).items.find(
+      (i) => i.source === '1password',
+    );
+    const lists = () => calls.filter((c) => c.args.join(' ') === 'item list --format json').length;
+    const before = lists();
+    expect((await service.matching('bank.example')).map((i) => i.id)).toEqual([bank?.id]);
+    expect(
+      await service.fillPolicy({ itemId: bank?.id ?? '', host: 'bank.example', want: 'password' }),
+    ).toMatchObject({ source: '1password', account: 'ada', match: 'exact' });
+    expect(lists()).toBe(before);
+  });
+});
