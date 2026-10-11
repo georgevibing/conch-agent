@@ -65,6 +65,7 @@ import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 import { LimitFallback } from './fallback';
 import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
+import { SwitchChoice } from './switching';
 
 export * from './access';
 export * from './activity';
@@ -143,6 +144,7 @@ export * from './updates';
 export * from './usage';
 export * from './fallback';
 export * from './spend';
+export * from './switching';
 export * from './vault';
 export * from './passwords';
 export * from './pick';
@@ -1175,6 +1177,35 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('limit.back'),
     engine: EngineId,
     until: z.number().optional(),
+  }),
+  /**
+   * The chat moved to another model because someone asked (ADR 0132): the
+   * assistant on the person's words, or the person with a chip or **Switch
+   * back**. From the next turn on. `message` is the line the chat shows.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('model.switched'),
+    from: EngineId,
+    fromModel: z.string().max(200).optional(),
+    to: EngineId,
+    model: z.string().max(200).optional(),
+    /** "Switched to Opus 5.5 on your Claude Max plan" */
+    message: z.string().max(300),
+    by: z.enum(['assistant', 'person']),
+    /** What changed with it, in a few words: "Ask first: Copilot can't do Auto". */
+    note: z.string().max(200).optional(),
+  }),
+  /**
+   * A few models the person's words could mean (ADR 0132), shown as chips
+   * under the reply. A chip sends its `text`; that message switches the chat
+   * at once and, with `request`, carries on with it on the model chosen.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('model.choices'),
+    choices: z.array(SwitchChoice).min(1).max(3),
+    request: z.string().min(1).max(4000).optional(),
   }),
   z.object({
     ...logged,

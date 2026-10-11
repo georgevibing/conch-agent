@@ -1322,6 +1322,14 @@ const CONCH: Record<string, (input: Input) => Draft> = {
       words: say('suggest', target ? clip(oneLine(target), 40) : 'something'),
     };
   },
+  // Switching the chat's model when asked (ADR 0132): the words the person used.
+  switch_model: (input) => {
+    const to = str(input, 'to');
+    return {
+      family: 'other',
+      words: say('switch', to ? `to ${clip(oneLine(to), 40)}` : 'models'),
+    };
+  },
   current_time: () => ({ family: 'other', words: say('check', 'the time') }),
   // Using the computer's apps (ADR 0110): what it did, never what it typed.
   computer: (input) => {

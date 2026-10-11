@@ -183,6 +183,10 @@ export const ProviderModels = Capabilities.extend({
   message: z.string().optional(),
   /** Runs on this computer: works with no internet, spends nothing. */
   local: z.boolean().default(false),
+  /** How it's paid for, when it's known: a plan, per use, or nothing (ADR 0132). */
+  billing: z.enum(['free', 'plan', 'metered']).optional(),
+  /** The plan or account in words ("Claude Max"), never an address. */
+  account: z.string().max(80).optional(),
 });
 export type ProviderModels = z.infer<typeof ProviderModels>;
 

@@ -2058,6 +2058,13 @@ const TOOLS: Case[] = [
   ],
   ['current_time', 'mcp__conch__current_time', {}, undefined, { done: 'Checked the time' }],
   [
+    'switch_model',
+    'mcp__conch__switch_model',
+    { to: 'Opus 5.5', carry_on: true },
+    undefined,
+    { doing: 'Switching to Opus 5.5', done: 'Switched to Opus 5.5' },
+  ],
+  [
     'computer screenshot',
     'mcp__conch__computer',
     { action: 'screenshot' },
