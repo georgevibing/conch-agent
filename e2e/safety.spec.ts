@@ -55,14 +55,18 @@ test('after reading a page, a command asks — saying why — and “Always allo
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('activity');
   await page.getByRole('option', { name: 'Settings: Activity' }).click();
-  await expect(page.getByRole('heading', { name: 'Everything your assistant did' })).toBeVisible();
-  await expect(page.getByText('Opened https://news.example/today')).toBeVisible();
-  await expect(page.getByText('Read news.example')).toBeVisible();
-  await expect(page.getByText(/You said no: run/)).toBeVisible();
-  await page.getByRole('combobox', { name: 'Show' }).click();
+  // Settings → Activity, over the chat (which says some of the same things).
+  const activity = page.getByRole('tabpanel', { name: 'Activity' });
+  await expect(
+    activity.getByRole('heading', { name: 'Everything your assistant did' }),
+  ).toBeVisible();
+  await expect(activity.getByText('Opened https://news.example/today')).toBeVisible();
+  await expect(activity.getByText('Read news.example')).toBeVisible();
+  await expect(activity.getByText(/You said no: run/)).toBeVisible();
+  await activity.getByRole('combobox', { name: 'Show' }).click();
   await page.getByRole('option', { name: 'Asked you' }).click();
-  await expect(page.getByText('Opened https://news.example/today')).toHaveCount(0);
-  await expect(page.getByText(/You said no: run/)).toBeVisible();
+  await expect(activity.getByText('Opened https://news.example/today')).toHaveCount(0);
+  await expect(activity.getByText(/You said no: run/)).toBeVisible();
 });
 
 test('Safety in Settings: turning a check off says what could happen, and the checkup notices', async ({
