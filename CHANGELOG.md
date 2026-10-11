@@ -2,6 +2,26 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.4](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-10-11)
+
+### New
+
+- The browser signs in from Passwords with one question, offers the accounts to pick on a sign-in card, and makes a strong password when you sign up
+- Passwords finds the right login for a page and warns you about look-alike sites
+- The browser answers a page's own questions, fills a form in one step and reads long pages to the end; find on page and Stop are in its panel
+- Ask the assistant to switch model in your words, like "use Opus 5.5", "something cheaper" or "go back", on every provider
+- The chat shows when it switched model, with Switch back
+- Activity moves into Settings, under Safe and sound
+
+### Fixed
+
+- Routines the assistant makes run on your clock, not the gateway's
+- A Mac lists Conch by name in Privacy & Security, not "node"
+- The per-core bars on This computer fill their column on desktop
+- An app card's name sits level with its logo
+- Delete reads red in the chat selection bar
+- The Passwords start screen shows its keys
+
 ## [0.1.0-alpha.3](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-10-10)
 
 ### Fixed
