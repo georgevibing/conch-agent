@@ -610,6 +610,16 @@ function rmRisk(words: string[], places: Places): Risk | undefined {
   return undefined;
 }
 
+/** Deleting inside folders, as `find -delete` or `rsync --delete` does: a whole one, or outside the work folder. */
+function deletesIn(folders: string[], places: Places): Risk | undefined {
+  if (folders.some((f) => criticalTarget(f, places, false))) return WHOLE;
+  const elsewhere = folders.filter((f) => {
+    const path = placeOf(f, places);
+    return !path || !inside(places.workspace, path);
+  });
+  return elsewhere.length ? rmRisk(['rm', '-r', ...elsewhere], places) : undefined;
+}
+
 /** Branches a push publishes or deploys from: pushed as asked only when the person names them. */
 const DEPLOY_BRANCH = /^(?:stable|production|prod|live|release(?:[/-].*)?|gh-pages)$/i;
 
@@ -1348,9 +1358,31 @@ function partRisk(part: string, places: Places): Risk | undefined {
     const targets = words.slice(1).filter((w) => !/^[-/]/.test(w));
     if (targets.some((t) => criticalTarget(t, places))) return WHOLE;
   }
-  if (prog === 'find' && /\s-delete\b|-exec\s+rm\b/.test(part)) {
-    const start = words[1] ?? '.';
-    if (criticalTarget(start, places, false)) return WHOLE;
+  // `find … -delete` and `rsync --delete` delete as `rm -r` would: read their folders the same way.
+  if (
+    prog === 'find' &&
+    /\s-delete\b|\s-(?:exec|execdir|ok|okdir)\s+(?:\S*[\\/])?(?:rm|rmdir|shred)\b/.test(part)
+  ) {
+    const starts: string[] = [];
+    for (let i = 1; i < words.length; i++) {
+      const w = words[i] ?? '';
+      if (/^-[HLP]$|^-O\d$/.test(w)) continue;
+      if (w === '-D') {
+        i++;
+        continue;
+      }
+      if (w.startsWith('-') || w === '(' || w === '!') break;
+      starts.push(w);
+    }
+    const risk = deletesIn(starts.length ? starts : ['.'], places);
+    if (risk) return risk;
+  }
+  if (prog === 'rsync' && words.some((w) => /^--(?:delete|del)(?:-\w+)*$/.test(w))) {
+    const dest = words.filter((w, i) => i > 0 && !w.startsWith('-')).pop();
+    if (dest && !/^(?:[\w.-]+@)?[\w.-]+:/.test(dest)) {
+      const risk = deletesIn([dest], places);
+      if (risk) return risk;
+    }
   }
   if (
     /^(?:mkfs(?:\.\w+)?|wipefs|fdisk|sfdisk|gdisk|parted)$/.test(prog) ||

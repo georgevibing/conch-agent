@@ -641,4 +641,33 @@ describe('the same step written another way', () => {
     ])
       expect(assessRisk('Bash', { command }, ctx), command).toBeUndefined();
   });
+
+  it('reads a delete by find or rsync like the same delete by rm', () => {
+    for (const command of [
+      'find -L ~ -delete',
+      'find ~ -execdir rm -rf {} +',
+      'find / -name x -exec /bin/rm -rf {} \\;',
+      'rsync -a --delete empty/ ~/',
+    ])
+      expect(breaksCircuit('Bash', { command }, ctx), command).toBeDefined();
+    for (const command of [
+      'find ~/Documents -type f -delete',
+      'find /Users/ada/Pictures -name "*.jpg" -exec rm {} +',
+      'rsync -a --delete empty/ ~/Documents/',
+    ])
+      expect(assessRisk('Bash', { command }, ctx), command).toMatchObject({
+        kind: 'wipe',
+        harm: 'severe',
+      });
+    for (const command of [
+      'find . -name "*.orig" -delete',
+      'find src -name "*.tmp" -delete',
+      'find /tmp/build -delete',
+      'rsync -a --delete dist/ public/',
+      'rsync -av --delete dist/ deploy@example.com:/srv/app/',
+    ])
+      expect(breaksCircuit('Bash', { command }, ctx), command).toBeUndefined();
+    expect(asks(bash('find . -name "*.orig" -delete'), true)).toBe(false);
+    expect(asks(bash('rsync -a --delete dist/ public/'), true)).toBe(false);
+  });
 });
