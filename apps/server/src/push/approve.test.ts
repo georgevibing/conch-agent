@@ -24,6 +24,9 @@ describe('what a lock-screen tap may allow (ADR 0108)', () => {
     for (const a of [
       asked('Bash', { command: 'npm test' }),
       asked('Bash', { command: 'git status && pnpm build' }),
+      asked('Bash', { command: 'pnpm test 2>&1 | tail -20' }),
+      asked('Bash', { command: 'ls > /dev/null' }),
+      asked('Bash', { command: 'pnpm build >> build.log' }),
       asked('Write', { file_path: `${work}/notes.md` }),
       asked('Edit', { file_path: `${work}/src/app.ts` }),
       asked('WebFetch', { url: 'https://example.com/docs' }),
@@ -51,6 +54,17 @@ describe('what a lock-screen tap may allow (ADR 0108)', () => {
       asked('Bash', { command: 'npm test' }, { once: true }),
       asked('Bash', { command: 'npm test' }, { editable: true }),
       asked('Bash', { command: 'npm test' }, { lasting: true }),
+      // However the delete is written.
+      asked('Bash', { command: '/bin/rm -rf build' }),
+      asked('Bash', { command: 'find . -name "*.log" -delete' }),
+      asked('Bash', { command: 'find . -name x -exec rm {} +' }),
+      asked('Bash', { command: 'python3 -c "import shutil; shutil.rmtree(\'out\')"' }),
+      asked('Bash', { command: 'perl -e \'unlink glob "*.txt"\'' }),
+      asked('Bash', { command: 'npx rimraf dist' }),
+      asked('Bash', { command: 'docker system prune -af' }),
+      asked('Bash', { command: 'gh api -X DELETE repos/me/shop/issues/1' }),
+      asked('Bash', { command: 'echo > notes.md' }),
+      asked('Bash', { command: 'timeout 9 rm notes.md' }),
     ]) {
       const check = lockScreenCheck(a, work);
       expect(check.quick, `${a.toolName} ${JSON.stringify(a.input)}`).toBe(false);

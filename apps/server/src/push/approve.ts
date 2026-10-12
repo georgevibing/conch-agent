@@ -24,7 +24,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import type { ConversationEvent } from '@conch/protocol';
 
-import { assessRisk } from '../conversations/risk';
+import { assessRisk, commandParts, wordsOf } from '../conversations/risk';
 import { sinkReason } from '../conversations/taint';
 import { PLAN_APPROVAL } from '../plans/mode';
 
@@ -36,9 +36,16 @@ export const APPROVAL_WAIT_MS = 30 * 60 * 1000;
 /** Whether a lock-screen tap may allow it, and if not, why, in a few words. */
 export type LockScreen = { quick: true } | { quick: false; why: string };
 
-/** In a command: deleting, sending, publishing, reaching another machine, or being root. */
+/** Programs that delete, send, publish, reach another machine, or run as root. */
+const OUTWARD_PROGRAMS =
+  /^(?:rm|rmdir|del|erase|rd|unlink|shred|truncate|dd|mv|rimraf|del-cli|trash|curl|wget|scp|sftp|rsync|ssh|nc|ncat|telnet|ftp|sudo|doas|su|chmod|chown|kill|pkill|killall|remove-item|invoke-webrequest|invoke-restmethod)$/i;
+
+/** The same, written as a subcommand, a flag, code on the line or an overwrite: in any piece. */
 const OUTWARD =
-  /(?:^|[\s;&|(`$])(?:rm|rmdir|del|erase|rd|unlink|shred|truncate|dd|mv|curl|wget|scp|sftp|rsync|ssh|nc|ncat|telnet|ftp|sudo|doas|su|chmod|chown|kill|pkill|killall|Remove-Item|Invoke-WebRequest|Invoke-RestMethod)(?=$|[\s;&|)])|\bgit\s+(?:push|reset|clean|rebase|checkout\s+--|restore|branch\s+-D|stash\s+(?:drop|clear))|\b(?:npm|pnpm|yarn|cargo|gem|twine|poetry)\s+publish\b|\bgh\s+(?:release|pr\s+merge|repo\s+delete)/;
+  /\bgit\s+(?:push|reset|clean|rebase|checkout\s+--|restore|branch\s+-D|stash\s+(?:drop|clear))|\b(?:npm|pnpm|yarn|cargo|gem|twine|poetry)\s+publish\b|\bgh\s+(?:release|pr\s+merge|repo\s+delete)|\bgh\s+api\b.*\s(?:-X|--method)\s*=?\s*(?:DELETE|POST|PUT|PATCH)\b|\s-(?:delete|exec(?:dir)?|ok(?:dir)?)\b|\b(?:rimraf|del-cli|rmtree|rmSync|unlinkSync|rmdirSync|unlink|os\.remove|os\.rmdir|fs\.rm|FileUtils\.rm\w*)\b|\b(?:docker|podman)\b.*\b(?:prune|rm|rmi|down)\b|(?:^|[^>&\d=-])>\|?\s*(?!\/dev\/null\b|&)[^\s>]/i;
+
+/** The program a piece of a command runs, its folder taken off. */
+const programOf = (part: string) => (wordsOf(part)[0] ?? '').replace(/^.*[\\/]/, '');
 
 /** Conch's own tools that act in your apps or send things out. */
 const SENDS = /^(?:mcp__conch__)?(?:google_|slack_|channel_|image_generate|app_publish|publish)/;
@@ -61,7 +68,11 @@ export function lockScreenCheck(asked: Asked, workspace: string): LockScreen {
   // Stricter than Auto on purpose: from a lock screen, anything that deletes, sends or
   // reaches another machine waits for the app, even inside the work folder.
   const command = (asked.input as { command?: unknown } | undefined)?.command;
-  if (typeof command === 'string' && OUTWARD.test(command))
+  if (
+    typeof command === 'string' &&
+    (OUTWARD.test(command) ||
+      commandParts(command).some((part) => OUTWARD_PROGRAMS.test(programOf(part))))
+  )
     return { quick: false, why: 'It deletes or sends something.' };
   const sink = sinkReason(asked.toolName, asked.input, { workspace });
   // A command was judged above, and a search query is everyday; the rest send or change things.
