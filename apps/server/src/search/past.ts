@@ -102,6 +102,10 @@ export function offersPastChats(ctx: ToolContext): boolean {
 export const SECRET_SHAPES: [RegExp, string][] = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, '•••'],
   [/\b(?:sk|rk)-[A-Za-z0-9_-]{20,}/g, '•••'],
+  // Stripe's, Hugging Face's, npm's.
+  [/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/g, '•••'],
+  [/\bhf_[A-Za-z0-9]{30,}/g, '•••'],
+  [/\bnpm_[A-Za-z0-9]{36,}/g, '•••'],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}/g, '•••'],
   [/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '•••'],
   [/\bglpat-[A-Za-z0-9_-]{20,}/g, '•••'],
@@ -116,8 +120,14 @@ export const SECRET_SHAPES: [RegExp, string][] = [
   [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}/g, '$1 •••'],
   // A password in an address: https://me:secret@host.
   [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi, '$1•••@'],
+  // The name may end a longer one, as environments write them: DB_PASSWORD=x.
   [
-    /\b((?:pass(?:word|wd|code|phrase)?|pwd|pin|secret|token|api[_ -]?key|access[_ -]?key|private[_ -]?key|client[_ -]?secret)s?\b["']?\s*(?:[:=]|\bis\b)\s*)(["']?)[^\s"',;]{3,}\2/gi,
+    /(?<![A-Za-z0-9])((?:pass(?:word|wd|code|phrase)?|pwd|pin|secret(?:[_ -]?key)?|token|api[_ -]?key|access[_ -]?key|private[_ -]?key|client[_ -]?secret)s?\b["']?\s*(?:[:=]|\bis\b)\s*)(["']?)[^\s"',;]{3,}\2/gi,
+    '$1$2•••$2',
+  ],
+  // Given as a flag: --password x.
+  [
+    /((?:^|\s)--?(?:pass(?:word|wd|phrase)?|secret|token|api-?key|access-?key|client-?secret)\s+)(["']?)[^\s"'<>|]{3,}\2/gi,
     '$1$2•••$2',
   ],
 ];

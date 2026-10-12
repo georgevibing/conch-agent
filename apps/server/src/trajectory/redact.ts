@@ -152,8 +152,8 @@ export class Redaction {
     let keys = 0;
     for (const [shape, by] of SECRET_SHAPES) {
       out = out.replace(shape, (match: string, ...groups: unknown[]) => {
-        // Already out (a saved password): counted once, as what it was.
-        if (match.includes(TOKEN.password)) return match;
+        // Already out (a saved password, or a key a shape before took): counted once.
+        if (match.includes(TOKEN.password) || match.includes(TOKEN.key)) return match;
         keys++;
         return by
           .replace(/\$(\d)/g, (_, n: string) => {

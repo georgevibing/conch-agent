@@ -463,6 +463,42 @@ describe('never a secret', () => {
     );
   });
 
+  it('hides keys named the way environments name them, and keys given as flags', () => {
+    const stripe = ['sk', 'live', '51Hc4F2eZvKYlo2C0aBcDeFgHiJk'].join('_');
+    const restricted = ['rk', 'live', '51Hc4F2eZvKYlo2C0aBcDeFgHiJk'].join('_');
+    const huggingface = ['hf', 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'].join('_');
+    const npm = ['npm', 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'].join('_');
+    const said = [
+      'export OPENAI_API_KEY=abcd1234efgh5678',
+      'DB_PASSWORD=hunter22',
+      'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENG',
+      'GITHUB_TOKEN="tok9876543"',
+      'SECRET_KEY=django-insecure-x1',
+      'mysql --password hunter33 -u root',
+      `STRIPE=${stripe} ${restricted} ${huggingface} ${npm}`,
+    ].join('\n');
+    const out = scrubSecrets(said);
+    for (const secret of [
+      'abcd1234efgh5678',
+      'hunter22',
+      'wJalrXUtnFEMIK7MDENG',
+      'tok9876543',
+      'django-insecure-x1',
+      'hunter33',
+      stripe,
+      restricted,
+      huggingface,
+      npm,
+    ])
+      expect(out).not.toContain(secret);
+    expect(out).toContain('DB_PASSWORD=•••');
+    expect(out).toContain('--password ••• -u root');
+    // A flag that names a file of one isn't the key.
+    expect(scrubSecrets('gh auth login --with-token < token.txt')).toBe(
+      'gh auth login --with-token < token.txt',
+    );
+  });
+
   it('never returns what Passwords handed out, nor a pasted key', async () => {
     const vaultValue = 'correct horse battery staple';
     const chats: Chat[] = [
