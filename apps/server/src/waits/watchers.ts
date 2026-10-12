@@ -285,6 +285,9 @@ function textOf(body: string, type: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/** Answers that say “not now”, not what the page is: 408 timed out, 425 too early, 429 slow down. */
+const PASSING = new Set([408, 425, 429]);
+
 export function urlWatcher(options: {
   url: URL;
   owner: string;
@@ -325,7 +328,8 @@ export function urlWatcher(options: {
       const hintMs = Number.isFinite(retry) && retry > 0 ? retry * 1000 : undefined;
       if (response.status === 304)
         return { settled: false, status: 'No change yet', ...(hintMs && { hintMs }) };
-      if (!response.ok && response.status >= 500)
+      // A server error, a slow-down or a timed-out request passes; another 4xx is the page's answer.
+      if (!response.ok && (response.status >= 500 || PASSING.has(response.status)))
         return {
           settled: false,
           status: '',

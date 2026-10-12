@@ -21,6 +21,7 @@ import {
 } from './github';
 import { GROWTH, nextGap, span } from './pace';
 import { WaitService } from './service';
+import { urlWatcher } from './watchers';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
 
@@ -590,6 +591,23 @@ describe('wait_for a page and a time', () => {
     expect(seen).toContain('"1"');
     expect(wakes).toHaveLength(1);
     expect(wakes[0]?.prompt).toMatch(/now reads: “Deploy done”/);
+  });
+
+  it('a page that says “too many requests” for a while hasn’t changed', async () => {
+    const answers: AppFetchResponse[] = [
+      { ok: true, status: 200, headers: {}, body: 'Deploy running' },
+      { ok: false, status: 429, headers: { 'retry-after': '60' }, body: 'Slow down' },
+      { ok: false, status: 408, headers: {}, body: '' },
+    ];
+    const watcher = urlWatcher({
+      url: new URL('https://status.example.com/deploy'),
+      owner: 'chat',
+      fetcher: async () => answers.shift() ?? { ok: true, status: 200, headers: {}, body: '' },
+    });
+    const signal = new AbortController().signal;
+    await watcher.look(signal);
+    expect(await watcher.look(signal)).toMatchObject({ settled: false, hintMs: 60_000 });
+    expect((await watcher.look(signal)).settled).toBe(false);
   });
 
   it('a time a minute away is held in the turn; one an hour away lets go', async () => {
