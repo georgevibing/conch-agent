@@ -11,6 +11,7 @@ import {
   legacyProofWindow,
   nextStep,
   nodeFlags,
+  restartNotice,
   RESTART_CODE,
   shouldAdoptSupervisor,
   shouldSupervise,
@@ -480,6 +481,7 @@ describe('recovering without restarting forever', () => {
   });
 
   it('restarts a frozen gateway even when its graceful shutdown exits zero', async () => {
+    const logs: string[] = [];
     let starts = 0;
     const reasons: (string | undefined)[] = [];
     const spawn = vi.fn((_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
@@ -494,7 +496,7 @@ describe('recovering without restarting forever', () => {
       supervise({
         home: tempHome(),
         spawn: spawn as never,
-        log: () => undefined,
+        log: (message) => logs.push(message),
         sleep: async () => undefined,
         watchdog: { startupMs: 10, pollMs: 5, recoverMs: 10, stopMs: 10 },
         exit: ((code: number) => {
@@ -503,6 +505,57 @@ describe('recovering without restarting forever', () => {
       }),
     ).rejects.toMatchObject({ code: 0 });
     expect(reasons).toEqual(['start', 'crash']);
+    expect(logs.join('')).toMatch(/Conch stopped responding\. Starting it again in a moment…/);
+    expect(logs.join('')).not.toMatch(/unexpectedly/);
+  });
+
+  it('says how long it waits when a cooldown follows, once, not "in a moment"', async () => {
+    const home = tempHome();
+    let now = 1_000_000;
+    saveRecoveryState(home, {
+      failures: [now - 50, now - 40, now - 30, now - 20, now - 10],
+      incidents: [],
+    });
+    const logs: string[] = [];
+    const codes = [1, 0];
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('exit', codes.shift(), null));
+      return child;
+    });
+    await expect(
+      supervise({
+        home,
+        now: () => now,
+        spawn: spawn as never,
+        log: (message) => logs.push(message),
+        sleep: async (ms) => {
+          now += ms;
+        },
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(logs.join('')).toMatch(
+      /Conch stopped unexpectedly\. Starting it again in about 10 minutes, with less background work/,
+    );
+    expect(logs.join('')).not.toMatch(/in a moment|to recover before starting/);
+  });
+
+  it('words the restart for what happened and how long it takes', () => {
+    expect(restartNotice(false, 0, 0)).toBe('Conch stopped unexpectedly. Starting it again…');
+    expect(restartNotice(false, 3_000, 0)).toBe(
+      'Conch stopped unexpectedly. Starting it again in a moment…',
+    );
+    expect(restartNotice(true, 30_000, 0)).toBe(
+      'Conch stopped responding. Starting it again in 30 seconds…',
+    );
+    expect(restartNotice(true, 30_000, 540_000)).toBe(
+      'Conch stopped responding. Starting it again in about 10 minutes, with less background work, so this computer can recover.',
+    );
+    expect(restartNotice(false, 1_000, 20_000)).toMatch(/in about a minute,/);
   });
 });
 

@@ -157,6 +157,25 @@ export function nextStep(
   return { kind: 'restart', delay, crashed: true };
 }
 
+/** About how long, in minutes: never "a moment" for a wait of several. */
+function minutes(ms: number): string {
+  const count = Math.ceil(ms / 60_000);
+  return count <= 1 ? 'a minute' : `${count} minutes`;
+}
+
+/**
+ * What to say when the gateway is started again after a failure: whether it stopped or
+ * stopped answering, and, when a cooldown follows the backoff, the whole wait.
+ */
+export function restartNotice(unresponsive: boolean, delay: number, cooldown: number): string {
+  const what = unresponsive ? 'Conch stopped responding.' : 'Conch stopped unexpectedly.';
+  if (cooldown > 0)
+    return `${what} Starting it again in about ${minutes(delay + cooldown)}, with less background work, so this computer can recover.`;
+  if (!delay) return `${what} Starting it again…`;
+  const when = delay < 5_000 ? 'in a moment' : `in ${Math.round(delay / 1_000)} seconds`;
+  return `${what} Starting it again ${when}…`;
+}
+
 export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const start = deps.spawn ?? spawn;
   const exit = deps.exit ?? ((code: number) => process.exit(code));
@@ -206,15 +225,20 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
       ? inheritedReason
       : 'start';
   let adopting = deps.adoptLegacy === true;
+  // The restart notice already said how long the cooldown after it lasts.
+  let announced = false;
   try {
     for (;;) {
-      if (cooldownRemaining(recovery, now())) {
-        log(
-          'Conch is giving this computer a moment to recover before starting with less background work.',
-        );
+      const cooling = cooldownRemaining(recovery, now());
+      if (cooling) {
+        if (!announced)
+          log(
+            `\n  Conch is giving this computer about ${minutes(cooling)} to recover before starting with less background work.\n`,
+          );
         await recoveryCooldown(recovery, { now, sleep, stopping: () => stopping });
         if (stopping) return exit(0);
       }
+      announced = false;
       const recoveryMode = needsRecovery(recovery, now());
       if (recoveryMode) record('recovery-mode');
       const launch = gatewayLaunch(home);
@@ -339,9 +363,10 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
       if (step.crashed) {
         recordFailure(recovery, now());
         record('crash');
-        log(
-          `\n  Conch stopped unexpectedly. Starting it again${step.delay ? ' in a moment' : ''}…\n`,
-        );
+        // The cooldown at the top of the loop follows the backoff: one wait, said once.
+        const cooldown = cooldownRemaining(recovery, now() + step.delay);
+        log(`\n  ${restartNotice(watch.failed(), step.delay, cooldown)}\n`);
+        announced = cooldown > 0;
         reason = 'crash';
       } else {
         log('\n  Restarting Conch…\n');
