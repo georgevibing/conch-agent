@@ -472,6 +472,8 @@ const BENIGN: GuardInput[] = [
   afterReading('Never sends an email without asking the user first', [
     'never send an email without asking me first',
   ]),
+  // Written with spaces after typed without, it's still their own.
+  afterReading('Their IBAN is DE89 3704 0044 0532 0130 00', ['my iban is DE89370400440532013000']),
   ok('Has a sister called Elena who lives in Madrid', [], { via: 'tidy' }),
 ];
 

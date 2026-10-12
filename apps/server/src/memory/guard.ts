@@ -509,7 +509,13 @@ export function gistIn(content: string, said: readonly string[]): number {
   const words = [...new Set(tokens(content))].filter((w) => !FILLER.has(w) && w.length > 2);
   if (!words.length) return 1;
   const theirs = new Set(said.flatMap((s) => tokens(s)));
-  return words.filter((w) => theirs.has(w)).length / words.length;
+  // A number typed in one piece and written in groups (an IBAN, a phone number), or the other way.
+  const numbers = said
+    .flatMap((s) => tokens(s.replace(/(?<=[\p{L}\p{N}])[ \t]+(?=\d)/gu, '')))
+    .filter((t) => /\d/.test(t));
+  const yours = (w: string) =>
+    theirs.has(w) || (w.length >= 4 && /\d/.test(w) && numbers.some((t) => t.includes(w)));
+  return words.filter(yours).length / words.length;
 }
 
 /** How much of the memory is lifted from what was read: the share of its word 3-grams found there. */
