@@ -726,4 +726,17 @@ describe('the same step written another way', () => {
       expect(asks(bash(command), false), command).toBe(true);
     expect(assessRisk('Bash', { command: 'gh api repos/ada/shop/pulls' }, ctx)).toBeUndefined();
   });
+
+  it('reads words in quotes as words: what a commit message or a note says doesn’t run', () => {
+    const message = "git commit -m 'docs: why `rm -rf ~` is blocked'";
+    expect(breaksCircuit('Bash', { command: message }, ctx)).toBeUndefined();
+    expect(assessRisk('Bash', { command: message }, ctx)).toBeUndefined();
+    expect(
+      assessRisk('Bash', { command: 'echo "Then run: make; sudo make install" > NOTES.md' }, ctx),
+    ).toBeUndefined();
+    // What a shell does fill in still counts: backticks and $(…) in double quotes, or none.
+    for (const command of ['git commit -m "`rm -rf ~`"', 'echo "$(rm -rf ~)"', 'echo `rm -rf ~`'])
+      expect(breaksCircuit('Bash', { command }, ctx), command).toBeDefined();
+    expect(asks(bash('echo "$(sudo whoami)"'), false)).toBe(true);
+  });
 });

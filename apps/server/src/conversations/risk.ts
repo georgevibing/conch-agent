@@ -343,6 +343,36 @@ export function withoutHeredocs(command: string): { text: string; runs: string[]
   return { text: kept.join('\n'), runs };
 }
 
+/**
+ * A line with what's inside quotes blanked out, the quotes kept: single quotes (the shell fills
+ * in nothing there), and double quotes too when `double`. A backslash outside quotes escapes.
+ */
+function blankQuoted(text: string, double: boolean): string {
+  let out = '';
+  let quote: '"' | "'" | undefined;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] ?? '';
+    if (quote) {
+      if (c === quote) {
+        quote = undefined;
+        out += c;
+      } else if (quote === '"' && c === '\\' && i + 1 < text.length) {
+        out += double ? '  ' : c + (text[i + 1] ?? '');
+        i++;
+      } else out += quote === "'" || double ? (c === '\n' ? c : ' ') : c;
+    } else {
+      if (c === '"' || c === "'") quote = c;
+      else if (c === '\\' && i + 1 < text.length) {
+        out += c + (text[i + 1] ?? '');
+        i++;
+        continue;
+      }
+      out += c;
+    }
+  }
+  return out;
+}
+
 /** The command line and every script inside it: `bash -c '…'`, `eval '…'`, `$(…)`, backticks. */
 function scriptsOf(command: string): string[] {
   const scripts: string[] = [];
@@ -351,7 +381,9 @@ function scriptsOf(command: string): string[] {
     const { text, runs } = withoutHeredocs(queue.shift() ?? '');
     queue.push(...runs);
     scripts.push(text);
-    for (const inner of text.matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`/g))
+    // Nothing in single quotes is filled in: `git commit -m 'why \`rm -rf ~\` is blocked'` is words.
+    const filled = blankQuoted(text, false);
+    for (const inner of filled.matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`/g))
       queue.push(inner[1] ?? inner[2] ?? '');
     for (const inner of text.matchAll(
       /\b(?:ba|z|da|k|fi)?sh(?:\s+-[\w-]+)*?\s+-\w*c\w*\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/g,
@@ -1696,9 +1728,10 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       );
     }
     // Run as the computer's administrator, wherever in the line.
+    const bare = blankQuoted(script, true);
     if (
-      /(?:^|[;&|\n(]\s*|\$\(\s*|`\s*)(?:sudo|doas|pkexec|gsudo|run0)\b/i.test(script) ||
-      /(?:^|[;&|\n]\s*)su(?:\s+-\S*)*(?:\s+[\w-]+)?\s*(?:$|[;&|]|-c\b)/.test(script)
+      /(?:^|[;&|\n(]\s*|\$\(\s*|`\s*)(?:sudo|doas|pkexec|gsudo|run0)\b/i.test(bare) ||
+      /(?:^|[;&|\n]\s*)su(?:\s+-\S*)*(?:\s+[\w-]+)?\s*(?:$|[;&|]|-c\b)/.test(bare)
     )
       risks.push(severe('privilege', 'run something as the computer’s administrator'));
     // A safety check of the network disarmed for what runs next.
