@@ -11,6 +11,9 @@ export interface WatchdogOptions {
   unhealthyMs?: number;
   recoverMs?: number;
   pollMs?: number;
+  /** Health that keeps coming back only to fail again is a restart, not another reduction. */
+  flapLimit?: number;
+  flapWindowMs?: number;
   stopMs?: number;
   /** A gateway that said nothing while reducing can't run a SIGTERM handler: kill it sooner. */
   frozenStopMs?: number;
@@ -39,6 +42,8 @@ export interface WatchState {
   heardAt?: number;
   /** Terminating a gateway that sent nothing at all while it was reducing. */
   frozen?: boolean;
+  /** When recent reductions started, within the flap window. */
+  reductions?: number[];
 }
 export type WatchEvent =
   | { type: 'tick'; at: number }
@@ -50,6 +55,8 @@ export interface WatchLimits {
   unhealthyMs: number;
   recoverMs: number;
   pollMs: number;
+  flapLimit: number;
+  flapWindowMs: number;
 }
 
 /** The watchdog's only transition function: pure, so every verdict is testable. */
@@ -71,8 +78,16 @@ export function watchTransition(
   if (
     (state.phase === 'booting' && elapsed >= limits.startupMs) ||
     (state.phase === 'healthy' && elapsed >= limits.unhealthyMs)
-  )
-    return { ...ticked, phase: 'reducing', since: event.at };
+  ) {
+    const reductions = [
+      ...(state.reductions ?? []).filter((at) => event.at - at < limits.flapWindowMs),
+      event.at,
+    ];
+    if (reductions.length < limits.flapLimit)
+      return { ...ticked, phase: 'reducing', since: event.at, reductions };
+    const frozen = state.heardAt === undefined || state.heardAt <= state.since;
+    return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen, reductions };
+  }
   if (state.phase === 'reducing' && elapsed >= limits.recoverMs) {
     const frozen = state.heardAt === undefined || state.heardAt < state.since;
     return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
@@ -95,10 +110,15 @@ export function watchGateway(
     unhealthyMs: options.unhealthyMs ?? 30_000,
     recoverMs: options.recoverMs ?? 20_000,
     pollMs: options.pollMs ?? 5_000,
+    flapLimit: options.flapLimit ?? 3,
+    flapWindowMs: options.flapWindowMs ?? 5 * 60_000,
   };
   let state: WatchState = { phase: 'booting', since: now(), failed: false };
   let resource: RecoveryResource | undefined;
   let forced: NodeJS.Timeout | undefined;
+  // A flapping gateway records its first cycle, not one pair of incidents every few seconds.
+  let reported: number | undefined;
+  let quiet = false;
   const children = child.pid
     ? gatewayChildren(child.pid, options.processGroup === true, {
         serviceMembers: options.serviceMembers,
@@ -118,11 +138,15 @@ export function watchGateway(
     state = watchTransition(before, event, limits);
     if (state.phase === before.phase) return;
     if (state.phase === 'reducing') {
-      options.incident('reduced-workload', resource);
+      quiet = reported !== undefined && state.since - reported < limits.flapWindowMs;
+      if (!quiet) {
+        reported = state.since;
+        options.incident('reduced-workload', resource);
+      }
       recover();
-    } else if (state.phase === 'healthy' && before.phase === 'reducing')
-      options.incident('responsive', resource);
-    else if (state.phase === 'terminating') {
+    } else if (state.phase === 'healthy' && before.phase === 'reducing') {
+      if (!quiet) options.incident('responsive', resource);
+    } else if (state.phase === 'terminating') {
       if (state.failed) options.incident('unresponsive', resource);
       children?.sample();
       const stopMs = options.stopMs ?? 15_000;

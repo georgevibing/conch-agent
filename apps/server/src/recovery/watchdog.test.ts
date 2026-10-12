@@ -99,6 +99,40 @@ describe('independent gateway watchdog', () => {
     expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
     watch.close();
   });
+  it('restarts health that keeps recovering only to fail again, recording one cycle', () => {
+    const { child, watch, incident } = world({ flapWindowMs: 1_000 });
+    for (let cycle = 0; cycle < 3; cycle++) {
+      child.emit('message', { type: 'conch.heartbeat', healthy: true });
+      vi.advanceTimersByTime(30);
+    }
+    expect(child.send).toHaveBeenCalledTimes(2);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(watch.failed()).toBe(true);
+    expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
+      'reduced-workload',
+      'responsive',
+      'unresponsive',
+    ]);
+    watch.close();
+  });
+  it('forgets reductions older than the flap window', () => {
+    const { child, watch, incident } = world({ flapWindowMs: 50 });
+    for (let cycle = 0; cycle < 4; cycle++) {
+      child.emit('message', { type: 'conch.heartbeat', healthy: true });
+      vi.advanceTimersByTime(30);
+    }
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(child.send).toHaveBeenCalledTimes(4);
+    // The second and fourth cycles fall within the window of one already recorded.
+    expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
+      'reduced-workload',
+      'responsive',
+      'reduced-workload',
+      'responsive',
+    ]);
+    watch.close();
+  });
   it('ignores malformed heartbeats and cancels timers and listeners on exit', () => {
     const { child, watch, repaired } = world();
     child.emit('message', { type: 'conch.heartbeat', healthy: 'true' });
@@ -183,7 +217,14 @@ describe('independent gateway watchdog', () => {
 });
 
 describe('watchdog transitions', () => {
-  const limits = { startupMs: 100, unhealthyMs: 30, recoverMs: 20, pollMs: 100 };
+  const limits = {
+    startupMs: 100,
+    unhealthyMs: 30,
+    recoverMs: 20,
+    pollMs: 100,
+    flapLimit: 3,
+    flapWindowMs: 1_000,
+  };
   const step = (state: WatchState, ...events: Parameters<typeof watchTransition>[1][]) =>
     events.reduce((current, event) => watchTransition(current, event, limits), state);
   const booting: WatchState = { phase: 'booting', since: 0, failed: false };
