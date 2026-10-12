@@ -42,10 +42,10 @@ describe('independent gateway watchdog', () => {
     vi.advanceTimersByTime(5);
     expect(child.send).toHaveBeenCalledWith({ type: 'conch.recover' }, expect.any(Function));
     vi.advanceTimersByTime(20);
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     expect(watch.failed()).toBe(true);
     vi.advanceTimersByTime(15);
-    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    // It never answered: no SIGTERM it could not run, only the kill.
+    expect(child.kill.mock.calls).toEqual([['SIGKILL']]);
     expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
       'reduced-workload',
       'unresponsive',
@@ -87,9 +87,26 @@ describe('independent gateway watchdog', () => {
     const { child, watch } = world({ frozenStopMs: 3 });
     child.emit('message', { type: 'conch.heartbeat', healthy: true });
     vi.advanceTimersByTime(50);
-    expect(child.kill.mock.calls).toEqual([['SIGTERM']]);
+    expect(child.kill).not.toHaveBeenCalled();
     vi.advanceTimersByTime(3);
-    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(child.kill.mock.calls).toEqual([['SIGKILL']]);
+    watch.close();
+  });
+  it('sends a frozen gateway no SIGTERM that would end it before its evidence is captured', () => {
+    const order: string[] = [];
+    const { child, watch } = world({
+      stopMs: 15_000,
+      beforeKill: () => order.push('evidence'),
+    });
+    child.kill.mockImplementation((signal: string) => order.push(signal));
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(50);
+    expect(order).toEqual(['evidence']);
+    // Comfortably past the capture's 2 s bound, and still within stopMs.
+    vi.advanceTimersByTime(2_499);
+    expect(order).toEqual(['evidence']);
+    vi.advanceTimersByTime(1);
+    expect(order).toEqual(['evidence', 'SIGKILL']);
     watch.close();
   });
   it('gives a gateway that still answers, unhealthily, the whole graceful stop', () => {
@@ -112,7 +129,6 @@ describe('independent gateway watchdog', () => {
       vi.advanceTimersByTime(30);
     }
     expect(child.send).toHaveBeenCalledTimes(2);
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     expect(watch.failed()).toBe(true);
     expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
       'reduced-workload',
@@ -215,9 +231,8 @@ describe('independent gateway watchdog', () => {
     const { child, watch } = world({ beforeKill, frozenStopMs: 3 });
     vi.advanceTimersByTime(120);
     expect(beforeKill.mock.calls).toEqual([[true]]);
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     vi.advanceTimersByTime(3);
-    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(child.kill.mock.calls).toEqual([['SIGKILL']]);
     watch.close();
     const stopped = world({ beforeKill });
     stopped.child.emit('message', { type: 'conch.stopping' });
@@ -297,7 +312,7 @@ describe('independent gateway watchdog', () => {
     vi.advanceTimersByTime(30);
     expect(child.send).toHaveBeenCalledOnce();
     vi.advanceTimersByTime(20);
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(watch.failed()).toBe(true);
     watch.close();
   });
 

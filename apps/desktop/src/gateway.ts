@@ -160,7 +160,8 @@ export class Gateway extends EventEmitter<{
       now: this.deps.now,
       stopping: () => this.#stopping,
       incident: (reason, resource) => this.#record(reason, resource),
-      // Bounded (2 s), never throws; the frozen gateway's kill grace covers it.
+      // Bounded (2 s), never throws. A frozen gateway gets no SIGTERM to end it first, only
+      // SIGKILL after frozenStopMs (2.5 s), so the capture is served.
       beforeKill: (frozen) => {
         if (frozen && this.#home) void captureEvidence(child.pid, this.#home);
       },

@@ -265,7 +265,8 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         now: deps.now,
         stopping: () => stopping,
         incident: record,
-        // Bounded (2 s), never throws; the frozen gateway's kill grace covers it.
+        // Bounded (2 s), never throws. A frozen gateway gets no SIGTERM to end it first, only
+        // SIGKILL after frozenStopMs (2.5 s), so the capture is served.
         beforeKill: (frozen) => {
           if (frozen) void captureEvidence(running.pid, home);
         },

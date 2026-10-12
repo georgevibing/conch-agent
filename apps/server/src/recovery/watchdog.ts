@@ -20,7 +20,12 @@ export interface WatchdogOptions {
   /** The most a responsive gateway's deadlines stretch while other programs starve the computer. */
   maxStretch?: number;
   stopMs?: number;
-  /** A gateway that said nothing while reducing can't run a SIGTERM handler: kill it sooner. */
+  /**
+   * A gateway that said nothing while reducing can't run a SIGTERM handler, so it gets no
+   * SIGTERM, only SIGKILL after this grace. It covers `beforeKill`'s evidence capture (bounded
+   * at 2 s): a gateway still booting has no handler, and Node's default SIGTERM would end it
+   * before the capture is served.
+   */
   frozenStopMs?: number;
   /** The launcher created a private POSIX process group for this gateway. */
   processGroup?: boolean;
@@ -236,9 +241,10 @@ export function watchGateway(
           children?.close();
           child.kill('SIGKILL');
         },
-        state.frozen ? Math.min(stopMs, options.frozenStopMs ?? 2_000) : stopMs,
+        state.frozen ? Math.min(stopMs, options.frozenStopMs ?? 2_500) : stopMs,
       );
-      if (state.failed) child.kill('SIGTERM');
+      // A frozen loop can't run its handler, and without one SIGTERM would end the evidence too.
+      if (state.failed && !state.frozen) child.kill('SIGTERM');
     }
   };
   const stop = (signal: NodeJS.Signals = 'SIGTERM') => {
