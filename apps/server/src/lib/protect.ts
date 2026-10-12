@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 
 /**
  * Where Conch keeps the person's passwords and its own keys (ADR 0025 §
@@ -116,11 +116,98 @@ export function touchesProtected(input: unknown, paths: readonly string[]): bool
     .replaceAll('\\\\', '/')
     .replaceAll('\\\\', '/');
   const home = homedir().replaceAll('\\', '/');
-  return paths.some((p) => {
+  const plain = paths.some((p) => {
     const path = p.replaceAll('\\', '/');
     const tilde = path.startsWith(home) ? `~${path.slice(home.length)}` : undefined;
     return text.includes(path) || (tilde !== undefined && text.includes(tilde));
   });
+  return plain || spelledOtherwise(stringsOf(input), paths, home);
+}
+
+/** Every string in a tool's input, however deep. */
+function stringsOf(input: unknown, out: string[] = [], depth = 0): string[] {
+  if (typeof input === 'string') out.push(input);
+  else if (depth < 20 && input && typeof input === 'object')
+    for (const value of Object.values(input)) stringsOf(value, out, depth + 1);
+  return out;
+}
+
+/** The words of a command that could be paths: what quotes and shell marks leave. */
+const WORD = /[^\s"'`|;&<>(){}=,]+/g;
+const GLOB = /[*?[]/;
+
+const pathKey = (path: string) =>
+  posix
+    .normalize(path.replaceAll('\\', '/'))
+    .replace(/(?<=.)\/+$/, '')
+    .toLowerCase();
+
+/** A word as the place it names: `~` and `$HOME` read, `.`, `..` and `//` folded, any case. */
+function placeOf(word: string, home: string, cwd: string | undefined): string | undefined {
+  let path = word.replace(/^~(?=\/|$)/, home).replaceAll('\\', '/');
+  if (!path.startsWith('/') && !/^[a-z]:\//i.test(path)) {
+    if (!cwd || path.startsWith('-') || path.startsWith('$')) return undefined;
+    path = `${cwd}/${path}`;
+  }
+  return pathKey(path);
+}
+
+/** A glob's one folder or file name, as a pattern. */
+const segmentPattern = (segment: string) =>
+  new RegExp(
+    `^${segment
+      .replace(/[.+^${}()|\\]/g, '\\$&')
+      .replaceAll('*', '[^/]*')
+      .replaceAll('?', '[^/]')}$`,
+  );
+
+/** Whether a place (maybe a glob) is a protected path or inside one. */
+function inside(place: string, protectedKeys: readonly string[]): boolean {
+  if (!GLOB.test(place)) return protectedKeys.some((p) => place === p || place.startsWith(`${p}/`));
+  const segments = place.split('/');
+  return protectedKeys.some((p) => {
+    const wanted = p.split('/');
+    if (segments.length < wanted.length) return false;
+    return wanted.every((name, i) => {
+      const segment = segments[i] ?? '';
+      if (!GLOB.test(segment)) return segment === name;
+      try {
+        return segmentPattern(segment).test(name);
+      } catch {
+        return true;
+      }
+    });
+  });
+}
+
+/**
+ * The same places written another way (review): `$HOME`, `./` and `//`, another case
+ * (macOS and Windows don't mind), `..`, a glob, or a `cd` into Conch's folder and a
+ * name from there. A fence for what a model plausibly writes, not a box: sealing
+ * still stands behind it.
+ */
+function spelledOtherwise(strings: readonly string[], paths: readonly string[], home: string) {
+  const keys = paths.map(pathKey);
+  for (const value of strings) {
+    let cwd: string | undefined;
+    let changing = false;
+    const words = value.replace(/\$\{HOME\}|\$HOME\b/g, home).match(WORD) ?? [];
+    for (const word of words) {
+      if (changing) {
+        changing = false;
+        cwd = placeOf(word, home, cwd) ?? cwd;
+        if (cwd && inside(cwd, keys)) return true;
+        continue;
+      }
+      if (word === 'cd' || word === 'pushd') {
+        changing = true;
+        continue;
+      }
+      const place = placeOf(word, home, cwd);
+      if (place && inside(place, keys)) return true;
+    }
+  }
+  return false;
 }
 
 export const PROTECTED_MESSAGE =

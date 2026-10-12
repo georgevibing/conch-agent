@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -34,6 +35,31 @@ describe('what the assistant’s own tools never touch', () => {
         paths,
       ),
     ).toBe(true);
+  });
+  it('sees the same place however a command spells it (review)', () => {
+    const home = join(homedir(), '.conch');
+    const paths = protectedPaths(home);
+    for (const command of [
+      'cat $HOME/.conch/here/key',
+      'cat "${HOME}/.conch/here/key"',
+      'cat ~/.conch/./here/key',
+      'cat ~/.conch//here/key',
+      'cat ~/.CONCH/here/key',
+      'cat ~/.conch/skills/../here/key',
+      'cd ~/.conch && cat here/key',
+      'cd "$HOME/.conch" ; cat ./vault/items.json',
+      'cat ~/.conch/h?re/key',
+      'cat ~/.conch/va*/items.json',
+    ])
+      expect(touchesProtected({ command }, paths), command).toBe(true);
+    // Conch's folder itself, and what isn't kept away, stay open.
+    for (const command of [
+      'ls ~/.conch/skills',
+      'cat ~/.conch/skills/here/SKILL.md',
+      'cd ~/.conch/skills && cat vault-notes.md',
+      'cat ~/notes/here/key',
+    ])
+      expect(touchesProtected({ command }, paths), command).toBe(false);
   });
 });
 
