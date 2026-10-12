@@ -2,6 +2,29 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.9](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2026-10-12)
+
+### New
+
+- Conch notices a slow memory leak and starts itself again once, while nothing is working, before it can freeze
+- Conch holds new work as soon as it starts falling behind, before it stops answering
+- A frozen Conch leaves a small note of where it was stuck, so a repeat can be fixed. It never holds your chats, commands or keys
+
+### Fixed
+
+- Waking your computer from sleep no longer stops a command that was running
+- A frozen Conch starts again in seconds, and a slow start, like restoring a big backup, is no longer taken for a freeze
+- On macOS and Windows, a chat's commands end when Conch stops unexpectedly, instead of running on unseen
+- On Windows, stopping Conch with Ctrl+C saves your conversations first
+- More ways to delete, download and run code, or read keys, now ask first, such as a wrapped rm -rf, find -delete and gh api
+- Your keys stay yours: a password is never filled into a page that moved, a redirect to another site drops the key, and more secrets are hidden
+- Skills are checked against the whole key you trust, deep files included, and a skill is never added part-way
+- Failed sign-ins from elsewhere no longer keep this computer out
+- Routines: Run now pressed twice runs once, a paused routine stays paused, and a one-off runs on time
+- Charts draw gaps, negative stacked bars and more than eight colours right, and fit their space after switching from Table
+- Chat apps get long answers, links and emoji whole, and Slack catch-up pages back through busy channels and long threads
+- Files stay attached while you move between chats, and a message too long to send stays in the box and says so
+
 ## [0.1.0-alpha.8](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2026-10-11)
 
 ### Fixed
