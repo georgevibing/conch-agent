@@ -9,6 +9,7 @@ import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager } from './manager';
+import type { SpendDesk } from './spend';
 import { ConversationStore } from './store';
 
 /** A provider whose replies wait until they're let go, so a turn can be caught running. */
@@ -51,21 +52,52 @@ class GatedEngine implements Engine {
   }
 }
 
-async function chat() {
+/** Each look at what a turn may spend, held until it's let go. */
+function spendLooks() {
+  const waiting: ((letGo: () => void) => void)[] = [];
+  return {
+    next: () => new Promise<() => void>((resolve) => waiting.push(resolve)),
+    look: () =>
+      new Promise<void>((resolve) => {
+        const take = waiting.shift();
+        if (take) take(resolve);
+        else resolve();
+      }),
+  };
+}
+
+async function chat({ slowSpend = false } = {}) {
   const home = await mkdtemp(join(tmpdir(), 'conch-wake-'));
   const engine = new GatedEngine();
   const settings = new SettingsStore(home);
   await settings.update({ preferences: { autoTitle: false } });
+  const looking = spendLooks();
   const manager = new ConversationManager({
     store: new ConversationStore(join(home, 'conversations')),
     settings,
     memory: new MemoryStore(join(home, 'memory')),
     engine: () => engine,
     tools: () => [],
+    ...(slowSpend && {
+      spend: {
+        billing: async () => {
+          await looking.look();
+          return {};
+        },
+        month: async () => ({ usd: 0 }),
+        record: async () => undefined,
+        cost: () => undefined,
+        usd: () => undefined,
+        cheaper: async () => undefined,
+        raiseBudget: async () => undefined,
+        parentOf: async () => undefined,
+        estimate: async () => undefined,
+      } satisfies SpendDesk,
+    }),
   });
   const idle = (id: string) =>
     vi.waitFor(async () => expect((await manager.detail(id)).conversation.status).toBe('idle'));
-  return { manager, engine, idle };
+  return { manager, engine, idle, looking };
 }
 
 const prompt = '[Conch] A wait you started has ended: CI for conch #482 is done.';
@@ -96,6 +128,48 @@ describe('waking a chat when its wait ends', () => {
     });
     expect(await manager.wake(id, prompt)).toBe('queued');
     expect(engine.prompts.at(-1)).not.toBe(prompt);
+    engine.hold = false;
+    engine.release();
+    await vi.waitFor(() => expect(engine.prompts.at(-1)?.endsWith(prompt)).toBe(true));
+    await idle(id);
+  });
+});
+
+/** One reply at a time in a chat, however the messages arrive. */
+describe('two things starting at once in one chat', () => {
+  it('a double send starts one reply; the other is told it’s still replying', async () => {
+    const { manager, engine, idle } = await chat();
+    const { id } = await manager.send({ clientMessageId: 'u1', text: 'hello' });
+    await idle(id);
+    engine.hold = true;
+    const sent = await Promise.allSettled([
+      manager.send({ conversationId: id, clientMessageId: 'a', text: 'A' }),
+      manager.send({ conversationId: id, clientMessageId: 'b', text: 'B' }),
+    ]);
+    expect(sent.map((s) => s.status).sort()).toEqual(['fulfilled', 'rejected']);
+    await vi.waitFor(() => expect(engine.prompts).toHaveLength(2));
+    engine.hold = false;
+    engine.release();
+    await idle(id);
+    expect(engine.prompts).toHaveLength(2);
+    const log = (await manager.detail(id)).events;
+    expect(log.filter((e) => e.type === 'user.message')).toHaveLength(2);
+  });
+
+  it('a wake while a message is on its way in goes after that reply', async () => {
+    const { manager, engine, idle, looking } = await chat({ slowSpend: true });
+    const { id } = await manager.send({ clientMessageId: 'u1', text: 'watch CI' });
+    await idle(id);
+    engine.hold = true;
+    const looked = looking.next();
+    const sending = manager.send({ conversationId: id, clientMessageId: 'u2', text: 'meanwhile' });
+    // The message is past its first checks, looking at what it may spend.
+    const letGo = await looked;
+    const woke = await manager.wake(id, prompt);
+    letGo();
+    await sending;
+    expect(woke).toBe('queued');
+    await vi.waitFor(() => expect(engine.prompts.at(-1)?.endsWith('meanwhile')).toBe(true));
     engine.hold = false;
     engine.release();
     await vi.waitFor(() => expect(engine.prompts.at(-1)?.endsWith(prompt)).toBe(true));

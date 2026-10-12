@@ -635,6 +635,12 @@ interface Live {
   /** Waiting for the chat to be free (a message sent while a stopped turn winds down). */
   waiters?: (() => void)[];
   /**
+   * A message is on its way in, between its first look at the chat and its
+   * reply starting: nothing else starts meanwhile. What came then (a wait
+   * ending, an accepted offer) goes once it has, or hasn't, started.
+   */
+  starting?: (() => void)[];
+  /**
    * What Conch's own tools brought in from outside this run, by where (ADR
    * 0087): the memory check compares a memory with it. Others' results are in
    * the log (`tool.finished`); these aren't, so a restart forgets them.
@@ -1542,7 +1548,7 @@ export class ConversationManager {
         'busy',
         `This is ${existing.record.origin.name} talking to your agent. Start a new chat to talk to your assistant.`,
       );
-    if (existing?.abort)
+    if (existing?.abort || existing?.starting)
       throw new ConversationError('busy', 'Still replying to your last message.');
     // A chip that names a model (ADR 0132): the chat switches to it first, and that model
     // answers, carrying on with the request that was waiting, if any.
@@ -1617,173 +1623,183 @@ export class ConversationManager {
     // A message that's only attachments is titled and previewed after the first of them.
     const said = input.text || attachments.map((a) => a.name).join(', ');
 
-    let live: Live;
-    let autoTitle = false;
-    let unarchived = false;
-    if (existing) {
-      // Checked again after the waits above: another message may have started meanwhile.
-      if (existing.abort)
-        throw new ConversationError('busy', 'Still replying to your last message.');
-      live = existing;
-      // A tapped chip's model replaces the old one whole: its thinking level was the old model's.
-      if (tapped && input.options) {
-        const options = clean(input.options);
-        if (JSON.stringify(options) !== JSON.stringify(live.record.options)) {
-          live.record = { ...live.record, options };
-          this.#append(live, { type: 'options', options });
-        }
-      } else if (input.options) this.#applyOptions(live, input.options);
-      unarchived = this.#unarchive(live);
-    } else {
-      const now = Date.now();
-      const { preferences } = await this.deps.settings.get();
-      autoTitle = preferences.autoTitle && Boolean(engine.complete || this.deps.titleModel);
-      const record: ConversationRecord = {
-        id,
-        // The first line is shown straight away and kept if no better title comes.
-        title: titleFrom(said),
-        preview: said.slice(0, 140),
-        createdAt: now,
-        updatedAt: now,
-        // Started here, you're looking at it; from a chat app, its reply is news.
-        seenAt: input.origin ? 0 : now,
-        status: 'idle',
-        options: clean(input.options ?? {}),
-        engine: engine.id,
-        ...(input.origin && { origin: input.origin }),
-        ...(input.folder && { folderId: input.folder }),
-        ...(autoTitle && { titling: true }),
-        ...(agent && { agentId: agent.id }),
-      };
-      live = {
-        record,
-        events: [],
-        seq: 0,
-        permissions: new Map(),
-        alwaysAllow: new Set(),
-        waived: new Set(),
-      };
-      this.#live.set(record.id, live);
-      await this.deps.store.upsert(record);
-      this.events.emit({
-        type: 'conversation.created',
-        clientMessageId: input.clientMessageId,
-        conversation: summary(record),
-      });
-    }
+    let starting: Live | undefined;
+    try {
+      let live: Live;
+      let autoTitle = false;
+      let unarchived = false;
+      if (existing) {
+        // Checked again after the waits above: another message may have started meanwhile.
+        if (existing.abort || existing.starting)
+          throw new ConversationError('busy', 'Still replying to your last message.');
+        live = existing;
+        live.starting = [];
+        starting = live;
+        // A tapped chip's model replaces the old one whole: its thinking level was the old model's.
+        if (tapped && input.options) {
+          const options = clean(input.options);
+          if (JSON.stringify(options) !== JSON.stringify(live.record.options)) {
+            live.record = { ...live.record, options };
+            this.#append(live, { type: 'options', options });
+          }
+        } else if (input.options) this.#applyOptions(live, input.options);
+        unarchived = this.#unarchive(live);
+      } else {
+        const now = Date.now();
+        const { preferences } = await this.deps.settings.get();
+        autoTitle = preferences.autoTitle && Boolean(engine.complete || this.deps.titleModel);
+        const record: ConversationRecord = {
+          id,
+          // The first line is shown straight away and kept if no better title comes.
+          title: titleFrom(said),
+          preview: said.slice(0, 140),
+          createdAt: now,
+          updatedAt: now,
+          // Started here, you're looking at it; from a chat app, its reply is news.
+          seenAt: input.origin ? 0 : now,
+          status: 'idle',
+          options: clean(input.options ?? {}),
+          engine: engine.id,
+          ...(input.origin && { origin: input.origin }),
+          ...(input.folder && { folderId: input.folder }),
+          ...(autoTitle && { titling: true }),
+          ...(agent && { agentId: agent.id }),
+        };
+        live = {
+          record,
+          events: [],
+          seq: 0,
+          permissions: new Map(),
+          alwaysAllow: new Set(),
+          waived: new Set(),
+        };
+        this.#live.set(record.id, live);
+        live.starting = [];
+        starting = live;
+        await this.deps.store.upsert(record);
+        this.events.emit({
+          type: 'conversation.created',
+          clientMessageId: input.clientMessageId,
+          conversation: summary(record),
+        });
+      }
 
-    // Anything still waiting for the internet goes along with this message;
-    // a reply stopped at a limit doesn't carry on once you've moved on (ADR 0079).
-    const held = this.#held.get(live.record.id) ?? heldFromLog(live.events);
-    const waiting = held?.prompt === CARRY_ON ? undefined : held;
-    this.#held.delete(live.record.id);
-    // A newer message overtakes an offer nobody answered (ADR 0060).
-    for (const offerId of openOffers(live.events))
-      if (!this.#carrying.has(offerId))
-        this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
-    if (agent) this.#begunWith(live, agent);
-    if (input.goal) this.#setGoal(live, input.goal);
-    this.#append(live, {
-      type: 'user.message',
-      messageId: input.clientMessageId,
-      text: input.text,
-      ...(attachments.length && { attachments }),
-    });
-    if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
-    if (tapped && switchedFrom) {
+      // Anything still waiting for the internet goes along with this message;
+      // a reply stopped at a limit doesn't carry on once you've moved on (ADR 0079).
+      const held = this.#held.get(live.record.id) ?? heldFromLog(live.events);
+      const waiting = held?.prompt === CARRY_ON ? undefined : held;
+      this.#held.delete(live.record.id);
+      // A newer message overtakes an offer nobody answered (ADR 0060).
+      for (const offerId of openOffers(live.events))
+        if (!this.#carrying.has(offerId))
+          this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
+      if (agent) this.#begunWith(live, agent);
+      if (input.goal) this.#setGoal(live, input.goal);
       this.#append(live, {
-        type: 'model.switched',
-        from: switchedFrom.engine,
-        ...(switchedFrom.model && { fromModel: switchedFrom.model.slice(0, 200) }),
-        to: tapped.choice.engine,
-        model: tapped.choice.model,
-        message: tapped.choice.line,
-        by: 'person',
+        type: 'user.message',
+        messageId: input.clientMessageId,
+        text: input.text,
+        ...(attachments.length && { attachments }),
       });
-      this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
-      // Nothing waited to be done: the line is the answer, and the next message goes to it.
-      if (!tapped.request) {
-        live.record = { ...live.record, updatedAt: Date.now() };
+      if (expanded?.skill)
+        this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
+      if (tapped && switchedFrom) {
+        this.#append(live, {
+          type: 'model.switched',
+          from: switchedFrom.engine,
+          ...(switchedFrom.model && { fromModel: switchedFrom.model.slice(0, 200) }),
+          to: tapped.choice.engine,
+          model: tapped.choice.model,
+          message: tapped.choice.line,
+          by: 'person',
+        });
+        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+        // Nothing waited to be done: the line is the answer, and the next message goes to it.
+        if (!tapped.request) {
+          live.record = { ...live.record, updatedAt: Date.now() };
+          await this.#persist(live);
+          return summary(live.record);
+        }
+      }
+      if (input.untrusted) this.#taint(live, input.untrusted);
+      if (input.round) {
+        const { roundId, speakers, room, first } = input.round;
+        this.#append(live, { type: 'round', roundId, state: 'started', speakers });
+        live.room = room;
+        // A new chat began with the first speaker already; an existing one hands it the floor.
+        const opening = existing && first ? await this.deps.agents?.get(first) : undefined;
+        if (opening) await this.#switchAgent(live, opening, { roundId, turn: 1 });
+      }
+      live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
+      if (unarchived)
+        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+      if (input.answer === false) {
         await this.#persist(live);
+        if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
         return summary(live.record);
       }
-    }
-    if (input.untrusted) this.#taint(live, input.untrusted);
-    if (input.round) {
-      const { roundId, speakers, room, first } = input.round;
-      this.#append(live, { type: 'round', roundId, state: 'started', speakers });
-      live.room = room;
-      // A new chat began with the first speaker already; an existing one hands it the floor.
-      const opening = existing && first ? await this.deps.agents?.get(first) : undefined;
-      if (opening) await this.#switchAgent(live, opening, { roundId, turn: 1 });
-    }
-    live.record = { ...live.record, preview: said.slice(0, 140), updatedAt: Date.now() };
-    if (unarchived)
-      this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
-    if (input.answer === false) {
-      await this.#persist(live);
-      if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
-      return summary(live.record);
-    }
-    const { prompt, attachments: sending } = joinHeld(waiting, {
-      engine: chosen.id,
-      prompt: tapped?.request
-        ? carryPrompt(tapped.choice.label, tapped.request)
-        : (expanded?.prompt ?? input.text),
-      attachments,
-    });
-    if (route.kind === 'hold') {
-      // Offline, and nothing on this computer answers: it waits, and goes by itself.
-      this.#held.set(live.record.id, { engine: chosen.id, prompt, attachments: sending });
-      this.#append(live, { type: 'turn.held', reason: 'offline' });
-      await this.#persist(live);
-      if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
-      return summary(live.record);
-    }
-    // The chat's model can't use what this needs (ADR 0050): it waits for your choice.
-    const model = route.model ?? (await this.#modelFor(live.record.options, engine.id));
-    const needs =
-      !waiting && !input.untrusted && !live.record.origin && input.text.trim()
-        ? await this.#appsNeeded(live, engine, model, input.text, expanded?.skill)
-        : undefined;
-    if (needs) {
-      this.#held.set(live.record.id, {
+      const { prompt, attachments: sending } = joinHeld(waiting, {
         engine: chosen.id,
-        prompt,
-        attachments: sending,
-        forApps: true,
+        prompt: tapped?.request
+          ? carryPrompt(tapped.choice.label, tapped.request)
+          : (expanded?.prompt ?? input.text),
+        attachments,
       });
-      this.#append(live, { type: 'turn.needs-apps', ...needs });
+      if (route.kind === 'hold') {
+        // Offline, and nothing on this computer answers: it waits, and goes by itself.
+        this.#held.set(live.record.id, { engine: chosen.id, prompt, attachments: sending });
+        this.#append(live, { type: 'turn.held', reason: 'offline' });
+        await this.#persist(live);
+        if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
+        return summary(live.record);
+      }
+      // The chat's model can't use what this needs (ADR 0050): it waits for your choice.
+      const model = route.model ?? (await this.#modelFor(live.record.options, engine.id));
+      const needs =
+        !waiting && !input.untrusted && !live.record.origin && input.text.trim()
+          ? await this.#appsNeeded(live, engine, model, input.text, expanded?.skill)
+          : undefined;
+      if (needs) {
+        this.#held.set(live.record.id, {
+          engine: chosen.id,
+          prompt,
+          attachments: sending,
+          forApps: true,
+        });
+        this.#append(live, { type: 'turn.needs-apps', ...needs });
+        await this.#persist(live);
+        if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
+        return summary(live.record);
+      }
+      // At a spending limit (ADR 0079), it waits for your one tap.
+      const capped = await this.#capped(live, engine, model);
+      if (capped) {
+        this.#held.set(live.record.id, {
+          engine: chosen.id,
+          prompt,
+          attachments: sending,
+          forBudget: true,
+        });
+        this.#append(live, { type: 'turn.capped', ...capped });
+        await this.#persist(live);
+        if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
+        return summary(live.record);
+      }
+      if (route.routed)
+        this.#routed(live, chosen.id, engine.id, route, {
+          fromModel: asked,
+          // Said once: the next message to the same one, still at the limit, needs no new line.
+          quiet: sameRouteAsLast(live.events, chosen.id, engine.id, route.routed.reason),
+        });
+      this.#claim(live, began);
+      this.#setStatus(live, 'running');
       await this.#persist(live);
+      void this.#answer(live, engine, prompt, sending, route.model);
       if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
       return summary(live.record);
+    } finally {
+      if (starting) this.#started(starting);
     }
-    // At a spending limit (ADR 0079), it waits for your one tap.
-    const capped = await this.#capped(live, engine, model);
-    if (capped) {
-      this.#held.set(live.record.id, {
-        engine: chosen.id,
-        prompt,
-        attachments: sending,
-        forBudget: true,
-      });
-      this.#append(live, { type: 'turn.capped', ...capped });
-      await this.#persist(live);
-      if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
-      return summary(live.record);
-    }
-    if (route.routed)
-      this.#routed(live, chosen.id, engine.id, route, {
-        fromModel: asked,
-        // Said once: the next message to the same one, still at the limit, needs no new line.
-        quiet: sameRouteAsLast(live.events, chosen.id, engine.id, route.routed.reason),
-      });
-    this.#claim(live, began);
-    this.#setStatus(live, 'running');
-    await this.#persist(live);
-    void this.#answer(live, engine, prompt, sending, route.model);
-    if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
-    return summary(live.record);
   }
 
   /** The model `engine` answers this chat with: its own choice, else your default. */
@@ -1874,7 +1890,8 @@ export class ConversationManager {
     this.#admit();
     if (input.conversationId) {
       const live = await this.#get(input.conversationId);
-      if (live.abort) throw new ConversationError('busy', 'This task is already running.');
+      if (live.abort || live.starting)
+        throw new ConversationError('busy', 'This task is already running.');
       // Approval grants are turn-scoped. Never replay a previous turn's answers.
       live.alwaysAllow.clear();
       live.waived.clear();
@@ -2113,7 +2130,7 @@ export class ConversationManager {
     },
   ): Promise<'started' | 'busy' | 'gone' | 'unavailable' | 'capped'> {
     const live = await this.#get(id);
-    if (live.abort || this.#held.has(id)) return 'busy';
+    if (live.abort || live.starting || this.#held.has(id)) return 'busy';
     const next = await this.deps.agents?.get(turn.agentId);
     if (!next) return 'gone';
     const engine = this.deps.engine(live.record.options.engine);
@@ -2121,7 +2138,7 @@ export class ConversationManager {
     const model = await this.#modelFor(live.record.options, engine.id);
     if (await this.#capped(live, engine, model)) return 'capped';
     // Checked again after the waits above: you may have written meanwhile.
-    if (live.abort) return 'busy';
+    if (live.abort || live.starting) return 'busy';
     this.#claim(live);
     live.room = turn.room;
     await this.#switchAgent(live, next, turn.round);
@@ -2215,6 +2232,13 @@ export class ConversationManager {
     live.stopAt = undefined;
     live.abort = abort;
     return abort;
+  }
+
+  /** A message has started its reply, or won't: what came meanwhile goes now. */
+  #started(live: Live) {
+    const came = live.starting ?? [];
+    live.starting = undefined;
+    for (const go of came) go();
   }
 
   /** The chat is free: whatever waited for it goes now. */
@@ -2723,7 +2747,7 @@ export class ConversationManager {
   ): Promise<boolean> {
     if (this.#draining) return false;
     const live = await this.#get(id);
-    if (live.abort) return false;
+    if (live.abort || live.starting) return false;
     const held = this.#held.get(id) ?? heldFromLog(live.events);
     if (!held) return false;
     const chosen = this.deps.engine(engineId ?? held.engine);
@@ -2758,7 +2782,8 @@ export class ConversationManager {
       }
     }
     // Nothing waits from here to the claim: two releases at once send it once.
-    if (live.abort || !(this.#held.get(id) ?? heldFromLog(live.events))) return false;
+    if (live.abort || live.starting || !(this.#held.get(id) ?? heldFromLog(live.events)))
+      return false;
     this.#held.delete(id);
     const from = this.deps.engine(held.engine);
     // You chose another model: the chat keeps it, and the picker shows it.
@@ -4801,7 +4826,8 @@ export class ConversationManager {
    */
   async compact(id: string, focus?: string): Promise<{ compacted: boolean; message: string }> {
     const live = await this.#get(id);
-    if (live.abort) throw new ConversationError('busy', 'Still replying to your last message.');
+    if (live.abort || live.starting)
+      throw new ConversationError('busy', 'Still replying to your last message.');
     const engine = this.deps.engine(live.record.options.engine);
     const session = live.record.sessions?.[engine.id];
     if (!engine.context)
@@ -4890,22 +4916,29 @@ export class ConversationManager {
     if (state === 'accepted' || this.#carrying.has(offerId)) return 'done';
     if (state !== 'open') throw new ConversationError('not-found', 'That offer was put away.');
     this.#carrying.add(offerId);
-    if (!live.abort) {
+    if (!live.abort && !live.starting) {
       await this.#carryNow(live, offerId, turn);
       return 'started';
     }
-    // A reply is running: this goes the moment it ends, before anything else can start.
-    const off = this.events.on((event) => {
-      if (
-        event.type !== 'conversation.event' ||
-        event.event.conversationId !== id ||
-        event.event.type !== 'status' ||
-        live.abort
-      )
-        return;
-      off();
+    const later = () =>
       void this.#carryNow(live, offerId, turn).catch(() => this.#carrying.delete(offerId));
-    });
+    // A reply is running: this goes the moment it ends, before anything else can start.
+    const queue = () => {
+      const off = this.events.on((event) => {
+        if (
+          event.type !== 'conversation.event' ||
+          event.event.conversationId !== id ||
+          event.event.type !== 'status' ||
+          live.abort
+        )
+          return;
+        off();
+        later();
+      });
+    };
+    // A message on its way in goes first: then this, now or once its reply ends.
+    if (live.starting) live.starting.push(() => (live.abort ? queue() : later()));
+    else queue();
     return 'queued';
   }
 
@@ -4923,6 +4956,11 @@ export class ConversationManager {
       await this.#persist(live);
       void this.#answer(live, this.deps.engine(live.record.options.engine), prompt, []);
     };
+    // A message on its way in goes first: then this, now or once its reply ends.
+    if (live.starting) {
+      live.starting.push(() => void this.wake(id, prompt).catch(() => undefined));
+      return 'queued';
+    }
     if (!live.abort) {
       await go();
       return 'started';
