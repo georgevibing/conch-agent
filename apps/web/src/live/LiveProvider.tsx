@@ -427,7 +427,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           at: Date.now(),
           ...(attachments?.length && { attachments }),
         });
-        socketRef.current?.send({
+        const sent = socketRef.current?.send({
           type: 'conversation.send',
           conversationId,
           clientMessageId,
@@ -439,6 +439,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           ...(how?.goal && { goal: how.goal }),
           ...(!conversationId && how?.agentId && { agentId: how.agentId }),
         });
+        // Not one the gateway would take (too long): it isn't left sending forever.
+        if (sent === false) {
+          useLiveStore.getState().dropPending(conversationId ?? NEW, clientMessageId);
+          toast.error('That message couldn’t be sent.');
+          return clientMessageId;
+        }
         if (!conversationId)
           startedNew.current = [...startedNew.current.slice(-9), clientMessageId];
         return clientMessageId;

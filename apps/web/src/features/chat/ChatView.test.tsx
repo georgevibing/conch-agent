@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from '@conch/nacre';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -403,6 +403,24 @@ describe('ChatView', () => {
         }),
       ),
     );
+  });
+
+  it('a message too long to send stays in the box and says so, rather than sending forever', async () => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    renderApp(
+      <>
+        <ChatView />
+        <Toaster />
+      </>,
+    );
+    const box = await screen.findByRole('textbox', { name: 'Message Conch' });
+    const long = 'x'.repeat(200_001);
+    fireEvent.change(box, { target: { value: long } });
+    await userEvent.type(box, '{Enter}');
+    expect(await screen.findByText(/too long to send/)).toBeVisible();
+    expect(sends()).toHaveLength(0);
+    expect(useLiveStore.getState().pending).toEqual({});
+    expect((box as HTMLTextAreaElement).value).toBe(long);
   });
 
   it('Stop works the moment you send — a new chat stops as soon as it exists', async () => {

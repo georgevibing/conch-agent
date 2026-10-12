@@ -1318,6 +1318,9 @@ export type ConversationDetail = z.infer<typeof ConversationDetail>;
 
 // ── WebSocket: client → server ──────────────────────────────────────────────
 
+/** The most a message's words may be; a longer paste goes as an attachment. */
+export const MESSAGE_MAX = 200_000;
+
 export const ClientCommand = z.discriminatedUnion('type', [
   z
     .object({
@@ -1327,7 +1330,7 @@ export const ClientCommand = z.discriminatedUnion('type', [
       /** Client-generated id so the UI can reconcile optimistic messages. */
       clientMessageId: z.string().min(1).max(128),
       /** May be empty when the message is only attachments. */
-      text: z.string().trim().max(200_000),
+      text: z.string().trim().max(MESSAGE_MAX),
       /** Ids from `POST /api/attachments`, in order. */
       attachments: z.array(Id).max(ATTACHMENT_LIMITS.maxCount).optional(),
       /** Model/effort/mode for this and later turns of the conversation. */

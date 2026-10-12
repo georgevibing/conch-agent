@@ -1,5 +1,6 @@
 import {
   ATTACHMENT_LIMITS,
+  MESSAGE_MAX,
   shouldFoldPaste,
   waitHeadline,
   type Attachment,
@@ -477,6 +478,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   ) => {
     const trimmed = text.trim();
     if (!trimmed && !attached.length) return;
+    if (trimmed.length > MESSAGE_MAX) {
+      toast.error(
+        'That’s too long to send as a message. It’s still here: attach it as a file instead.',
+      );
+      return;
+    }
     setEngineIssue(undefined);
     if (origin?.kind === 'task') {
       if (attached.length) {

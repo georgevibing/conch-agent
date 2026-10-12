@@ -53,4 +53,16 @@ describe('LiveProvider', () => {
     expect(subscribes('notes.md')).toHaveLength(0);
     expect(useLiveStore.getState().views['notes.md']?.loaded).toBe(true);
   });
+
+  it('a message too long to send isn’t left sending', async () => {
+    const live = await mount();
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    act(() => void live.send('x'.repeat(200_001), 'c_long'));
+    expect(useLiveStore.getState().pending.c_long ?? []).toHaveLength(0);
+    expect(
+      (FakeSocket.last?.sent ?? []).some(
+        (c) => (c as { type: string }).type === 'conversation.send',
+      ),
+    ).toBe(false);
+  });
 });
