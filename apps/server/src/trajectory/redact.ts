@@ -81,7 +81,7 @@ export class Redaction {
   /** The kinds found in the text at hand: their examples come from it once all is out. */
   #found = new Set<RedactionKind>();
   #names?: RegExp;
-  #homes: string[];
+  #homes: RegExp[];
 
   constructor(private readonly options: RedactOptions = {}) {
     const names = [
@@ -97,7 +97,10 @@ export class Redaction {
         'giu',
       );
     const home = options.home?.replace(/[\\/]+$/, '');
-    this.#homes = home && home.length > 1 ? [...new Set([home, home.replace(/\\/g, '/')])] : [];
+    // The home folder itself, never /Users/anna for /Users/ann.
+    this.#homes = (
+      home && home.length > 1 ? [...new Set([home, home.replace(/\\/g, '/')])] : []
+    ).map((h) => new RegExp(`${escape(h)}(?![\\p{L}\\p{N}_-])`, 'gu'));
   }
 
   #count(kind: RedactionKind, n: number) {
@@ -184,13 +187,7 @@ export class Redaction {
         : undefined;
     });
 
-    for (const home of this.#homes) {
-      const n = out.split(home).length - 1;
-      if (n > 0) {
-        out = out.split(home).join('~');
-        this.#count('home', n);
-      }
-    }
+    for (const home of this.#homes) out = this.#replace(out, 'home', home, () => '~');
     if (this.#names) out = this.#replace(out, 'name', this.#names, () => TOKEN.name);
 
     for (const kind of this.#found) {

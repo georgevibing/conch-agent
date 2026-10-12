@@ -101,6 +101,13 @@ describe('taking things out of a trajectory', () => {
     expect(JSON.stringify(r.value(deep))).not.toContain('hunter22');
   });
 
+  it('takes out the home folder, not a folder whose name starts the same', () => {
+    const r = new Redaction({ home: '/Users/ann' });
+    expect(r.text('cd /Users/ann/x and /Users/anna/y, then /Users/ann')).toBe(
+      'cd ~/x and /Users/anna/y, then ~',
+    );
+  });
+
   it('knows a card number from any long number', () => {
     expect(luhn('4111111111111111')).toBe(true);
     expect(luhn('4111111111111112')).toBe(false);
