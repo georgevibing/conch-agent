@@ -116,19 +116,25 @@ export const copilotChats: ChatFinder = {
       }
       places.push({ dir: join(user, 'globalStorage', 'emptyWindowChatSessions') });
       for (const place of places) {
+        // One chat kept both ways (the .json VS Code moved on from, its .jsonl) is read once: the newer.
+        const here = new Map<string, SessionFile>();
         for (const file of await entries(place.dir)) {
           if (!file.isFile() || !/\.jsonl?$/.test(file.name)) continue;
           const path = join(place.dir, file.name);
           const stat = await fileStat(path);
           if (!stat?.size) continue;
-          out.push({
+          const key = file.name.replace(/\.jsonl?$/, '');
+          const seen = here.get(key);
+          if (seen && seen.mtimeMs >= stat.mtimeMs) continue;
+          here.set(key, {
             source: 'copilot',
-            key: file.name.replace(/\.jsonl?$/, ''),
+            key,
             path,
             ...stat,
             ...(place.project && { project: place.project }),
           });
         }
+        out.push(...here.values());
       }
     }
     return out;

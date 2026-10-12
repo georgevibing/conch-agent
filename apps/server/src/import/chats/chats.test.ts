@@ -1,9 +1,11 @@
 import {
   appendFileSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -172,6 +174,18 @@ describe('reading each app’s past chats', () => {
       'assistant: Source maps are on.',
     ]);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it('reads one Copilot chat once when VS Code kept it both ways', async () => {
+    copilotHome(home);
+    const [first] = await copilotChats.find(home, {});
+    const dir = join(first?.path ?? '', '..');
+    // The older .json left beside the change log that replaced it.
+    copyFileSync(join(dir, 'two.jsonl'), join(dir, 'two.json'));
+    utimesSync(join(dir, 'two.json'), new Date(2020, 0, 1), new Date(2020, 0, 1));
+    const found = await copilotChats.find(home, {});
+    expect(found.map((f) => f.key).sort()).toEqual(['one', 'two']);
+    expect(found.find((f) => f.key === 'two')?.path.endsWith('.jsonl')).toBe(true);
   });
 
   it('finds nothing, and never fails, where an app isn’t', async () => {
