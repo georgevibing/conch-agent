@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   pressureStretch,
+  RELIEF_COOLDOWN_MS,
   watchGateway,
   watchTransition,
   type WatchdogOptions,
@@ -307,9 +308,9 @@ describe('independent gateway watchdog', () => {
     expect(child.send).not.toHaveBeenCalled();
     beat(5);
     expect(child.send).toHaveBeenCalledOnce();
-    // Twice recoverMs, shedding again after the first.
+    // Twice recoverMs; shedding again waits out the gateway's cooldown.
     beat(20);
-    expect(child.send).toHaveBeenCalledTimes(2);
+    expect(child.send).toHaveBeenCalledOnce();
     expect(child.kill).not.toHaveBeenCalled();
     beat(20);
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
@@ -334,6 +335,30 @@ describe('independent gateway watchdog', () => {
     expect(child.send.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(child.kill).not.toHaveBeenCalled();
     expect(watch.failed()).toBe(false);
+    watch.close();
+  });
+  it('asks a stretched reduction to shed again only once the gateway would act on it', () => {
+    const { child, watch } = world({
+      unhealthyMs: 30_000,
+      recoverMs: 20_000,
+      pollMs: 5_000,
+      stopMs: 15_000,
+    });
+    const starved = { gatewayRssBytes: 200, memoryTotalBytes: 16_000, loadPerCpu: 8 };
+    const beat = (healthy: boolean) =>
+      child.emit('message', { type: 'conch.heartbeat', healthy, resource: starved });
+    beat(true);
+    const sent: number[] = [];
+    child.send.mockImplementation(() => sent.push(Date.now()));
+    const start = Date.now();
+    for (let t = 0; t < 150_000 && !child.kill.mock.calls.length; t += 5_000) {
+      vi.advanceTimersByTime(5_000);
+      beat(false);
+    }
+    const at = sent.map((time) => time - start);
+    expect(at.length).toBeGreaterThan(1);
+    for (let i = 1; i < at.length; i++)
+      expect(at[i]! - at[i - 1]!).toBeGreaterThan(RELIEF_COOLDOWN_MS);
     watch.close();
   });
   it('never stretches a deadline for silence', () => {

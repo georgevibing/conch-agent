@@ -41,6 +41,12 @@ export interface WatchdogOptions {
   beforeKill?: (frozen: boolean) => void;
 }
 
+/**
+ * How long the gateway ignores another `conch.recover` after acting on one: matches
+ * `GatewayRecovery.receive` in recovery/gateway.ts. A request inside it is dropped.
+ */
+export const RELIEF_COOLDOWN_MS = 30_000;
+
 /** booting → healthy → reducing → terminating; `since` is the current deadline's reference. */
 export type WatchPhase = 'booting' | 'healthy' | 'reducing' | 'terminating';
 export interface WatchState {
@@ -167,8 +173,10 @@ export function watchTransition(
       const frozen = state.heardAt === undefined || state.heardAt < state.since;
       return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
     }
-    // A stretched reduction keeps shedding work, once per recoverMs.
-    if (event.at - (state.shedAt ?? state.since) >= limits.recoverMs)
+    // A stretched reduction keeps shedding work, once per recoverMs but never inside the
+    // gateway's cooldown, which would drop the request.
+    const shed = event.at - (state.shedAt ?? state.since);
+    if (shed >= limits.recoverMs && shed > RELIEF_COOLDOWN_MS)
       return { ...ticked, shedAt: event.at };
   }
   return ticked;
