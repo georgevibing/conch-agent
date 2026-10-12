@@ -1060,6 +1060,26 @@ describe('the process’s life', () => {
     });
   });
 
+  it('lets go of a stopped call: it can’t fetch, and its timer stops nothing', async () => {
+    const fetcher = vi.fn(noFetch);
+    const app = await makeApp(`export const tools = {
+      ${tool('slow', 'await new Promise((r) => setTimeout(r, 300)); try { await app.fetch("https://api.example.com/x"); await app.data.set("after", "fetched"); } catch (e) { await app.data.set("after", e.message); } return "late";')}
+      ${tool('peek', 'return app.data.get("after");')}
+    };`);
+    const runtime = start(app, { callMs: 1500, fetcher });
+    await runtime.list();
+    const controller = new AbortController();
+    const pending = runtime.call('slow', {}, controller.signal);
+    setTimeout(() => controller.abort(), 100);
+    expect(await pending).toEqual({ ok: false, text: 'Stopped.' });
+    await new Promise((r) => setTimeout(r, 1800));
+    expect(runtime.running).toBe(true);
+    expect((await runtime.call('peek', {})).text).toBe(
+      'app.fetch only works while one of the app’s tools is running.',
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('logs what the app writes with app.log', async () => {
     const app = await makeApp(
       `export const tools = { ${tool('note', 'app.log("watered", { plant: "fern" }); return app.now();')} };`,

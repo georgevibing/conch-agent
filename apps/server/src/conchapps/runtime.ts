@@ -413,7 +413,8 @@ export class SealedRuntime implements AppRuntime {
         signal?.removeEventListener('abort', onAbort);
         resolve(outcome);
       };
-      const onAbort = () => done({ ok: false, text: 'Stopped.' });
+      // A stopped call is let go: it may no longer fetch, and its timer stops nothing.
+      const onAbort = () => this.#pending.get(id)?.done({ ok: false, text: 'Stopped.' });
       signal?.addEventListener('abort', onAbort, { once: true });
       const timer = setTimeout(() => {
         // The process may be mid-anything: it's stopped, and starts afresh next time.
