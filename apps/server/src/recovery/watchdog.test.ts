@@ -253,12 +253,14 @@ describe('independent gateway watchdog', () => {
   });
   it('keeps only bounded numeric resource evidence when diagnosing a stall', () => {
     const { child, watch, incident } = world();
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(25);
     child.emit('message', {
       type: 'conch.heartbeat',
-      healthy: true,
+      healthy: false,
       resource: { running: 3, probeMs: 2, token: 'private', command: 'private' },
     });
-    vi.advanceTimersByTime(30);
+    vi.advanceTimersByTime(5);
     expect(incident).toHaveBeenCalledWith('reduced-workload', { running: 3, probeMs: 2 });
     watch.close();
   });
@@ -273,6 +275,21 @@ describe('independent gateway watchdog', () => {
     child.emit('message', { type: 'conch.heartbeat', healthy: false });
     vi.advanceTimersByTime(30);
     expect(incident).toHaveBeenCalledWith('reduced-workload', undefined);
+    watch.close();
+  });
+
+  it('does not report a silent gateway’s last measurements as current', () => {
+    const { child, watch, incident } = world();
+    child.emit('message', {
+      type: 'conch.heartbeat',
+      healthy: true,
+      resource: { running: 3, probeMs: 2 },
+    });
+    vi.advanceTimersByTime(50);
+    expect(incident.mock.calls).toEqual([
+      ['reduced-workload', undefined],
+      ['unresponsive', undefined],
+    ]);
     watch.close();
   });
 

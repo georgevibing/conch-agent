@@ -195,6 +195,10 @@ export function watchGateway(
   };
   let state: WatchState = { phase: 'booting', since: now(), failed: false };
   let resource: RecoveryResource | undefined;
+  let measuredAt = 0;
+  // A silent gateway's last numbers are from before it went quiet, not now: omit them after
+  // two heartbeats' time.
+  const current = () => (now() - measuredAt <= limits.pollMs * 2 ? resource : undefined);
   let forced: NodeJS.Timeout | undefined;
   // A flapping gateway records its first cycle, not one pair of incidents every few seconds.
   let reported: number | undefined;
@@ -224,14 +228,14 @@ export function watchGateway(
       quiet = reported !== undefined && state.since - reported < limits.flapWindowMs;
       if (!quiet) {
         reported = state.since;
-        options.incident('reduced-workload', resource);
+        options.incident('reduced-workload', current());
       }
       recover();
     } else if (state.phase === 'healthy' && before.phase === 'reducing') {
-      if (!quiet) options.incident('responsive', resource);
+      if (!quiet) options.incident('responsive', current());
     } else if (state.phase === 'terminating') {
       if (state.failed) {
-        options.incident('unresponsive', resource);
+        options.incident('unresponsive', current());
         try {
           options.beforeKill?.(state.frozen === true);
         } catch {
@@ -267,6 +271,7 @@ export function watchGateway(
     apply({ type: 'heartbeat', at: now() });
     // A heartbeat without measurements must not leave older numbers looking current.
     resource = 'resource' in value ? recoveryResource(value.resource) : undefined;
+    measuredAt = now();
     if ('healthy' in value && value.healthy === true) apply({ type: 'healthy', at: now() });
   };
   child.on('message', message);
