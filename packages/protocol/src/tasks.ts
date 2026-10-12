@@ -149,7 +149,7 @@ export const TaskWaitReason = z.enum([
   'provider',
   /** Its provider already has as many as it takes well. */
   'provider-busy',
-  /** Conch is recovering, or hasn't looked at this computer yet. */
+  /** Conch is recovering or catching up, or hasn't looked at this computer yet. */
   'recovering',
 ]);
 export type TaskWaitReason = z.infer<typeof TaskWaitReason>;

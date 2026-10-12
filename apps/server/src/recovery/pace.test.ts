@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admitsPlanned, ResourcePace, paceMessage } from './pace';
+import { admitsPlanned, ResourcePace, paceMessage, type WorkloadPace } from './pace';
 import { resourcePolicy, type ResourceSnapshot } from './resources';
 
 const GiB = 1024 ** 3;
@@ -138,5 +138,16 @@ describe('work the person asked for just now', () => {
     expect(
       admitsPlanned({ phase: 'recovering', cause: 'recovery', concurrency: 1, critical: false }),
     ).toBe(false);
+    expect(
+      admitsPlanned({ phase: 'held', cause: 'unresponsive', concurrency: 0, critical: false }),
+    ).toBe(false);
+  });
+
+  it('says a hold after one slow moment is catching up, not recovering', () => {
+    const held = (cause: WorkloadPace['cause']) =>
+      paceMessage({ phase: 'held', cause, concurrency: 0, critical: false });
+    expect(held('unresponsive')).toContain('catching up');
+    expect(held('unresponsive')).not.toContain('recovering');
+    expect(held('recovery')).toContain('Conch is recovering.');
   });
 });

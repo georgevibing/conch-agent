@@ -2,7 +2,12 @@ import { memoryReserve, type ResourceSnapshot } from './resources';
 
 export interface WorkloadPace {
   phase: 'normal' | 'constrained' | 'held' | 'recovering';
-  cause: 'memory' | 'cpu' | 'unknown' | 'recovery';
+  /**
+   * Why work is held. `recovery` is Conch's own recovery (and what a normal or
+   * easing pace says); `unresponsive` is the short hold after Conch stopped
+   * answering for a moment and its supervisor asked it to shed work.
+   */
+  cause: 'memory' | 'cpu' | 'unknown' | 'recovery' | 'unresponsive';
   concurrency: number;
   critical: boolean;
 }
@@ -100,12 +105,18 @@ export class ResourcePace {
 /**
  * May work the person asked for just now go on (a chat paused for an update,
  * a task they pressed Start now on)? Yes when all is normal, and while the
- * processor is merely busy; not while memory is short or Conch recovers. (A
+ * processor is merely busy; not while memory is short, Conch recovers or
+ * catches up after it stopped answering. (A
  * normal pace says `cause: 'recovery'`, so the phase is asked first.)
  */
 export function admitsPlanned(pace: WorkloadPace): boolean {
   if (pace.phase === 'normal') return true;
-  return !pace.critical && pace.cause !== 'memory' && pace.cause !== 'recovery';
+  return (
+    !pace.critical &&
+    pace.cause !== 'memory' &&
+    pace.cause !== 'recovery' &&
+    pace.cause !== 'unresponsive'
+  );
 }
 
 /** Only fixed host-authored words. Never interpolate tool output, commands or other chats. */
@@ -118,7 +129,7 @@ export function paceMessage(pace: WorkloadPace): string {
     case 'constrained':
       return `This computer is approaching its ${pace.cause === 'memory' ? 'memory' : 'CPU'} budget. Reduce parallel jobs and avoid extra browser tabs; prefer smaller batches, reading or planning. Conch is limiting managed work to one command at a time. ${next}`;
     case 'held':
-      return `${pace.cause === 'unknown' ? 'Conch cannot yet verify resource headroom.' : pace.cause === 'recovery' ? 'Conch is recovering.' : `This computer is under ${pace.critical ? 'critical ' : ''}${pace.cause === 'memory' ? 'memory' : 'CPU'} pressure.`} New heavy work is waiting. Continue with lighter steps or wait for room; do not bypass the queue through a native shell. ${next}`;
+      return `${pace.cause === 'unknown' ? 'Conch cannot yet verify resource headroom.' : pace.cause === 'recovery' ? 'Conch is recovering.' : pace.cause === 'unresponsive' ? 'Conch was slow to respond a moment ago and is catching up.' : `This computer is under ${pace.critical ? 'critical ' : ''}${pace.cause === 'memory' ? 'memory' : 'CPU'} pressure.`} New heavy work is waiting. Continue with lighter steps or wait for room; do not bypass the queue through a native shell. ${next}`;
     case 'recovering':
       return `Resource pressure is easing. Conch is checking sustained health and restoring work gradually. Keep parallelism low and continue the existing task with lighter steps while queued commands wait their turn. ${next}`;
   }

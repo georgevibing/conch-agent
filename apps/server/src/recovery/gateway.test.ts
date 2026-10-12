@@ -74,6 +74,19 @@ describe('whether there is room, and why not', () => {
       check('easing');
       pace = { phase: 'held', cause: 'unknown', concurrency: 0, critical: false };
       check('not-measured');
+      // The hold after one slow moment isn't the recovery after repeated trouble.
+      pace = { phase: 'held', cause: 'unresponsive', concurrency: 0, critical: false };
+      check('catching-up');
+      expect(recovery.room()).toMatchObject({
+        why: 'Conch was slow to respond a moment ago, and is catching up',
+        until: 'within about half a minute, once it’s keeping up again',
+      });
+      // Admission paused for Conch's own recovery still says so.
+      pace = { phase: 'held', cause: 'recovery', concurrency: 0, critical: false };
+      check('recovering');
+      expect(recovery.room()).toMatchObject({
+        until: 'once Conch has stayed responsive for a full minute',
+      });
       pace = { phase: 'normal', cause: 'recovery', concurrency: 4, critical: false };
       sample = resourcePolicy({ ...healthy(), availableBytes: 1e8 });
       await recovery.poll();
@@ -198,7 +211,7 @@ describe('gateway recovery', () => {
     recovery.stop();
   });
 
-  it('holds work after a freeze for Conch’s recovery, never saying memory ran short', async () => {
+  it('holds work a moment after a freeze while Conch catches up, never saying memory ran short', async () => {
     const processes = new ProcessService({
       protectedPaths: [],
       sealed: async () => false,
@@ -217,14 +230,16 @@ describe('gateway recovery', () => {
       await recovery.start(async () => true);
       expect(recovery.room()).toEqual({ room: true });
       recovery.receive({ type: 'conch.recover' });
-      expect(relieve).toHaveBeenCalledWith('recovery');
+      expect(relieve).toHaveBeenCalledWith('unresponsive');
       await vi.waitFor(() =>
         expect(deps.note).toHaveBeenCalledWith('Held new commands a moment to stay responsive'),
       );
-      expect(processes.workload).toMatchObject({ phase: 'held', cause: 'recovery' });
+      expect(processes.workload).toMatchObject({ phase: 'held', cause: 'unresponsive' });
       const room = recovery.room();
-      expect(room.room ? undefined : room.reason).toBe('recovering');
+      expect(room.room ? undefined : room.reason).toBe('catching-up');
       expect(room.room ? '' : room.why).not.toContain('memory');
+      expect(room.room ? '' : room.why).not.toContain('repeated trouble');
+      expect(recovery.allowsPlanned).toBe(false);
     } finally {
       recovery.stop();
       processes.close();

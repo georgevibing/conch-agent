@@ -188,6 +188,7 @@ export interface Schedule {
 /** A gateway hold that isn't memory or the processor, in a waiting task's words. */
 const HOLD_WORDS: Record<Exclude<HoldReason, 'memory' | 'cpu'>, string> = {
   recovering: 'Waiting while Conch recovers',
+  'catching-up': 'Waiting a moment while Conch catches up',
   easing: 'Easing back in: this computer was busy a moment ago',
   stopping: 'Waiting while Conch stops',
   'not-answering': 'Checking this computer has room',
@@ -370,9 +371,11 @@ export function schedule(input: ScheduleInput): Schedule {
           ? 'memory'
           : machine.pace?.cause === 'cpu'
             ? 'cpu'
-            : machine.pace?.cause === 'recovery'
-              ? 'recovering'
-              : 'not-measured');
+            : machine.pace?.cause === 'unresponsive'
+              ? 'catching-up'
+              : machine.pace?.cause === 'recovery'
+                ? 'recovering'
+                : 'not-measured');
       if (hold === 'memory') return wait(slot, 'memory', memoryWords());
       if (hold === 'cpu') return wait(slot, 'cpu', cpuWords(), { canStartNow: machine.planned });
       return wait(slot, 'recovering', HOLD_WORDS[hold]);

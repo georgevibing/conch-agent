@@ -11,6 +11,7 @@ import type { RecoveryResource } from './supervisor-state';
 export type HoldReason =
   | 'stopping'
   | 'recovering'
+  | 'catching-up'
   | 'not-answering'
   | 'not-measured'
   | 'memory'
@@ -39,6 +40,10 @@ const HELD: Record<HoldReason, { why: string; until: string }> = {
   recovering: {
     why: 'Conch is recovering after repeated trouble',
     until: 'once Conch has stayed responsive for a full minute',
+  },
+  'catching-up': {
+    why: 'Conch was slow to respond a moment ago, and is catching up',
+    until: 'within about half a minute, once it’s keeping up again',
   },
   'not-answering': {
     why: 'Conch is checking that it can still respond',
@@ -245,9 +250,11 @@ export class GatewayRecovery {
           ? 'memory'
           : pace.cause === 'cpu'
             ? 'cpu'
-            : pace.cause === 'recovery'
-              ? 'recovering'
-              : 'not-measured',
+            : pace.cause === 'unresponsive'
+              ? 'catching-up'
+              : pace.cause === 'recovery'
+                ? 'recovering'
+                : 'not-measured',
       );
     }
     return { room: true };
@@ -372,9 +379,10 @@ export class GatewayRecovery {
     const now = (this.deps.now ?? (() => performance.now()))();
     if (now - this.#lastRelief < 30_000) return;
     this.#lastRelief = now;
-    // The supervisor asks because Conch stopped answering, not because memory ran short.
+    // The supervisor asks because Conch stopped answering, not because memory ran short,
+    // and once: this isn't the recovery after repeated trouble.
     void this.deps
-      .relieve('recovery')
+      .relieve('unresponsive')
       .then(({ stopped }) =>
         this.deps.note(
           stopped

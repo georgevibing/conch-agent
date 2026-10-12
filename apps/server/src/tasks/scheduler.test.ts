@@ -167,6 +167,15 @@ describe('how many start: room, not a number (ADR 0129)', () => {
       words: 'Waiting while Conch recovers',
     });
     expect(recovering.capacity).toMatchObject({ atOnce: 0, words: 'Waiting while Conch recovers' });
+    const catchingUp = run({
+      queued,
+      machine: roomy({
+        allowed: false,
+        planned: false,
+        pace: { phase: 'held', cause: 'unresponsive', critical: false },
+      }),
+    });
+    expect(catchingUp.waiting.get(held.id)?.words).toBe('Waiting a moment while Conch catches up');
     const unknown = run({ queued, machine: roomy({ allowed: false, planned: false }) });
     expect(unknown.waiting.get(held.id)?.words).toBe('Checking this computer has room');
   });
@@ -185,6 +194,11 @@ describe('how many start: room, not a number (ADR 0129)', () => {
     expect(why('memory')?.reason).toBe('memory');
     expect(why('cpu')?.reason).toBe('cpu');
     expect(why('stopping')?.words).toBe('Waiting while Conch stops');
+    expect(why('catching-up')).toMatchObject({
+      reason: 'recovering',
+      words: 'Waiting a moment while Conch catches up',
+      canStartNow: false,
+    });
     expect(why('not-measured')?.words).toBe('Checking this computer has room');
     // The reason wins over the pace's cause.
     expect(
