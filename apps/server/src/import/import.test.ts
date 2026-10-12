@@ -375,7 +375,7 @@ describe('OpenClaw’s other agents (ADR 0042)', () => {
 function targets(catalog: CatalogEntry[] = []): ImportTargets & {
   log: string[];
   routines: ImportTargets['routines'] & {
-    made: { title: string; status: string; agentId?: string }[];
+    made: { title: string; status: string; agentId?: string; prompt?: string }[];
   };
   agents: AgentStore;
   bound: { id: string; agentId: string }[];
@@ -411,6 +411,7 @@ function targets(catalog: CatalogEntry[] = []): ImportTargets & {
           id: `r_${made.length}`,
           title: input.title,
           status: input.status,
+          prompt: input.prompt,
           ...(input.agentId && { agentId: input.agentId }),
         };
         made.push(routine);
@@ -522,6 +523,41 @@ describe('bringing things over', () => {
     expect(by('key:openrouter')).toMatchObject({ checked: false });
     // No secret ever reaches the plan.
     expect(JSON.stringify(plan)).not.toMatch(/not-real|from-hermes/);
+  });
+
+  it('never brings a key into About you or a routine’s words', async () => {
+    const root = openClawHome(home);
+    const github = 'ghp_' + 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789';
+    writeFileSync(
+      join(root, 'workspace', 'USER.md'),
+      `# User\n\nAda. My GitHub token is ${github}. The bot is 123:test-telegram-token-not-real.\n`,
+    );
+    writeFileSync(
+      join(root, 'cron', 'jobs.json'),
+      JSON.stringify({
+        jobs: [
+          {
+            id: 'j1',
+            name: 'Deploy',
+            enabled: true,
+            schedule: { kind: 'cron', expr: '0 8 * * 1-5' },
+            payload: { message: 'Deploy with DEPLOY_TOKEN=abcd1234efgh5678 please.' },
+          },
+        ],
+      }),
+    );
+    const t = targets();
+    const service = new ImportService({ home: conch, sourceHome: home, targets: t });
+    const plan = await service.plan('openclaw');
+    await service.run(
+      'openclaw',
+      plan.items.filter((i) => i.checked).map((i) => i.id),
+    );
+    const about = (await t.settings.get()).profile.about;
+    expect(about).toContain('Ada.');
+    expect(about).not.toContain(github);
+    expect(about).not.toContain('test-telegram-token-not-real');
+    expect(t.routines.made[0]?.prompt).toBe('Deploy with DEPLOY_TOKEN=••• please.');
   });
 
   it('backs up first, brings the ticked things, and undoes them — putting back what it replaced', async () => {

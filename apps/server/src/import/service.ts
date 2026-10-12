@@ -66,7 +66,7 @@ import { z } from 'zod';
 
 import { joinInstructions, splitInstructions, uniqueName } from '../agents/store';
 import { Mutex, readJson, writeJson } from '../lib/fs';
-import { type AgentDraft, draftAgent } from './agents';
+import { type AgentDraft, draftAgent, withoutSecrets } from './agents';
 import { checkMemory } from '../memory/guard';
 import { describe } from '../routines/schedule';
 import { scanSkill, scanText, unsmuggle } from '../skills/scan';
@@ -1104,11 +1104,14 @@ export class ImportService {
         }
       }
       const agentOf = (appId: string | undefined) => (appId ? here.get(appId) : undefined);
+      // About you and a routine's words reach prompts too: never with a key in them.
+      const keys = secretsOf(found);
+      const words = (text: string) => withoutSecrets(unsmuggle(text), keys).text;
 
       if (found.about)
         await step('about', 'about', 'About you', async () => {
           before.about = settings.profile.about;
-          const about = [settings.profile.about.trim(), unsmuggle(found.about?.text ?? '')]
+          const about = [settings.profile.about.trim(), words(found.about?.text ?? '')]
             .filter(Boolean)
             .join('\n\n');
           await t.settings.update({ profile: { about: about.slice(0, 4000) } });
@@ -1134,7 +1137,7 @@ export class ImportService {
         const made = await t.routines.create({
           title: r.title,
           summary: '',
-          prompt: unsmuggle(r.prompt),
+          prompt: words(r.prompt),
           schedule: r.schedule,
           timezone: r.timezone,
           status: 'draft',
@@ -1154,7 +1157,7 @@ export class ImportService {
           await step(`${prefix}:about`, 'about', `About you, from ${agent.name}`, async () => {
             const now = (await t.settings.get()).profile.about;
             before.about ??= settings.profile.about;
-            const text = unsmuggle(agent.about?.text ?? '');
+            const text = words(agent.about?.text ?? '');
             if (now.includes(text.slice(0, 80))) return 'Already in About you.';
             await t.settings.update({
               profile: { about: [now.trim(), text].filter(Boolean).join('\n\n').slice(0, 4000) },
