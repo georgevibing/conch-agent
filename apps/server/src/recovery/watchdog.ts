@@ -50,6 +50,8 @@ export interface WatchState {
   failed: boolean;
   /** When this supervisor last judged; a long gap means it was asleep, not the gateway. */
   lastTick?: number;
+  /** The last late tick was taken for this supervisor's sleep; until one is on time, late ones are judged. */
+  napped?: boolean;
   /** The last well-formed IPC message: proof the gateway's event loop runs. */
   heardAt?: number;
   /** Terminating a gateway that sent nothing at all while it was reducing. */
@@ -132,10 +134,11 @@ export function watchTransition(
     return state.phase === 'booting' && state.bootPhase !== undefined
       ? { ...state, phase: 'healthy', since: event.at }
       : state;
-  const ticked = { ...state, lastTick: event.at };
-  // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence.
-  if (state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3)
-    return { ...ticked, since: event.at };
+  const late = state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3;
+  const ticked = { ...state, lastTick: event.at, napped: late };
+  // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence. Ticks that are
+  // always late (App Nap, timer coalescing, a loaded host) are not one nap after another.
+  if (late && !state.napped) return { ...ticked, since: event.at };
   const elapsed = event.at - state.since;
   const silent = event.at - Math.max(state.since, state.heardAt ?? state.since);
   // Only a gateway still talking gets longer while other programs starve the computer.

@@ -461,4 +461,26 @@ describe('watchdog transitions', () => {
     expect(step(woke, { type: 'tick', at: 3_600_029 }).phase).toBe('healthy');
     expect(step(woke, { type: 'tick', at: 3_600_030 }).phase).toBe('reducing');
   });
+  it('still judges a frozen gateway when every tick comes late', () => {
+    let state = step(booting, { type: 'healthy', at: 0 }, { type: 'tick', at: 50 });
+    for (let at = 450; at <= 2_050 && state.phase !== 'terminating'; at += 400)
+      state = step(state, { type: 'tick', at });
+    expect(state).toMatchObject({ phase: 'terminating', failed: true, frozen: true });
+  });
+  it('takes a late tick after an on-time one for another nap', () => {
+    const napped = step(
+      booting,
+      { type: 'healthy', at: 0 },
+      { type: 'tick', at: 5 },
+      {
+        type: 'tick',
+        at: 1_000,
+      },
+    );
+    const onTime = step(napped, { type: 'tick', at: 1_010 });
+    expect(step(onTime, { type: 'tick', at: 5_000 })).toMatchObject({
+      phase: 'healthy',
+      since: 5_000,
+    });
+  });
 });
