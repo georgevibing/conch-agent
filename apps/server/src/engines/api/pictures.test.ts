@@ -244,6 +244,9 @@ describe('a model that can’t look at pictures, in every provider’s words', (
     'Invalid API key provided.',
     'image exceeds 5 MB maximum',
     'tools are not supported for this model',
+    // A picture that's wrong, not a model that can't see.
+    'messages.0.content.1.image.source.base64.data: Image does not match the provided media type image/png',
+    'Could not process image',
   ])('not: %s', (text) => {
     expect(refusesImages(text)).toBe(false);
   });

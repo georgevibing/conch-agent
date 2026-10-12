@@ -221,6 +221,9 @@ export function toolPictureCount(message: WireMessage): number {
  */
 export function refusesImages(text: string): boolean {
   const words = text.toLowerCase();
+  // A picture that isn't what it says it is ("does not match the provided
+  // media type") is a bad picture, not a model that can't see.
+  if (/(?:does not|doesn['’]t) match/.test(words)) return false;
   if (/no endpoints found that support image/.test(words)) return true;
   if (
     /unknown variant .?image_url|image_url.{0,40}(?:unknown|not (?:allowed|permitted|supported))/.test(
