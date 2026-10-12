@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { unifiedDiff } from './diff';
 import { UndoService } from './service';
 import { UndoStore, type ChangeSet } from './store';
+import { MAX_FILE } from './tracker';
 
 let root: string;
 let home: string;
@@ -169,6 +170,26 @@ describe('noticing what changed', () => {
     // An empty file of your own (writable) still counts.
     writeFileSync(join(work, '.keep'), '');
     expect((await t.end())?.files.map((f) => f.shown)).toEqual(['.keep']);
+  });
+
+  it('a file too big to keep is never taken for one the turn made, however it shrinks', async () => {
+    const { tracker, undo } = setup();
+    const big = 'x'.repeat(MAX_FILE + 1024);
+    writeFileSync(join(work, 'data.csv'), big);
+    writeFileSync(join(work, 'log.txt'), big);
+    const t = tracker();
+    await t.begin();
+    // A command filters it under the limit…
+    await t.before('b1', 'Bash', { command: 'filter' });
+    writeFileSync(join(work, 'data.csv'), 'a,b\n1,2\n');
+    expect(await t.after('b1')).toBeUndefined();
+    // …and so does a file tool.
+    await t.before('w1', 'Write', { file_path: join(work, 'log.txt') });
+    writeFileSync(join(work, 'log.txt'), 'trimmed\n');
+    expect(await t.after('w1')).toBeUndefined();
+    expect(await t.end()).toBeUndefined();
+    expect(await undo.byConversation('c1')).toEqual([]);
+    expect(readFileSync(join(work, 'data.csv'), 'utf8')).toBe('a,b\n1,2\n');
   });
 
   it('a work folder that’s the whole home folder: only file tools, and it says so', async () => {

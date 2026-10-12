@@ -98,6 +98,20 @@ type Snapshot = Map<string, IndexEntry>;
 const sandboxStandIn = (info: { size: number; mode: number; nlink: number }) =>
   info.size === 0 && (info.mode & 0o222) === 0 && info.nlink === 1;
 
+/**
+ * The hash of a file that's there but too big to keep: it stays in the picture,
+ * so when it shrinks it isn't taken for a file the turn made (and Undo removed).
+ * A change to it is never undone, either way.
+ */
+const UNKEPT = '';
+const unkept = (info: { size: number; mtimeMs: number; mode: number }): IndexEntry => ({
+  size: info.size,
+  mtimeMs: info.mtimeMs,
+  mode: info.mode & 0o777,
+  hash: UNKEPT,
+});
+const neither = (a?: IndexEntry, b?: IndexEntry) => a?.hash === UNKEPT || b?.hash === UNKEPT;
+
 export class TurnTracker {
   /** The work folder as it was last looked at; undefined when it can't be kept (`reason`). */
   #folder?: Snapshot;
@@ -148,7 +162,7 @@ export class TurnTracker {
       this.#pending.set(toolUseId, {
         name: toolName,
         input,
-        file: { path, parent, before: await this.#keep(path) },
+        file: { path, parent, before: await this.#look(path) },
       });
       return;
     }
@@ -164,8 +178,8 @@ export class TurnTracker {
     this.#pending.delete(toolUseId);
     let files: FileChange[] = [];
     if (call.file) {
-      const now = await this.#keep(call.file.path);
-      if (now?.hash !== call.file.before?.hash)
+      const now = await this.#look(call.file.path);
+      if (now?.hash !== call.file.before?.hash && !neither(call.file.before, now))
         files = [
           {
             path: call.file.path,
@@ -224,7 +238,7 @@ export class TurnTracker {
     for (const rel of [...paths].sort()) {
       const a = before.get(rel);
       const b = now.get(rel);
-      if (a?.hash === b?.hash) continue;
+      if (a?.hash === b?.hash || neither(a, b)) continue;
       const path = join(workspace, rel);
       files.push({
         path,
@@ -236,6 +250,13 @@ export class TurnTracker {
     }
     this.#folder = now;
     return files;
+  }
+
+  /** One file as it is: kept, too big to keep, or undefined when it isn't there. */
+  async #look(path: string): Promise<IndexEntry | undefined> {
+    const info = await lstat(path).catch(() => undefined);
+    if (info?.isFile() && info.size > MAX_FILE) return unkept(info);
+    return this.#keep(path);
   }
 
   /** One file, kept: its entry, or undefined when it isn't there (or can't be kept). */
@@ -280,10 +301,14 @@ export class TurnTracker {
         }
         if (!entry.isFile()) continue;
         const info = await lstat(path).catch(() => undefined);
-        if (!info || info.size > MAX_FILE || sandboxStandIn(info)) continue;
+        if (!info || sandboxStandIn(info)) continue;
+        const rel = relative(workspace, path);
+        if (info.size > MAX_FILE) {
+          out.set(rel, unkept(info));
+          continue;
+        }
         total += info.size;
         if (out.size >= MAX_FILES || total > MAX_FOLDER) return false;
-        const rel = relative(workspace, path);
         const seen = known.get(rel);
         if (
           seen &&
