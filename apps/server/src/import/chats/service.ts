@@ -268,8 +268,13 @@ export class ChatImportService {
         }
       } catch (error) {
         // A file that won't read (damaged, a shape not seen before) stays out; the rest come in.
+        // Noted, so it isn't read again until it changes (a chat already here stays).
         run.skipped += 1;
         this.deps.log?.(error);
+        if (!before)
+          await this.store
+            .putEmpty({ ...base, ...(file.project && { project: file.project }) })
+            .catch(() => undefined);
       }
       state.done += 1;
       if (state.done % BATCH === 0) {

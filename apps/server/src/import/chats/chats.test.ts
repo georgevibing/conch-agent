@@ -327,15 +327,20 @@ describe('bringing them in', () => {
 
   it('skips a file that won’t read, and brings the rest', async () => {
     everyAppHome(home);
+    let reads = 0;
     const broken: ChatFinder = {
       id: 'claude-code',
       find: async () => [{ source: 'claude-code', key: 'x', path: '/nope', size: 1, mtimeMs: 1 }],
       read: async () => {
+        reads++;
         throw new Error('a shape never seen');
       },
     };
     const chats = service({ finders: [broken, codex] });
     expect(await chats.start()).toMatchObject({ added: 2, skipped: 1 });
+    // Not read again until it changes.
+    await chats.start();
+    expect(reads).toBe(1);
   });
 
   it('keeps up by itself once you’ve said yes, and not before', async () => {
