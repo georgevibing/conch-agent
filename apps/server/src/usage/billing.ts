@@ -59,7 +59,9 @@ export class Billings {
       else if (status.auth?.method === 'subscription') value = { billing: 'plan', source: account };
       else value = { billing: 'metered', source: account };
     }
-    this.#cache.set(engine.id, { at: this.now(), value });
+    // Not known (the provider didn't answer): asked again next time, so a turn
+    // that costs money is never let through as if it were free for a minute.
+    if (value.billing) this.#cache.set(engine.id, { at: this.now(), value });
     return value;
   }
 }

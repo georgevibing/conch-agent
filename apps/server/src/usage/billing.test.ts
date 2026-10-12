@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Engine } from '../engines/types';
-import { recordSmallSpend, type BillingInfo } from './billing';
+import { Billings, recordSmallSpend, type BillingInfo } from './billing';
 import { UsageService } from './service';
 
 const homes: string[] = [];
@@ -44,5 +44,24 @@ describe('a small model’s spend in the month’s budget (ADR 0103)', () => {
         'claude-haiku-4-5',
       );
     expect((await usage.month()).usd).toBe(0);
+  });
+});
+
+describe('how a provider charges', () => {
+  it('asks again after a check that failed, rather than keeping “don’t know” for a minute', async () => {
+    let ready = false;
+    const flaky = {
+      id: 'anthropic',
+      label: 'Anthropic API',
+      detect: async () => {
+        if (!ready) throw new Error('timed out');
+        return { state: 'ready', auth: { method: 'api-key', description: 'Anthropic API' } };
+      },
+    } as unknown as Engine;
+    const billings = new Billings(() => 1_000);
+    expect(await billings.of(flaky)).toEqual({});
+    ready = true;
+    expect((await billings.of(flaky)).billing).toBe('metered');
+    expect((await billings.quick(flaky)).billing).toBe('metered');
   });
 });
