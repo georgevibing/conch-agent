@@ -357,8 +357,8 @@ describe('independent gateway watchdog', () => {
     }
     const at = sent.map((time) => time - start);
     expect(at.length).toBeGreaterThan(1);
-    for (let i = 1; i < at.length; i++)
-      expect(at[i]! - at[i - 1]!).toBeGreaterThan(RELIEF_COOLDOWN_MS);
+    for (const [i, time] of at.slice(1).entries())
+      expect(time - (at[i] ?? 0)).toBeGreaterThan(RELIEF_COOLDOWN_MS);
     watch.close();
   });
   it('never stretches a deadline for silence', () => {
