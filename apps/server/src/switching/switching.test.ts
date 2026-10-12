@@ -183,6 +183,13 @@ describe('switching models when asked (ADR 0132)', () => {
     expect(claude.turns[0]?.prompt).toContain('hello');
   });
 
+  it('says the chat is answered by the provider it switched to, for its small jobs', async () => {
+    const { manager } = await setup();
+    const chat = await manager.send({ clientMessageId: 'u1', text: 'switch:Opus 5.5' });
+    await idle(manager, chat.id);
+    expect((await manager.answering(chat.id)).engine).toBe('claude-code');
+  });
+
   it('“try this with Claude” carries the request on to the new model in the same run', async () => {
     const { manager, codex, claude } = await setup();
     const chat = await manager.send({

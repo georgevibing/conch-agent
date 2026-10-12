@@ -1323,7 +1323,8 @@ export class ConversationManager {
   ): Promise<{ engine: EngineId; origin?: ConversationRecord['origin'] }> {
     const live = await this.#get(id);
     return {
-      engine: live.record.engine,
+      // The one its turns go to now: the chat may have switched since it began.
+      engine: this.deps.engine(live.record.options.engine).id,
       ...(live.record.origin && { origin: live.record.origin }),
     };
   }
@@ -4801,7 +4802,7 @@ export class ConversationManager {
   async compact(id: string, focus?: string): Promise<{ compacted: boolean; message: string }> {
     const live = await this.#get(id);
     if (live.abort) throw new ConversationError('busy', 'Still replying to your last message.');
-    const engine = this.deps.engine(live.record.options.engine ?? live.record.engine);
+    const engine = this.deps.engine(live.record.options.engine);
     const session = live.record.sessions?.[engine.id];
     if (!engine.context)
       return {
