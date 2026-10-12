@@ -304,6 +304,13 @@ describe('abuse: forgiving input never widens what a call may do', () => {
     expect(ok(checkHostArgs(tool, { input: '{"x": 1}' })).args).toEqual({ input: '{"x": 1}' });
   });
 
+  it('never unwraps an envelope for a tool that takes anything', () => {
+    const open = { type: 'object', additionalProperties: true };
+    expect(normaliseArgs(open, { input: { a: 1 } }, { dropUnknown: false }).args).toEqual({
+      input: { a: 1 },
+    });
+  });
+
   it('leaves deep arguments alone rather than recursing without end', () => {
     let deep: Record<string, unknown> = { a: 1 };
     for (let i = 0; i < 5_000; i++) deep = { n: deep };

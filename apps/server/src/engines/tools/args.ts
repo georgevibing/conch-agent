@@ -308,7 +308,9 @@ export function normaliseArgs(
   // `{"arguments": {…}}` around arguments the tool would take by themselves.
   const keys = Object.keys(raw);
   const only = keys.length === 1 ? keys[0] : undefined;
-  if (only && ENVELOPES.includes(only) && !Object.hasOwn(properties, only)) {
+  // A tool that names no fields and takes anything may well mean `input` itself.
+  const open = !Object.keys(properties).length && schema['additionalProperties'] !== false;
+  if (only && ENVELOPES.includes(only) && !open && !Object.hasOwn(properties, only)) {
     const inner = raw[only];
     const parsed = typeof inner === 'string' ? repairJson(inner)?.value : inner;
     if (isRecord(parsed)) args = parsed;
