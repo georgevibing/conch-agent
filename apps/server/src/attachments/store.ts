@@ -39,6 +39,15 @@ const PASTED_NAME = 'Pasted text';
 const FITTED = '.for-models';
 
 /**
+ * A file's name in its folder, never one of Conch's own there (`meta.json`, the
+ * fitted picture), in any case: a file called `meta.json` would be overwritten.
+ */
+const ownName = (file: string) =>
+  file.toLowerCase() === 'meta.json' || file.toLowerCase().startsWith(FITTED)
+    ? `file-${file}`
+    : file;
+
+/**
  * `~/.conch/attachments/<id>/` — one folder per attachment: `meta.json` and
  * the file itself under its own (cleaned) name, so an agent that opens it
  * by path sees `report.pdf`, not an opaque blob.
@@ -124,7 +133,7 @@ export class AttachmentStore {
       ...(input.facts?.preview && { preview: input.facts.preview }),
       createdAt: Date.now(),
     };
-    const file = pasted ? 'pasted-text.txt' : cleanName(shown);
+    const file = pasted ? 'pasted-text.txt' : ownName(cleanName(shown));
     const folder = this.folder(id);
     await mkdir(folder, { recursive: true, mode: 0o700 });
     await writeFile(safeJoin(folder, file), bytes, { mode: 0o600 });

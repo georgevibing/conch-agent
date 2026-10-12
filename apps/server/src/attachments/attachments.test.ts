@@ -85,6 +85,17 @@ describe('sniff', () => {
 });
 
 describe('AttachmentStore', () => {
+  it('keeps a file named like its own notes as the person’s file', async () => {
+    const store = await tempStore();
+    for (const name of ['meta.json', 'META.JSON']) {
+      const bytes = Buffer.from('{"mine":true}\n');
+      const saved = await store.save({ name, bytes });
+      const found = await store.get(saved.id);
+      expect(found?.attachment.name).toBe(name);
+      expect(await readFile(found?.path ?? '', 'utf8')).toBe('{"mine":true}\n');
+    }
+  });
+
   it('keeps Excel’s Windows-1252 CSV and Notepad’s UTF-16 as UTF-8 text', async () => {
     const store = await tempStore();
     const csv = await store.save({
