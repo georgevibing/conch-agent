@@ -139,6 +139,18 @@ export function prove(home: string, folder: string): SwapState | undefined {
 }
 
 /**
+ * A swap the pointer never reached (stopped between writing it and moving
+ * the pointer, or its folder gone): nothing is waiting to be proved.
+ */
+export function forgetSwap(home: string): void {
+  const state = readState(home);
+  if (!state.pending) return;
+  const next = { ...state };
+  delete next.pending;
+  writeState(home, next);
+}
+
+/**
  * The new version didn't start: back to the one before, at once, and the
  * one that failed isn't offered again. Returns what to say.
  */

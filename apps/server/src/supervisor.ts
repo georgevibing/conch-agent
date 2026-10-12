@@ -36,7 +36,7 @@ import {
 } from './recovery/supervisor-state';
 import { watchGateway, type WatchdogOptions } from './recovery/watchdog';
 
-import { currentFolder, goBack, PROVE_WITHIN_MS, readState } from './updates/layout';
+import { currentFolder, forgetSwap, goBack, PROVE_WITHIN_MS, readState } from './updates/layout';
 
 /** "Start me again": the gateway exits with this to be restarted (EX_TEMPFAIL). */
 export const RESTART_CODE = 75;
@@ -220,6 +220,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         pending && launch.folder && resolve(pending.folder) === resolve(launch.folder)
           ? pending
           : undefined;
+      if (pending && !proving) forgetSwap(home);
       const legacyProof = adopting ? proving : undefined;
       adopting = false;
       if (legacyProof && legacyProofWindow(legacyProof.since, now(), deps.watchdog?.stopMs) === 0) {

@@ -251,6 +251,43 @@ describe('starting the version swapped in, and going back when it fails', () => 
     expect(readState(home).failed).toEqual(['0.3.0']);
   });
 
+  it('forgets a swap the pointer never reached, instead of waiting on it forever', async () => {
+    const home = tempHome();
+    const old = version(home, '0.2.0');
+    const next = version(home, '0.3.0');
+    writeState(home, { current: { folder: old, version: '0.2.0' }, failed: [] });
+    point(home, old);
+    // Stopped between writing the swap and moving the pointer.
+    writeState(home, {
+      ...readState(home),
+      pending: {
+        folder: next,
+        version: '0.3.0',
+        since: 1,
+        from: { folder: old, version: '0.2.0' },
+      },
+    });
+    const spawn = vi.fn(() => {
+      const child = Object.assign(new EventEmitter(), { kill: () => undefined });
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    const run = supervise({
+      spawn: spawn as never,
+      exit: ((code: number) => {
+        throw Object.assign(new Error('exit'), { code });
+      }) as never,
+      log: () => undefined,
+      sleep: async () => undefined,
+      home,
+    });
+    await expect(run).rejects.toMatchObject({ code: 0 });
+    const state = readState(home);
+    expect(state.pending).toBeUndefined();
+    expect(state.current).toEqual({ folder: old, version: '0.2.0' });
+    expect(state.failed).toEqual([]);
+  });
+
   it('keeps the new version once it’s answering', async () => {
     const { home, next, cwds, run } = world((cwd, child, at) => {
       prove(at, cwd.replace(/[\\/]apps[\\/]server$/, ''));
