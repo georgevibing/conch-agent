@@ -384,6 +384,20 @@ export function useDraftAttachments(initial: readonly Attachment[] = []) {
 
   useEffect(
     () => () => {
+      // Leaving the chat stops what's still on its way, and it isn't kept with the draft: say so.
+      const stopped = current.current.filter((d) => uploads.current.has(d.key));
+      if (stopped.length)
+        toast(
+          stopped.length === 1
+            ? `“${stopped[0]?.name}” hadn’t finished uploading`
+            : `${stopped.length} files hadn’t finished uploading`,
+          {
+            description:
+              stopped.length === 1
+                ? 'It isn’t attached. Attach it again in that chat.'
+                : 'They aren’t attached. Attach them again in that chat.',
+          },
+        );
       for (const abort of uploads.current.values()) abort.abort();
       for (const timer of timers.current.values()) clearTimeout(timer);
     },

@@ -39,4 +39,15 @@ describe('useDraftAttachments', () => {
     });
     expect(result.current.drafts.map((d) => d.name)).toEqual(['note-0.txt', 'note-1.txt']);
   });
+
+  it('says so when leaving the chat stops a file still uploading', async () => {
+    const { result, unmount } = renderHook(() => useDraftAttachments());
+    await act(() => result.current.addFiles(notes(1)));
+    expect(result.current.drafts[0]?.status).toBe('uploading');
+    unmount();
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining('note-0.txt'),
+      expect.objectContaining({ description: expect.any(String) }),
+    );
+  });
 });
