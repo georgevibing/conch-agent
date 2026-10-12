@@ -520,6 +520,13 @@ export class ReleaseFollower {
     // What a failed try left behind goes first.
     if (resolve(folder) === resolve(this.root))
       return { kind: 'refused', reason: 'That version is already running.' };
+    const notes = all
+      .filter((o) => compareVersions(o.version, release.version) <= 0)
+      .map((o) => o.notes);
+    // Already made ready and waiting for a restart: clearing it would leave the pointer on nothing.
+    const waiting = readState(home).pending;
+    if (waiting && resolve(waiting.folder) === resolve(folder) && runnable(folder))
+      return { kind: 'staged', version: release.version, folder, notes };
     await clear();
     const added = await repo(['worktree', 'add', '--detach', '--quiet', folder, verdict.commit]);
     if (added.code !== 0) return failed('its files couldn’t be put in place');
@@ -567,9 +574,7 @@ export class ReleaseFollower {
       kind: 'staged',
       version: release.version,
       folder,
-      notes: all
-        .filter((o) => compareVersions(o.version, release.version) <= 0)
-        .map((o) => o.notes),
+      notes,
     };
   }
 

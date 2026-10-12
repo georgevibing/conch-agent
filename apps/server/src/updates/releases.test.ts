@@ -321,6 +321,23 @@ describe('updating beside the running version', () => {
     expect((await f.stage(first(offers), offers, () => undefined)).kind).toBe('failed');
   });
 
+  it('leaves a version waiting for a restart alone when it’s asked for again', async () => {
+    const w = await world();
+    w.release('0.2.0', 'Edit pages by hand');
+    const f = w.follower();
+    const { offers } = await w.look(f);
+    const folder = join(w.home, 'versions', '0.2.0');
+    expect((await f.stage(first(offers), offers, () => undefined)).kind).toBe('staged');
+    w.backup.mockRejectedValueOnce(new Error('There isn’t room for a backup.'));
+    expect(await f.stage(first(offers), offers, () => undefined)).toMatchObject({
+      kind: 'staged',
+      version: '0.2.0',
+      folder,
+    });
+    expect(currentFolder(w.home)).toBe(folder);
+    expect(readState(w.home).pending).toMatchObject({ folder, version: '0.2.0' });
+  });
+
   it('no backup, no swap', async () => {
     const w = await world();
     w.release('0.2.0', 'Edit pages by hand');
