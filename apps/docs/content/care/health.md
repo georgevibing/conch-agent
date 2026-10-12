@@ -18,7 +18,7 @@ When all is well, it says **Everything's working**. Each group is one line, like
 
 - **Providers**: installed, signed in and answering.
 - **Apps**, **Other apps** and **Talk to me here**: your apps, chat apps and apps using Conch still work.
-- **This computer**: the browser, search, the internet, disk space, whether Conch's files are private, and **Staying responsive**: room for more work, and what Conch did after a slowdown or restart.
+- **This computer**: the browser, search, the internet, disk space, whether Conch's files are private, and **Staying responsive**: room for more work, and what Conch did after a slowdown or restart. If Conch stopped answering this week, **Stopped answering** says how often, and where in its own code it was stuck the last time. If it keeps happening, that line is the useful one to share.
 - **Your data**: [backups](./backups.md), passwords, memory and [undo](./undo.md).
 - **Updates**: Conch and its programs. See [Updates](./updates.md).
 - **Conch**: your agents, outside agents and [dashboards](./dashboards.md).
