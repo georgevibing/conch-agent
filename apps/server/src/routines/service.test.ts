@@ -351,6 +351,40 @@ describe('RoutineService', () => {
     expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
   });
 
+  it('keeps a pause made while the clock looks, and doesn’t run the paused routine', async () => {
+    const s = await setup();
+    const store = (s.routines as unknown as { deps: { store: RoutineStore } }).deps.store;
+    const first = await s.routines.create(
+      { ...base, schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const second = await s.routines.create(
+      { ...base, title: 'Second', schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    const save = store.save.bind(store);
+    let paused = false;
+    // While the clock saves the first, the person pauses the second.
+    vi.spyOn(store, 'save').mockImplementation(async (routine) => {
+      await save(routine);
+      if (!paused && routine.id === first.id) {
+        paused = true;
+        const current = await store.get(second.id);
+        if (current) await save({ ...current, status: 'paused' });
+      }
+    });
+    try {
+      Date.now = () => realNow() + HOUR + 1000;
+      await s.routines.checkNow();
+      await settled(s, first.id);
+      expect((await s.routines.detail(second.id)).routine.status).toBe('paused');
+      expect((await s.routines.detail(second.id)).runs).toHaveLength(0);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   it('completes one-off routines after they run', async () => {
     const s = await setup();
     const r = await s.routines.create(

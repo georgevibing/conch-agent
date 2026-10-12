@@ -664,7 +664,9 @@ export class RoutineService {
       )
         continue;
       if (routine.status === 'completed') {
-        await this.deps.store.save({ ...routine, status: 'active', updatedAt: now });
+        const fresh = await this.deps.store.get(routine.id).catch(() => undefined);
+        if (fresh?.status !== 'completed') continue;
+        await this.deps.store.save({ ...fresh, status: 'active', updatedAt: now });
         this.deps.onHeal?.(`Put “${routine.title}” back to waiting`);
       }
       const scheduledFor = last.scheduledFor;
@@ -683,9 +685,11 @@ export class RoutineService {
   async #tick() {
     await this.#resumeWaiting();
     const now = this.#now;
-    for (const routine of await this.deps.store.all()) {
+    for (const { id } of await this.deps.store.all()) {
+      // Read again: a person may have paused or changed it since the list was read.
+      const routine = await this.deps.store.get(id);
       // A When-routine starts from what happens (the pulse), never from the clock.
-      if (routine.status !== 'active' || isWhenSchedule(routine.schedule)) continue;
+      if (routine?.status !== 'active' || isWhenSchedule(routine.schedule)) continue;
       const handled = routine.lastScheduledFor ?? routine.createdAt;
       // The first scheduled time we haven't handled yet…
       const [firstDue] = nextRuns(routine.schedule, routine.timezone, {
