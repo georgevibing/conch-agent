@@ -243,6 +243,13 @@ describe('an Anthropic turn', () => {
     ['message_stop', { type: 'message_stop' }],
   );
 
+  it('says a turn that ran out of room mid-call was cut, not finished with a call', async () => {
+    const cut = STREAM.replace('"stop_reason":"tool_use"', '"stop_reason":"max_tokens"');
+    const { wire: api } = wire(() => sseResponse(cut));
+    const events = await drain(api.stream(request()));
+    expect(events.at(-1)).toMatchObject({ type: 'end', stop: 'length' });
+  });
+
   it('streams thinking and text, and keeps every block for replay', async () => {
     const { wire: api } = wire(() => sseResponse(STREAM, { chunk: 11 }));
 

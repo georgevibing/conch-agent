@@ -122,6 +122,16 @@ describe('reading a streamed chat turn', () => {
     ]);
   });
 
+  it('says a turn that ran out of room mid-call was cut, not finished with a call', async () => {
+    const events = await read([
+      chunk({
+        tool_calls: [{ index: 0, id: 'c1', function: { name: 'write', arguments: '{"a' } }],
+      }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] }),
+    ]);
+    expect(events.at(-1)).toMatchObject({ type: 'end', stop: 'length' });
+  });
+
   it('counts usage once, wherever it arrives, and the last word wins', async () => {
     const events = await read([
       chunk({ content: 'Hi' }, { usage: { prompt_tokens: 3, completion_tokens: 1 } }),

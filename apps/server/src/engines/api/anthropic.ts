@@ -908,11 +908,12 @@ export class AnthropicWire implements Wire {
       ...(cacheWriteTokens > 0 && { cacheWriteTokens: Math.round(cacheWriteTokens) }),
       outputTokens: Math.max(0, Math.round(outputTokens)),
     };
+    // Cut off at the most it can write: the last tool call, if any, ended part-way.
     const stop: WireStop =
-      stopReason === 'tool_use' || toolCalls.length
-        ? 'tools'
-        : stopReason === 'max_tokens'
-          ? 'length'
+      stopReason === 'max_tokens'
+        ? 'length'
+        : stopReason === 'tool_use' || toolCalls.length
+          ? 'tools'
           : stopReason === 'pause_turn'
             ? 'pause'
             : 'end';

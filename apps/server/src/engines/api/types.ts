@@ -98,7 +98,8 @@ export interface WireToolCall {
 /**
  * Why the model stopped talking. `pause`: the provider paused its own work
  * part-way (Anthropic's `pause_turn`), so the reply goes back as it is and the
- * model is asked to carry on.
+ * model is asked to carry on. `length`: it reached the most it can write at
+ * once, so its words were cut short, or its last tool call ended part-way.
  */
 export type WireStop = 'end' | 'tools' | 'length' | 'pause';
 

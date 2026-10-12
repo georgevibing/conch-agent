@@ -337,7 +337,8 @@ export async function* readChatStream(
     name: call.name ?? '',
     argumentsJson: call.args,
   }));
-  const stop: WireStop = toolCalls.length ? 'tools' : finish === 'length' ? 'length' : 'end';
+  // Cut off at the most it can write: the last tool call, if any, ended part-way.
+  const stop: WireStop = finish === 'length' ? 'length' : toolCalls.length ? 'tools' : 'end';
   const message: WireMessage = {
     role: 'assistant',
     content: content.length ? content : null,

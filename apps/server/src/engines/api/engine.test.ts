@@ -444,6 +444,37 @@ describe('a turn against the real OpenRouter wire', () => {
     expect(stored.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
   });
 
+  it('never runs a tool call cut off at the most the model can write, and says it was cut', async () => {
+    const CUT = dataFrames(
+      '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"mcp__conch__remember","arguments":"{\\"content\\":\\"I like te"}}]}}]}',
+      '{"choices":[{"delta":{},"finish_reason":"length"}]}',
+      '[DONE]',
+    );
+    const LONG = dataFrames(
+      '{"choices":[{"delta":{"content":"Here is the start of a very long"}}]}',
+      '{"choices":[{"delta":{},"finish_reason":"length"}]}',
+      '[DONE]',
+    );
+    let chats = 0;
+    const fetch = fakeFetch((call) => {
+      if (call.url.includes('/models')) return jsonResponse(MODELS);
+      chats++;
+      return sseResponse(chats === 1 ? CUT : LONG);
+    });
+    const { engine } = await engineFor(new OpenRouterWire(fetch.fetch));
+    const saved: string[] = [];
+    const events = await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
+    expect(saved).toEqual([]);
+    const second = fetch.calls.at(-1)?.body as Record<string, unknown>;
+    expect((second['messages'] as { content: string }[]).at(-1)).toMatchObject({
+      role: 'tool',
+      tool_call_id: 'call_1',
+      content: expect.stringMatching(/cut off/),
+    });
+    expect(events.find((e) => e.type === 'notice')).toMatchObject({ code: 'length' });
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+
   it('passes on what a host tool found for the person, and gives the model only its text', async () => {
     let chats = 0;
     const fetch = fakeFetch((call) => {

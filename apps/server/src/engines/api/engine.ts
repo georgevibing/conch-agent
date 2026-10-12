@@ -393,6 +393,18 @@ async function run(
 /** What a call the turn paused before gets, so every call has an answer. */
 const NOT_RUN = 'Not run: Conch paused this turn here to check in with the person.';
 
+/** A tool call whose arguments ended part-way, at the most the model can write at once. */
+const CUT_OFF =
+  'Not run: this call was cut off part-way, because you reached the most you can write at once, so its arguments are incomplete. Call it again with less at once (a long file in parts, say).';
+
+/** What the person sees when a reply ran into the same limit. */
+const CUT_SHORT: EngineEvent = {
+  type: 'notice',
+  code: 'length',
+  message:
+    'The answer was cut short: the model reached the most it can write at once. Ask it to carry on.',
+};
+
 /**
  * The person's next message, after a turn that paused (ADR 0085): the model is
  * told it stopped part-way, so "Carry on" picks the work up instead of
@@ -1139,6 +1151,7 @@ export class ApiEngine implements Engine {
         }
         if (!end.toolCalls.length) {
           await save();
+          if (end.stop === 'length') yield CUT_SHORT;
           yield { type: 'done', outcome: 'success', usage: usage(), ...(context && { context }) };
           return;
         }
@@ -1152,6 +1165,11 @@ export class ApiEngine implements Engine {
         let paused: TurnPause | undefined;
         for (const call of end.toolCalls) {
           stopped ||= input.signal.aborted;
+          // Its arguments ended part-way: mended, they'd run on half of what was meant.
+          if (end.stop === 'length' && call === end.toolCalls.at(-1) && !stopped && !paused) {
+            results.push({ id: call.id, name: call.name, text: CUT_OFF, isError: true });
+            continue;
+          }
           if (stopped || paused) {
             // A tool call with no answer is a transcript neither provider will
             // accept next time, so every call gets one even when interrupted.
