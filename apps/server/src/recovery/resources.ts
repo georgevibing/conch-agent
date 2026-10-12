@@ -130,3 +130,64 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
     }),
   });
 }
+
+/** What one managed job's whole process tree uses now. */
+export interface TreeUsage {
+  rssBytes: number;
+  cpuPercent: number;
+}
+
+/**
+ * Sums `ps -o pid=,ppid=,rss=,pcpu=` rows over each root's descendants, by
+ * parent links rather than process group, so a sandbox that starts its own
+ * session still counts. Roots missing from the listing are left out.
+ */
+export function treeUsage(text: string, roots: readonly number[]): Map<number, TreeUsage> {
+  const children = new Map<number, number[]>();
+  const own = new Map<number, TreeUsage>();
+  for (const line of text.split('\n')) {
+    const [pid = NaN, parent = NaN, rss = NaN, cpu = NaN] = line.trim().split(/\s+/).map(Number);
+    if (
+      !Number.isSafeInteger(pid) ||
+      !Number.isSafeInteger(parent) ||
+      !Number.isFinite(rss) ||
+      !Number.isFinite(cpu)
+    )
+      continue;
+    own.set(pid, { rssBytes: Math.max(0, rss) * 1024, cpuPercent: Math.max(0, cpu) });
+    const siblings = children.get(parent);
+    if (siblings) siblings.push(pid);
+    else children.set(parent, [pid]);
+  }
+  const usage = new Map<number, TreeUsage>();
+  for (const root of roots) {
+    if (!own.has(root)) continue;
+    const total = { rssBytes: 0, cpuPercent: 0 };
+    const seen = new Set<number>();
+    const next = [root];
+    for (let pid = next.pop(); pid !== undefined; pid = next.pop()) {
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      const row = own.get(pid);
+      if (row) {
+        total.rssBytes += row.rssBytes;
+        total.cpuPercent += row.cpuPercent;
+      }
+      next.push(...(children.get(pid) ?? []));
+    }
+    usage.set(root, total);
+  }
+  return usage;
+}
+
+/** One bounded `ps` of the process table: ids and resource columns only, never commands. */
+export async function sampleTrees(roots: readonly number[]): Promise<Map<number, TreeUsage>> {
+  if (process.platform === 'win32' || !roots.length) return new Map();
+  const { stdout } = await execute('ps', ['-A', '-o', 'pid=,ppid=,rss=,pcpu='], {
+    timeout: 1000,
+    maxBuffer: 4 * MiB,
+    encoding: 'utf8',
+    env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' },
+  });
+  return treeUsage(stdout, roots);
+}

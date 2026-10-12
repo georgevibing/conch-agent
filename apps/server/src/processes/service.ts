@@ -7,7 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
-import { sampleResources, type ResourceSnapshot } from '../recovery/resources';
+import {
+  sampleResources,
+  sampleTrees,
+  type ResourceSnapshot,
+  type TreeUsage,
+} from '../recovery/resources';
 import { ResourcePace, paceMessage, type WorkloadPace } from '../recovery/pace';
 
 import { taintFrom } from '../conversations/taint';
@@ -71,6 +76,8 @@ export class ProcessService {
       sealed: () => Promise<boolean>;
       now?: () => number;
       resources?: () => Promise<ResourceSnapshot>;
+      /** What each managed job's process tree uses, by its supervisor's pid. */
+      usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
       healed?: (message: string) => void;
     },
   ) {
@@ -141,31 +148,57 @@ export class ProcessService {
     })();
     return this.#sampling;
   }
-  /** Shed only a managed job, never arbitrary host processes. Never replay its command. */
-  relievePressure() {
+  /**
+   * Shed only a managed job, never arbitrary host processes: the one whose whole
+   * process tree uses the most, the newest when none can be measured. Never
+   * replay its command.
+   */
+  async relievePressure(): Promise<{ stopped: number; queued: number }> {
+    const queued = () => [...this.#sessions.values()].filter((s) => s.status === 'queued').length;
     const now = (this.deps.now ?? Date.now)();
-    if (now < this.#pausedUntil)
-      return {
-        stopped: 0,
-        queued: [...this.#sessions.values()].filter((s) => s.status === 'queued').length,
-      };
+    if (now < this.#pausedUntil) return { stopped: 0, queued: queued() };
     this.#pausedUntil = now + 30_000;
     this.#pace.hold('memory');
-    for (const queued of this.#sessions.values())
-      if (queued.status === 'queued')
-        queued.reason = this.#admissionPaused ?? 'Waiting briefly for this computer to recover.';
-    const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
-    const session = running.at(-1);
+    for (const session of this.#sessions.values())
+      if (session.status === 'queued')
+        session.reason = this.#admissionPaused ?? 'Waiting briefly for this computer to recover.';
+    const session = await this.#heaviest();
     if (session) {
       session.reason =
         'Stopped to keep Conch responsive. Check its output before deciding whether to run it again.';
       this.#stop(session);
       this.deps.healed?.('Stopped a heavy command to stay responsive. Its output is kept.');
     }
-    return {
-      stopped: session ? 1 : 0,
-      queued: [...this.#sessions.values()].filter((s) => s.status === 'queued').length,
+    return { stopped: session ? 1 : 0, queued: queued() };
+  }
+  /** One bounded look at the running jobs' trees, weighed by their share of memory and of CPU. */
+  async #heaviest(): Promise<Session | undefined> {
+    const running = () => [...this.#sessions.values()].filter((s) => s.status === 'running');
+    const roots = running().flatMap((s) => (s.child?.pid ? [s.child.pid] : []));
+    let usage = new Map<number, TreeUsage>();
+    if (roots.length > 1) usage = await (this.deps.usage ?? sampleTrees)(roots).catch(() => usage);
+    // Measured or not, only what is still running now can be stopped.
+    const live = running();
+    const of = (s: Session) => (s.child?.pid ? usage.get(s.child.pid) : undefined);
+    let rss = 0;
+    let cpu = 0;
+    for (const s of live) {
+      rss += of(s)?.rssBytes ?? 0;
+      cpu += of(s)?.cpuPercent ?? 0;
+    }
+    const weight = (s: Session) => {
+      const used = of(s);
+      if (!used) return -1;
+      return (rss ? used.rssBytes / rss : 0) + (cpu ? used.cpuPercent / cpu : 0);
     };
+    // Ties and unmeasured jobs go to the newest, as before anything was measured.
+    let heaviest = live.at(-1);
+    let most = heaviest ? weight(heaviest) : -1;
+    for (const s of live) {
+      const value = weight(s);
+      if (value > most) [heaviest, most] = [s, value];
+    }
+    return heaviest;
   }
   #watch() {
     if (!this.#monitor)
@@ -191,7 +224,8 @@ export class ProcessService {
       const now = (this.deps.now ?? Date.now)();
       if (resources.level === 'critical') {
         this.#criticalSince ??= now;
-        if (now - this.#criticalSince >= 15_000 && now >= this.#pausedUntil) this.relievePressure();
+        if (now - this.#criticalSince >= 15_000 && now >= this.#pausedUntil)
+          await this.relievePressure();
       } else this.#criticalSince = undefined;
       const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
       const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued');

@@ -93,7 +93,8 @@ function eventLoopDelay(): LoopDelay {
 
 export interface GatewayRecoveryDeps {
   sample: () => Promise<ResourceSnapshot>;
-  relieve: () => { stopped: number; queued: number };
+  /** Stops at most the heaviest managed job, after measuring the running ones. */
+  relieve: () => Promise<{ stopped: number; queued: number }>;
   pause: (reason: string) => void;
   resume: () => void;
   note: (message: string) => void;
@@ -367,12 +368,16 @@ export class GatewayRecovery {
     const now = (this.deps.now ?? Date.now)();
     if (now - this.#lastRelief < 30_000) return;
     this.#lastRelief = now;
-    const { stopped } = this.deps.relieve();
-    this.deps.note(
-      stopped
-        ? 'Stopped a heavy command to stay responsive. Its output is kept.'
-        : 'Held new commands a moment to stay responsive',
-    );
+    void this.deps
+      .relieve()
+      .then(({ stopped }) =>
+        this.deps.note(
+          stopped
+            ? 'Stopped a heavy command to stay responsive. Its output is kept.'
+            : 'Held new commands a moment to stay responsive',
+        ),
+      )
+      .catch(() => undefined);
     void this.poll();
   }
 

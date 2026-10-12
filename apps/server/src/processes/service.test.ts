@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../conversations/manager';
 import { ProcessService } from './service';
-import { resourcePolicy, type ResourceSnapshot } from '../recovery/resources';
+import {
+  resourcePolicy,
+  sampleTrees,
+  type ResourceSnapshot,
+  type TreeUsage,
+} from '../recovery/resources';
 
 const healthy = () =>
   resourcePolicy({
@@ -28,6 +33,7 @@ async function setup(
     now?: () => number;
     protectedPaths?: string[];
     resources?: () => Promise<ResourceSnapshot>;
+    usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
   } = {},
 ) {
   const cwd = await mkdtemp(join(tmpdir(), 'conch-process-'));
@@ -35,6 +41,8 @@ async function setup(
     protectedPaths: [],
     sealed: async () => false,
     resources: async () => healthy(),
+    // Nothing measured unless a test says so: relief falls back to the newest job.
+    usage: async () => new Map(),
     ...options,
   });
   cleanups.push(async () => {
@@ -225,11 +233,49 @@ describe('managed commands', () => {
     const { service, start, read } = await setup();
     const older = await start('node -e "setInterval(()=>{},1000)"');
     const newer = await start('node -e "setInterval(()=>{},1000)"');
-    expect(service.relievePressure().stopped).toBe(1);
-    expect(service.relievePressure().stopped).toBe(0);
+    expect((await service.relievePressure()).stopped).toBe(1);
+    expect((await service.relievePressure()).stopped).toBe(0);
     expect((await read(newer.id)).status).toBe('stopped');
     expect((await read(older.id)).status).toBe('running');
   });
+  it('sheds the heaviest managed job, not the newest, and only measures managed trees', async () => {
+    const usage = vi.fn(
+      async (roots: number[]) =>
+        new Map(
+          roots.map((root, i): [number, TreeUsage] => [
+            root,
+            i === 0
+              ? { rssBytes: 2 * 1024 ** 3, cpuPercent: 180 }
+              : { rssBytes: 40 * 1024 ** 2, cpuPercent: 1 },
+          ]),
+        ),
+    );
+    const { service, start, read } = await setup({ usage });
+    const heavy = await start('node -e "setInterval(()=>{},1000)"');
+    const light = await start('node -e "setInterval(()=>{},1000)"');
+    expect((await service.relievePressure()).stopped).toBe(1);
+    expect(usage).toHaveBeenCalledOnce();
+    expect(usage.mock.calls[0]?.[0]).toHaveLength(2);
+    expect((await read(heavy.id)).status).toBe('stopped');
+    expect((await read(light.id)).status).toBe('running');
+  });
+  it.skipIf(process.platform === 'win32')(
+    'measures real process trees: the older job holding memory and a CPU is the one stopped',
+    async () => {
+      const { service, start, read } = await setup({ usage: sampleTrees });
+      const heavy = await start(
+        `node -e "globalThis.held=Buffer.alloc(300*1024*1024,1);console.log('held');setTimeout(()=>{for(;;);},50)"`,
+      );
+      const light = await start('node -e "setInterval(()=>{},1000)"');
+      await until(
+        () => read(heavy.id),
+        (v) => v.output.includes('held'),
+      );
+      expect((await service.relievePressure()).stopped).toBe(1);
+      expect((await read(heavy.id)).status).toBe('stopped');
+      expect((await read(light.id)).status).toBe('running');
+    },
+  );
 
   it('restores one shared slot at a time across chats and does not replay cancelled work', async () => {
     let now = 1000;

@@ -17,7 +17,7 @@ const healthy = () =>
 function setup(recoveryMode = false) {
   const deps = {
     sample: vi.fn(async () => healthy()),
-    relieve: vi.fn(() => ({ stopped: 1, queued: 2 })),
+    relieve: vi.fn(async () => ({ stopped: 1, queued: 2 })),
     pause: vi.fn(),
     resume: vi.fn(),
     note: vi.fn(),

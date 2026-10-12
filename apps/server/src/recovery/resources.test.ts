@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { darwinAvailableMemory, resourcePolicy } from './resources';
+import { darwinAvailableMemory, resourcePolicy, treeUsage } from './resources';
 
 const baseline = {
   at: 0,
@@ -63,5 +63,31 @@ Pages wired down:                        500000.
     expect(
       darwinAvailableMemory('page size of 16384 bytes\nPages free: 1.\nPages inactive: 2.'),
     ).toBeUndefined();
+  });
+});
+
+describe('process tree usage', () => {
+  it('sums each managed root with all its descendants and nothing else', () => {
+    const ps = [
+      '    1     0  9000  50.0',
+      '  100     1  1000   1.0',
+      '  101   100  2000  20.5',
+      '  102   101  3000   3.5',
+      '  200     1   500   0.0',
+      '  201   200 99999  99.0',
+      '  300     1  7000  70.0',
+      'garbage line',
+      '',
+    ].join('\n');
+    const usage = treeUsage(ps, [100, 200, 404]);
+    expect(usage.get(100)).toEqual({ rssBytes: 6000 * 1024, cpuPercent: 25 });
+    expect(usage.get(200)).toEqual({ rssBytes: 100_499 * 1024, cpuPercent: 99 });
+    // A root that is gone isn't measured, and other host processes are never counted.
+    expect(usage.has(404)).toBe(false);
+    expect(usage.size).toBe(2);
+  });
+  it('survives a parent loop without counting a process twice', () => {
+    const usage = treeUsage('10 11 100 1\n11 10 200 2', [10]);
+    expect(usage.get(10)).toEqual({ rssBytes: 300 * 1024, cpuPercent: 3 });
   });
 });
