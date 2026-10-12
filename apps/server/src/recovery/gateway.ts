@@ -65,6 +65,7 @@ const HELD: Record<HoldReason, { why: string; until: string }> = {
 export type RecoveryMessage =
   | { type: 'conch.heartbeat'; healthy: boolean; resource?: RecoveryResource }
   | { type: 'conch.stopping' }
+  | { type: 'conch.booting'; phase: string }
   | { type: 'conch.recovered' };
 
 export interface GatewayRecoveryDeps {

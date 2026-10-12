@@ -1,4 +1,5 @@
 import { buildApp } from './app';
+import { bootHeartbeat, parentChannel } from './recovery/boot';
 import { quietCryptoWarnings } from './lib/quiet';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { openHere } from './auth/open-here';
@@ -25,6 +26,8 @@ import { RESTART_CODE, SUPERVISOR_REVISION } from './supervisor';
 import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
 
+// Supervised: proof of life until the first real heartbeat, so a slow start isn't killed as stuck.
+const boot = bootHeartbeat(parentChannel());
 quietCryptoWarnings();
 const config = loadConfig();
 const addressOf = (port: number) =>
@@ -61,6 +64,7 @@ if (
   !(await runningGateway(config.CONCH_HOME))?.background
 ) {
   console.warn('  🐚  Conch is open in a window; this one takes over when it closes.');
+  boot.phase('waiting');
   await waitForTurn(config.CONCH_HOME, async () => (await choose()).kind !== 'running');
   choice = await choose();
 }
@@ -88,16 +92,20 @@ if (choice.kind === 'taken') {
 config.CONCH_PORT = choice.port;
 
 // A restore waiting for this start goes into place before any store reads a file (ADR 0020).
+boot.phase('restore');
 const restored = await applyPendingRestore(config.CONCH_HOME, { conchVersion: SERVER_VERSION });
 if (restored.kind === 'applied') console.warn('\n  🐚  Your backup is restored.');
 if (restored.kind === 'failed')
   console.error(`\n  Conch couldn’t finish restoring your backup: ${restored.error}`);
 
+boot.phase('services');
 const services = new Services(config);
 services.homeProblems = await secureHome(config.CONCH_HOME);
+boot.phase('app');
 const app = await buildApp(services);
 const shutdown = shutdownHandler({
   begin: () => {
+    boot.stop();
     services.recovery.stop();
     services.routines.stop();
     services.tasks.close();
@@ -122,6 +130,7 @@ process.on('message', recoveryMessage);
 app.addHook('onClose', async () => {
   process.off('message', recoveryMessage);
 });
+boot.phase('listen');
 await services.gate.hosts.discover();
 // Whether `tailscale serve` reaches Conch: phones are only offered an address that works.
 void services.tailscale.status().catch(() => undefined);
@@ -144,6 +153,7 @@ const probeHost =
     : config.CONCH_HOST === '::'
       ? '::1'
       : config.CONCH_HOST;
+boot.phase('probe');
 const probeUrl = `http://${probeHost.includes(':') ? `[${probeHost}]` : probeHost}:${config.CONCH_PORT}/api/health`;
 await services.recovery.start(async () => {
   const response = await fetch(probeUrl, { signal: AbortSignal.timeout(2_000), redirect: 'error' });
@@ -151,6 +161,8 @@ await services.recovery.start(async () => {
   const body: unknown = await response.json();
   return typeof body === 'object' && body !== null && 'bootId' in body && body.bootId === BOOT_ID;
 });
+// Its first heartbeat went out: the real ones carry on from here.
+boot.stop();
 // The app's window opens on it now, by number (`askUrl`: `localhost` tries ::1 first).
 void desktop?.send({ type: 'listening', url: askUrl(config.CONCH_HOST, config.CONCH_PORT) });
 await recordGateway(config.CONCH_HOME, {
