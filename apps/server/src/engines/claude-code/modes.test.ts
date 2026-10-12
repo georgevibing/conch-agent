@@ -10,6 +10,7 @@ interface Options {
   permissionMode?: string;
   env?: Record<string, string>;
   allowDangerouslySkipPermissions?: boolean;
+  abortController?: AbortController;
   canUseTool?: (
     name: string,
     input: Record<string, unknown>,
@@ -196,5 +197,14 @@ describe('Claude Code’s notes on each round of steps (ADR 0103)', () => {
     expect(off?.env?.['CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES']).toBe(
       process.env['CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES'],
     );
+  });
+});
+
+describe('a turn stopped while Claude Code was getting ready', () => {
+  it('starts it already stopped', async () => {
+    const stop = new AbortController();
+    stop.abort();
+    const options = await run(engineFor(), turn({ signal: stop.signal }));
+    expect(options?.abortController?.signal.aborted).toBe(true);
   });
 });

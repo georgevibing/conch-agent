@@ -590,6 +590,8 @@ export class ClaudeCodeEngine implements Engine {
     const abort = new AbortController();
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
+    // A signal that's already stopped (while getting ready) never fires again.
+    if (input.signal.aborted) abort.abort();
     try {
       // Pictures go in a message of their own: a plain prompt can only be words.
       const images = input.images ?? [];
@@ -656,6 +658,8 @@ export class ClaudeCodeEngine implements Engine {
     const abort = new AbortController();
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
+    // A signal that's already stopped (while getting ready) never fires again.
+    if (input.signal.aborted) abort.abort();
 
     // What host tools found for the person, by tool call, until their row closes.
     const views = new Map<string, ToolView>();
