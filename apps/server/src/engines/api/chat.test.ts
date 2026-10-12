@@ -107,6 +107,21 @@ describe('reading a streamed chat turn', () => {
     ]);
   });
 
+  it('carries on the call before when a piece has neither index nor id', async () => {
+    const events = await read([
+      chunk({ tool_calls: [{ id: 'call_a', function: { name: 'search', arguments: '' } }] }),
+      chunk({ tool_calls: [{ function: { arguments: '{"query":' } }] }),
+      chunk({ tool_calls: [{ function: { arguments: '"tea"}' } }] }),
+      chunk({ tool_calls: [{ function: { name: 'remember', arguments: '{}' } }] }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
+    ]);
+    const end = events.at(-1) as Extract<WireEvent, { type: 'end' }>;
+    expect(end.toolCalls).toEqual([
+      { id: 'call_a', name: 'search', argumentsJson: '{"query":"tea"}' },
+      { id: 'call_1', name: 'remember', argumentsJson: '{}' },
+    ]);
+  });
+
   it('counts usage once, wherever it arrives, and the last word wins', async () => {
     const events = await read([
       chunk({ content: 'Hi' }, { usage: { prompt_tokens: 3, completion_tokens: 1 } }),

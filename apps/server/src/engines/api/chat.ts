@@ -272,6 +272,8 @@ export async function* readChatStream(
     string,
     { order: number; id?: string; name?: string; args: string; extra?: Record<string, unknown> }
   >();
+  /** The key of the call the last piece belonged to. */
+  let last: string | undefined;
   let usage: WireUsage | undefined;
   let finish: string | undefined;
   const tags = dialect.thinkTags ? new ThinkSplitter() : undefined;
@@ -299,13 +301,17 @@ export async function* readChatStream(
     if (delta?.reasoning_details?.length) details.push(...delta.reasoning_details);
     if (split.text) yield { type: 'text', delta: split.text };
     for (const call of delta?.tool_calls ?? []) {
-      // `index` is the promise; a server without it is keyed by id, then by arrival.
+      // `index` is the promise; a server without it is keyed by id, then by
+      // arrival: a nameless piece with neither carries on the call before.
       const key =
         typeof call.index === 'number'
           ? `i${call.index}`
           : call.id
             ? `id:${call.id}`
-            : `n${calls.size}`;
+            : !call.function?.name && last
+              ? last
+              : `n${calls.size}`;
+      last = key;
       const existing = calls.get(key) ?? { order: calls.size, args: '' };
       const piece = call.function?.arguments;
       calls.set(key, {
