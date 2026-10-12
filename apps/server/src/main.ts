@@ -46,8 +46,10 @@ if (!desktop && process.env.CONCH_SUPERVISED === '1')
   process.once('disconnect', () => {
     if (!stopSoon()) process.exit(0);
   });
-// A supervisor (the background one or the app's) can ask where a frozen gateway is stuck.
-if (typeof process.send === 'function') answerEvidenceRequests(config.CONCH_HOME);
+// A supervisor (the background one or the app's) can ask where a frozen gateway is
+// stuck, and a gateway frozen when its supervisor dies doesn't hold the port forever.
+if (typeof process.send === 'function')
+  answerEvidenceRequests(config.CONCH_HOME, { supervisor: process.ppid });
 // Before anything starts: is the port free, already a Conch, or another program's?
 const choose = async () =>
   choosePort({

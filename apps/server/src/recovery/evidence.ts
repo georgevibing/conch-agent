@@ -206,6 +206,7 @@ const { isAbsolute, join, relative, sep } = require('node:path');
 const { fileURLToPath } = require('node:url');
 const { workerData } = require('node:worker_threads');
 const { folder, root, pid, pollMs, pauseMs, mapMs, mapMaxChars } = workerData;
+const { supervisor, orphanMs, orphanCheckMs } = workerData;
 const request = join(folder, pid + '.request');
 const answer = join(folder, pid + '.frames.json');
 let busy = false;
@@ -334,15 +335,50 @@ setInterval(() => {
   try { rmSync(request, { force: true }); } catch {}
   capture();
 }, pollMs);
+// The supervisor is gone (this process was handed to another parent, or the
+// one it had exited) and the gateway hasn't stopped by itself: its own way out
+// runs on the main thread, which a freeze holds, so it ends here instead.
+function gone() {
+  if (process.ppid !== supervisor) return true;
+  try {
+    process.kill(supervisor, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+if (supervisor > 1) {
+  let goneAt;
+  setInterval(() => {
+    if (goneAt === undefined) {
+      if (gone()) goneAt = performance.now();
+    } else if (performance.now() - goneAt >= orphanMs) process.kill(process.pid, 'SIGKILL');
+  }, orphanCheckMs);
+}
 `;
 
 /**
- * Gateway side: answer the supervisor's requests from a thread of their own.
- * Costs a small idle thread; never keeps the gateway alive and never throws.
+ * A gateway whose supervisor went away stops by itself (its 'disconnect'
+ * handler and the shutdown deadline); past this, it's frozen and is ended.
+ */
+export const ORPHAN_GRACE_MS = 20_000;
+
+/**
+ * Gateway side: answer the supervisor's requests from a thread of their own,
+ * and, given the `supervisor`'s pid, end a gateway that is frozen once it has
+ * gone. Costs a small idle thread; never keeps the gateway alive and never throws.
  */
 export function answerEvidenceRequests(
   home: string,
-  options: { root?: string; pollMs?: number; pauseMs?: number; mapMs?: number } = {},
+  options: {
+    root?: string;
+    pollMs?: number;
+    pauseMs?: number;
+    mapMs?: number;
+    supervisor?: number;
+    orphanMs?: number;
+    orphanCheckMs?: number;
+  } = {},
 ): () => void {
   try {
     const worker = new Worker(WATCHER, {
@@ -362,6 +398,9 @@ export function answerEvidenceRequests(
         // Finding source lines stops in time for the supervisor's bound.
         mapMs: options.mapMs ?? EVIDENCE_BOUND_MS - 500,
         mapMaxChars: MAP_MAX_CHARS,
+        supervisor: options.supervisor ?? 0,
+        orphanMs: options.orphanMs ?? ORPHAN_GRACE_MS,
+        orphanCheckMs: options.orphanCheckMs ?? 1_000,
       },
     });
     worker.on('error', () => undefined);

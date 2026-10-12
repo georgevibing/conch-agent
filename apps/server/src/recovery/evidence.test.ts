@@ -280,3 +280,95 @@ setTimeout(() => {
     ]);
   }, 20_000);
 });
+
+describe.skipIf(process.platform === 'win32')('a gateway whose supervisor is killed', () => {
+  const server = resolve(import.meta.dirname, '..', '..');
+  const gateways: number[] = [];
+  afterEach(() => {
+    for (const pid of gateways.splice(0)) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Gone already.
+      }
+    }
+  });
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** A supervisor and its gateway, which leaves a mark when its own 'disconnect' handler stops it. */
+  async function supervised(body: string, orphanMs: number) {
+    const root = home();
+    const marker = join(root, 'stopped-itself');
+    const gateway = join(root, 'gateway.mjs');
+    writeFileSync(
+      gateway,
+      `import { answerEvidenceRequests } from ${JSON.stringify(pathToFileURL(join(server, 'src', 'recovery', 'evidence.ts')).href)};
+import { writeFileSync } from 'node:fs';
+answerEvidenceRequests(${JSON.stringify(root)}, { root: ${JSON.stringify(root)}, supervisor: process.ppid, orphanMs: ${orphanMs}, orphanCheckMs: 100 });
+process.once('disconnect', () => { writeFileSync(${JSON.stringify(marker)}, ''); process.exit(0); });
+setTimeout(() => { process.send('ready'); ${body} }, 300);
+`,
+    );
+    const supervisor = join(root, 'supervisor.mjs');
+    writeFileSync(
+      supervisor,
+      `import { spawn } from 'node:child_process';
+const gateway = spawn(process.execPath, ['--import', 'tsx', ${JSON.stringify(gateway)}], {
+  cwd: ${JSON.stringify(server)},
+  stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+});
+gateway.once('message', () => process.send(gateway.pid));
+setInterval(() => {}, 1_000);
+`,
+    );
+    const parent = spawn(process.execPath, [supervisor], {
+      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+    });
+    children.push(parent);
+    const pid = await new Promise<number>((done, fail) => {
+      const timer = setTimeout(() => fail(new Error('fixture did not start')), 10_000);
+      parent.once('message', (message) => {
+        clearTimeout(timer);
+        done(Number(message));
+      });
+      parent.once('exit', () => fail(new Error('fixture exited')));
+    });
+    gateways.push(pid);
+    return { parent, pid, marker };
+  }
+
+  /** How long `pid` took to go, or undefined if it's still there after `ms`. */
+  async function goneWithin(pid: number, ms: number): Promise<number | undefined> {
+    const started = performance.now();
+    while (performance.now() - started < ms) {
+      if (!alive(pid)) return performance.now() - started;
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    return undefined;
+  }
+
+  it('ends a frozen gateway once the grace has passed', async () => {
+    const { parent, pid, marker } = await supervised('for (;;);', 2_000);
+    await new Promise((done) => setTimeout(done, 300));
+    parent.kill('SIGKILL');
+    // Still there through most of the grace, a healthy gateway's time to stop by itself...
+    expect(await goneWithin(pid, 1_500)).toBeUndefined();
+    // ...and then ended, though its own handler never got to run.
+    expect(await goneWithin(pid, 4_000)).toBeDefined();
+    expect(() => statSync(marker)).toThrow();
+  }, 20_000);
+
+  it('leaves a healthy gateway to stop by itself', async () => {
+    const { parent, pid, marker } = await supervised('setInterval(() => {}, 1_000);', 10_000);
+    parent.kill('SIGKILL');
+    expect(await goneWithin(pid, 3_000)).toBeDefined();
+    expect(statSync(marker).isFile()).toBe(true);
+  }, 20_000);
+});
