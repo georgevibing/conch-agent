@@ -1105,6 +1105,10 @@ function localTool(name: string, places: Places): boolean {
  */
 const OTHER_SOURCE =
   /^--(?:index-url|extra-index-url|find-links|trusted-host|registry|index|git|source|break-system-packages)(?:=|$)/;
+/** A package already on this computer: a folder, a file, a tarball or a wheel. */
+const LOCAL_SPEC =
+  /^(?!.*:\/\/)(?:\.{1,2}(?:[\\/].*)?|[~/].*|file:.*|[A-Za-z]:[\\/].*|.*\.(?:tgz|tar\.gz|tar|whl))$/;
+
 /** The same, set in the environment for the install that runs next. */
 const REGISTRY_SET =
   /\b(?:PIP_(?:EXTRA_)?INDEX_URL|PIP_FIND_LINKS|PIP_TRUSTED_HOST|UV_(?:EXTRA_)?INDEX_URL|UV_INDEX|UV_FIND_LINKS|npm_config_registry|YARN_REGISTRY|YARN_NPM_REGISTRY_SERVER|BUN_CONFIG_REGISTRY|GOPROXY|GONOSUMDB|GOFLAGS)=/i;
@@ -1133,10 +1137,17 @@ function installRisk(
     .filter(
       (w, i, all) => !/^\d*(?:[<>]|&>)/.test(w) && !/^\d*(?:>>?|<|&>)$/.test(all[i - 1] ?? ''),
     );
+  // Names, not flags, a requirements file, or what's already on this computer (`../lib`, a .tgz).
   const named = (from: number) =>
     sub
       .slice(from)
-      .filter((w) => !w.startsWith('-') && !/^(?:\.|\.\/.*|-r|requirements.*)$/.test(w));
+      .filter(
+        (w, i, all) =>
+          !w.startsWith('-') &&
+          !/^(?:-r|-c|-e|--requirement|--constraint|--editable)$/.test(all[i - 1] ?? '') &&
+          !/^(?:requirements.*)$/.test(w) &&
+          !LOCAL_SPEC.test(w),
+      );
   // An address, or a version that is one: `x@github:a/b`, `x@https://…`, pip's `x @ https://…`,
   // and npm's `a/b` for a GitHub repository.
   const fromUrl = (list: string[]) =>
@@ -1382,6 +1393,9 @@ function disruptRisk(prog: string, words: string[], part: string): Risk | undefi
 /** Programs that reach another computer, by address or by name. */
 const NETWORK =
   /^(?:curl|wget|http|https|xh|httpie|aria2c|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp|lftp|rclone|dig|nslookup|host|ping|ping6|traceroute|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)$/i;
+
+/** An address on this computer itself: `localhost:3000`, `http://127.0.0.1/x`. */
+const LOOPBACK = /^(?:https?:\/\/)?(?:localhost|127\.\d+\.\d+\.\d+|\[::1\]|0\.0\.0\.0)(?:[:/]|$)/i;
 
 /** A word that's an address on the internet, with a long query or path that could carry something. */
 function carriesData(word: string): boolean {
@@ -1633,7 +1647,10 @@ function partRisk(part: string, places: Places): Risk | undefined {
         NEVER,
       );
   }
-  if (/^(?:curl|wget|http|https|xh|httpie)$/.test(prog)) {
+  // Sent to this computer's own servers, and nowhere else, it doesn't leave.
+  const addresses = words.slice(1).filter((w) => LOOPBACK.test(w) || /^https?:\/\//i.test(w));
+  const onlyHere = addresses.length > 0 && addresses.every((w) => LOOPBACK.test(w));
+  if (/^(?:curl|wget|http|https|xh|httpie)$/.test(prog) && !onlyHere) {
     if (
       /\s(?:-d|--data(?:-raw|-binary|-urlencode|-ascii)?|-F|--form(?:-string)?|-T|--upload-file|--json|--post-(?:data|file)|--body-(?:data|file))\b|\s-X\s*(?:POST|PUT|PATCH|DELETE)\b|--request\s+(?:POST|PUT|PATCH|DELETE)\b|--method=(?:POST|PUT|PATCH|DELETE)\b/i.test(
         part,
