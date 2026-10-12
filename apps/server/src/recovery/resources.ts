@@ -137,57 +137,160 @@ export interface TreeUsage {
   cpuPercent: number;
 }
 
+/** One process in a listing: ids and resource columns, never its command or name. */
+export interface ProcessRow {
+  parent: number;
+  rssBytes: number;
+  /** User and system CPU time it has used since it started; NaN when unreadable. */
+  cpuSeconds: number;
+}
+
 /**
- * Sums `ps -o pid=,ppid=,rss=,pcpu=` rows over each root's descendants, by
- * parent links rather than process group, so a sandbox that starts its own
- * session still counts. Roots missing from the listing are left out.
+ * `ps`'s cumulative CPU time, `[[dd-]hh:]mm:ss[.cc]`: whole seconds on Linux,
+ * hundredths on macOS, where minutes go past 59.
  */
-export function treeUsage(text: string, roots: readonly number[]): Map<number, TreeUsage> {
-  const children = new Map<number, number[]>();
-  const own = new Map<number, TreeUsage>();
+export function cpuSeconds(time: string): number | undefined {
+  const match = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)$/.exec(time);
+  if (!match) return;
+  const [, days = '0', hours = '0', minutes = '0', seconds = '0'] = match;
+  return ((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds);
+}
+
+/**
+ * The CPU time in a Linux /proc/<pid>/stat line, in seconds at the kernel's fixed
+ * 100 ticks a second. Read after the name's last closing parenthesis (the name may
+ * hold one itself), and the name is never kept.
+ */
+export function procCpuSeconds(stat: string): number | undefined {
+  const end = stat.lastIndexOf(')');
+  if (end < 0) return;
+  const fields = stat
+    .slice(end + 1)
+    .trim()
+    .split(/\s+/);
+  // utime and stime: the 14th and 15th fields, counting pid and name.
+  const ticks = Number(fields[11]) + Number(fields[12]);
+  return Number.isSafeInteger(ticks) && ticks >= 0 ? ticks / 100 : undefined;
+}
+
+/** `ps -o pid=,ppid=,rss=,time=` rows, by pid. Anything else in the text is skipped. */
+export function processRows(text: string): Map<number, ProcessRow> {
+  const rows = new Map<number, ProcessRow>();
   for (const line of text.split('\n')) {
-    const [pid = NaN, parent = NaN, rss = NaN, cpu = NaN] = line.trim().split(/\s+/).map(Number);
+    const [pid, parent, rss, time = ''] = line.trim().split(/\s+/);
+    const cpu = cpuSeconds(time);
     if (
-      !Number.isSafeInteger(pid) ||
-      !Number.isSafeInteger(parent) ||
-      !Number.isFinite(rss) ||
-      !Number.isFinite(cpu)
+      !Number.isSafeInteger(Number(pid)) ||
+      !Number.isSafeInteger(Number(parent)) ||
+      !Number.isFinite(Number(rss)) ||
+      cpu === undefined
     )
       continue;
-    own.set(pid, { rssBytes: Math.max(0, rss) * 1024, cpuPercent: Math.max(0, cpu) });
+    rows.set(Number(pid), {
+      parent: Number(parent),
+      rssBytes: Math.max(0, Number(rss)) * 1024,
+      cpuSeconds: cpu,
+    });
+  }
+  return rows;
+}
+
+/** Each root in `rows`, with itself and all its descendants by parent links. */
+function trees(rows: Map<number, ProcessRow>, roots: readonly number[]): Map<number, Set<number>> {
+  const children = new Map<number, number[]>();
+  for (const [pid, { parent }] of rows) {
     const siblings = children.get(parent);
     if (siblings) siblings.push(pid);
     else children.set(parent, [pid]);
   }
-  const usage = new Map<number, TreeUsage>();
+  const result = new Map<number, Set<number>>();
   for (const root of roots) {
-    if (!own.has(root)) continue;
-    const total = { rssBytes: 0, cpuPercent: 0 };
+    if (!rows.has(root)) continue;
     const seen = new Set<number>();
     const next = [root];
     for (let pid = next.pop(); pid !== undefined; pid = next.pop()) {
       if (seen.has(pid)) continue;
       seen.add(pid);
-      const row = own.get(pid);
-      if (row) {
-        total.rssBytes += row.rssBytes;
-        total.cpuPercent += row.cpuPercent;
-      }
       next.push(...(children.get(pid) ?? []));
     }
-    usage.set(root, total);
+    result.set(root, seen);
+  }
+  return result;
+}
+
+/**
+ * What each root's tree uses now: memory from the later listing, and CPU as the
+ * time it used between the two over the time between them. Not `ps pcpu`, a
+ * lifetime average on Linux, where a job busy an hour ago would outweigh the one
+ * busy now. By parent links rather than process group, so a sandbox that starts
+ * its own session still counts. Roots missing from the later listing are left out.
+ */
+export function treeUsage(
+  before: Map<number, ProcessRow>,
+  after: Map<number, ProcessRow>,
+  roots: readonly number[],
+  elapsedMs: number,
+): Map<number, TreeUsage> {
+  const usage = new Map<number, TreeUsage>();
+  for (const [root, pids] of trees(after, roots)) {
+    let rssBytes = 0;
+    let spent = 0;
+    for (const pid of pids) {
+      const row = after.get(pid);
+      if (!row) continue;
+      rssBytes += row.rssBytes;
+      // One that started in between (or a reused pid) used all its time in between;
+      // one unreadable either time counts for none rather than for its whole life.
+      const earlier = before.get(pid)?.cpuSeconds ?? 0;
+      const since = row.cpuSeconds >= earlier ? row.cpuSeconds - earlier : row.cpuSeconds;
+      if (Number.isFinite(since) && !Number.isNaN(earlier)) spent += since;
+    }
+    usage.set(root, {
+      rssBytes,
+      cpuPercent: elapsedMs > 0 ? (spent * 100_000) / elapsedMs : 0,
+    });
   }
   return usage;
 }
 
-/** One bounded `ps` of the process table: ids and resource columns only, never commands. */
-export async function sampleTrees(roots: readonly number[]): Promise<Map<number, TreeUsage>> {
-  if (process.platform === 'win32' || !roots.length) return new Map();
-  const { stdout } = await execute('ps', ['-A', '-o', 'pid=,ppid=,rss=,pcpu='], {
+/** One bounded look at the process table: ids and resource columns only, never commands. */
+async function listProcesses(roots: readonly number[]): Promise<Map<number, ProcessRow>> {
+  const { stdout } = await execute('ps', ['-A', '-o', 'pid=,ppid=,rss=,time='], {
     timeout: 1000,
     maxBuffer: 4 * MiB,
     encoding: 'utf8',
     env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' },
   });
-  return treeUsage(stdout, roots);
+  const rows = processRows(stdout);
+  if (process.platform === 'linux') {
+    // ps counts whole seconds there: the kernel's ticks instead, for the trees' own processes.
+    const signal = AbortSignal.timeout(1000);
+    const pids = [...trees(rows, roots).values()].flatMap((tree) => [...tree]);
+    await Promise.all(
+      pids.map(async (pid) => {
+        const stat = await readFile(`/proc/${pid}/stat`, { encoding: 'utf8', signal }).catch(
+          () => '',
+        );
+        const row = rows.get(pid);
+        if (row) row.cpuSeconds = procCpuSeconds(stat) ?? NaN;
+      }),
+    );
+  }
+  return rows;
+}
+
+/**
+ * What each managed root's tree uses: two looks `intervalMs` apart, so its CPU is
+ * what it uses now, not what it once used.
+ */
+export async function sampleTrees(
+  roots: readonly number[],
+  intervalMs = 500,
+): Promise<Map<number, TreeUsage>> {
+  if (process.platform === 'win32' || !roots.length) return new Map();
+  const before = await listProcesses(roots);
+  const first = performance.now();
+  await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  const after = await listProcesses(roots);
+  return treeUsage(before, after, roots, performance.now() - first);
 }
