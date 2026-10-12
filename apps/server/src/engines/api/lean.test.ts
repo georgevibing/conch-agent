@@ -90,6 +90,28 @@ describe('lean mode (ADR 0086)', () => {
     expect(long.endsWith('…')).toBe(true);
   });
 
+  it('reads a heading inside a code block as code, not a new section', () => {
+    const system = [
+      '# Your instructions',
+      'Set up with:',
+      '```sh',
+      '# install deps',
+      'pnpm install',
+      '```',
+      'ALWAYS reply in French.',
+      '',
+      '# Memory',
+      '```',
+      '## not a heading',
+      '```',
+      '- [m1] (fact) Likes tea',
+    ].join('\n');
+    const lean = leanSystem(system, { tools: false });
+    expect(lean).toContain('# install deps');
+    expect(lean).toContain('ALWAYS reply in French.');
+    expect(lean).toContain('Likes tea');
+  });
+
   it('finds tools by what the model wants to do, in its own words', () => {
     expect(searchTools('browse the web', TOOLS).slice(0, 2)).toEqual([
       'mcp__conch__browser_open',

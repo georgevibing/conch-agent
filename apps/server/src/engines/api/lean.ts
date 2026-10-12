@@ -118,8 +118,13 @@ export function leanPrompt(
   const blocks: string[] = [];
   let current: string[] = [];
   const fitted = withResilience(system, options.tools ? 'compact' : 'words');
+  // A `# comment` inside a code block is code, never a new section.
+  let fence: string | undefined;
   for (const line of fitted.split('\n')) {
-    if (/^#{1,2} /.test(line) && current.length) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker && !fence) fence = marker;
+    else if (marker && marker[0] === fence?.[0] && marker.length >= fence.length) fence = undefined;
+    else if (!fence && /^#{1,2} /.test(line) && current.length) {
       blocks.push(current.join('\n'));
       current = [];
     }
