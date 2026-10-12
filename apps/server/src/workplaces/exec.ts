@@ -1,9 +1,10 @@
 /**
  * Running a program for a place (ADR 0106): bytes in on stdin, bytes out,
- * bounded, stopped with its whole process group. One seam (`Exec`) so tests
- * can pretend to be Docker or `ssh` without either being installed.
+ * bounded, stopped with its whole process group, and gone with the gateway
+ * that started it (ADR 0094). One seam (`Exec`) so tests can pretend to be
+ * Docker or `ssh` without either being installed.
  */
-import { spawn } from 'node:child_process';
+import { spawnTethered, stopTree } from '../processes/tether';
 
 export interface ExecOptions {
   stdin?: Buffer | string;
@@ -37,12 +38,11 @@ export const exec: Exec = (program, args, options = {}) =>
   new Promise((resolve, reject) => {
     const signal = options.signal;
     if (signal?.aborted) return reject(signal.reason ?? new Error('Stopped.'));
-    const child = spawn(program, args, {
+    // Its own process group, tied to this gateway: it dies with it (ADR 0094).
+    const child = spawnTethered(program, args, {
       cwd: options.cwd,
       env: options.env ?? {},
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: process.platform !== 'win32',
-      windowsHide: true,
+      stdin: 'pipe',
     });
     let output = '';
     let stderr = '';
@@ -52,14 +52,7 @@ export const exec: Exec = (program, args, options = {}) =>
     let timedOut = false;
     const maxStdout = options.maxStdout ?? 0;
     const maxOutput = options.maxOutput ?? KEEP;
-    const stop = () => {
-      try {
-        if (child.pid && process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
-        else child.kill('SIGKILL');
-      } catch {
-        /* Already gone. */
-      }
-    };
+    const stop = () => stopTree(child);
     const timer = options.timeoutMs
       ? setTimeout(() => {
           timedOut = true;
@@ -67,7 +60,7 @@ export const exec: Exec = (program, args, options = {}) =>
         }, options.timeoutMs).unref()
       : undefined;
     signal?.addEventListener('abort', stop, { once: true });
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       if (maxStdout) {
         if (size + chunk.length > maxStdout) {
           overflow = true;
@@ -79,13 +72,13 @@ export const exec: Exec = (program, args, options = {}) =>
       }
       output = (output + chunk.toString('utf8')).slice(-maxOutput);
     });
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8');
       stderr = (stderr + text).slice(-maxOutput);
       output = (output + text).slice(-maxOutput);
     });
-    child.stdin.on('error', () => undefined);
-    child.stdin.end(options.stdin ?? '');
+    child.stdin?.on('error', () => undefined);
+    child.stdin?.end(options.stdin ?? '');
     child.once('error', (error) => {
       if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', stop);
