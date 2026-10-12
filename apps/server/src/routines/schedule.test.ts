@@ -114,6 +114,11 @@ suite('schedules', () => {
     expect(new Date(at).toISOString()).toBe('2030-07-01T07:00:00.000Z');
     expect(onceAt('2030-01-15T09:00:00', TZ)).toBe(Date.parse('2030-01-15T08:00:00Z')); // CET
     expect(onceAt('2030-01-15T09:00:00Z', TZ)).toBe(Date.parse('2030-01-15T09:00:00Z'));
+    // A time that comes twice as the clocks go back is the first of the two, wherever you are.
+    expect(onceAt('2030-10-27T02:30', TZ)).toBe(Date.parse('2030-10-27T00:30:00Z'));
+    expect(onceAt('2030-11-03T01:30', 'America/New_York')).toBe(Date.parse('2030-11-03T05:30:00Z'));
+    // One that never comes (clocks go forward) is just after the jump.
+    expect(onceAt('2030-03-31T02:30', TZ)).toBe(Date.parse('2030-03-31T01:30:00Z'));
   });
 
   it('counts a calendar slot as the previous run from the moment it comes', () => {

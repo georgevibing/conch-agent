@@ -51,6 +51,13 @@ export function onceAt(at: string, timezone: string): number {
     const v = (type: string) => Number(parts.find((p) => p.type === type)?.value);
     return Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'), v('second')) - t;
   };
+  // The offsets either side of the day: a time that comes twice (clocks going back) is the first.
+  const HALF_DAY = 12 * 3_600_000;
+  const fits = [offset(guess - HALF_DAY), offset(guess + HALF_DAY)]
+    .map((o) => guess - o)
+    .filter((t) => guess - offset(t) === t)
+    .sort((a, b) => a - b);
+  if (fits[0] !== undefined) return fits[0];
   const first = guess - offset(guess);
   return guess - offset(first);
 }
