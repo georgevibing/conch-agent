@@ -2,6 +2,27 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.10](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-12)
+
+### New
+
+- Settings → Health tells you when Conch stopped answering this week and started again on its own, and where it was stuck
+
+### Fixed
+
+- Conch notices when it keeps stalling for a few seconds at a time, not only when it stops answering for long
+- When Conch is frozen, it keeps a note of where it was stuck, even when it froze while starting
+- If Conch starts answering again just before it would be restarted, it carries on instead
+- Ctrl+C on a frozen Conch stops it in seconds, and pressing it again stops it at once
+- A frozen Conch no longer keeps running in the background after whatever started it has gone
+- When Conch has to stop a command to stay responsive, it stops the one working hardest right now
+- When another program keeps the computer busy, Conch waits longer before restarting itself, and never mistakes that for its own trouble
+- Messages after a restart say what happened, and how long Conch will wait before starting again
+- After one slow moment, waiting work says Conch is catching up, not that it is recovering from repeated trouble
+- A command can no longer open a door into Conch that other people on this computer could use
+- A routine waiting for room on your plan runs once there is room, even when it was held a moment before
+- Setting your computer's clock back no longer holds every command for as long
+
 ## [0.1.0-alpha.9](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2026-10-12)
 
 ### New
