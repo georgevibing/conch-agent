@@ -83,8 +83,11 @@ export async function isDir(path: string): Promise<boolean> {
  * JSON5 as OpenClaw writes its config: comments, trailing commas, unquoted
  * keys and single quotes. Enough of it to read a config, never to run one.
  */
-export function parseJson5(text: string): unknown {
+export function parseJson5(source: string): unknown {
+  const text = source.replace(/^\uFEFF/, '');
   let out = '';
+  /** The last character written outside a string that isn't a space. */
+  let last = '';
   let i = 0;
   const n = text.length;
   while (i < n) {
@@ -106,6 +109,7 @@ export function parseJson5(text: string): unknown {
       }
       i++;
       out += `"${quote === "'" ? value.replace(/\\'/g, "'") : value}"`;
+      last = '"';
       continue;
     }
     if (c === '/' && next === '/') {
@@ -117,15 +121,23 @@ export function parseJson5(text: string): unknown {
       i = i < 0 ? n : i + 2;
       continue;
     }
+    // Only outside strings: a trailing comma goes, an unquoted key is quoted.
+    if ((c === '}' || c === ']') && last === ',') {
+      const comma = out.lastIndexOf(',');
+      out = out.slice(0, comma) + out.slice(comma + 1);
+    }
+    if (/[A-Za-z_$]/.test(c) && (last === '{' || last === ',')) {
+      const word = /^[A-Za-z_$][\w$-]*/.exec(text.slice(i, i + 200))?.[0] ?? c;
+      i += word.length;
+      out += /^\s*:/.test(text.slice(i, i + 200)) ? `"${word}"` : word;
+      last = 'a';
+      continue;
+    }
     out += c;
+    if (!/\s/.test(c)) last = c;
     i++;
   }
-  const json = out
-    // Unquoted keys: `{ key:` or `, key:`.
-    .replace(/([{,]\s*)([A-Za-z_$][\w$-]*)(\s*:)/g, '$1"$2"$3')
-    // Trailing commas.
-    .replace(/,(\s*[}\]])/g, '$1');
-  return JSON.parse(json);
+  return JSON.parse(out);
 }
 
 /**

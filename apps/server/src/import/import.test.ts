@@ -36,6 +36,10 @@ describe('reading another agent’s files', () => {
     expect(
       parseJson5(`// a comment\n{ a: 1, 'b': 'it\\'s', c: "http://x/y", /* gone */ d: [1, 2,], }`),
     ).toEqual({ a: 1, b: "it's", c: 'http://x/y', d: [1, 2] });
+    // What's inside a string stays as written.
+    expect(
+      parseJson5('\uFEFF{ prompt: "Be brief, note: always", list: "a,]", x: \'{ y: 1, }\' }'),
+    ).toEqual({ prompt: 'Be brief, note: always', list: 'a,]', x: '{ y: 1, }' });
   });
 
   it('reads .env files', () => {
