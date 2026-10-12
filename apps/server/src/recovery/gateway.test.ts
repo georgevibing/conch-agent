@@ -181,6 +181,23 @@ describe('gateway recovery', () => {
     expect(deps.relieve).toHaveBeenCalledTimes(2);
   });
 
+  it('times the relief cooldown on the monotonic clock, not the wall clock', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+    vi.setSystemTime(new Date('2026-10-12T12:00:00Z'));
+    const { recovery, deps } = setup();
+    await recovery.start(async () => true);
+    recovery.receive({ type: 'conch.recover' });
+    expect(deps.relieve).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    // The wall clock is set back an hour (NTP, a time zone fix, a dead battery).
+    vi.setSystemTime(new Date('2026-10-12T11:00:30Z'));
+    recovery.receive({ type: 'conch.recover' });
+    expect(deps.relieve).toHaveBeenCalledTimes(2);
+    recovery.stop();
+  });
+
   it('holds work after a freeze for Conch’s recovery, never saying memory ran short', async () => {
     const processes = new ProcessService({
       protectedPaths: [],

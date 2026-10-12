@@ -368,7 +368,8 @@ export class GatewayRecovery {
       raw.type !== 'conch.recover'
     )
       return;
-    const now = (this.deps.now ?? Date.now)();
+    // The same monotonic clock as the rest: setting the wall clock back must not suppress relief.
+    const now = (this.deps.now ?? (() => performance.now()))();
     if (now - this.#lastRelief < 30_000) return;
     this.#lastRelief = now;
     // The supervisor asks because Conch stopped answering, not because memory ran short.
