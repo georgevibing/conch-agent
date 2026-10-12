@@ -31,6 +31,8 @@ export interface WatchState {
   since: number;
   /** Terminating because the gateway stopped answering, not because it was asked to stop. */
   failed: boolean;
+  /** When this supervisor last judged; a long gap means it was asleep, not the gateway. */
+  lastTick?: number;
 }
 export type WatchEvent =
   | { type: 'tick'; at: number }
@@ -40,6 +42,7 @@ export interface WatchLimits {
   startupMs: number;
   unhealthyMs: number;
   recoverMs: number;
+  pollMs: number;
 }
 
 /** The watchdog's only transition function: pure, so every verdict is testable. */
@@ -50,17 +53,21 @@ export function watchTransition(
 ): WatchState {
   if (state.phase === 'terminating') return state;
   if (event.type === 'shutdown')
-    return { phase: 'terminating', since: event.at, failed: event.failed };
-  if (event.type === 'healthy') return { phase: 'healthy', since: event.at, failed: false };
+    return { ...state, phase: 'terminating', since: event.at, failed: event.failed };
+  if (event.type === 'healthy') return { ...state, phase: 'healthy', since: event.at };
+  const ticked = { ...state, lastTick: event.at };
+  // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence.
+  if (state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3)
+    return { ...ticked, since: event.at };
   const elapsed = event.at - state.since;
   if (
     (state.phase === 'booting' && elapsed >= limits.startupMs) ||
     (state.phase === 'healthy' && elapsed >= limits.unhealthyMs)
   )
-    return { phase: 'reducing', since: event.at, failed: false };
+    return { ...ticked, phase: 'reducing', since: event.at };
   if (state.phase === 'reducing' && elapsed >= limits.recoverMs)
-    return { phase: 'terminating', since: event.at, failed: true };
-  return state;
+    return { ...ticked, phase: 'terminating', since: event.at, failed: true };
+  return ticked;
 }
 
 /** Watches from another event loop, so even a completely blocked gateway can recover. */
@@ -77,6 +84,7 @@ export function watchGateway(
     startupMs: options.startupMs ?? 120_000,
     unhealthyMs: options.unhealthyMs ?? 30_000,
     recoverMs: options.recoverMs ?? 20_000,
+    pollMs: options.pollMs ?? 5_000,
   };
   let state: WatchState = { phase: 'booting', since: now(), failed: false };
   let resource: RecoveryResource | undefined;
@@ -131,7 +139,7 @@ export function watchGateway(
   const timer = setInterval(() => {
     if (options.enabled === false || options.stopping() || state.phase === 'terminating') return;
     apply({ type: 'tick', at: now() });
-  }, options.pollMs ?? 5_000);
+  }, limits.pollMs);
   timer.unref();
   return {
     stop,

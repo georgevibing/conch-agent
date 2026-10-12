@@ -3,10 +3,10 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { watchGateway, watchTransition, type WatchState } from './watchdog';
+import { watchGateway, watchTransition, type WatchdogOptions, type WatchState } from './watchdog';
 
 afterEach(() => vi.useRealTimers());
-function world() {
+function world(extra: Partial<WatchdogOptions> = {}) {
   vi.useFakeTimers();
   const child = Object.assign(new EventEmitter(), {
     connected: true,
@@ -24,6 +24,7 @@ function world() {
     stopping: () => false,
     incident,
     repaired,
+    ...extra,
   });
   return { child, watch, incident, repaired };
 }
@@ -58,6 +59,22 @@ describe('independent gateway watchdog', () => {
       'reduced-workload',
       'responsive',
     ]);
+    watch.close();
+  });
+  it('does not mistake its own sleep for a frozen gateway', () => {
+    let slept = 0;
+    const { child, watch, incident } = world({ now: () => Date.now() + slept });
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(10);
+    slept = 3_600_000;
+    vi.advanceTimersByTime(5);
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(25);
+    expect(child.send).not.toHaveBeenCalled();
+    expect(incident).not.toHaveBeenCalled();
+    // Judging resumes after the nap.
+    vi.advanceTimersByTime(10);
+    expect(child.send).toHaveBeenCalledWith({ type: 'conch.recover' }, expect.any(Function));
     watch.close();
   });
   it('ignores malformed heartbeats and cancels timers and listeners on exit', () => {
@@ -144,7 +161,7 @@ describe('independent gateway watchdog', () => {
 });
 
 describe('watchdog transitions', () => {
-  const limits = { startupMs: 100, unhealthyMs: 30, recoverMs: 20 };
+  const limits = { startupMs: 100, unhealthyMs: 30, recoverMs: 20, pollMs: 100 };
   const step = (state: WatchState, ...events: Parameters<typeof watchTransition>[1][]) =>
     events.reduce((current, event) => watchTransition(current, event, limits), state);
   const booting: WatchState = { phase: 'booting', since: 0, failed: false };
@@ -170,5 +187,12 @@ describe('watchdog transitions', () => {
     const stopping = step(booting, { type: 'shutdown', at: 5, failed: false });
     expect(stopping).toMatchObject({ phase: 'terminating', failed: false });
     expect(step(stopping, { type: 'healthy', at: 6 }, { type: 'tick', at: 1_000 })).toBe(stopping);
+  });
+  it('skips judging a tick that follows its own sleep, and restarts the deadline there', () => {
+    const healthy = step(booting, { type: 'healthy', at: 0 }, { type: 'tick', at: 5 });
+    const woke = step(healthy, { type: 'tick', at: 3_600_000 });
+    expect(woke).toMatchObject({ phase: 'healthy', since: 3_600_000 });
+    expect(step(woke, { type: 'tick', at: 3_600_029 }).phase).toBe('healthy');
+    expect(step(woke, { type: 'tick', at: 3_600_030 }).phase).toBe('reducing');
   });
 });
