@@ -93,15 +93,15 @@ function readNumber(field: Buffer): number {
 
 const text = (field: Buffer) => field.toString('utf8').replace(/\0.*$/s, '');
 
+/** A PAX header's path. Each record's length counts bytes, so it's read as bytes. */
 function paxPath(data: Buffer): string | undefined {
   let at = 0;
-  const all = data.toString('utf8');
-  while (at < all.length) {
-    const space = all.indexOf(' ', at);
+  while (at < data.length) {
+    const space = data.indexOf(0x20, at);
     if (space < 0) break;
-    const length = parseInt(all.slice(at, space), 10);
+    const length = parseInt(data.toString('ascii', at, space), 10);
     if (!Number.isFinite(length) || length <= 0) break;
-    const record = all.slice(space + 1, at + length - 1);
+    const record = data.toString('utf8', space + 1, at + length - 1);
     if (record.startsWith('path=')) return record.slice(5);
     at += length;
   }

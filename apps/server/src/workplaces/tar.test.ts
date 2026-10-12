@@ -54,6 +54,20 @@ describe('tar', () => {
     expect(entries.find((e) => e.path === 'link')?.type).toBe('link');
   });
 
+  it('reads long names in any language, PAX lengths being bytes', () => {
+    const name = `dir/${'ü'.repeat(60)}.txt`;
+    const packed = packTar([{ path: name, data: Buffer.from('x'), mode: 0o644, mtime: 1 }]);
+    expect(readTar(packed).map((e) => e.path)).toEqual([name]);
+    // bsdtar (macOS) writes a PAX header for any name that isn't ASCII, with more records after.
+    const src = temp();
+    const accented = `${'é'.repeat(70)}.txt`;
+    writeFileSync(join(src, accented), 'far');
+    const made = execFileSync('tar', ['-czf', '-', '-C', src, accented], {
+      env: { ...process.env, COPYFILE_DISABLE: '1' },
+    });
+    expect(readTar(made).map((e) => e.path.normalize('NFC'))).toEqual([accented]);
+  });
+
   it('refuses a damaged archive instead of guessing', () => {
     const packed = packTar([{ path: 'a', data: Buffer.from('x'), mode: 0o644, mtime: 1 }]);
     const raw = gunzipSync(packed);
