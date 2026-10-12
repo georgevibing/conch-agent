@@ -208,6 +208,19 @@ describe('independent gateway watchdog', () => {
     watch.close();
   });
 
+  it('does not report an older heartbeat’s measurements as current', () => {
+    const { child, watch, incident } = world();
+    child.emit('message', {
+      type: 'conch.heartbeat',
+      healthy: true,
+      resource: { running: 3, probeMs: 2 },
+    });
+    child.emit('message', { type: 'conch.heartbeat', healthy: false });
+    vi.advanceTimersByTime(30);
+    expect(incident).toHaveBeenCalledWith('reduced-workload', undefined);
+    watch.close();
+  });
+
   it('does not mistake an older release without heartbeat support for a freeze', () => {
     vi.useFakeTimers();
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() });

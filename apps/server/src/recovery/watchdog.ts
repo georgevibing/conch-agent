@@ -199,7 +199,8 @@ export function watchGateway(
       apply({ type: 'booting', at: now(), phase: value.phase });
     if (value.type !== 'conch.heartbeat') return;
     apply({ type: 'heartbeat', at: now() });
-    if ('resource' in value) resource = recoveryResource(value.resource);
+    // A heartbeat without measurements must not leave older numbers looking current.
+    resource = 'resource' in value ? recoveryResource(value.resource) : undefined;
     if ('healthy' in value && value.healthy === true) apply({ type: 'healthy', at: now() });
   };
   child.on('message', message);
