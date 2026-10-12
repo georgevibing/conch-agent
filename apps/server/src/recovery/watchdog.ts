@@ -17,6 +17,8 @@ export interface WatchdogOptions {
   /** Health that keeps coming back only to fail again is a restart, not another reduction. */
   flapLimit?: number;
   flapWindowMs?: number;
+  /** The most a responsive gateway's deadlines stretch while other programs starve the computer. */
+  maxStretch?: number;
   stopMs?: number;
   /** A gateway that said nothing while reducing can't run a SIGTERM handler: kill it sooner. */
   frozenStopMs?: number;
@@ -49,9 +51,11 @@ export interface WatchState {
   reductions?: number[];
   /** The latest `conch.booting` phase; old releases never send one. */
   bootPhase?: string;
+  /** When managed work was last shed while reducing. */
+  shedAt?: number;
 }
 export type WatchEvent =
-  | { type: 'tick'; at: number }
+  | { type: 'tick'; at: number; stretch?: number }
   | { type: 'healthy'; at: number }
   | { type: 'message'; at: number }
   | { type: 'booting'; at: number; phase: string }
@@ -65,6 +69,33 @@ export interface WatchLimits {
   pollMs: number;
   flapLimit: number;
   flapWindowMs: number;
+}
+
+/**
+ * How much longer a gateway that still answers gets when something else is starving
+ * this computer. None when the gateway itself is the likely culprit: a restart cures that.
+ */
+export function pressureStretch(resource: RecoveryResource | undefined, max = 3): number {
+  if (!resource) return 1;
+  const {
+    gatewayRssBytes: rss,
+    memoryTotalBytes: total,
+    memoryAvailableBytes: available,
+    cgroupMemoryLimitBytes: limit,
+    cgroupMemoryAvailableBytes: limitAvailable,
+  } = resource;
+  if (rss === undefined) return 1;
+  if (total && rss / total >= 0.25) return 1;
+  if (limit && (rss / limit >= 0.5 || (limitAvailable ?? limit) / limit < 0.1)) return 1;
+  const share = total && available !== undefined ? available / total : 1;
+  const load = resource.loadPerCpu ?? 0;
+  const pressure = resource.memoryPressure ?? 0;
+  const starved = Math.max(
+    share < 0.05 ? 3 : share < 0.1 ? 2 : 1,
+    load >= 3 ? 3 : load >= 1.5 ? 2 : 1,
+    pressure >= 20 ? 3 : pressure >= 5 ? 2 : 1,
+  );
+  return Math.max(1, Math.min(max, starved));
 }
 
 /** The watchdog's only transition function: pure, so every verdict is testable. */
@@ -95,26 +126,34 @@ export function watchTransition(
     return { ...ticked, since: event.at };
   const elapsed = event.at - state.since;
   const silent = event.at - Math.max(state.since, state.heardAt ?? state.since);
+  // Only a gateway still talking gets longer while other programs starve the computer.
+  const stretch = (window: number) =>
+    state.heardAt !== undefined && event.at - state.heardAt < window ? (event.stretch ?? 1) : 1;
   const booted =
     state.bootPhase === undefined
       ? elapsed >= limits.startupMs
       : silent >= limits.startupMs || (state.bootPhase !== 'waiting' && elapsed >= limits.readyMs);
   if (
     (state.phase === 'booting' && booted) ||
-    (state.phase === 'healthy' && elapsed >= limits.unhealthyMs)
+    (state.phase === 'healthy' && elapsed >= limits.unhealthyMs * stretch(limits.unhealthyMs))
   ) {
     const reductions = [
       ...(state.reductions ?? []).filter((at) => event.at - at < limits.flapWindowMs),
       event.at,
     ];
     if (reductions.length < limits.flapLimit)
-      return { ...ticked, phase: 'reducing', since: event.at, reductions };
+      return { ...ticked, phase: 'reducing', since: event.at, shedAt: event.at, reductions };
     const frozen = state.heardAt === undefined || state.heardAt <= state.since;
     return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen, reductions };
   }
-  if (state.phase === 'reducing' && elapsed >= limits.recoverMs) {
-    const frozen = state.heardAt === undefined || state.heardAt < state.since;
-    return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
+  if (state.phase === 'reducing') {
+    if (elapsed >= limits.recoverMs * stretch(limits.recoverMs)) {
+      const frozen = state.heardAt === undefined || state.heardAt < state.since;
+      return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
+    }
+    // A stretched reduction keeps shedding work, once per recoverMs.
+    if (event.at - (state.shedAt ?? state.since) >= limits.recoverMs)
+      return { ...ticked, shedAt: event.at };
   }
   return ticked;
 }
@@ -157,11 +196,14 @@ export function watchGateway(
       /* A closing IPC pipe does not stop recovery. */
     }
   };
-  // Effects, incidents included, happen only when the phase changes.
+  // Effects, incidents included, happen only on transitions.
   const apply = (event: WatchEvent) => {
     const before = state;
     state = watchTransition(before, event, limits);
-    if (state.phase === before.phase) return;
+    if (state.phase === before.phase) {
+      if (state.phase === 'reducing' && state.shedAt !== before.shedAt) recover();
+      return;
+    }
     if (state.phase === 'reducing') {
       quiet = reported !== undefined && state.since - reported < limits.flapWindowMs;
       if (!quiet) {
@@ -206,7 +248,7 @@ export function watchGateway(
   child.on('message', message);
   const timer = setInterval(() => {
     if (options.enabled === false || options.stopping() || state.phase === 'terminating') return;
-    apply({ type: 'tick', at: now() });
+    apply({ type: 'tick', at: now(), stretch: pressureStretch(resource, options.maxStretch) });
   }, limits.pollMs);
   timer.unref();
   return {

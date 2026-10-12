@@ -3,7 +3,13 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { watchGateway, watchTransition, type WatchdogOptions, type WatchState } from './watchdog';
+import {
+  pressureStretch,
+  watchGateway,
+  watchTransition,
+  type WatchdogOptions,
+  type WatchState,
+} from './watchdog';
 
 afterEach(() => vi.useRealTimers());
 function world(extra: Partial<WatchdogOptions> = {}) {
@@ -221,6 +227,46 @@ describe('independent gateway watchdog', () => {
     watch.close();
   });
 
+  it('gives a gateway that still answers longer while other programs starve the computer', () => {
+    const { child, watch, incident } = world();
+    const starved = { gatewayRssBytes: 200, memoryTotalBytes: 16_000, loadPerCpu: 2 };
+    child.emit('message', { type: 'conch.heartbeat', healthy: true, resource: starved });
+    const beat = (ms: number) => {
+      for (let t = 0; t < ms; t += 5) {
+        child.emit('message', { type: 'conch.heartbeat', healthy: false, resource: starved });
+        vi.advanceTimersByTime(5);
+      }
+    };
+    beat(55);
+    expect(child.send).not.toHaveBeenCalled();
+    beat(5);
+    expect(child.send).toHaveBeenCalledOnce();
+    // Twice recoverMs, shedding again after the first.
+    beat(20);
+    expect(child.send).toHaveBeenCalledTimes(2);
+    expect(child.kill).not.toHaveBeenCalled();
+    beat(20);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
+      'reduced-workload',
+      'unresponsive',
+    ]);
+    watch.close();
+  });
+  it('never stretches a deadline for silence', () => {
+    const { child, watch } = world();
+    child.emit('message', {
+      type: 'conch.heartbeat',
+      healthy: true,
+      resource: { gatewayRssBytes: 200, memoryTotalBytes: 16_000, loadPerCpu: 4 },
+    });
+    vi.advanceTimersByTime(30);
+    expect(child.send).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(20);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    watch.close();
+  });
+
   it('does not mistake an older release without heartbeat support for a freeze', () => {
     vi.useFakeTimers();
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() });
@@ -279,6 +325,32 @@ describe('independent gateway watchdog', () => {
       watch.close();
       child.kill('SIGKILL');
     }
+  });
+});
+
+describe('pressure stretch', () => {
+  const GiB = 1024 ** 3;
+  const host = { memoryTotalBytes: 16 * GiB, gatewayRssBytes: 0.5 * GiB };
+  it('stretches only when other programs starve the computer, and only so far', () => {
+    expect(pressureStretch(undefined)).toBe(1);
+    expect(pressureStretch({ ...host, memoryAvailableBytes: 8 * GiB, loadPerCpu: 0.5 })).toBe(1);
+    expect(pressureStretch({ ...host, memoryAvailableBytes: 1.2 * GiB })).toBe(2);
+    expect(pressureStretch({ ...host, memoryAvailableBytes: 0.5 * GiB })).toBe(3);
+    expect(pressureStretch({ ...host, loadPerCpu: 1.5 })).toBe(2);
+    expect(pressureStretch({ ...host, loadPerCpu: 8 })).toBe(3);
+    expect(pressureStretch({ ...host, memoryPressure: 25 })).toBe(3);
+    expect(pressureStretch({ ...host, loadPerCpu: 8 }, 2)).toBe(2);
+  });
+  it('does not stretch when the gateway itself is the likely culprit', () => {
+    const starved = { memoryAvailableBytes: 0.2 * GiB, loadPerCpu: 4 };
+    expect(pressureStretch({ ...starved, memoryTotalBytes: 16 * GiB })).toBe(1);
+    expect(
+      pressureStretch({ ...starved, memoryTotalBytes: 16 * GiB, gatewayRssBytes: 6 * GiB }),
+    ).toBe(1);
+    const limited = { ...host, ...starved, cgroupMemoryLimitBytes: 4 * GiB };
+    expect(pressureStretch({ ...limited, cgroupMemoryAvailableBytes: 2 * GiB })).toBe(3);
+    expect(pressureStretch({ ...limited, cgroupMemoryAvailableBytes: 0.2 * GiB })).toBe(1);
+    expect(pressureStretch({ ...limited, gatewayRssBytes: 2.5 * GiB })).toBe(1);
   });
 });
 
