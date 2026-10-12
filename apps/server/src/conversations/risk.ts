@@ -260,7 +260,7 @@ export function riskAsks(risk: Risk | undefined, untrusted: boolean): boolean {
 
 /** A shell's own wrappers, unwrapped so the command inside is what's read. */
 const PREFIX =
-  /^(?:(?:sudo|doas|nohup|time|command|exec|builtin|nice|ionice|stdbuf|caffeinate)(?:\s+-[\w-]+)*\s+|env(?:\s+-[\w-]+)*\s+|[A-Za-z_][\w]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/;
+  /^(?:(?:sudo|doas|nohup|time|command|exec|builtin|nice|ionice|stdbuf|caffeinate)(?:\s+-[\w-]+)*\s+|env(?:\s+-[\w-]+)*\s+|[A-Za-z_][\w]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/i;
 
 /**
  * Wrappers whose options take a value (`timeout 60`, `nice -n 10`, `env -u FOO`, `sudo -u root`),
@@ -269,12 +269,12 @@ const PREFIX =
  */
 const WRAPPERS: RegExp[] = [
   /^(?:if|then|else|elif|do|while|until|!)\s+/,
-  /^timeout(?:\s+-(?:s|k)\s*\S+|\s+--(?:signal|kill-after)=\S+|\s+-[\w-]+)*\s+\d+(?:\.\d+)?[smhd]?\s+/,
-  /^nice(?:\s+-n\s*[+-]?\d+|\s+--adjustment=[+-]?\d+|\s+-[+-]?\d+)+\s+/,
-  /^ionice(?:\s+-[cnpP]\s*\S+|\s+-t)+\s+/,
-  /^stdbuf(?:\s+-[ioe]\s*\S+|\s+--(?:input|output|error)=\S+)+\s+/,
-  /^env(?:\s+-[uCS]\s*\S+|\s+--(?:unset|chdir)=\S+|\s+-[\w-]+)+\s+/,
-  /^(?:sudo|doas)(?:\s+-[ugCDpRrTt]\s*\S+|\s+--(?:user|group)=\S+|\s+-[\w-]+)+\s+/,
+  /^timeout(?:\s+-(?:s|k)\s*\S+|\s+--(?:signal|kill-after)=\S+|\s+-[\w-]+)*\s+\d+(?:\.\d+)?[smhd]?\s+/i,
+  /^nice(?:\s+-n\s*[+-]?\d+|\s+--adjustment=[+-]?\d+|\s+-[+-]?\d+)+\s+/i,
+  /^ionice(?:\s+-[cnpP]\s*\S+|\s+-t)+\s+/i,
+  /^stdbuf(?:\s+-[ioe]\s*\S+|\s+--(?:input|output|error)=\S+)+\s+/i,
+  /^env(?:\s+-[uCS]\s*\S+|\s+--(?:unset|chdir)=\S+|\s+-[\w-]+)+\s+/i,
+  /^(?:sudo|doas)(?:\s+-[ugCDpRrTt]\s*\S+|\s+--(?:user|group)=\S+|\s+-[\w-]+)+\s+/i,
   /^eval\s+(?=[^\s"'])/,
 ];
 
@@ -463,7 +463,8 @@ export function wordsOf(part: string): string[] {
   return words;
 }
 
-const program = (part: string) => (wordsOf(part)[0] ?? '').replace(/^.*[\\/]/, '');
+/** The program a part runs, as a Mac's disk finds it: `RM` runs `rm`. */
+const program = (part: string) => (wordsOf(part)[0] ?? '').replace(/^.*[\\/]/, '').toLowerCase();
 
 /** Branch names a team protects, or that publish when pushed. */
 const PROTECTED_BRANCH =
@@ -1135,14 +1136,14 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
 
 /** Paths whose files run again by themselves later, or let someone in. */
 const PERSISTENT =
-  /(?:^|[\\/])(?:Library[\\/]Launch(?:Agents|Daemons)|\.config[\\/](?:autostart|systemd)|etc[\\/](?:cron[^\\/]*|systemd|init\.d|rc\.local|profile(?:\.d)?|launchd\.conf))(?:[\\/]|$)|(?:^|[\\/])\.(?:bashrc|bash_profile|bash_login|profile|zshrc|zprofile|zshenv|zlogin|config[\\/]fish[\\/]config\.fish)$/;
+  /(?:^|[\\/])(?:Library[\\/]Launch(?:Agents|Daemons)|\.config[\\/](?:autostart|systemd)|etc[\\/](?:cron[^\\/]*|systemd|init\.d|rc\.local|profile(?:\.d)?|launchd\.conf))(?:[\\/]|$)|(?:^|[\\/])\.(?:bashrc|bash_profile|bash_login|profile|zshrc|zprofile|zshenv|zlogin|config[\\/]fish[\\/]config\.fish)$/i;
 const ACCESS =
-  /(?:^|[\\/])(?:\.ssh[\\/](?:authorized_keys2?|rc)|etc[\\/]sudoers(?:\.d)?)(?:[\\/]|$)/;
+  /(?:^|[\\/])(?:\.ssh[\\/](?:authorized_keys2?|rc)|etc[\\/]sudoers(?:\.d)?)(?:[\\/]|$)/i;
 /** Files that tell an agent what it may do: writing them raises its own powers. */
 const AGENT_CONFIG =
-  /(?:^|[\\/])(?:\.claude[\\/]settings(?:\.local)?\.json|\.mcp\.json|\.codex[\\/]config\.toml|\.gemini[\\/]settings\.json|\.cursor[\\/](?:mcp\.json|permissions\.json)|\.vscode[\\/]tasks\.json)$/;
+  /(?:^|[\\/])(?:\.claude[\\/]settings(?:\.local)?\.json|\.mcp\.json|\.codex[\\/]config\.toml|\.gemini[\\/]settings\.json|\.cursor[\\/](?:mcp\.json|permissions\.json)|\.vscode[\\/]tasks\.json)$/i;
 const HOOKS =
-  /(?:^|[\\/])(?:\.git[\\/](?:hooks[\\/]|config$)|\.husky[\\/]|\.github[\\/]workflows[\\/])/;
+  /(?:^|[\\/])(?:\.git[\\/](?:hooks[\\/]|config$)|\.husky[\\/]|\.github[\\/]workflows[\\/])/i;
 
 /**
  * The computer's own files: what it starts from, its programs and settings.
@@ -1170,7 +1171,7 @@ function writeRisk(path: string): Risk | undefined {
 
 /** Files that hold keys, sign-ins or saved passwords, named on a command line. */
 const SECRET_FILES =
-  /(?:^|[\s"'=/\\])(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?|\.netrc|\.git-credentials|\.pgpass|credentials\.db|application_default_credentials\.json|access_tokens\.db|Login Data|key4\.db|logins\.json)(?=$|[\s"';|&)])/;
+  /(?:^|[\s"'=/\\])(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?|\.netrc|\.git-credentials|\.pgpass|credentials\.db|application_default_credentials\.json|access_tokens\.db|Login Data|key4\.db|logins\.json)(?=$|[\s"';|&)])/i;
 
 /**
  * Where keys and sign-ins live, as absolute paths. `sandbox.ts` lists the
@@ -1178,26 +1179,26 @@ const SECRET_FILES =
  * folder's settings or Claude Code's skills isn't taken for a secret.
  */
 const SECRET_PATHS: RegExp[] = [
-  /[\\/]\.ssh[\\/](?![^\\/]*\.pub$)(?!config$)(?!known_hosts)[^\\/]+$/,
-  /[\\/]\.aws[\\/](?:credentials|sso[\\/]cache)/,
-  /[\\/]\.config[\\/]gcloud[\\/](?:credentials\.db|access_tokens\.db|application_default_credentials\.json|legacy_credentials)/,
-  /[\\/]\.azure[\\/](?:accessTokens|msal_token_cache)/,
-  /[\\/]\.kube[\\/]config$/,
-  /[\\/]\.docker[\\/]config\.json$/,
-  /[\\/]\.netrc$|[\\/]\.git-credentials$|[\\/]\.pgpass$/,
-  /[\\/]\.config[\\/]gh[\\/]hosts\.yml$/,
-  /[\\/]\.gnupg(?:[\\/]|$)/,
-  /[\\/]\.password-store(?:[\\/]|$)/,
-  /[\\/]Library[\\/](?:Keychains|Cookies)(?:[\\/]|$)/,
-  /[\\/]\.claude[\\/]\.credentials\.json$|[\\/]\.codex[\\/]auth\.json$/,
-  /[\\/]Group Containers[\\/]2BUA8C4S2C\.com\.1password|Bitwarden CLI[\\/]data\.json/,
-  /[\\/](?:Login Data|Cookies|key4\.db|logins\.json)$/,
+  /[\\/]\.ssh[\\/](?![^\\/]*\.pub$)(?!config$)(?!known_hosts)[^\\/]+$/i,
+  /[\\/]\.aws[\\/](?:credentials|sso[\\/]cache)/i,
+  /[\\/]\.config[\\/]gcloud[\\/](?:credentials\.db|access_tokens\.db|application_default_credentials\.json|legacy_credentials)/i,
+  /[\\/]\.azure[\\/](?:accessTokens|msal_token_cache)/i,
+  /[\\/]\.kube[\\/]config$/i,
+  /[\\/]\.docker[\\/]config\.json$/i,
+  /[\\/]\.netrc$|[\\/]\.git-credentials$|[\\/]\.pgpass$/i,
+  /[\\/]\.config[\\/]gh[\\/]hosts\.yml$/i,
+  /[\\/]\.gnupg(?:[\\/]|$)/i,
+  /[\\/]\.password-store(?:[\\/]|$)/i,
+  /[\\/]Library[\\/](?:Keychains|Cookies)(?:[\\/]|$)/i,
+  /[\\/]\.claude[\\/]\.credentials\.json$|[\\/]\.codex[\\/]auth\.json$/i,
+  /[\\/]Group Containers[\\/]2BUA8C4S2C\.com\.1password|Bitwarden CLI[\\/]data\.json/i,
+  /[\\/](?:Login Data|Cookies|key4\.db|logins\.json)$/i,
 ];
 
 const isSecret = (path: string) => SECRET_PATHS.some((re) => re.test(path));
 /** A whole folder of keys or sign-ins, copied or packed up at once. */
 const SECRET_FOLDER =
-  /[\\/](?:\.ssh|\.aws|\.gnupg|\.azure|\.kube|\.password-store|\.config[\\/](?:gcloud|gh))[\\/]?$/;
+  /[\\/](?:\.ssh|\.aws|\.gnupg|\.azure|\.kube|\.password-store|\.config[\\/](?:gcloud|gh))[\\/]?$/i;
 
 function secretsNamed(part: string, places: Places): boolean {
   if (SECRET_FILES.test(part)) return true;
@@ -1269,6 +1270,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
   const words = wordsOf(part);
   const prog = program(part);
   if (!prog) return undefined;
+  words[0] = prog;
   // `… | xargs rm -rf`: what it deletes is only known when it runs.
   if (prog === 'xargs') {
     const inner = unwrap(
@@ -1559,7 +1561,7 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     }
     // Run as the computer's administrator, wherever in the line.
     if (
-      /(?:^|[;&|\n(]\s*|\$\(\s*|`\s*)(?:sudo|doas|pkexec|gsudo|run0)\b/.test(script) ||
+      /(?:^|[;&|\n(]\s*|\$\(\s*|`\s*)(?:sudo|doas|pkexec|gsudo|run0)\b/i.test(script) ||
       /(?:^|[;&|\n]\s*)su(?:\s+-\S*)*(?:\s+[\w-]+)?\s*(?:$|[;&|]|-c\b)/.test(script)
     )
       risks.push(severe('privilege', 'run something as the computer’s administrator'));
