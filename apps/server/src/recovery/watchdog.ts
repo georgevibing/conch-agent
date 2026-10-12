@@ -152,11 +152,12 @@ export function watchTransition(
     (state.phase === 'booting' && booted) ||
     (state.phase === 'healthy' && elapsed >= limits.unhealthyMs * stretch(limits.unhealthyMs))
   ) {
-    const reductions = [
-      ...(state.reductions ?? []).filter((at) => event.at - at < limits.flapWindowMs),
-      event.at,
-    ];
-    if (reductions.length < limits.flapLimit)
+    const recent = (state.reductions ?? []).filter((at) => event.at - at < limits.flapWindowMs);
+    // A stretched cycle is a starved computer, not flapping: its reductions start every
+    // 90 s or so, and three of them in the window would restart a gateway that still answers.
+    const stretched = state.phase === 'healthy' && stretch(limits.unhealthyMs) > 1;
+    const reductions = stretched ? recent : [...recent, event.at];
+    if (stretched || reductions.length < limits.flapLimit)
       return { ...ticked, phase: 'reducing', since: event.at, shedAt: event.at, reductions };
     const frozen = state.heardAt === undefined || state.heardAt <= state.since;
     return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen, reductions };

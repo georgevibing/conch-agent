@@ -302,6 +302,23 @@ describe('independent gateway watchdog', () => {
     ]);
     watch.close();
   });
+  it('does not take a starved computer’s stretched cycles for flapping', () => {
+    const { child, watch } = world({ flapWindowMs: 1_000 });
+    const starved = { gatewayRssBytes: 200, memoryTotalBytes: 16_000, loadPerCpu: 2 };
+    const beat = (healthy: boolean) =>
+      child.emit('message', { type: 'conch.heartbeat', healthy, resource: starved });
+    for (let cycle = 0; cycle < 4; cycle++) {
+      beat(true);
+      for (let t = 0; t < 60; t += 5) {
+        vi.advanceTimersByTime(5);
+        beat(false);
+      }
+    }
+    expect(child.send.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(watch.failed()).toBe(false);
+    watch.close();
+  });
   it('never stretches a deadline for silence', () => {
     const { child, watch } = world();
     child.emit('message', {
