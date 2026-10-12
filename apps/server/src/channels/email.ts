@@ -601,20 +601,33 @@ export class EmailAdapter implements ChannelAdapter {
     const ownOnOther = this.secrets.provider === 'other' && from === this.#address;
     if (verdict === 'pass' && !ownOnOther) return 'ok';
     // Your own mail, sent from your phone, often isn't checked: it's yours if it's in your Sent mail.
-    if ((verdict === 'none' || ownOnOther) && from === this.#address && sent && email.messageId) {
+    // A check that says it's forged is never overruled, and the Sent copy must be this very
+    // email: a Message-ID alone proves nothing, as everyone you've written to has one of yours.
+    if (verdict !== 'fail' && from === this.#address && sent && email.messageId) {
       try {
         await client.mailboxOpen(sent, { readOnly: true });
         const inSent = await client.search(
           { header: { 'message-id': email.messageId } },
           { uid: true },
         );
+        const copy = inSent && inSent[0] ? await this.#sentCopy(client, inSent[0]) : undefined;
         await client.mailboxOpen('INBOX');
-        if (inSent && inSent.length) return 'ok';
+        if (copy && sameEmail(copy, email, this.#writeTo)) return 'ok';
       } catch {
         await client.mailboxOpen('INBOX').catch(() => undefined);
       }
     }
     return 'unverified';
+  }
+
+  async #sentCopy(client: ImapFlow, uid: number): Promise<Email | undefined> {
+    const message = await client.fetchOne(
+      String(uid),
+      { uid: true, size: true, source: true },
+      { uid: true },
+    );
+    if (!message || !message.source || (message.size ?? 0) > MAX_MESSAGE) return undefined;
+    return parseSource(message.source);
   }
 
   #imapError(error: unknown): ChannelError {
@@ -644,6 +657,17 @@ interface Cursor {
 function parseCursor(value: string | undefined): Cursor | undefined {
   const match = /^(\d+):(\d+)$/.exec(value ?? '');
   return match?.[1] && match[2] ? { validity: match[1], uid: Number(match[2]) } : undefined;
+}
+
+/** Whether the copy in Sent is the email that arrived: written to Conch, with the same subject. */
+function sameEmail(copy: Email, email: Email, writeTo: string): boolean {
+  const recipients = [...(copy.to ?? []), ...(copy.cc ?? [])].flatMap((a) =>
+    a.group ? a.group.map((g) => g.address) : [a.address],
+  );
+  return (
+    recipients.some((r) => normalHandle(r ?? '') === writeTo) &&
+    (copy.subject ?? '') === (email.subject ?? '')
+  );
 }
 
 /** For a server of your own: its checks are signed with its own name (its organisation's domain). */

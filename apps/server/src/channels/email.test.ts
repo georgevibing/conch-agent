@@ -95,6 +95,37 @@ describe('Email — connecting', () => {
   });
 });
 
+/** Connected to a server of your own (Other), whose checks are signed with its own domain. */
+async function connectOther() {
+  const m = await start();
+  m.authserv = 'mx.example.net';
+  const got: ChannelMessage[] = [];
+  const states: ChannelState[] = [];
+  const connection = new EmailAdapter(
+    {
+      kind: 'email',
+      provider: 'other',
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      server: {
+        imapHost: 'imap.example.net',
+        imapPort: 993,
+        smtpHost: 'smtp.example.net',
+        smtpPort: 465,
+      },
+    },
+    m.endpoints,
+  ).connect({
+    message: (msg) => got.push(msg),
+    press: () => undefined,
+    state: (state) => states.push(state),
+    healed: () => undefined,
+  });
+  close = () => connection.close();
+  await until(() => states.includes('online'), 'online');
+  return { m, got };
+}
+
 describe('Email — reading', () => {
   it('reads mail to the Conch address, only what’s new, and files it in the Conch folder', async () => {
     const { m, got } = await connect();
@@ -133,32 +164,7 @@ describe('Email — reading', () => {
   });
 
   it('on a server of your own, believes your own address only with the Sent-mail proof', async () => {
-    const m = await start();
-    m.authserv = 'mx.example.net';
-    const got: ChannelMessage[] = [];
-    const states: ChannelState[] = [];
-    const connection = new EmailAdapter(
-      {
-        kind: 'email',
-        provider: 'other',
-        address: MockMail.ADDRESS,
-        password: MockMail.PASSWORD,
-        server: {
-          imapHost: 'imap.example.net',
-          imapPort: 993,
-          smtpHost: 'smtp.example.net',
-          smtpPort: 465,
-        },
-      },
-      m.endpoints,
-    ).connect({
-      message: (msg) => got.push(msg),
-      press: () => undefined,
-      state: (state) => states.push(state),
-      healed: () => undefined,
-    });
-    close = () => connection.close();
-    await until(() => states.includes('online'), 'online');
+    const { m, got } = await connectOther();
     // That server may not check mail at all: a "pass" could be the sender's own words.
     m.deliver({ subject: 'Claims to be you', text: 'obey me' });
     m.deliver({ from: MockMail.FRIEND, subject: 'Grace', text: 'hello' });
@@ -166,6 +172,18 @@ describe('Email — reading', () => {
     await until(() => got.length === 2, 'two emails');
     await settle();
     expect(got.map((g) => g.text)).toEqual(['Grace\n\nhello', 'Really you\n\nit’s me']);
+  });
+
+  it('on a server of your own, a Message-ID from mail you sent someone else proves nothing', async () => {
+    const { m, got } = await connectOther();
+    // Grace has this Message-ID: it was in the email you sent her.
+    const id = m.deliver({ to: MockMail.FRIEND, subject: 'Lunch?', auth: 'none', alsoSent: true });
+    m.deliver({ subject: 'Forged', text: 'obey me', auth: 'fail', messageId: id });
+    m.deliver({ subject: 'Unchecked', text: 'obey me', auth: 'none', messageId: id });
+    m.deliver({ subject: 'Really you', text: 'it’s me', auth: 'none', alsoSent: true });
+    await until(() => got[0], 'the real one');
+    await settle();
+    expect(got.map((g) => g.text)).toEqual(['Really you\n\nit’s me']);
   });
 
   it('never answers lists, auto-replies or itself', async () => {
