@@ -188,7 +188,10 @@ describe('TurnWatch', () => {
     for (let i = 0; i < 6; i++) watch.call('shell', { i });
     expect(watch.outside().kind).toBe('go');
     watch.call('shell', { i: 7 });
-    expect(watch.outside()).toMatchObject({ kind: 'stop', pause: { reason: 'steps' } });
+    expect(watch.outside()).toMatchObject({
+      kind: 'stop',
+      pause: { reason: 'steps', message: expect.stringContaining('after 4 steps') },
+    });
   });
 
   it('writes stable JSON', () => {

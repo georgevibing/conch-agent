@@ -256,7 +256,7 @@ export class TurnWatch {
     const time = this.next();
     if (time.kind === 'stop' && time.pause.reason !== 'steps') return time;
     if (this.#calls > this.budget.steps * 2)
-      return { kind: 'stop', pause: pauseFor('steps', this.budget, this.#calls) };
+      return { kind: 'stop', pause: pauseFor('steps', this.budget, Math.ceil(this.#calls / 2)) };
     return GO;
   }
 }
