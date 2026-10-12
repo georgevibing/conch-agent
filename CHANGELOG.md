@@ -2,6 +2,36 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.10](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-12)
+
+
+### Features
+
+* **server:** Health says when Conch froze and started again ([ac1ea66](https://github.com/georgevibing/conch-agent/commit/ac1ea6616329eebee0fc8e3c18f78ed370e19513))
+
+
+### Bug Fixes
+
+* **server:** a command that sends SIGUSR1 can't open a debugger anyone here could use ([d1a0403](https://github.com/georgevibing/conch-agent/commit/d1a0403c9498fc85d821764e57319f80cc9a6a05))
+* **server:** a freeze's evidence names the source line, not a line of tsx's output ([e4e41d6](https://github.com/georgevibing/conch-agent/commit/e4e41d67019604914cf7c46ceae5cd5a477f0a05))
+* **server:** a frozen gateway that answers before its kill isn't killed ([e5219b5](https://github.com/georgevibing/conch-agent/commit/e5219b5388d6a5e237324fc730d1073a3452c141))
+* **server:** a frozen gateway's evidence is captured before it is stopped ([1240b36](https://github.com/georgevibing/conch-agent/commit/1240b3644b7218bd01832e84f050152029dc2ee9))
+* **server:** a gateway frozen when its supervisor dies doesn't hold the port forever ([184b01c](https://github.com/georgevibing/conch-agent/commit/184b01c4ff7fef520bce9a33d100d54f992306e0))
+* **server:** a gateway that keeps stalling briefly is seen, not just one that stalls long ([5497ed3](https://github.com/georgevibing/conch-agent/commit/5497ed3994542f43c6f59178a4b61fd66053fe32))
+* **server:** a gateway that's busy on its own isn't given longer because the computer is busy ([3b00d7a](https://github.com/georgevibing/conch-agent/commit/3b00d7a8e30862e1045d0f13658d96ec6f1cbff5))
+* **server:** a hold after one slow moment says Conch is catching up ([69e9042](https://github.com/georgevibing/conch-agent/commit/69e9042d34c6fd87a20ec95426dca567346e32fc))
+* **server:** a routine waiting for room on your plan still goes when it was just being held ([ab73f07](https://github.com/georgevibing/conch-agent/commit/ab73f077241b87db1aec151b62896a34554615a9))
+* **server:** a silent gateway's incident doesn't pass old numbers off as current ([b4322df](https://github.com/georgevibing/conch-agent/commit/b4322df19373818d9598ea8a7e23b0e579108e62))
+* **server:** a slow stretch counts for one whole interval, whoever looks in between ([b9e6f81](https://github.com/georgevibing/conch-agent/commit/b9e6f81a3d9144cda1805f630477936644d53f7e))
+* **server:** a starved computer's slow cycles are not taken for flapping ([01e89ae](https://github.com/georgevibing/conch-agent/commit/01e89ae0a3bb4f0a073f84b557ac6b245867a9b0))
+* **server:** a stretched reduction asks again only when the gateway will listen ([1b7c032](https://github.com/georgevibing/conch-agent/commit/1b7c0321b9f1d87a2ed1252cb4ec75c042a00210))
+* **server:** a supervisor whose ticks always come late still judges a frozen gateway ([6b38bea](https://github.com/georgevibing/conch-agent/commit/6b38bea1fe41e89d989618ff5b88a7e581b84c13))
+* **server:** Ctrl+C on a gateway that isn't answering doesn't wait fifteen seconds ([2745f0d](https://github.com/georgevibing/conch-agent/commit/2745f0db69f00db9003798977a7631e69c1d7561))
+* **server:** setting the clock back doesn't hold every command for as long ([50818cb](https://github.com/georgevibing/conch-agent/commit/50818cb35be5f0282887a9d7131247ab21b514f1))
+* **server:** the heaviest command is the one busy now, not one busy long ago ([66deb6a](https://github.com/georgevibing/conch-agent/commit/66deb6ae005bc20dd9a1f0b290c7cde461aa5150))
+* **server:** the supervisor says what happened to Conch and how long it waits ([809f498](https://github.com/georgevibing/conch-agent/commit/809f498f9c6a847712a30e5a112e80a1e446fd64))
+* **server:** where Conch was stuck keeps the unnamed function that called it ([9eeec05](https://github.com/georgevibing/conch-agent/commit/9eeec0587edfda1727899e4bd1f1ebef5e65f856))
+
 ## [0.1.0-alpha.9](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2026-10-12)
 
 ### New
