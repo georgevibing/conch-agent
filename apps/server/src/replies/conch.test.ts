@@ -74,7 +74,20 @@ describe('what counts as a number in a table', () => {
 });
 
 describe('a table worth a chart', () => {
-  it('has two rows or more and a column of numbers after the first', () => {
+  it('has three rows or more and a column of numbers after the first', () => {
+    expect(
+      chartable({
+        header: ['Year', 'Visitors'],
+        rows: [
+          ['2024', '1,200'],
+          ['2025', '1,800'],
+          ['2026', '2,100'],
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('is not two numbers: they read as well as they’d draw', () => {
     expect(
       chartable({
         header: ['Year', 'Visitors'],
@@ -83,7 +96,7 @@ describe('a table worth a chart', () => {
           ['2025', '1,800'],
         ],
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('is not a list whose only numbers name the rows', () => {
@@ -119,8 +132,87 @@ describe('a table worth a chart', () => {
           ['Jan', '80'],
           ['Feb', '—'],
           ['Mar', '64'],
+          ['Apr', '51'],
         ],
       }),
+    ).toBe(true);
+  });
+});
+
+describe('a table whose numbers aren’t the point', () => {
+  const offered = (rows: string[]) =>
+    conchReplies(table(rows), { tools: true }).some((r) => r.text === 'Show it as a chart');
+
+  it('is not a list of things to buy with a reason and a price for each', () => {
+    expect(
+      offered([
+        'Here’s a revamp:',
+        '',
+        '| Item | Why | Price |',
+        '|---|---|---|',
+        '| Navy blazer | Works with everything | $180 |',
+        '| White oxford shirt | Classic base | $45 |',
+        '| Chelsea boots | Smart-casual | $220 |',
+        '| Dark jeans | Dresses up or down | $90 |',
+      ]),
+    ).toBe(false);
+  });
+
+  it('is not amounts in different units, like a recipe', () => {
+    expect(
+      offered([
+        '| Ingredient | Amount |',
+        '|---|---|',
+        '| Flour | 200 g |',
+        '| Sugar | 50 g |',
+        '| Eggs | 2 |',
+        '| Milk | 250 ml |',
+      ]),
+    ).toBe(false);
+  });
+
+  it('is not the same number in every row', () => {
+    expect(
+      offered(['| Room | Beds |', '|---|---|', '| Blue | 2 |', '| Green | 2 |', '| Yellow | 2 |']),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['sizes', ['| Piece | Size |', '|---|---|', '| Jeans | 32 |', '| Shirt | 40 |']],
+    ['steps', ['| Step | Minutes |', '|---|---|', '| Preheat | 10 |', '| Bake | 25 |']],
+    [
+      'opening hours and phones',
+      ['| Store | Opens | Phone |', '|---|---|---|', '| A | 9 | 555 |', '| B | 10 | 556 |'],
+    ],
+  ])('is not two rows of %s', (_, rows) => expect(offered(rows)).toBe(false));
+
+  it('still offers real data: money by year, scores by team, spend by month', () => {
+    expect(
+      offered([
+        '| Year | Revenue |',
+        '|---|---|',
+        '| 2022 | $1.2m |',
+        '| 2023 | $1.8m |',
+        '| 2024 | $2.4m |',
+      ]),
+    ).toBe(true);
+    expect(
+      offered([
+        '| Team | Played | Points |',
+        '|---|---|---|',
+        '| Lions | 10 | 24 |',
+        '| Tigers | 10 | 19 |',
+        '| Bears | 10 | 12 |',
+      ]),
+    ).toBe(true);
+    expect(
+      offered([
+        '| Month | Groceries | Eating out | Note |',
+        '|---|---|---|---|',
+        '| Jan | €320 | €140 | |',
+        '| Feb | €295 | €210 | birthday |',
+        '| Mar | €310 | €95 | |',
+      ]),
     ).toBe(true);
   });
 });

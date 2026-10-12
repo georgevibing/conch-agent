@@ -92,19 +92,39 @@ const NUMBER =
 export const isNumber = (cell: string) => NUMBER.test(plain(cell));
 
 /**
- * Worth a chart: two rows or more, and a column of numbers that isn't the
- * first (the first names the rows: “Year | Event” is a list, not data).
- * Empty cells and dashes are gaps, not words.
+ * What a number is counted in: its money sign and its unit, “$” or “kg” or
+ * “%”. “k” and “m” are how big, not what of: “$800k” and “$1.2m” are both “$”.
+ */
+const unitOf = (cell: string) => {
+  const text = plain(cell);
+  const money = /[$€£¥]/.exec(text)?.[0] ?? '';
+  const after = text.replace(/^.*\d/, '').trim().toLowerCase();
+  return `${money}|${/^(k|m|bn|b)$/.test(after) ? '' : after}`;
+};
+
+const isGap = (cell: string) => !cell || /^[-–—]$/.test(cell);
+
+/**
+ * Worth a chart: the numbers are the point of the table, not a detail beside
+ * the words. Three rows or more (two numbers read as well as they'd draw), a
+ * column of numbers after the first (the first names the rows: “Year | Event”
+ * is a list, not data) counted in one unit and not the same in every row, and
+ * more such columns than columns of words: a list of things with a reason and
+ * a price each is a list to read. Empty cells and dashes are gaps, not words.
  */
 export function chartable(table: ReplyTable): boolean {
-  if (table.rows.length < 2 || table.header.length < 2) return false;
+  if (table.rows.length < 3 || table.header.length < 2) return false;
+  let measures = 0;
+  let words = 0;
   for (let column = 1; column < table.header.length; column++) {
-    const cells = table.rows
-      .map((row) => plain(row[column] ?? ''))
-      .filter((cell) => cell && !/^[-–—]$/.test(cell));
-    if (cells.length >= 2 && cells.every(isNumber)) return true;
+    const cells = table.rows.map((row) => plain(row[column] ?? '')).filter((c) => !isGap(c));
+    if (cells.length >= 3 && cells.every(isNumber)) {
+      const oneUnit = new Set(cells.map(unitOf)).size === 1;
+      const varies = new Set(cells.map((c) => c.replace(/\s/g, ''))).size > 1;
+      if (oneUnit && varies) measures++;
+    } else if (cells.length * 2 >= table.rows.length && !cells.every(isNumber)) words++;
   }
-  return false;
+  return measures > 0 && measures > words;
 }
 
 // ── The rules ───────────────────────────────────────────────────────────────

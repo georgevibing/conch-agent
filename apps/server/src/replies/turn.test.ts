@@ -18,7 +18,13 @@ import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { pickReplies, replyText, waitingOnYou } from './turn';
 
-const TABLE = ['| Month | Sales |', '| --- | --- |', '| May | 120 |', '| June | 180 |'].join('\n');
+const TABLE = [
+  '| Month | Sales |',
+  '| --- | --- |',
+  '| May | 120 |',
+  '| June | 180 |',
+  '| July | 150 |',
+].join('\n');
 
 let seq = 0;
 const ev = (event: Record<string, unknown>): ConversationEvent =>
