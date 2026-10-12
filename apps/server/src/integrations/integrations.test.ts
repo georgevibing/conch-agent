@@ -538,6 +538,43 @@ describe('SSRF guard', () => {
     }
   });
 
+  it('keeps the key and the body to the site they were for when redirected', async () => {
+    const calls: { url: string; method?: string; body?: unknown; headers: Headers }[] = [];
+    const hops: Record<string, Response> = {
+      'https://93.184.215.14/token': new Response(null, {
+        status: 303,
+        headers: { location: 'https://93.184.215.14/again' },
+      }),
+      'https://93.184.215.14/again': new Response(null, {
+        status: 307,
+        headers: { location: 'https://198.51.100.7/elsewhere' },
+      }),
+      'https://198.51.100.7/elsewhere': new Response('ok'),
+    };
+    const base = ((url: URL, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        method: init?.method,
+        body: init?.body,
+        headers: new Headers(init?.headers),
+      });
+      return Promise.resolve(hops[String(url)] ?? new Response('', { status: 404 }));
+    }) as typeof fetch;
+    const res = await guardedFetch('public', base)('https://93.184.215.14/token', {
+      method: 'POST',
+      body: 'secret=1',
+      headers: { authorization: 'Bearer KEY', 'content-type': 'text/plain', accept: 'x/y' },
+    });
+    expect(await res.text()).toBe('ok');
+    // 303: the same site, asked again with GET and no body.
+    expect(calls[1]).toMatchObject({ method: 'GET', body: undefined });
+    expect(calls[1]?.headers.get('authorization')).toBe('Bearer KEY');
+    expect(calls[1]?.headers.get('content-type')).toBeNull();
+    // Another site: no key.
+    expect(calls[2]?.headers.get('authorization')).toBeNull();
+    expect(calls[2]?.headers.get('accept')).toBe('x/y');
+  });
+
   it('refuses integrations at addresses it would never call', async () => {
     const { service } = await setup({ realCatalog: true });
     await expect(

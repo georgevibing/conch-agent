@@ -96,23 +96,43 @@ export async function checkEndpoint(url: URL, reach: Reach): Promise<void> {
 
 type Fetch = typeof fetch;
 
+/** What only the site it was meant for may see: a redirect elsewhere goes without them. */
+const CREDENTIALS = ['authorization', 'cookie', 'proxy-authorization'];
+/** What describes a body, dropped with it. */
+const BODY_HEADERS = ['content-type', 'content-length', 'content-encoding', 'content-language'];
+
 /**
  * `fetch` that checks every hop against `checkEndpoint`. Redirects are followed
- * by hand (at most 5) so a public server can't bounce us somewhere private.
+ * by hand (at most 5) so a public server can't bounce us somewhere private, the
+ * way `fetch` itself would: a 303 (or a POST's 301 or 302) asks again with GET and
+ * no body, and a hop to another site goes without the key or cookies.
  */
 export function guardedFetch(reach: Reach, base: Fetch = fetch): Fetch {
   return async (input, init) => {
     let url = new URL(input instanceof Request ? input.url : String(input));
+    let request: RequestInit = { ...init, headers: new Headers(init?.headers) };
     for (let hop = 0; hop < 6; hop++) {
       await checkEndpoint(url, reach);
       const response = await base(url, {
-        ...init,
+        ...request,
         redirect: 'manual',
         signal: init?.signal ?? AbortSignal.timeout(15_000),
       });
       const location = response.headers.get('location');
       if (response.status < 300 || response.status >= 400 || !location) return response;
-      url = new URL(location, url);
+      const next = new URL(location, url);
+      const headers = new Headers(request.headers);
+      const method = (request.method ?? 'GET').toUpperCase();
+      if (
+        (response.status === 303 && method !== 'HEAD') ||
+        ((response.status === 301 || response.status === 302) && method === 'POST')
+      ) {
+        for (const name of BODY_HEADERS) headers.delete(name);
+        request = { ...request, method: 'GET', body: undefined };
+      }
+      if (next.origin !== url.origin) for (const name of CREDENTIALS) headers.delete(name);
+      request = { ...request, headers };
+      url = next;
     }
     throw new EndpointError('Too many redirects.');
   };
