@@ -519,6 +519,47 @@ describe('independent gateway watchdog', () => {
     watch.close();
   });
 
+  it('stops a gateway that has stopped answering after the short grace, not the whole stop', () => {
+    const { child, watch } = world({ stopMs: 15_000, startupMs: 120_000 });
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(11);
+    expect(watch.stop('SIGINT')).toBe('unanswered');
+    expect(child.kill.mock.calls).toEqual([['SIGINT']]);
+    vi.advanceTimersByTime(2_500);
+    expect(child.kill.mock.calls).toEqual([['SIGINT'], ['SIGKILL']]);
+    expect(watch.failed()).toBe(false);
+    watch.close();
+  });
+  it('gives a gateway that still talks, or an old one that never does, the whole stop', () => {
+    const talking = world({ stopMs: 15_000, startupMs: 120_000 });
+    talking.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(10);
+    expect(talking.watch.stop()).toBe('asked');
+    vi.advanceTimersByTime(14_999);
+    expect(talking.child.kill.mock.calls).toEqual([['SIGTERM']]);
+    talking.watch.close();
+    const old = world({ stopMs: 15_000, enabled: false });
+    vi.advanceTimersByTime(60_000);
+    expect(old.watch.stop()).toBe('asked');
+    vi.advanceTimersByTime(14_999);
+    expect(old.child.kill.mock.calls).toEqual([['SIGTERM']]);
+    old.watch.close();
+  });
+  it('ends it at once when asked to stop again', () => {
+    const { child, watch } = world({ stopMs: 15_000 });
+    expect(watch.stop('SIGINT')).toBe('asked');
+    expect(watch.stop('SIGINT')).toBe('forced');
+    expect(child.kill.mock.calls).toEqual([['SIGINT'], ['SIGKILL']]);
+    watch.close();
+    // Already stopping by itself, the first request waits for it; the second does not.
+    const quitting = world({ stopMs: 15_000 });
+    quitting.child.emit('message', { type: 'conch.stopping' });
+    expect(quitting.watch.stop()).toBe('asked');
+    expect(quitting.child.kill).not.toHaveBeenCalled();
+    expect(quitting.watch.stop()).toBe('forced');
+    expect(quitting.child.kill.mock.calls).toEqual([['SIGKILL']]);
+    quitting.watch.close();
+  });
   it('bounds intentional shutdown without treating it as a crash', () => {
     const { child, watch } = world();
     child.emit('message', { type: 'conch.stopping' });

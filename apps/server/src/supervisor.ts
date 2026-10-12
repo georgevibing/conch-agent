@@ -189,9 +189,12 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
     const stop = () => {
       const first = !stopping;
       stopping = true;
-      // On POSIX the child runs in its own session and never sees Ctrl+C: pass it on.
-      if (platform !== 'win32') watching?.stop(signal);
-      else if (first && child) stopWindowsGateway(child, deps.watchdog?.stopMs);
+      // On POSIX the child runs in its own session and never sees Ctrl+C: pass it on. Asked
+      // again, the watchdog ends it at once.
+      if (platform !== 'win32') {
+        if (watching?.stop(signal) === 'unanswered')
+          log('\n  Conch isn’t answering, so it’s being stopped.\n');
+      } else if (first && child) stopWindowsGateway(child, deps.watchdog?.stopMs);
     };
     signals.set(signal, stop);
     process.on(signal, stop);

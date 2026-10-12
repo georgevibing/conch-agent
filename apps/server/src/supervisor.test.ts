@@ -506,6 +506,61 @@ describe('recovering without restarting forever', () => {
   });
 });
 
+describe('stopping a gateway that isn’t answering', () => {
+  /** Ctrl+C `times` over, `silentMs` after it started, to a gateway that only SIGKILL ends. */
+  async function interrupt(times: number, silentMs: number) {
+    const before = new Set(process.listeners('SIGINT'));
+    const kills: (NodeJS.Signals | number | undefined)[] = [];
+    const logs: string[] = [];
+    let now = 0;
+    const child = Object.assign(new EventEmitter(), {
+      kill: (signal?: NodeJS.Signals | number) => {
+        kills.push(signal);
+        if (signal === 'SIGKILL') queueMicrotask(() => child.emit('exit', null, signal));
+        return true;
+      },
+    });
+    const started = Date.now();
+    const code = await new Promise<number>((resolve) => {
+      void supervise({
+        home: tempHome(),
+        platform: 'linux',
+        now: () => now,
+        spawn: (() => {
+          queueMicrotask(() => {
+            now += silentMs;
+            for (let i = 0; i < times; i++)
+              for (const listener of process.listeners('SIGINT'))
+                if (!before.has(listener)) (listener as () => void)();
+          });
+          return child;
+        }) as never,
+        log: (message) => logs.push(message),
+        watchdog: { stopMs: 10_000, frozenStopMs: 20 },
+        exit: ((exitCode: number) => {
+          resolve(exitCode);
+          throw new Error('exit');
+        }) as never,
+      }).catch(() => undefined);
+    });
+    return { code, kills, logs: logs.join(''), took: Date.now() - started };
+  }
+
+  it('says so, and waits only a moment for one that has said nothing for a while', async () => {
+    const stopped = await interrupt(1, 60_000);
+    expect(stopped).toMatchObject({ code: 0, kills: ['SIGINT', 'SIGKILL'] });
+    expect(stopped.logs).toMatch(/Conch isn’t answering, so it’s being stopped/);
+    expect(stopped.took).toBeLessThan(5_000);
+  });
+
+  it('ends it at once on a second Ctrl+C', async () => {
+    const stopped = await interrupt(2, 0);
+    expect(stopped).toMatchObject({ code: 0, kills: ['SIGINT', 'SIGKILL'] });
+    expect(stopped.logs).not.toMatch(/answering/);
+    expect(stopped.took).toBeLessThan(5_000);
+  });
+});
+
 describe('stopping on Windows without losing what the gateway saves', () => {
   /** A gateway that stops by itself once its channel closes, unless told it's stuck. */
   function gateway(stuck = false) {

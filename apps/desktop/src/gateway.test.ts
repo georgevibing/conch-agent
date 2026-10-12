@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { readRecoveryState, saveRecoveryState } from '../../server/src/recovery/supervisor-state';
 
-import { Gateway, RESTART_CODE, type GatewayState } from './gateway';
+import { Gateway, RESTART_CODE, type GatewayDeps, type GatewayState } from './gateway';
 
 /** A gateway process, as far as the app can see one. */
 class FakeChild extends EventEmitter {
@@ -37,8 +37,14 @@ class FakeChild extends EventEmitter {
     this.connected = false;
     this.emit('exit', code, signal);
   }
+  /** Every signal it was sent. */
+  signals: NodeJS.Signals[] = [];
+  /** Frozen: only SIGKILL ends it. */
+  stuck = false;
   kill(signal: NodeJS.Signals) {
-    setTimeout(() => this.exit(null, signal), this.goodbyeMs);
+    this.signals.push(signal);
+    if (!this.stuck || signal === 'SIGKILL')
+      setTimeout(() => this.exit(null, signal), this.goodbyeMs);
     return true;
   }
   /** How long it takes to say goodbye once its channel closes. */
@@ -59,7 +65,7 @@ const homes: string[] = [];
 afterEach(() => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
-function world(existingHome?: string) {
+function world(existingHome?: string, watchdog?: GatewayDeps['watchdog']) {
   const home = existingHome ?? mkdtempSync(join(tmpdir(), 'conch-desktop-watch-'));
   if (!existingHome) homes.push(home);
   const children: FakeChild[] = [];
@@ -89,6 +95,7 @@ function world(existingHome?: string) {
         now += ms;
       },
       log: (text) => void logged.push(text),
+      watchdog,
     },
   );
   gateway.on('state', (state) => states.push(state));
@@ -263,7 +270,7 @@ describe('the gateway, kept running by the app', () => {
     await gateway.stop();
   });
 
-  it('stopped again while it’s still on its way out, waits for it quietly', async () => {
+  it('stopped again while it’s still on its way out, ends it and tells both once', async () => {
     const { gateway, latest, logged } = world();
     gateway.start();
     latest().goodbyeMs = 30;
@@ -276,6 +283,30 @@ describe('the gateway, kept running by the app', () => {
     await Promise.all([first, second]);
     expect(latest().running).toBe(false);
     expect(logged.join('')).not.toMatch(/IPC channel/);
+  });
+
+  it('quitting, gives a gateway that has stopped answering a moment, not fifteen seconds', async () => {
+    const { gateway, latest, later } = world(undefined, { frozenStopMs: 20 });
+    gateway.start();
+    latest().stuck = true;
+    later(60_000);
+    const started = Date.now();
+    await gateway.stop();
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(latest().signals).toEqual(['SIGTERM', 'SIGKILL']);
+  });
+
+  it('quit again while it won’t stop, ends it at once', async () => {
+    const { gateway, latest } = world();
+    gateway.start();
+    latest().stuck = true;
+    const first = gateway.stop();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(latest().signals).toEqual(['SIGTERM']);
+    const started = Date.now();
+    await Promise.all([first, gateway.stop()]);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(latest().signals).toEqual(['SIGTERM', 'SIGKILL']);
   });
 
   it('starts again once when its code changes, however often it changes on the way down', async () => {

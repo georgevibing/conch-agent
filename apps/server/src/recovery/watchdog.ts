@@ -91,7 +91,8 @@ export type WatchEvent =
   | { type: 'message'; at: number }
   | { type: 'booting'; at: number; phase: string }
   | { type: 'heartbeat'; at: number }
-  | { type: 'shutdown'; at: number; failed: boolean };
+  /** `frozen`: asked to stop while saying nothing, it can't run its handler either. */
+  | { type: 'shutdown'; at: number; failed: boolean; frozen?: boolean };
 export interface WatchLimits {
   startupMs: number;
   readyMs: number;
@@ -166,6 +167,7 @@ export function watchTransition(
       since: event.at,
       failed: event.failed,
       requested: !event.failed,
+      ...(event.frozen && { frozen: true }),
     };
   if (event.type === 'healthy') {
     const beats = [...(state.beats ?? []).filter((at) => event.at - at < healthWindow), event.at];
@@ -270,13 +272,20 @@ export function watchTransition(
   return ticked;
 }
 
+/**
+ * What a requested stop did: `asked` sent the signal (or found it already stopping),
+ * `unanswered` too but to a gateway that has said nothing lately, so it gets only the frozen
+ * grace, and `forced` (asked again) ended it at once.
+ */
+export type StopOutcome = 'asked' | 'unanswered' | 'forced';
+
 /** Watches from another event loop, so even a completely blocked gateway can recover. */
 export function watchGateway(
   child: ChildProcess,
   options: WatchdogOptions,
 ): {
   close: () => void;
-  stop: (signal?: NodeJS.Signals) => void;
+  stop: (signal?: NodeJS.Signals) => StopOutcome;
   failed: () => boolean;
 } {
   const now = options.now ?? (() => performance.now());
@@ -291,7 +300,9 @@ export function watchGateway(
     healthWindowMs: options.healthWindowMs ?? 2 * 60_000,
     healthyShare: options.healthyShare ?? 0.4,
   };
-  let state: WatchState = { phase: 'booting', since: now(), failed: false };
+  const started = now();
+  let state: WatchState = { phase: 'booting', since: started, failed: false };
+  let asked = 0;
   let resource: RecoveryResource | undefined;
   let measuredAt = 0;
   // A silent gateway's last numbers are from before it went quiet, not now: omit them after
@@ -363,11 +374,27 @@ export function watchGateway(
       if (state.failed && !state.frozen) child.kill('SIGTERM');
     }
   };
-  const stop = (signal: NodeJS.Signals = 'SIGTERM') => {
-    const terminating = state.phase === 'terminating';
-    // Already on its way out, it is only marked as asked to stop: never taken back.
-    apply({ type: 'shutdown', at: now(), failed: false });
-    if (!terminating) child.kill(signal);
+  const stop = (signal: NodeJS.Signals = 'SIGTERM'): StopOutcome => {
+    asked++;
+    if (state.phase === 'terminating') {
+      // Already on its way out, it is only marked as asked to stop: never taken back.
+      apply({ type: 'shutdown', at: now(), failed: false });
+      if (asked === 1) return 'asked';
+      // Asked again (a second Ctrl+C): don't make anyone wait any longer.
+      clearTimeout(forced);
+      children?.close();
+      child.kill('SIGKILL');
+      return 'forced';
+    }
+    // Silent for two heartbeats, its loop can't run a SIGTERM handler: the frozen grace will do.
+    // Not an old release that never sends any, nor this supervisor just back from a nap.
+    const silent =
+      options.enabled !== false &&
+      !state.napped &&
+      now() - (state.heardAt ?? started) > limits.pollMs * 2;
+    apply({ type: 'shutdown', at: now(), failed: false, frozen: silent });
+    child.kill(signal);
+    return silent ? 'unanswered' : 'asked';
   };
   const message = (value: unknown) => {
     if (!value || typeof value !== 'object' || !('type' in value)) return;

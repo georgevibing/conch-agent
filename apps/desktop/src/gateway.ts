@@ -71,6 +71,7 @@ export class Gateway extends EventEmitter<{
   message: [FromGateway];
 }> {
   #child?: ChildProcess;
+  #watch?: ReturnType<typeof watchGateway>;
   #state: GatewayState = { kind: 'starting' };
   #recovery: RecoveryState = { failures: [], incidents: [] };
   #home?: string;
@@ -154,7 +155,7 @@ export class Gateway extends EventEmitter<{
       detached: process.platform !== 'win32',
     });
     this.#child = child;
-    const watch = watchGateway(child, {
+    const watch = (this.#watch = watchGateway(child, {
       ...this.deps.watchdog,
       processGroup: process.platform !== 'win32',
       now: this.deps.now,
@@ -169,7 +170,7 @@ export class Gateway extends EventEmitter<{
         clearRecovery(this.#recovery);
         this.#record('repaired');
       },
-    });
+    }));
     this.#set({ kind: 'starting' });
     const out = (chunk: Buffer | string) => {
       const text = String(chunk);
@@ -192,7 +193,10 @@ export class Gateway extends EventEmitter<{
       if (exited) return;
       exited = true;
       watch.close();
-      if (this.#child === child) this.#child = undefined;
+      if (this.#child === child) {
+        this.#child = undefined;
+        this.#watch = undefined;
+      }
       void this.#exited(watch.failed() ? 1 : code, signal);
     };
     child.once('exit', done);
@@ -286,8 +290,9 @@ export class Gateway extends EventEmitter<{
 
   /**
    * Stop it and wait until it has: asked nicely, then told after fifteen
-   * seconds. Resolves at once when it isn't running; asked again while it's
-   * on its way out, waits for the same goodbye.
+   * seconds, or after a moment when it has stopped answering. Resolves at once
+   * when it isn't running; asked again while it's on its way out (Quit twice),
+   * ends it now and waits for the same goodbye.
    */
   async stop(timeoutMs = 15_000): Promise<void> {
     // Stopping for good (quitting, installing an update) wins over a restart under way.
@@ -300,16 +305,22 @@ export class Gateway extends EventEmitter<{
     this.#cooling = undefined;
     const child = this.#child;
     if (!child || child.exitCode !== null) return;
-    this.#goodbye ??= new Promise<void>((resolve) => {
+    if (this.#goodbye) {
+      if (process.platform === 'win32') child.kill('SIGKILL');
+      else this.#watch?.stop();
+      return this.#goodbye;
+    }
+    this.#goodbye = new Promise<void>((resolve) => {
       const forced = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
       child.once('exit', () => {
         clearTimeout(forced);
         this.#goodbye = undefined;
         resolve();
       });
-      // Windows has no SIGTERM: closing the channel is the gateway's cue to stop.
+      // Windows has no SIGTERM: closing the channel is the gateway's cue to stop. Elsewhere the
+      // watchdog sends it, and gives a gateway that has stopped answering only a moment.
       if (process.platform === 'win32' && child.connected) child.disconnect();
-      else child.kill('SIGTERM');
+      else this.#watch?.stop('SIGTERM');
     });
     await this.#goodbye;
   }
