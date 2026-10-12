@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ProcessService } from '../processes/service';
 import { GatewayRecovery } from './gateway';
 import type { WorkloadPace } from './pace';
 import { resourcePolicy } from './resources';
@@ -178,6 +179,39 @@ describe('gateway recovery', () => {
     recovery.stop();
     recovery.receive({ type: 'conch.recover' });
     expect(deps.relieve).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds work after a freeze for Conch’s recovery, never saying memory ran short', async () => {
+    const processes = new ProcessService({
+      protectedPaths: [],
+      sealed: async () => false,
+      resources: async () => healthy(),
+    });
+    const { deps } = setup();
+    const relieve = vi.fn((cause: WorkloadPace['cause']) => processes.relievePressure(cause));
+    const recovery = new GatewayRecovery({
+      ...deps,
+      relieve,
+      sample: () => processes.resourceSnapshot(),
+      admit: () => processes.workload.phase === 'normal',
+      pace: () => processes.workload,
+    });
+    try {
+      await recovery.start(async () => true);
+      expect(recovery.room()).toEqual({ room: true });
+      recovery.receive({ type: 'conch.recover' });
+      expect(relieve).toHaveBeenCalledWith('recovery');
+      await vi.waitFor(() =>
+        expect(deps.note).toHaveBeenCalledWith('Held new commands a moment to stay responsive'),
+      );
+      expect(processes.workload).toMatchObject({ phase: 'held', cause: 'recovery' });
+      const room = recovery.room();
+      expect(room.room ? undefined : room.reason).toBe('recovering');
+      expect(room.room ? '' : room.why).not.toContain('memory');
+    } finally {
+      recovery.stop();
+      processes.close();
+    }
   });
 
   it('keeps recovery mode until an explicit repair after stable health', async () => {

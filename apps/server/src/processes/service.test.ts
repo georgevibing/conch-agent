@@ -233,8 +233,8 @@ describe('managed commands', () => {
     const { service, start, read } = await setup();
     const older = await start('node -e "setInterval(()=>{},1000)"');
     const newer = await start('node -e "setInterval(()=>{},1000)"');
-    expect((await service.relievePressure()).stopped).toBe(1);
-    expect((await service.relievePressure()).stopped).toBe(0);
+    expect((await service.relievePressure('memory')).stopped).toBe(1);
+    expect((await service.relievePressure('memory')).stopped).toBe(0);
     expect((await read(newer.id)).status).toBe('stopped');
     expect((await read(older.id)).status).toBe('running');
   });
@@ -253,7 +253,7 @@ describe('managed commands', () => {
     const { service, start, read } = await setup({ usage });
     const heavy = await start('node -e "setInterval(()=>{},1000)"');
     const light = await start('node -e "setInterval(()=>{},1000)"');
-    expect((await service.relievePressure()).stopped).toBe(1);
+    expect((await service.relievePressure('memory')).stopped).toBe(1);
     expect(usage).toHaveBeenCalledOnce();
     expect(usage.mock.calls[0]?.[0]).toHaveLength(2);
     expect((await read(heavy.id)).status).toBe('stopped');
@@ -271,7 +271,7 @@ describe('managed commands', () => {
         () => read(heavy.id),
         (v) => v.output.includes('held'),
       );
-      expect((await service.relievePressure()).stopped).toBe(1);
+      expect((await service.relievePressure('memory')).stopped).toBe(1);
       expect((await read(heavy.id)).status).toBe('stopped');
       expect((await read(light.id)).status).toBe('running');
     },

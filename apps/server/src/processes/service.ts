@@ -151,14 +151,17 @@ export class ProcessService {
   /**
    * Shed only a managed job, never arbitrary host processes: the one whose whole
    * process tree uses the most, the newest when none can be measured. Never
-   * replay its command.
+   * replay its command. The hold that follows names the caller's `cause`, so a
+   * gateway that stopped answering isn't reported as memory running short.
    */
-  async relievePressure(): Promise<{ stopped: number; queued: number }> {
+  async relievePressure(
+    cause: WorkloadPace['cause'],
+  ): Promise<{ stopped: number; queued: number }> {
     const queued = () => [...this.#sessions.values()].filter((s) => s.status === 'queued').length;
     const now = (this.deps.now ?? Date.now)();
     if (now < this.#pausedUntil) return { stopped: 0, queued: queued() };
     this.#pausedUntil = now + 30_000;
-    this.#pace.hold('memory');
+    this.#pace.hold(cause);
     for (const session of this.#sessions.values())
       if (session.status === 'queued')
         session.reason = this.#admissionPaused ?? 'Waiting briefly for this computer to recover.';
@@ -225,7 +228,7 @@ export class ProcessService {
       if (resources.level === 'critical') {
         this.#criticalSince ??= now;
         if (now - this.#criticalSince >= 15_000 && now >= this.#pausedUntil)
-          await this.relievePressure();
+          await this.relievePressure('memory');
       } else this.#criticalSince = undefined;
       const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
       const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued');

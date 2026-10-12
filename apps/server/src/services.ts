@@ -606,7 +606,7 @@ export class Services {
       pace: () => this.processes.workload,
       // A pause the person chose goes on while the processor is busy; memory still holds it.
       admitPlanned: () => admitsPlanned(this.processes.workload),
-      relieve: () => this.processes.relievePressure(),
+      relieve: (cause) => this.processes.relievePressure(cause),
       pause: (reason) => this.processes.pauseAdmission(reason),
       resume: () => this.processes.resumeAdmission(),
       note: (message) => void this.healed.note('gateway', message),
