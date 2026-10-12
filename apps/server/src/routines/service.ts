@@ -561,6 +561,8 @@ export class RoutineService {
     for (const [routineId, held] of this.#roomWait) {
       // Until the plan resets, unless a person changed what it waits for.
       if (!now && held.until !== undefined && this.#now < held.until) continue;
+      // The run that was held may still be finishing: it keeps its place for the next look.
+      if (this.#running.has(routineId) || this.#claimed.has(routineId)) continue;
       const routine = await this.deps.store.get(routineId).catch(() => undefined);
       if (!routine || routine.status !== 'active') {
         this.#roomWait.delete(routineId);

@@ -222,10 +222,15 @@ describe('routines and spending', () => {
         source: 'Claude Max',
         windows: [{ id: 'session', label: 'Now', usedPercent: 10, severity: 'normal' }],
       });
-      // It goes when the plan resets.
+      // It goes when the plan resets: at the next look, or the one after when the
+      // held run was still finishing its own bookkeeping (it keeps its place).
       Date.now = () => realNow() + 61_000 + 0.7 * HOUR;
-      await s.routines.checkNow();
-      await runs(s, r.id, 2);
+      for (let i = 0; i < 50 && (await s.routines.detail(r.id)).runs.length < 2; i++) {
+        await s.routines.checkNow();
+        await new Promise((done) => setTimeout(done, 20));
+      }
+      const [, ...earlier] = await runs(s, r.id, 2);
+      expect(earlier.map((run) => run.guard)).toEqual(['plan-room']);
       expect(await settled(s, r.id)).toMatchObject({ trigger: 'catch-up', status: 'succeeded' });
       expect((await s.routines.detail(r.id)).routine.status).toBe('completed');
     } finally {
