@@ -238,6 +238,24 @@ describe('managed commands', () => {
     expect((await read(newer.id)).status).toBe('stopped');
     expect((await read(older.id)).status).toBe('running');
   });
+  it('times the relief hold on the monotonic clock, not the wall clock', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'performance'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-12T12:00:00Z'));
+      const { service, start, read } = await setup();
+      const older = await start('node -e "setInterval(()=>{},1000)"');
+      const newer = await start('node -e "setInterval(()=>{},1000)"');
+      expect((await service.relievePressure('memory')).stopped).toBe(1);
+      expect((await read(newer.id)).status).toBe('stopped');
+      vi.advanceTimersByTime(31_000);
+      // The wall clock is set back an hour (NTP, a time zone fix, a dead battery).
+      vi.setSystemTime(new Date('2026-10-12T11:00:31Z'));
+      expect((await service.relievePressure('memory')).stopped).toBe(1);
+      expect((await read(older.id)).status).toBe('stopped');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('sheds the heaviest managed job, not the newest, and only measures managed trees', async () => {
     const usage = vi.fn(
       async (roots: number[]) =>

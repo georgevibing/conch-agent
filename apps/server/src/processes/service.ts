@@ -117,7 +117,7 @@ export class ProcessService {
   }
   resourceSnapshot(): Promise<ResourceSnapshot> {
     // All chats share the gateway's monitor. Tool bursts cannot trigger bursts of OS reads.
-    const now = (this.deps.now ?? (() => performance.now()))();
+    const now = this.#now();
     if (this.#failedAt !== undefined && now >= this.#failedAt && now - this.#failedAt < 1000)
       return Promise.reject(new Error('Resource sampling is waiting before checking again.'));
     if (this.#sample && now >= this.#sample.at && now - this.#sample.at < 1000)
@@ -131,14 +131,14 @@ export class ProcessService {
             timer = setTimeout(() => reject(new Error('Resource sampling timed out.')), 2000);
           }),
         ]);
-        this.#sample = { at: (this.deps.now ?? (() => performance.now()))(), value: sample };
+        this.#sample = { at: this.#now(), value: sample };
         this.#failedAt = undefined;
         if (this.#admissionPaused) this.#pace.hold('recovery');
         else this.#pace.observe(sample);
         return sample;
       } catch (error) {
         this.#sample = undefined;
-        this.#failedAt = (this.deps.now ?? (() => performance.now()))();
+        this.#failedAt = this.#now();
         this.#pace.hold();
         throw error;
       } finally {
@@ -147,6 +147,13 @@ export class ProcessService {
       }
     })();
     return this.#sampling;
+  }
+  /**
+   * The monotonic clock for holds, cooldowns and deadlines: setting the wall clock
+   * back must not hold every command for as long as it went back.
+   */
+  #now(): number {
+    return (this.deps.now ?? (() => performance.now()))();
   }
   /**
    * Shed only a managed job, never arbitrary host processes: the one whose whole
@@ -158,7 +165,7 @@ export class ProcessService {
     cause: WorkloadPace['cause'],
   ): Promise<{ stopped: number; queued: number }> {
     const queued = () => [...this.#sessions.values()].filter((s) => s.status === 'queued').length;
-    const now = (this.deps.now ?? Date.now)();
+    const now = this.#now();
     if (now < this.#pausedUntil) return { stopped: 0, queued: queued() };
     this.#pausedUntil = now + 30_000;
     this.#pace.hold(cause);
@@ -224,7 +231,7 @@ export class ProcessService {
       }
       const resources = await this.resourceSnapshot();
       if (this.#closed) return;
-      const now = (this.deps.now ?? Date.now)();
+      const now = this.#now();
       if (resources.level === 'critical') {
         this.#criticalSince ??= now;
         if (now - this.#criticalSince >= 15_000 && now >= this.#pausedUntil)
@@ -266,7 +273,7 @@ export class ProcessService {
       group: 'Tasks',
       title: 'Managed commands',
       run: async ({ repair }) => {
-        const now = (this.deps.now ?? Date.now)();
+        const now = this.#now();
         const overdue = [...this.#sessions.values()].filter(
           (s) => (s.status === 'running' || s.status === 'queued') && s.deadline <= now,
         );
@@ -462,7 +469,7 @@ export class ProcessService {
             status: 'queued',
             exitCode: null,
             at: Date.now(),
-            deadline: (this.deps.now ?? Date.now)() + Number(args.timeout_ms),
+            deadline: this.#now() + Number(args.timeout_ms),
             unsealed,
             reason: 'Checking available resources before starting.',
             cancel: () => ctx.signal.removeEventListener('abort', onAbort),
@@ -472,7 +479,7 @@ export class ProcessService {
                 this.#stop(session);
                 return;
               }
-              if (session.deadline <= (this.deps.now ?? Date.now)()) {
+              if (session.deadline <= this.#now()) {
                 this.#stop(session, 'timed-out');
                 return;
               }
@@ -588,13 +595,15 @@ export class ProcessService {
           if (args.id && Number(args.wait_ms) > 0) {
             const session = this.#own(ctx.conversationId, String(args.id));
             const offset = args.offset === undefined ? session.end : Number(args.offset);
-            const until = Date.now() + Number(args.wait_ms);
+            const until = performance.now() + Number(args.wait_ms);
             while (
               (session.status === 'running' || session.status === 'queued') &&
               session.end <= offset &&
-              Date.now() < until
+              performance.now() < until
             )
-              await delay(Math.min(100, until - Date.now()), undefined, { signal: ctx.signal });
+              await delay(Math.min(100, until - performance.now()), undefined, {
+                signal: ctx.signal,
+              });
           }
           // What a command printed marks the chat as that command would in a Bash call: a
           // download, a page, GitHub's issues or CI logs. A build's or a test's own output is
