@@ -50,7 +50,7 @@ export interface LiveChartProps extends Omit<ComponentProps<'figure'>, 'children
   windowLabel?: string;
 }
 
-const color = (series: LiveSeries, i: number) => series.color ?? `var(--nc-chart-${i + 1})`;
+const color = (series: LiveSeries, i: number) => series.color ?? `var(--nc-chart-${(i % 8) + 1})`;
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);

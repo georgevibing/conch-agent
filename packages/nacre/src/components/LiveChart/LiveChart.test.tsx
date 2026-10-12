@@ -52,6 +52,21 @@ describe('LiveChart', () => {
     await expectAccessible(container);
   });
 
+  it('wraps its colours past the eighth series, as every chart does', () => {
+    const { container } = renderNacre(
+      <LiveChart
+        title="Cores"
+        times={times}
+        series={Array.from({ length: 9 }, (_, i) => ({
+          id: `c${i}`,
+          label: `Core ${i + 1}`,
+          values: [1, 2, 3, 4],
+        }))}
+      />,
+    );
+    expect(container.querySelector('path[style*="chart-9"]')).toBeNull();
+  });
+
   it('shows every series at the moment under the pointer', () => {
     const { container } = renderNacre(
       <LiveChart
