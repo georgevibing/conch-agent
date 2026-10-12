@@ -892,7 +892,10 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         : severe('infra', 'deploy where people can reach it', true, deploy);
   }
   if (prog === 'gh') {
-    if (/\b(?:repo\s+delete|release\s+delete|secret\s+(?:set|delete)|variable\s+set)\b/.test(sub))
+    if (
+      /\b(?:repo\s+delete|release\s+delete|secret\s+(?:set|delete)|variable\s+set)\b/.test(sub) ||
+      /\bapi\b.*(?:\s(?:-X|--method)\s*=?\s*DELETE\b)/i.test(` ${sub}`)
+    )
       return severe(
         'infra',
         'delete a repository or change its secrets',

@@ -716,4 +716,14 @@ describe('the same step written another way', () => {
     ])
       expect(asks(bash(command), false), command).toBe(true);
   });
+
+  it('asks before deleting on GitHub through gh api, as gh repo delete does', () => {
+    for (const command of [
+      'gh api -X DELETE repos/ada/shop',
+      'gh api --method DELETE repos/ada/shop/releases/1',
+      'gh api --method=DELETE repos/ada/shop/git/refs/heads/main',
+    ])
+      expect(asks(bash(command), false), command).toBe(true);
+    expect(assessRisk('Bash', { command: 'gh api repos/ada/shop/pulls' }, ctx)).toBeUndefined();
+  });
 });
