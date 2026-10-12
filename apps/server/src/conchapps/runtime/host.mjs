@@ -131,6 +131,8 @@ const nextTick = real.nextTick.bind(real);
 const hrtime = real.hrtime.bind(real);
 const hrtimeBigint = real.hrtime.bigint.bind(real.hrtime);
 const uptime = real.uptime.bind(real);
+const rss = real.memoryUsage.rss.bind(real.memoryUsage);
+const every = globalThis.setInterval;
 const HOST_URL = import.meta.url;
 const { URL } = globalThis;
 const { parse: jsonParse, stringify: jsonStringify } = JSON;
@@ -142,6 +144,18 @@ const BufferConcat = Buffer.concat.bind(Buffer);
 
 /** What comes in on stdin, per line: more than any message the gateway sends. */
 const MAX_IN = 16 * 1024 * 1024;
+
+/**
+ * The most memory the process may hold. `--max-old-space-size` bounds only
+ * the JavaScript heap: buffers and typed arrays live outside it, so the
+ * whole process is watched here, and stopped past this.
+ */
+const MAX_RSS = 640 * 1024 * 1024;
+every(() => {
+  if (rss() <= MAX_RSS) return;
+  writeErr('This app used more memory than Conch allows (640 MB), so it was stopped.\n');
+  exit(1);
+}, 200).unref();
 
 let wire;
 try {

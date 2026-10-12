@@ -1080,6 +1080,18 @@ describe('the process’s life', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('stops a process that holds more memory than it may, buffers too', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('hoard', 'const kept = []; for (let i = 0; i < 12; i++) { kept.push(new Uint8Array(64 * 1024 * 1024).fill(1)); await new Promise((r) => setTimeout(r, 100)); } return String(kept.length);')}
+      ${tool('fine', 'return "fine";')}
+    };`);
+    const runtime = start(app);
+    const got = await runtime.call('hoard', {});
+    expect(got.ok).toBe(false);
+    expect(runtime.log).toMatch(/more memory/);
+    expect(await runtime.call('fine', {})).toEqual({ ok: true, text: 'fine' });
+  });
+
   it('logs what the app writes with app.log', async () => {
     const app = await makeApp(
       `export const tools = { ${tool('note', 'app.log("watered", { plant: "fern" }); return app.now();')} };`,
