@@ -125,6 +125,8 @@ export class TurnTracker {
     }
   >();
   #ready?: Promise<void>;
+  /** Commands ran at the same time since the last look. */
+  #together = false;
 
   constructor(private readonly deps: TrackerDeps) {}
 
@@ -166,9 +168,17 @@ export class TurnTracker {
       });
       return;
     }
-    // Anything else could change the work folder: look again first, so only its own changes count.
-    if (this.#folder) this.#folder = await this.#scan(this.#folder);
+    // Anything else could change the work folder: look again first, so only its own changes
+    // count. Not while another is running: its changes so far would be lost in the look, and
+    // which of the two made what can't be told, so what they changed together is the turn's.
+    if (this.#running()) this.#together = true;
+    else if (this.#folder) this.#folder = await this.#scan(this.#folder);
     this.#pending.set(toolUseId, { name: toolName, input });
+  }
+
+  /** A command (anything but a file tool) is still running. */
+  #running(): boolean {
+    return [...this.#pending.values()].some((call) => !call.file);
   }
 
   /** Just after it: what it changed, saved as one change set. */
@@ -197,6 +207,11 @@ export class TurnTracker {
         if (now) this.#folder.set(rel, now);
         else this.#folder.delete(rel);
       }
+    } else if (this.#running()) {
+      return undefined;
+    } else if (this.#together) {
+      this.#together = false;
+      return this.#save(await this.#compare(), 'Changed during this turn');
     } else if (this.#folder) {
       files = await this.#compare();
     }

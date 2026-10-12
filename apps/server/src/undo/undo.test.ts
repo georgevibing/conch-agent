@@ -122,6 +122,25 @@ describe('noticing what changed', () => {
     ]);
   });
 
+  it('commands that ran at once: their changes are the turn’s, none lost or put on the wrong one', async () => {
+    const { tracker } = setup();
+    const t = tracker();
+    await t.begin();
+    await t.before('a', 'Bash', { command: 'a' });
+    writeFileSync(join(work, 'from-a.txt'), 'a');
+    await t.before('b', 'Bash', { command: 'b' });
+    writeFileSync(join(work, 'from-b.txt'), 'b');
+    expect(await t.after('a')).toBeUndefined();
+    const set = await t.after('b');
+    expect(set).toMatchObject({ label: 'Changed during this turn' });
+    expect(set?.toolUseId).toBeUndefined();
+    expect(set?.files.map((f) => f.shown)).toEqual(['from-a.txt', 'from-b.txt']);
+    // One after them is its own again.
+    await t.before('c', 'Bash', { command: 'c' });
+    writeFileSync(join(work, 'from-c.txt'), 'c');
+    expect(await t.after('c')).toMatchObject({ label: 'Bash c', files: [{ shown: 'from-c.txt' }] });
+  });
+
   it('what a turn changed some other way (another provider) is the turn’s', async () => {
     const { tracker } = setup();
     const t = tracker();
