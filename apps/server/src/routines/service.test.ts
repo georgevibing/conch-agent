@@ -367,12 +367,13 @@ describe('RoutineService', () => {
     let paused = false;
     // While the clock saves the first, the person pauses the second.
     vi.spyOn(store, 'save').mockImplementation(async (routine) => {
-      await save(routine);
+      const saved = await save(routine);
       if (!paused && routine.id === first.id) {
         paused = true;
         const current = await store.get(second.id);
         if (current) await save({ ...current, status: 'paused' });
       }
+      return saved;
     });
     try {
       Date.now = () => realNow() + HOUR + 1000;
