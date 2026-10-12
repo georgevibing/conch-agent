@@ -24,11 +24,15 @@ import { gistIn } from '../memory/guard';
 import { SECRET } from '../skills/learn';
 import type { Change } from './review';
 
+// A password manager, a loan officer or a star sign isn't one: a password itself, a loan, an illness is.
 const HEALTH_OR_MONEY =
-  /\b(?:diagnos\w*|medication\w*|prescri\w*|therap(?:y|ist)\w*|depress\w*|anxiety|disorder|illness|disease|pregnan\w*|hiv|cancer|surgery|salary|salaries|income|debt\w*|loan\w*|mortgage|bank account|account number|credit card|card number|iban|ssn|social security|net worth|password\w*|passcode|pin code)\b/i;
+  /\b(?:diagnos\w*|medication\w*|prescri\w*|therap(?:y|ist)\w*|depress\w*|anxiety|disorder|illness|disease|pregnan\w*|hiv|cancer(?!\s*(?:\(born|sign\b|zodiac))|surgery|salary|salaries|income|debt\w*|loans?(?!\s+(?:officer|broker|adviser|advisor|processor|underwriter)s?\b)|mortgage|bank account|account number|credit card|card number|iban|ssn|social security|net worth|pass(?:word|code|phrase)s?\s*(?:is|was|are|[:=])|pin code)(?![\w-])/i;
 /** About the assistant, or an order to it: never a memory about the person. */
 const ABOUT_ASSISTANT =
-  /\b(?:the assistant|assistant should|you should|you must|you will|system prompt|from now on|going forward|ignore (?:all|any|previous|the)|previous instructions|jailbreak|developer mode)\b/i;
+  /\b(?:the assistant|assistant should|you should|you must|you will|system prompt|ignore (?:all|any|previous|the)|previous instructions|jailbreak|developer mode)\b/i;
+/** “From now on…” is an order, unless it says what the person prefers (“Prefers German from now on”). */
+const LATER = /\b(?:from now on|going forward)\b/i;
+const ABOUT_THEM = /^\s*(?:prefers|likes|wants|uses|would (?:like|rather))\b/i;
 /** An imperative ("Always say…", "Use…"), not a statement about the person ("Always uses metric"). */
 const ORDER =
   /^\s*(?:(?:always|never|please)\s+)?(?:do|don'?t|use|reply|respond|answer|write|say|ignore|remember|forget|send|open|run|delete|mention|include|call|ask|tell)\b/i;
@@ -133,7 +137,12 @@ export function dropWhy(
     return 'it doesn’t rest on words you wrote';
   if (SECRET.test(text) || (ctx.redact && ctx.redact(text) !== text)) return 'something secret';
   if (HEALTH_OR_MONEY.test(text)) return 'health or money';
-  if (ABOUT_ASSISTANT.test(text) || ORDER.test(text)) return 'about the assistant, or an order';
+  if (
+    ABOUT_ASSISTANT.test(text) ||
+    ORDER.test(text) ||
+    (LATER.test(text) && !ABOUT_THEM.test(text))
+  )
+    return 'about the assistant, or an order';
   if (POWER.test(text) || taskPermission(text)) return 'a power';
   if (ctx.refused?.exact) return 'you took it back once';
   if (change.op === 'supersede') {

@@ -97,11 +97,36 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     ).toBe('drop');
   });
 
+  it('everyday facts that only sound like health, money or a secret: applied', () => {
+    for (const text of [
+      'Uses 1Password as their password manager',
+      'Uses Bitwarden for passwords',
+      'Works as a loan officer at a bank',
+      'Is a Cancer (born in July)',
+    ])
+      expect(gate(add(text, text), ctx({ said: [text] })), text).toEqual({ verdict: 'apply' });
+    // What they look like stays out.
+    for (const text of [
+      'Their password is tulip77',
+      'Has a student loan',
+      'Is being treated for cancer',
+    ])
+      expect(gate(add(text, text), ctx({ said: [text] })), text).toMatchObject({
+        why: expect.stringMatching(/health or money|secret/),
+      });
+  });
+
   it('about the assistant, or an order to it: dropped', () => {
     expect(gate(add('The assistant should always answer in French'), ctx()).verdict).toBe('drop');
     expect(gate(add('Always reply in French'), ctx()).verdict).toBe('drop');
     expect(gate(add('Use TypeScript for every example'), ctx()).verdict).toBe('drop');
-    // A statement about the person is fine, even with "always".
+    const later = 'From now on, reply in German';
+    expect(gate(add(later, later), ctx({ said: [later] }))).toMatchObject({
+      why: 'about the assistant, or an order',
+    });
+    // A statement about the person is fine, even with "always" or "from now on".
+    const prefers = 'Prefers replies in German from now on';
+    expect(gate(add(prefers, prefers), ctx({ said: [prefers] }))).toEqual({ verdict: 'apply' });
     expect(gate(add('Always uses TypeScript at work'), ctx()).verdict).toBe('apply');
     expect(
       gate(add('Prefers step-by-step instructions', 'give me step-by-step instructions'), ctx())
