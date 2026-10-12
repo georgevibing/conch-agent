@@ -85,6 +85,16 @@ describe('TerminalSession', () => {
     expect(replay.startsWith('x')).toBe(true);
   });
 
+  it('cuts scrollback with no line break in it at a whole character', async () => {
+    const { pty, print } = fakePty();
+    const session = new TerminalSession(meta, pty, hooks);
+    print('€'.repeat(800_000));
+    await new Promise((r) => setTimeout(r, 20));
+    const later = watcher();
+    session.attach(later.w);
+    expect(later.output().startsWith('€')).toBe(true);
+  });
+
   it('pauses the shell while a viewer can’t keep up, and resumes once it has', async () => {
     const { pty, print } = fakePty();
     const session = new TerminalSession(meta, pty, hooks);

@@ -132,7 +132,10 @@ export class TerminalSession {
       const first = this.#chunks[0];
       const excess = this.#bytes - SCROLLBACK_BYTES;
       const cut = first.indexOf(0x0a, excess);
-      const kept = first.subarray(cut === -1 ? excess : cut + 1);
+      // No line break: at the next whole character, never inside one (UTF-8 continuation bytes).
+      let start = excess;
+      while (cut === -1 && start < first.length && ((first[start] ?? 0) & 0xc0) === 0x80) start++;
+      const kept = first.subarray(cut === -1 ? start : cut + 1);
       this.#bytes -= first.length - kept.length;
       this.#chunks[0] = kept;
     }
