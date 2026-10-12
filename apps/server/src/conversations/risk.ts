@@ -1017,6 +1017,9 @@ function localTool(name: string, places: Places): boolean {
  */
 const OTHER_SOURCE =
   /^--(?:index-url|extra-index-url|find-links|trusted-host|registry|index|git|source|break-system-packages)(?:=|$)/;
+/** The same, set in the environment for the install that runs next. */
+const REGISTRY_SET =
+  /\b(?:PIP_(?:EXTRA_)?INDEX_URL|PIP_FIND_LINKS|PIP_TRUSTED_HOST|UV_(?:EXTRA_)?INDEX_URL|UV_INDEX|UV_FIND_LINKS|npm_config_registry|YARN_REGISTRY|YARN_NPM_REGISTRY_SERVER|BUN_CONFIG_REGISTRY|GOPROXY|GONOSUMDB|GOFLAGS)=/i;
 /** The same, in a registry's own short flags: pip's `-i`/`-f`, gem's `-s`. */
 const otherSource = (registry: Registry | undefined, flag: string) =>
   OTHER_SOURCE.test(flag) ||
@@ -1030,7 +1033,12 @@ const otherSource = (registry: Registry | undefined, flag: string) =>
  * could have named it); a name one slip off a famous one (`reqeusts`) asks always; so does an
  * address, and another registry asks after reading.
  */
-function installRisk(prog: string, words: string[], places: Places): Risk | undefined {
+function installRisk(
+  prog: string,
+  words: string[],
+  places: Places,
+  steered = false,
+): Risk | undefined {
   // Redirections (`2>&1`, `> log.txt`) are the shell's, not names of packages.
   const sub = words
     .slice(1)
@@ -1041,17 +1049,55 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
     sub
       .slice(from)
       .filter((w) => !w.startsWith('-') && !/^(?:\.|\.\/.*|-r|requirements.*)$/.test(w));
+  // An address, or a version that is one: `x@github:a/b`, `x@https://…`, pip's `x @ https://…`,
+  // and npm's `a/b` for a GitHub repository.
   const fromUrl = (list: string[]) =>
-    list.some((w) => /^(?:git\+|https?:\/\/|github:|git@)/.test(w));
+    list.some(
+      (w) =>
+        /^(?:git\+|https?:\/\/|github:|git@)|:\/\//.test(w) ||
+        /@\s*(?:git\+|git:|https?:|github:|gitlab:|bitbucket:|gist:)/.test(w) ||
+        (registry === 'npm' &&
+          /^(?:@[^/@]+\/[^/@]+@|[^/@]+@)?[\w-][\w.-]*\/[\w.-]+$/.test(w) &&
+          !/\.(?:tgz|tar|tar\.gz)$/.test(w)),
+    );
+  // The package npx or `npm exec` fetches to run (`--package=x`, `-p x`), else its first name.
+  const fetched = (from: number) => {
+    const flagged = sub.flatMap((w, i) =>
+      /^--package=/.test(w)
+        ? [w.slice('--package='.length)]
+        : /^(?:-p|--package)$/.test(sub[i - 1] ?? '')
+          ? [w]
+          : [],
+    );
+    if (flagged.length) return flagged;
+    return named(from)
+      .slice(0, 1)
+      .filter((p) => !localTool(p, places));
+  };
   let pkgs: string[] = [];
   let registry: Registry | undefined;
   if (/^(?:npm|pnpm|yarn|bun)$/.test(prog) && /^(?:i|install|add)$/.test(sub[0] ?? '')) {
     pkgs = named(1);
     registry = 'npm';
   } else if (/^(?:npx|bunx)$/.test(prog)) {
-    pkgs = named(0)
-      .slice(0, 1)
-      .filter((p) => !localTool(p, places));
+    pkgs = fetched(0);
+    registry = 'npm';
+  } else if (prog === 'npm' && /^(?:exec|x)$/.test(sub[0] ?? '')) {
+    pkgs = fetched(1);
+    registry = 'npm';
+  } else if (
+    /^(?:npm|pnpm|yarn|bun)$/.test(prog) &&
+    /^(?:create|init)$/.test(sub[0] ?? '') &&
+    named(1)[0]
+  ) {
+    // `npm create vite` runs create-vite; `npm init @scope` runs @scope/create.
+    const spec = named(1)[0] ?? '';
+    const scoped = /^(@[^/@]+)(?:\/([^@]+))?/.exec(spec);
+    pkgs = [
+      scoped
+        ? `${scoped[1]}/${scoped[2] ? `create-${scoped[2]}` : 'create'}`
+        : `create-${packageName('npm', spec)}`,
+    ];
     registry = 'npm';
   } else if (/^(?:pnpm|yarn|bun)$/.test(prog) && sub[0] === 'dlx') {
     pkgs = named(1).slice(0, 1);
@@ -1081,6 +1127,8 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
     if (prog !== 'composer') registry = prog === 'gem' ? 'gem' : 'brew';
   } else if (prog === 'dotnet' && sub[0] === 'add' && sub.includes('package')) pkgs = named(2);
   if (!pkgs.length) return undefined;
+  // `lodash@npm:evil-pkg` installs evil-pkg under lodash's name.
+  if (registry === 'npm') pkgs = pkgs.map((p) => /@npm:(.+)$/.exec(p)?.[1] ?? p);
   const installs = WISHES.install as RegExp;
   // The person named the address themselves ("install it from github.com/x/y"): theirs to ask.
   if (fromUrl(pkgs))
@@ -1090,7 +1138,7 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
       true,
       wish(installs, pkgs.map(hostOf).find(Boolean) ?? pkgs[0]),
     );
-  const elsewhere = sub.some((w) => otherSource(registry, w));
+  const elsewhere = steered || sub.some((w) => otherSource(registry, w));
   if (registry) {
     const at = registry;
     const names = pkgs.map((p) => packageName(at, p));
@@ -1603,6 +1651,10 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     )
       risks.push(severe('exfiltration', 'hand control of this computer to another one'));
   }
+  // A registry of someone else's, set for what runs next: every install in the line goes there.
+  if (scriptsOf(command).some((script) => REGISTRY_SET.test(script)))
+    for (const part of commandParts(command))
+      risks.push(installRisk(program(part), wordsOf(part), places, true));
   for (const part of commandParts(command)) {
     risks.push(partRisk(part, places));
     // `echo … > ~/.zshrc`, `tee -a ~/.ssh/authorized_keys`, `cp x ~/Library/LaunchAgents/`.
