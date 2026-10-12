@@ -440,15 +440,20 @@ export function mapChatError(
     );
   if (
     status === 402 ||
-    /insufficient.?(balance|quota|credit|fund)|credit_balance|exceeded_current_quota|arrearage|freetieronly|payment|billing|spend.?limit|usage_limit_exceeded|\b1113\b|\b1008\b|balance is empty|prepay/.test(
+    // A code is read from the code, never from numbers in the message.
+    /\b(?:1113|1008)\b/.test(kind) ||
+    /insufficient.?(balance|quota|credit|fund)|credit_balance|exceeded_current_quota|arrearage|freetieronly|payment|billing|spend.?limit|usage_limit_exceeded|balance is empty|prepay/.test(
       words,
     )
   )
     return new ApiError('payment', `Your ${label} credit has run out. Top up to keep going.`);
   if (
-    /model_not_found|not_found|\b1211\b|does not exist|unknown model|not found|has reached its end of life/.test(
+    /\b1211\b/.test(kind) ||
+    // "not found" alone could be anything (a tool call's id); it's the model's when it says so.
+    /model_not_found|unknown model|has reached its end of life|model\b.{0,60}(?:not.?found|does not exist)|(?:not found|does not exist).{0,30}\bmodel/.test(
       words,
     ) ||
+    /\bnot_found\b/.test(kind) ||
     status === 404 ||
     status === 410
   )

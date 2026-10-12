@@ -226,6 +226,20 @@ describe('reading a failure the way each provider means it', () => {
       { message: 'Model not found, inaccessible, and/or not deployed', code: 'NOT_FOUND' },
       'not-found',
     ],
+    // Words in the message that only look like another error.
+    [
+      'a tool call the provider can’t find',
+      400,
+      { message: "Invalid parameter: tool_call_id 'call_9' not found in messages" },
+      'other',
+    ],
+    [
+      'a long chat that names 1008 tokens',
+      400,
+      { message: 'This prompt is too long: 1008 tokens over the context length' },
+      'context',
+    ],
+    ['Z.ai’s 1211 for a model', 400, { message: 'Unknown', code: '1211' }, 'not-found'],
   ] as const)('%s', (_name, status, error, kind) => {
     expect(mapChatError(status, error, undefined, label).kind).toBe(kind);
   });
