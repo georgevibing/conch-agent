@@ -142,6 +142,22 @@ describe('the behaviour guard (ADR 0117)', () => {
     expect(
       watch({ name: 'mcp__conch__app_shop__pay_invoice', input: { amount: 5 } }, four, HERE),
     ).toMatchObject({ level: 'ask', trust: true });
+    // However the amount is written: a decimal comma, a dot or a space for thousands.
+    for (const amount of ['€1.500,00', '2.000', '1.234.567', '1 500,00 €', '1,500.00', 'CHF 1’500'])
+      expect(
+        watch({ name: 'mcp__conch__app_shop__pay_invoice', input: { amount } }, [], HERE),
+      ).toMatchObject({ level: 'ask', kind: 'money' });
+    expect(
+      watch(
+        { name: 'mcp__conch__app_shop__pay_invoice', input: { amount: '1 500,00 €' } },
+        [],
+        HERE,
+      ),
+    ).toMatchObject({ reason: expect.stringContaining('pay 1,500 ') });
+    for (const amount of ['12,50 €', '€9.99', '0,5'])
+      expect(
+        watch({ name: 'mcp__conch__app_shop__pay_invoice', input: { amount } }, [], HERE),
+      ).toBeUndefined();
     // Looking at a payment is not paying.
     expect(
       watch({ name: 'mcp__conch__app_shop__get_payment', input: { amount: 9000 } }, [], HERE),

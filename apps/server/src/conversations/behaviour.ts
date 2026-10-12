@@ -161,12 +161,32 @@ function itemsOf(input: unknown): number {
   return most;
 }
 
+/**
+ * An amount as people write one: “1,500.00”, “€1.500,00”, “1 500,00 €”,
+ * “CHF 1’500”. The last mark is the decimal one when both kinds are there; one
+ * kind alone is for thousands when it comes more than once or before three
+ * digits at the end. “2.000” could be two, but reading it as two thousand only
+ * asks once too often.
+ */
+function readAmount(text: string): number {
+  const digits = text.replace(/[^\d.,]/g, '');
+  const last = Math.max(digits.lastIndexOf('.'), digits.lastIndexOf(','));
+  if (last < 0) return Number(digits || NaN);
+  const mark = digits[last];
+  const decimal =
+    digits.includes('.') && digits.includes(',')
+      ? true
+      : digits.indexOf(mark ?? '') === last && digits.length - last - 1 !== 3;
+  const whole = digits.slice(0, decimal ? last : undefined).replace(/[.,]/g, '');
+  return Number(decimal ? `${whole}.${digits.slice(last + 1)}` : whole);
+}
+
 /** The amount a payment names, when it names one. */
 function amountOf(input: unknown): number | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   for (const [key, value] of Object.entries(args)) {
     if (!/^(?:amount|total|price|value|sum|cost)$/i.test(key)) continue;
-    const n = typeof value === 'number' ? value : Number(String(value).replace(/[^\d.]/g, ''));
+    const n = typeof value === 'number' ? value : readAmount(String(value));
     if (Number.isFinite(n) && String(value).trim()) return n;
   }
   return undefined;
