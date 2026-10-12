@@ -202,7 +202,6 @@ function pythonBridge(python: string): PtyBackend {
       const { stdin, stdout } = pipes(child);
       const control = child.stdio[3] as Writable | undefined;
       const decoder = new StringDecoder('utf8');
-      const errors = new StringDecoder('utf8');
       return {
         pid: child.pid ?? 0,
         write: (data) => stdin.write(data),
