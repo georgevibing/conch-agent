@@ -306,12 +306,31 @@ async function around(
 }
 
 /**
- * Put a value into one marked box. A secret only goes where the masks are
- * (`SECRET_ATTR`), so it can't show in a screenshot the model looks at; a
- * username goes into any box.
+ * Whether the boxes are still on the page they were read from: the person may
+ * have been asked for a while, and a page that went elsewhere in the meantime
+ * (or a frame that did) could have planted boxes with the same marks.
  */
-async function put(frame: Frame, mark: string, value: string, secret = true): Promise<boolean> {
-  const box = frame.locator(`[${FILL_ATTR}="${mark}"]`).first();
+function stillThere(at: Around): boolean {
+  const { frame } = at;
+  if (frame.isDetached()) return false;
+  const page = frame.page();
+  const where = fillHost(page.url(), frame === page.mainFrame() ? undefined : frame.url());
+  if ('blocked' in where || where.host !== at.host) return false;
+  try {
+    return new URL(page.url()).origin === at.origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Put a value into one marked box, if it's still on the site it was read from.
+ * A secret only goes where the masks are (`SECRET_ATTR`), so it can't show in a
+ * screenshot the model looks at; a username goes into any box.
+ */
+async function put(at: Around, mark: string, value: string, secret = true): Promise<boolean> {
+  if (!stillThere(at)) return false;
+  const box = at.frame.locator(`[${FILL_ATTR}="${mark}"]`).first();
   if (secret) {
     const masked = await box.getAttribute(SECRET_ATTR, { timeout: 1_000 }).catch(() => null);
     if (masked !== 'password' && masked !== 'payment') return false;
@@ -407,7 +426,7 @@ async function fillAround(
       if (!r || !CARD_ROLES.has(r) || (!f.empty && !f.target)) continue;
       const v = await value(WANT[r] as FillWant);
       check();
-      if (v && (await put(at.frame, f.mark, v, r !== 'cardholder'))) done.push(r);
+      if (v && (await put(at, f.mark, v, r !== 'cardholder'))) done.push(r);
     }
     return done;
   }
@@ -415,13 +434,13 @@ async function fillAround(
   if (!want) return done;
   const v = await passwords.fillValue({ itemId, host: at.host, want });
   check();
-  if (await put(at.frame, at.target.mark, v, role !== 'username')) done.push(role);
+  if (await put(at, at.target.mark, v, role !== 'username')) done.push(role);
   if (role === 'password') {
     const user = at.fields.find((f) => f.empty && !f.target && at.roles.get(f.mark) === 'username');
     if (user) {
       const name = await value('username');
       check();
-      if (name && (await put(at.frame, user.mark, name, false))) done.push('username');
+      if (name && (await put(at, user.mark, name, false))) done.push('username');
     }
   }
   return done;
@@ -431,8 +450,8 @@ async function fillAround(
 async function fillNew(at: Around, password: string, previous: string | undefined): Promise<void> {
   for (const f of at.fields) {
     const r = at.roles.get(f.mark);
-    if (r === 'new-password') await put(at.frame, f.mark, password);
-    else if (r === 'password' && f.empty && previous) await put(at.frame, f.mark, previous);
+    if (r === 'new-password') await put(at, f.mark, password);
+    else if (r === 'password' && f.empty && previous) await put(at, f.mark, previous);
   }
 }
 

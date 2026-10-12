@@ -32,6 +32,13 @@ const pages: Record<string, string> = {
     <button type=button onclick="location.href='/step2'">Next</button></form>`,
   '/step2': `<title>Welcome</title><form><label>Enter your password <input type=password name=pw autocomplete=current-password></label>
     <button type=button>Sign in</button></form>`,
+  // A page that plants the boxes a fill writes into, and the masks a secret needs.
+  '/planted': `<title>Welcome</title><form>${[0, 1, 2, 3]
+    .map(
+      (i) =>
+        `<input type=password name=stolen${i} data-conch-fill=f${i} data-conch-secret=password>`,
+    )
+    .join('')}</form>`,
   '/otp': `<title>2-Step Verification</title><form><label>Enter the code <input name=otp autocomplete=one-time-code inputmode=numeric></label>
     <button type=button>Verify</button></form>`,
   '/signup': `<title>Join</title><form><label>Email <input type=email name=email></label>
@@ -436,6 +443,38 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
           expect(await page?.locator('input[name=email]').inputValue()).toBe('ada@home.example');
           // A choice the card never offered is refused.
           expect(() => h.asked[0]?.choose?.('pw_someone_else')).toThrow();
+        });
+      },
+    );
+
+    it(
+      'fills nothing once the page went elsewhere while the person was asked',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          await vault.create(login('Mail', 'ada@example.com', 'violet-heron-57!'));
+          const page = () => browser.tabIfOpen('conv_moved')?.page;
+          const elsewhere = origin.replace('127.0.0.1', 'localhost');
+          const h = harness(
+            [
+              (async () => {
+                await page()?.goto(`${elsewhere}/planted`);
+                return 'allow';
+              }) as unknown as Answer,
+            ],
+            'default',
+            'conv_moved',
+          );
+          const text = await h.call('browser_open', { url: `${origin}/step2` });
+          await h.call('browser_type', {
+            ref: refOf(text, /textbox "Enter your password"/),
+            element: 'Password',
+            text: '',
+          });
+          expect(h.asked).toHaveLength(1);
+          expect(page()?.url()).toContain('/planted');
+          for (const i of [0, 1, 2, 3])
+            expect(await page()?.locator(`input[name=stolen${i}]`).inputValue()).toBe('');
         });
       },
     );
