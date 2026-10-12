@@ -85,6 +85,8 @@ export interface SuperviseDeps {
   /** How often to look whether it has. */
   lookEveryMs?: number;
   watchdog?: Partial<WatchdogOptions>;
+  /** The OS to stop the gateway for (tests pretend to be Windows). */
+  platform?: NodeJS.Platform;
 }
 
 /**
@@ -122,6 +124,20 @@ export function gatewayLaunch(
   };
 }
 
+/**
+ * Stop a Windows gateway without losing what it saves on the way out. Windows
+ * has no signals: Node's `kill` is TerminateProcess whatever it's asked to send,
+ * so the gateway (which shares the console and already has Ctrl+C) never gets to
+ * finish. Closing the channel is its cue to stop, as in the desktop app; if it
+ * hasn't stopped by `stopMs`, it is ended.
+ */
+export function stopWindowsGateway(child: ChildProcess, stopMs = 15_000): void {
+  if (child.exitCode != null || child.signalCode != null) return;
+  if (child.connected) child.disconnect();
+  const forced = setTimeout(() => child.kill('SIGKILL'), stopMs);
+  child.once('exit', () => clearTimeout(forced));
+}
+
 /** What to do when the gateway stops: start it again (and how soon), or stop too. */
 export function nextStep(
   code: number | null,
@@ -147,6 +163,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const home = deps.home ?? process.env.CONCH_HOME ?? join(homedir(), '.conch');
+  const platform = deps.platform ?? process.platform;
   const recovery = readRecoveryState(home);
   // The legacy launcher remains alive until its next normal stop. Keep its code
   // through subsequent release cleanup too, without accumulating ancestor roots.
@@ -169,9 +186,11 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const signals = new Map<NodeJS.Signals, () => void>();
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     const stop = () => {
+      const first = !stopping;
       stopping = true;
-      // The child shares the terminal and gets Ctrl+C itself; make sure of SIGTERM.
-      watching?.stop(signal);
+      // On POSIX the child runs in its own session and never sees Ctrl+C: pass it on.
+      if (platform !== 'win32') watching?.stop(signal);
+      else if (first && child) stopWindowsGateway(child, deps.watchdog?.stopMs);
     };
     signals.set(signal, stop);
     process.on(signal, stop);
@@ -218,7 +237,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
           : undefined;
       child = start(process.execPath, launch.args, {
         stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-        detached: process.platform !== 'win32',
+        detached: platform !== 'win32',
         ...(launch.cwd && { cwd: launch.cwd }),
         env: {
           ...process.env,
@@ -239,7 +258,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
           !launch.folder ||
           existsSync(join(launch.folder, 'apps', 'server', 'src', 'recovery', 'gateway.ts')),
         ...deps.watchdog,
-        processGroup: process.platform !== 'win32',
+        processGroup: platform !== 'win32',
         serviceMembers,
         now: deps.now,
         stopping: () => stopping,

@@ -14,6 +14,7 @@ import {
   RESTART_CODE,
   shouldAdoptSupervisor,
   shouldSupervise,
+  stopWindowsGateway,
   supervise,
 } from './supervisor';
 import { point, prove, readState, swapIn, writeState } from './updates/layout';
@@ -465,5 +466,95 @@ describe('recovering without restarting forever', () => {
       }),
     ).rejects.toMatchObject({ code: 0 });
     expect(reasons).toEqual(['start', 'crash']);
+  });
+});
+
+describe('stopping on Windows without losing what the gateway saves', () => {
+  /** A gateway that stops by itself once its channel closes, unless told it's stuck. */
+  function gateway(stuck = false) {
+    const kills: (NodeJS.Signals | number | undefined)[] = [];
+    const child = Object.assign(new EventEmitter(), {
+      connected: true,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill: (signal?: NodeJS.Signals | number) => {
+        kills.push(signal);
+        queueMicrotask(() => child.emit('exit', null, signal));
+        return true;
+      },
+      disconnect: () => {
+        child.connected = false;
+        if (!stuck) setTimeout(() => child.emit('exit', 0, null), 5);
+      },
+    });
+    return { child, kills };
+  }
+  /** The supervisor's own signal listeners, so the test runner's are never called. */
+  async function stopWith(signal: NodeJS.Signals, platform: NodeJS.Platform) {
+    const before = new Set(process.listeners(signal));
+    const { child, kills } = gateway();
+    const exited = new Promise<number>((resolve) => {
+      void supervise({
+        home: tempHome(),
+        platform,
+        spawn: (() => {
+          queueMicrotask(() => {
+            for (const listener of process.listeners(signal))
+              if (!before.has(listener)) (listener as () => void)();
+          });
+          return child;
+        }) as never,
+        log: () => undefined,
+        watchdog: { stopMs: 1_000 },
+        exit: ((code: number) => {
+          resolve(code);
+          throw new Error('exit');
+        }) as never,
+      }).catch(() => undefined);
+    });
+    return { code: await exited, kills, connected: child.connected };
+  }
+
+  it('closes the channel on Ctrl+C instead of ending the gateway, letting it save first', async () => {
+    const stopped = await stopWith('SIGINT', 'win32');
+    expect(stopped).toEqual({ code: 0, kills: [], connected: false });
+  });
+
+  it('still passes the signal on elsewhere, where the gateway has its own session', async () => {
+    const stopped = await stopWith('SIGINT', 'linux');
+    expect(stopped.kills).toEqual(['SIGINT']);
+  });
+
+  it('ends a gateway that never finishes stopping, once it has had its time', async () => {
+    vi.useFakeTimers();
+    try {
+      const { child, kills } = gateway(true);
+      stopWindowsGateway(child as never, 1_000);
+      expect(child.connected).toBe(false);
+      vi.advanceTimersByTime(999);
+      expect(kills).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(kills).toEqual(['SIGKILL']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a gateway that stopped in time, or had already stopped, alone', async () => {
+    vi.useFakeTimers();
+    try {
+      const done = gateway();
+      stopWindowsGateway(done.child as never, 1_000);
+      vi.advanceTimersByTime(5);
+      vi.advanceTimersByTime(5_000);
+      expect(done.kills).toEqual([]);
+      const gone = gateway();
+      gone.child.exitCode = 0;
+      stopWindowsGateway(gone.child as never, 1_000);
+      vi.advanceTimersByTime(5_000);
+      expect(gone).toMatchObject({ kills: [], child: { connected: true } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
