@@ -77,6 +77,28 @@ describe('independent gateway watchdog', () => {
     expect(child.send).toHaveBeenCalledWith({ type: 'conch.recover' }, expect.any(Function));
     watch.close();
   });
+  it('kills a gateway that said nothing while reducing after a short grace, not the full stop', () => {
+    const { child, watch } = world({ frozenStopMs: 3 });
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(50);
+    expect(child.kill.mock.calls).toEqual([['SIGTERM']]);
+    vi.advanceTimersByTime(3);
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    watch.close();
+  });
+  it('gives a gateway that still answers, unhealthily, the whole graceful stop', () => {
+    const { child, watch } = world({ frozenStopMs: 3 });
+    child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(35);
+    child.emit('message', { type: 'conch.heartbeat', healthy: false });
+    vi.advanceTimersByTime(15);
+    expect(child.kill.mock.calls).toEqual([['SIGTERM']]);
+    vi.advanceTimersByTime(14);
+    expect(child.kill.mock.calls).toEqual([['SIGTERM']]);
+    vi.advanceTimersByTime(1);
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    watch.close();
+  });
   it('ignores malformed heartbeats and cancels timers and listeners on exit', () => {
     const { child, watch, repaired } = world();
     child.emit('message', { type: 'conch.heartbeat', healthy: 'true' });

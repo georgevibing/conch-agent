@@ -12,6 +12,8 @@ export interface WatchdogOptions {
   recoverMs?: number;
   pollMs?: number;
   stopMs?: number;
+  /** A gateway that said nothing while reducing can't run a SIGTERM handler: kill it sooner. */
+  frozenStopMs?: number;
   /** The launcher created a private POSIX process group for this gateway. */
   processGroup?: boolean;
   /** Only members of this registered service, excluding the supervisor's baseline. */
@@ -33,10 +35,15 @@ export interface WatchState {
   failed: boolean;
   /** When this supervisor last judged; a long gap means it was asleep, not the gateway. */
   lastTick?: number;
+  /** The last well-formed IPC message: proof the gateway's event loop runs. */
+  heardAt?: number;
+  /** Terminating a gateway that sent nothing at all while it was reducing. */
+  frozen?: boolean;
 }
 export type WatchEvent =
   | { type: 'tick'; at: number }
   | { type: 'healthy'; at: number }
+  | { type: 'message'; at: number }
   | { type: 'shutdown'; at: number; failed: boolean };
 export interface WatchLimits {
   startupMs: number;
@@ -55,6 +62,7 @@ export function watchTransition(
   if (event.type === 'shutdown')
     return { ...state, phase: 'terminating', since: event.at, failed: event.failed };
   if (event.type === 'healthy') return { ...state, phase: 'healthy', since: event.at };
+  if (event.type === 'message') return { ...state, heardAt: event.at };
   const ticked = { ...state, lastTick: event.at };
   // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence.
   if (state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3)
@@ -65,8 +73,10 @@ export function watchTransition(
     (state.phase === 'healthy' && elapsed >= limits.unhealthyMs)
   )
     return { ...ticked, phase: 'reducing', since: event.at };
-  if (state.phase === 'reducing' && elapsed >= limits.recoverMs)
-    return { ...ticked, phase: 'terminating', since: event.at, failed: true };
+  if (state.phase === 'reducing' && elapsed >= limits.recoverMs) {
+    const frozen = state.heardAt === undefined || state.heardAt < state.since;
+    return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
+  }
   return ticked;
 }
 
@@ -115,10 +125,14 @@ export function watchGateway(
     else if (state.phase === 'terminating') {
       if (state.failed) options.incident('unresponsive', resource);
       children?.sample();
-      forced = setTimeout(() => {
-        children?.close();
-        child.kill('SIGKILL');
-      }, options.stopMs ?? 15_000);
+      const stopMs = options.stopMs ?? 15_000;
+      forced = setTimeout(
+        () => {
+          children?.close();
+          child.kill('SIGKILL');
+        },
+        state.frozen ? Math.min(stopMs, options.frozenStopMs ?? 2_000) : stopMs,
+      );
       if (state.failed) child.kill('SIGTERM');
     }
   };
@@ -129,6 +143,7 @@ export function watchGateway(
   };
   const message = (value: unknown) => {
     if (!value || typeof value !== 'object' || !('type' in value)) return;
+    apply({ type: 'message', at: now() });
     if (value.type === 'conch.recovered') options.repaired();
     if (value.type === 'conch.stopping') apply({ type: 'shutdown', at: now(), failed: false });
     if (value.type !== 'conch.heartbeat') return;
