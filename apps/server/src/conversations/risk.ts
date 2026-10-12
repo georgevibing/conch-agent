@@ -794,32 +794,43 @@ const GRANT_WORDS =
  * named as such. Claude Code blocks the same by default and clears them by name.
  */
 function infraRisk(part: string, prog: string, words: string[]): Risk | undefined {
+  // The words that say what to do, not the names of things or flags' values: `pod/delete-worker`,
+  // `s3://my-delete-bucket`, `-out=apply.plan`, `--bucket my-delete-bucket` and `data-set` aren't verbs.
+  const verbs = ` ${words
+    .slice(1)
+    .filter((w, i, all) => !/^-|[=:/@]/.test(w) && !/^--[\w-]+$/.test(all[i - 1] ?? ''))
+    .join(' ')} `;
+  const says = (alternatives: string) => new RegExp(`\\s(?:${alternatives})(?=\\s)`).test(verbs);
   const sub = words.slice(1).join(' ');
   const prod = PROD.test(part);
   const deploy = wish(DEPLOY_WORDS, prod ? PROD_WORDS : undefined);
   const destroy = wish(DESTROY_WORDS, prod ? PROD_WORDS : undefined);
   if (/^(?:terraform|tofu|terragrunt|pulumi|cdk|cdktf|sst|serverless|sls)$/.test(prog)) {
-    if (/\bdestroy\b|apply\b.*-destroy|\bstack\s+rm\b/.test(sub))
+    if (says('destroy') || (says('apply') && /\s-destroy\b/.test(sub)) || says('stack rm'))
       return severe('infra', 'tear down cloud infrastructure', true, destroy);
-    if (/\b(?:apply|up|deploy|import|state\s+(?:rm|mv|push))\b/.test(sub))
+    if (says('apply|up|deploy|import|state (?:rm|mv|push)'))
       return prod
         ? severe('infra', 'change production infrastructure', true, deploy)
         : severe('infra', 'change cloud infrastructure', true, deploy);
   }
   if (/^(?:kubectl|oc)$/.test(prog)) {
-    if (/\b(?:delete|drain|cordon)\b/.test(sub))
+    if (says('delete|drain|cordon'))
       return severe('infra', 'delete or drain things in a cluster', true, destroy);
-    if (/\b(?:create\s+(?:cluster)?rolebinding)\b/.test(sub))
+    if (says('create (?:cluster)?rolebinding'))
       return severe('privilege', 'grant access in a cluster', true, wish(GRANT_WORDS));
-    if (/\b(?:apply|create|replace|patch|scale|rollout|set|edit|annotate|label)\b/.test(sub))
+    if (
+      says(
+        'apply|create|replace|patch|scale|rollout (?:restart|undo|pause|resume)|set|edit|annotate|label',
+      )
+    )
       return prod
         ? severe('infra', 'change a production cluster', true, deploy)
         : severe('infra', 'change a cluster', true, deploy);
   }
   if (prog === 'helm') {
-    if (/\b(?:uninstall|delete|rollback)\b/.test(sub))
+    if (says('uninstall|delete|rollback'))
       return severe('infra', 'remove a release from a cluster', true, destroy);
-    if (/\b(?:install|upgrade)\b/.test(sub))
+    if (says('install|upgrade'))
       return prod
         ? severe('infra', 'change a production cluster', true, deploy)
         : severe(
@@ -832,13 +843,13 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
   if (/^(?:aws|gcloud|gsutil|az|doctl|linode-cli|hcloud|oci|ibmcloud|scw)$/.test(prog)) {
     if (
       /\b(?:iam\s+(?:attach|put|create-access-key|create-login-profile|add-user-to-group|update-assume-role)|add-iam-policy-binding|set-iam-policy|role\s+assignment\s+create|put-bucket-(?:policy|acl)|delete-public-access-block|put-public-access-block)/.test(
-        sub,
+        verbs,
       )
     )
       return severe('privilege', 'grant access to cloud resources', true, wish(GRANT_WORDS));
     if (
       /\b(?:secretsmanager\s+(?:put|create|update)|kms\s+(?:schedule-key-deletion|disable)|route53\s+change|dns\s+record-sets|acm\s+delete)/.test(
-        sub,
+        verbs,
       )
     )
       return severe(
@@ -848,12 +859,13 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         wish(/\bsecret\w*|\bdns\b|\brecord\w*|\bcertificate\w*|\bcert\b|\bdomain\w*|\bkey\w*/),
       );
     if (
-      /(?:^|\s)(?:delete|terminate|remove|deregister|purge|destroy|rb)(?:[-\s]|$)|[a-z]-(?:delete|terminate|remove|deregister|purge)(?:[-\s]|$)|\bdelete-\w|\bterminate-\w|\brm\b.*(?:-r|--recursive)|\b(?:rm|rb)\s+(?:-\w+\s+)*gs:\/\//.test(
-        sub,
-      )
+      /\s(?:delete|terminate|remove|deregister|purge|destroy|rb)(?:[-\s]|$)|[a-z]-(?:delete|terminate|remove|deregister|purge)(?:[-\s]|$)|\sdelete-\w|\sterminate-\w/.test(
+        verbs,
+      ) ||
+      /\brm\b.*(?:-r|--recursive)|\b(?:rm|rb)\s+(?:-\w+\s+)*gs:\/\//.test(sub)
     )
       return severe('infra', 'delete cloud resources', true, destroy);
-    if (/\b(?:deploy|update-function-code|update-service|create-deployment)\b/.test(sub))
+    if (says('deploy|update-function-code|update-service|create-deployment'))
       return prod
         ? severe('infra', 'deploy to production', true, deploy)
         : severe('infra', 'deploy to the cloud', true, deploy);
@@ -865,9 +877,14 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
   ) {
     if (/\b(?:destroy|remove|rm|delete|apps:destroy|pg:reset|\w+:delete)\b/.test(sub))
       return severe('infra', 'delete a deployed app or its data', true, destroy);
+    // Reading what's there (`fly logs -a api-prod`) changes nothing, production or not.
+    const reads =
+      /^\s(?:logs?|status|info|list|ls|apps|whoami|version|help|open|ps|releases|domains|inspect|describe|show|get|history|dashboard|monitor|tail|env|config)\s/.test(
+        verbs,
+      );
     if (
       /\b(?:deploy|publish|up|release|promote)\b/.test(sub) ||
-      prod ||
+      (prod && !reads) ||
       (words.length === 1 && /^(?:vercel|surge)$/.test(prog))
     )
       return prod

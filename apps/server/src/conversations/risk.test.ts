@@ -691,4 +691,29 @@ describe('the same step written another way', () => {
     ])
       expect(assessRisk('Bash', { command }, ctx), command).toBeUndefined();
   });
+
+  it('reads a cluster or a cloud by its verb, not by the names of things in it', () => {
+    for (const command of [
+      'kubectl rollout status deploy/web',
+      'kubectl rollout history deploy/web',
+      'kubectl get pods -n data-set',
+      'kubectl logs pod/delete-worker',
+      'helm status my-install',
+      'terraform plan -out=apply.plan',
+      'fly logs -a api-prod',
+      'heroku logs -a shop-prod',
+      'aws s3 ls s3://my-delete-bucket',
+      'aws s3api get-object --bucket my-delete-bucket --key a.txt a.txt',
+    ])
+      expect(assessRisk('Bash', { command }, ctx), command).toBeUndefined();
+    for (const command of [
+      'kubectl rollout restart deploy/web',
+      'kubectl -n data-set delete pod web-1',
+      'helm upgrade my-install ./chart',
+      'fly deploy -a api-prod',
+      'aws s3api delete-object --bucket b --key k',
+      'aws ec2 terminate-instances --instance-ids i-1',
+    ])
+      expect(asks(bash(command), false), command).toBe(true);
+  });
 });
