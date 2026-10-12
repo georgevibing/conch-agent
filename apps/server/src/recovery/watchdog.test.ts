@@ -361,6 +361,56 @@ describe('independent gateway watchdog', () => {
       expect(time - (at[i] ?? 0)).toBeGreaterThan(RELIEF_COOLDOWN_MS);
     watch.close();
   });
+  /** Real deadlines, and a gateway that answers every heartbeat it is awake for. */
+  function cycling(extra: Partial<WatchdogOptions> = {}) {
+    const test = world({
+      startupMs: 120_000,
+      unhealthyMs: 30_000,
+      recoverMs: 20_000,
+      pollMs: 5_000,
+      stopMs: 15_000,
+      flapWindowMs: 5 * 60_000,
+      ...extra,
+    });
+    /** Runs for `ms`, a second at a time, beating when `awake` says it answered at that second. */
+    const run = (ms: number, awake: (second: number) => boolean, resource?: object) => {
+      for (let t = 1_000; t <= ms && !test.child.kill.mock.calls.length; t += 1_000) {
+        vi.advanceTimersByTime(1_000);
+        if (awake(t / 1_000))
+          test.child.emit('message', { type: 'conch.heartbeat', healthy: true, resource });
+      }
+    };
+    test.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    return { ...test, run };
+  }
+  // Stopped 25 s out of every 30 (SIGSTOP), answering twice in between: never 30 s silent.
+  const dutyCycle = (second: number) => second % 30 === 25 || second % 30 === 29;
+  it('reduces work for a gateway that stops answering again and again, each time briefly', () => {
+    const { child, watch, incident, run } = cycling();
+    run(130_000, dutyCycle);
+    expect(child.send).toHaveBeenCalledWith({ type: 'conch.recover' }, expect.any(Function));
+    expect(incident.mock.calls[0]?.[0]).toBe('reduced-workload');
+    expect(child.kill).not.toHaveBeenCalled();
+    // It keeps doing it: the flap limit restarts it.
+    run(15 * 60_000, dutyCycle);
+    expect(watch.failed()).toBe(true);
+    expect(child.kill).toHaveBeenCalled();
+    watch.close();
+  });
+  it('leaves a healthy gateway that misses a heartbeat now and then alone', () => {
+    const { child, watch, incident, run } = cycling();
+    run(15 * 60_000, (second) => second % 5 === 0 && second % 35 !== 0);
+    expect(child.send).not.toHaveBeenCalled();
+    expect(incident).not.toHaveBeenCalled();
+    watch.close();
+  });
+  it('does not count brief stalls against a gateway while other programs starve the computer', () => {
+    const { child, watch, run } = cycling();
+    const starved = { gatewayRssBytes: 200, memoryTotalBytes: 16_000, loadPerCpu: 2 };
+    run(15 * 60_000, dutyCycle, starved);
+    expect(child.send).not.toHaveBeenCalled();
+    watch.close();
+  });
   it('never stretches a deadline for silence', () => {
     const { child, watch } = world();
     child.emit('message', {
@@ -525,6 +575,25 @@ describe('watchdog transitions', () => {
     for (let at = 450; at <= 2_050 && state.phase !== 'terminating'; at += 400)
       state = step(state, { type: 'tick', at });
     expect(state).toMatchObject({ phase: 'terminating', failed: true, frozen: true });
+  });
+  it('starts the health window again after a nap, and never judges it while booting', () => {
+    const sparse = { ...limits, pollMs: 10, unhealthyMs: 1_000, healthWindowMs: 100 };
+    const run = (state: WatchState, from: number, to: number) => {
+      for (let at = from; at <= to; at += 10)
+        state = watchTransition(state, { type: 'tick', at }, sparse);
+      return state;
+    };
+    expect(run(booting, 10, 90).phase).toBe('booting');
+    const healthy = watchTransition(booting, { type: 'healthy', at: 0 }, sparse);
+    expect(run(healthy, 10, 90).phase).toBe('healthy');
+    expect(run(healthy, 10, 100).phase).toBe('reducing');
+    const woke = run(
+      watchTransition(run(healthy, 10, 50), { type: 'tick', at: 500 }, sparse),
+      510,
+      590,
+    );
+    expect(woke.phase).toBe('healthy');
+    expect(run(woke, 600, 600).phase).toBe('reducing');
   });
   it('takes a late tick after an on-time one for another nap', () => {
     const napped = step(

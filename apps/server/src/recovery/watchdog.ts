@@ -17,6 +17,12 @@ export interface WatchdogOptions {
   /** Health that keeps coming back only to fail again is a restart, not another reduction. */
   flapLimit?: number;
   flapWindowMs?: number;
+  /**
+   * Stalls each shorter than `unhealthyMs` still add up: when fewer than `healthyShare` of the
+   * heartbeats due in the last `healthWindowMs` were healthy, work is reduced as at a deadline.
+   */
+  healthWindowMs?: number;
+  healthyShare?: number;
   /** The most a responsive gateway's deadlines stretch while other programs starve the computer. */
   maxStretch?: number;
   stopMs?: number;
@@ -68,6 +74,9 @@ export interface WatchState {
   bootPhase?: string;
   /** When managed work was last shed while reducing. */
   shedAt?: number;
+  /** Healthy heartbeats within the health window, and when that window began to be watched. */
+  beats?: number[];
+  beatsFrom?: number;
 }
 export type WatchEvent =
   | { type: 'tick'; at: number; stretch?: number }
@@ -84,6 +93,8 @@ export interface WatchLimits {
   pollMs: number;
   flapLimit: number;
   flapWindowMs: number;
+  healthWindowMs?: number;
+  healthyShare?: number;
 }
 
 /**
@@ -127,7 +138,17 @@ export function watchTransition(
   if (state.phase === 'terminating') return state;
   if (event.type === 'shutdown')
     return { ...state, phase: 'terminating', since: event.at, failed: event.failed };
-  if (event.type === 'healthy') return { ...state, phase: 'healthy', since: event.at };
+  const healthWindow = limits.healthWindowMs ?? 120_000;
+  if (event.type === 'healthy') {
+    const beats = [...(state.beats ?? []).filter((at) => event.at - at < healthWindow), event.at];
+    return {
+      ...state,
+      phase: 'healthy',
+      since: event.at,
+      beats,
+      beatsFrom: state.beatsFrom ?? event.at,
+    };
+  }
   if (event.type === 'message') return { ...state, heardAt: event.at };
   if (event.type === 'booting') {
     if (state.phase !== 'booting') return state;
@@ -138,10 +159,17 @@ export function watchTransition(
   if (event.type === 'heartbeat')
     // A release that announces its start tracks health from its first heartbeat, healthy or not.
     return state.phase === 'booting' && state.bootPhase !== undefined
-      ? { ...state, phase: 'healthy', since: event.at }
+      ? { ...state, phase: 'healthy', since: event.at, beatsFrom: event.at }
       : state;
   const late = state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3;
-  const ticked = { ...state, lastTick: event.at, napped: late };
+  // Heartbeats that arrive in bursts after a late tick (a nap, a throttled supervisor) can't be
+  // counted per interval: the health window starts again.
+  const ticked = {
+    ...state,
+    lastTick: event.at,
+    napped: late,
+    ...(late && state.beatsFrom !== undefined && { beats: [], beatsFrom: event.at }),
+  };
   // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence. Ticks that are
   // always late (App Nap, timer coalescing, a loaded host) are not one nap after another.
   if (late && !state.napped) return { ...ticked, since: event.at };
@@ -150,21 +178,46 @@ export function watchTransition(
   // Only a gateway still talking gets longer while other programs starve the computer.
   const stretch = (window: number) =>
     state.heardAt !== undefined && event.at - state.heardAt < window ? (event.stretch ?? 1) : 1;
+  // How many of the heartbeats due over the whole health window were healthy, one per interval.
+  const due = Math.floor(healthWindow / limits.pollMs);
+  const answered = new Set(
+    (state.beats ?? [])
+      .filter((at) => event.at - at < healthWindow)
+      .map((at) => Math.floor((event.at - at) / limits.pollMs)),
+  ).size;
+  const sparse =
+    state.phase === 'healthy' &&
+    !late &&
+    stretch(limits.unhealthyMs) === 1 &&
+    state.beatsFrom !== undefined &&
+    event.at - state.beatsFrom >= healthWindow &&
+    due >= 4 &&
+    answered < due * (limits.healthyShare ?? 0.4);
   const booted =
     state.bootPhase === undefined
       ? elapsed >= limits.startupMs
       : silent >= limits.startupMs || (state.bootPhase !== 'waiting' && elapsed >= limits.readyMs);
   if (
     (state.phase === 'booting' && booted) ||
-    (state.phase === 'healthy' && elapsed >= limits.unhealthyMs * stretch(limits.unhealthyMs))
+    (state.phase === 'healthy' &&
+      (elapsed >= limits.unhealthyMs * stretch(limits.unhealthyMs) || sparse))
   ) {
     const recent = (state.reductions ?? []).filter((at) => event.at - at < limits.flapWindowMs);
     // A stretched cycle is a starved computer, not flapping: its reductions start every
     // 90 s or so, and three of them in the window would restart a gateway that still answers.
     const stretched = state.phase === 'healthy' && stretch(limits.unhealthyMs) > 1;
     const reductions = stretched ? recent : [...recent, event.at];
+    // Each reduction is judged on the health that follows it.
+    const fresh = { beats: [], beatsFrom: event.at };
     if (stretched || reductions.length < limits.flapLimit)
-      return { ...ticked, phase: 'reducing', since: event.at, shedAt: event.at, reductions };
+      return {
+        ...ticked,
+        ...fresh,
+        phase: 'reducing',
+        since: event.at,
+        shedAt: event.at,
+        reductions,
+      };
     const frozen = state.heardAt === undefined || state.heardAt <= state.since;
     return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen, reductions };
   }
@@ -200,6 +253,8 @@ export function watchGateway(
     pollMs: options.pollMs ?? 5_000,
     flapLimit: options.flapLimit ?? 3,
     flapWindowMs: options.flapWindowMs ?? 5 * 60_000,
+    healthWindowMs: options.healthWindowMs ?? 2 * 60_000,
+    healthyShare: options.healthyShare ?? 0.4,
   };
   let state: WatchState = { phase: 'booting', since: now(), failed: false };
   let resource: RecoveryResource | undefined;
