@@ -99,9 +99,9 @@ const sandboxStandIn = (info: { size: number; mode: number; nlink: number }) =>
   info.size === 0 && (info.mode & 0o222) === 0 && info.nlink === 1;
 
 /**
- * The hash of a file that's there but too big to keep: it stays in the picture,
- * so when it shrinks it isn't taken for a file the turn made (and Undo removed).
- * A change to it is never undone, either way.
+ * The hash of a file that's there but not kept (too big, or a stand-in): it
+ * stays in the picture, so when it shrinks or is filled it isn't taken for a
+ * file the turn made (and Undo removed). A change to it is never undone.
  */
 const UNKEPT = '';
 const unkept = (info: { size: number; mtimeMs: number; mode: number }): IndexEntry => ({
@@ -301,9 +301,9 @@ export class TurnTracker {
         }
         if (!entry.isFile()) continue;
         const info = await lstat(path).catch(() => undefined);
-        if (!info || sandboxStandIn(info)) continue;
+        if (!info) continue;
         const rel = relative(workspace, path);
-        if (info.size > MAX_FILE) {
+        if (info.size > MAX_FILE || sandboxStandIn(info)) {
           out.set(rel, unkept(info));
           continue;
         }

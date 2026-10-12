@@ -172,6 +172,20 @@ describe('noticing what changed', () => {
     expect((await t.end())?.files.map((f) => f.shown)).toEqual(['.keep']);
   });
 
+  it('an empty read-only file a command filled is never taken for one it made', async () => {
+    const { tracker, undo } = setup();
+    writeFileSync(join(work, 'keep.txt'), '');
+    chmodSync(join(work, 'keep.txt'), 0o444);
+    const t = tracker();
+    await t.begin();
+    await t.before('b1', 'Bash', { command: 'fill' });
+    chmodSync(join(work, 'keep.txt'), 0o644);
+    writeFileSync(join(work, 'keep.txt'), 'important');
+    const set = await t.after('b1');
+    if (set) await undo.apply([set.id], 'undo');
+    expect(readFileSync(join(work, 'keep.txt'), 'utf8')).toBe('important');
+  });
+
   it('a file too big to keep is never taken for one the turn made, however it shrinks', async () => {
     const { tracker, undo } = setup();
     const big = 'x'.repeat(MAX_FILE + 1024);
