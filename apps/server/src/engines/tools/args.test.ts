@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { chartTools } from '../../research/charts';
 import { toJsonSchema } from '../api/jsonschema';
 import type { HostTool } from '../types';
 import {
@@ -302,6 +303,28 @@ describe('abuse: forgiving input never widens what a call may do', () => {
   it('never unwraps an envelope the tool really takes', () => {
     const tool = { name: 't', input: { input: z.string() } };
     expect(ok(checkHostArgs(tool, { input: '{"x": 1}' })).args).toEqual({ input: '{"x": 1}' });
+  });
+
+  it('lets a tool’s own mend read fields it would otherwise drop', () => {
+    const [chart] = chartTools();
+    if (!chart) throw new Error('no chart_show');
+    const data = ok(
+      checkHostArgs(chart, {
+        type: 'column',
+        labels: ['a', 'b'],
+        series: [{ name: 's', data: [1, 2] }],
+      }),
+    );
+    expect(data.args.series).toEqual([{ name: 's', values: [1, 2] }]);
+    expect(data.notes).toEqual([]);
+    const label = ok(
+      checkHostArgs(chart, {
+        type: 'column',
+        labels: ['a', 'b'],
+        series: [{ label: 's', values: [1, 2] }],
+      }),
+    );
+    expect(label.args.series).toEqual([{ name: 's', values: [1, 2] }]);
   });
 
   it('never unwraps an envelope for a tool that takes anything', () => {

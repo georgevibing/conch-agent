@@ -301,7 +301,13 @@ export function normaliseArgs(
   {
     dropUnknown,
     aliases,
-  }: { dropUnknown: boolean; aliases?: Readonly<Record<string, readonly string[] | undefined>> },
+    mend,
+  }: {
+    dropUnknown: boolean;
+    aliases?: Readonly<Record<string, readonly string[] | undefined>>;
+    /** The tool's own mend, which reads fields by other names before unknown ones are dropped. */
+    mend?: (args: Record<string, unknown>) => Record<string, unknown>;
+  },
 ): { args: Record<string, unknown>; dropped: string[]; renamed: string[] } {
   const properties = isRecord(schema['properties']) ? schema['properties'] : {};
   let args = raw;
@@ -317,6 +323,13 @@ export function normaliseArgs(
   }
   const renamed: string[] = [];
   if (aliases) args = renameAliases(args, properties, aliases, renamed);
+  if (mend) {
+    try {
+      args = mend(args);
+    } catch {
+      // A mend that can't read the value leaves it for the strict check to explain.
+    }
+  }
   const dropped: string[] = [];
   return { args: normaliseObject(args, schema, '', dropped, dropUnknown, 0), dropped, renamed };
 }
@@ -522,19 +535,11 @@ export function checkHostArgs(
   const read = start(raw);
   if ('problem' in read) return { ok: false, message: read.problem };
   const schema = schemaOf(tool.input);
-  const normalised = normaliseArgs(schema, read.args, {
+  const { args, dropped, renamed } = normaliseArgs(schema, read.args, {
     dropUnknown: true,
     ...(tool.aliases && { aliases: tool.aliases }),
+    ...(tool.mend && { mend: tool.mend.bind(tool) }),
   });
-  const { dropped, renamed } = normalised;
-  let { args } = normalised;
-  if (tool.mend) {
-    try {
-      args = tool.mend(args);
-    } catch {
-      // A mend that can't read the value leaves it for the strict check to explain.
-    }
-  }
   const notes = [...read.notes, ...renamedNote(renamed), ...droppedNote(dropped)];
   const parsed = z.object(tool.input).strict().safeParse(args, { reportInput: true });
   if (parsed.success) return { ok: true, args: parsed.data, notes };
