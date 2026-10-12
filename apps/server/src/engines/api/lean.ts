@@ -123,7 +123,8 @@ export function leanPrompt(
   for (const line of fitted.split('\n')) {
     const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
     if (marker && !fence) fence = marker;
-    else if (marker && marker[0] === fence?.[0] && marker.length >= fence.length) fence = undefined;
+    else if (marker && fence && marker[0] === fence[0] && marker.length >= fence.length)
+      fence = undefined;
     else if (!fence && /^#{1,2} /.test(line) && current.length) {
       blocks.push(current.join('\n'));
       current = [];
