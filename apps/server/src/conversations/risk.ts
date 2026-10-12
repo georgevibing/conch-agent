@@ -262,6 +262,34 @@ export function riskAsks(risk: Risk | undefined, untrusted: boolean): boolean {
 const PREFIX =
   /^(?:(?:sudo|doas|nohup|time|command|exec|builtin|nice|ionice|stdbuf|caffeinate)(?:\s+-[\w-]+)*\s+|env(?:\s+-[\w-]+)*\s+|[A-Za-z_][\w]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/;
 
+/**
+ * Wrappers whose options take a value (`timeout 60`, `nice -n 10`, `env -u FOO`, `sudo -u root`),
+ * and the shell's own words before a command (`then`, `do`, `!`, an unquoted `eval`): what
+ * follows is the command that runs.
+ */
+const WRAPPERS: RegExp[] = [
+  /^(?:if|then|else|elif|do|while|until|!)\s+/,
+  /^timeout(?:\s+-(?:s|k)\s*\S+|\s+--(?:signal|kill-after)=\S+|\s+-[\w-]+)*\s+\d+(?:\.\d+)?[smhd]?\s+/,
+  /^nice(?:\s+-n\s*[+-]?\d+|\s+--adjustment=[+-]?\d+|\s+-[+-]?\d+)+\s+/,
+  /^ionice(?:\s+-[cnpP]\s*\S+|\s+-t)+\s+/,
+  /^stdbuf(?:\s+-[ioe]\s*\S+|\s+--(?:input|output|error)=\S+)+\s+/,
+  /^env(?:\s+-[uCS]\s*\S+|\s+--(?:unset|chdir)=\S+|\s+-[\w-]+)+\s+/,
+  /^(?:sudo|doas)(?:\s+-[ugCDpRrTt]\s*\S+|\s+--(?:user|group)=\S+|\s+-[\w-]+)+\s+/,
+  /^eval\s+(?=[^\s"'])/,
+];
+
+/** One piece of a command line with every wrapper taken off. */
+function unwrap(piece: string): string {
+  let text = piece;
+  for (let i = 0; i < 20; i++) {
+    const before = text;
+    for (const wrapper of WRAPPERS) text = text.replace(wrapper, '');
+    text = text.replace(PREFIX, '');
+    if (text === before) break;
+  }
+  return text;
+}
+
 /** Programs that run what a here-document gives them: its body is commands, not words. */
 const RUNS_INPUT =
   /^(?:(?:ba|z|da|k|fi)?sh|python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php|pwsh|powershell|osascript|ssh|eval|source|\.|xargs|sudo|doas|su)$/i;
@@ -301,7 +329,7 @@ export function withoutHeredocs(command: string): { text: string; runs: string[]
           .slice(0, m.index)
           .split(/\|\||&&|[;|&(]/)
           .pop() ?? '';
-      const prog = (wordsOf(before.trim().replace(PREFIX, ''))[0] ?? '').replace(/^.*[\\/]/, '');
+      const prog = (wordsOf(unwrap(before.trim()))[0] ?? '').replace(/^.*[\\/]/, '');
       pending.push({
         end: m[3] ?? '',
         strip: m[1] === '-',
@@ -326,7 +354,7 @@ function scriptsOf(command: string): string[] {
     for (const inner of text.matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`/g))
       queue.push(inner[1] ?? inner[2] ?? '');
     for (const inner of text.matchAll(
-      /\b(?:ba|z|da|k|fi)?sh\s+-\w*c\w*\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/g,
+      /\b(?:ba|z|da|k|fi)?sh(?:\s+-[\w-]+)*?\s+-\w*c\w*\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/g,
     ))
       queue.push(inner[1] ?? inner[2] ?? '');
     for (const inner of text.matchAll(/\beval\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/g))
@@ -384,19 +412,24 @@ export function splitLine(text: string): string[] {
   return pieces;
 }
 
+/** Words echoed into `xargs`: `echo ~ | xargs rm -rf` is `rm -rf ~`. */
+const ECHOED_INTO = /\b(?:echo|printf)\s+([^|;&\n]*?)\s*\|\s*xargs(?:\s+-[\w-]+)*\s+([^|;&\n]+)/g;
+
 /** The pieces a command line runs, wrappers (`sudo`, `env A=1`, `nohup`) taken off. */
 export function commandParts(command: string): string[] {
-  return scriptsOf(command).flatMap((text) =>
-    splitLine(text)
+  return scriptsOf(command).flatMap((text) => [
+    ...splitLine(text)
       .map((piece) =>
-        piece
-          .trim()
-          .replace(/^[({]\s*/, '')
-          .replace(/\s*[)}]+$/, '')
-          .replace(PREFIX, ''),
+        unwrap(
+          piece
+            .trim()
+            .replace(/^[({]\s*/, '')
+            .replace(/\s*[)}]+$/, ''),
+        ),
       )
       .filter(Boolean),
-  );
+    ...[...text.matchAll(ECHOED_INTO)].map((m) => unwrap(`${m[2] ?? ''} ${m[1] ?? ''}`.trim())),
+  ]);
 }
 
 /** Words of one part, as the shell would split them: quotes joined to what's beside them. */
@@ -1236,6 +1269,24 @@ function partRisk(part: string, places: Places): Risk | undefined {
   const words = wordsOf(part);
   const prog = program(part);
   if (!prog) return undefined;
+  // `… | xargs rm -rf`: what it deletes is only known when it runs.
+  if (prog === 'xargs') {
+    const inner = unwrap(
+      part.replace(/^\S*xargs(?:\s+-[IdEnLPsa]\s*\S+|\s+--[\w-]+(?:=\S+)?|\s+-[\w-]+)*\s*/, ''),
+    );
+    if (!inner) return undefined;
+    if (
+      /^(?:rm|rmdir|shred|srm)$/.test(program(inner)) &&
+      /(?:^|\s)-\w*[rR]|--recursive/.test(inner)
+    )
+      return severe(
+        'wipe',
+        'delete for good whatever a list names, only known when it runs',
+        true,
+        wish(WISHES.wipe as RegExp),
+      );
+    return partRisk(inner, places);
+  }
   if (/^(?:rm|rmdir|unlink|shred|srm)$/.test(prog)) {
     const risk = rmRisk(words, places);
     if (risk) return risk;

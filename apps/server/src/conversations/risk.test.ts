@@ -553,3 +553,31 @@ describe('what the person asked for, in their own words (ADR 0128)', () => {
     expect(declared(dir, 'npm', 'left-pad')).toBe(false);
   });
 });
+
+describe('the same step written another way', () => {
+  it('reads past wrappers that take a value, and the shell’s own keywords', () => {
+    for (const command of [
+      'timeout 60 rm -rf ~',
+      'timeout -s KILL 5m rm -rf ~',
+      'timeout 5 rm -rf .',
+      'nice -n 10 rm -rf ~',
+      'env -u FOO rm -rf ~',
+      'sudo -u root rm -rf ~',
+      'if true; then rm -rf ~; fi',
+      'while true; do rm -rf ~; done',
+      '! rm -rf ~',
+      'bash -l -c "rm -rf ~"',
+      'eval rm -rf ~',
+      'echo ~ | xargs rm -rf',
+    ]) {
+      expect(asks(bash(command), false), command).toBe(true);
+      expect(breaksCircuit('Bash', { command }, ctx), command).toBeDefined();
+    }
+    // A recursive delete of a list only known when it runs asks, but isn't the breaker.
+    const fed = 'find /Users/ada/Documents -name "*.bak" | xargs rm -rf';
+    expect(asks(bash(fed), false)).toBe(true);
+    expect(breaksCircuit('Bash', { command: fed }, ctx)).toBeUndefined();
+    expect(asks(bash('lsof -ti :3000 | xargs kill'), true)).toBe(false);
+    expect(asks(bash('timeout 30 pnpm test'), true)).toBe(false);
+  });
+});
