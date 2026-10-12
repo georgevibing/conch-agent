@@ -10,7 +10,9 @@
  * V8's inspector, in-process with no port, to pause the main thread. V8 honours
  * that between any two statements, even inside `while (true) {}`. A gateway
  * blocked in native code (a synchronous syscall) can't pause; that is recorded
- * as `outside-javascript`. Lines are those of the code Node runs (after tsx).
+ * as `outside-javascript`. Lines are those of the source as written: tsx runs
+ * each module as one or two long lines, so a frame is mapped back through the
+ * module's inline source map, and left out when it can't be.
  */
 import {
   mkdirSync,
@@ -30,6 +32,8 @@ export const EVIDENCE_KEPT = 3;
 export const EVIDENCE_MAX_BYTES = 16_384;
 const MAX_FRAMES = 40;
 const ANSWER_MAX_BYTES = 65_536;
+/** A module's source map larger than this isn't read: its frames are left out. */
+const MAP_MAX_CHARS = 2_000_000;
 
 export interface StackFrame {
   name: string;
@@ -197,10 +201,11 @@ function tidy(folder: string): void {
 const WATCHER = `
 const { existsSync, renameSync, rmSync, writeFileSync } = require('node:fs');
 const { Session } = require('node:inspector');
+const { SourceMap } = require('node:module');
 const { isAbsolute, join, relative, sep } = require('node:path');
 const { fileURLToPath } = require('node:url');
 const { workerData } = require('node:worker_threads');
-const { folder, root, pid, pollMs, pauseMs } = workerData;
+const { folder, root, pid, pollMs, pauseMs, mapMs, mapMaxChars } = workerData;
 const request = join(folder, pid + '.request');
 const answer = join(folder, pid + '.frames.json');
 let busy = false;
@@ -223,9 +228,29 @@ function write(where, frames) {
     renameSync(answer + '.tmp', answer);
   } catch {}
 }
+// The source map inside the code V8 runs (tsx writes it inline), or null.
+function mapOf(source) {
+  if (typeof source !== 'string') return null;
+  const at = source.lastIndexOf('//# sourceMappingURL=data:');
+  if (at < 0) return null;
+  const url = source.slice(at + 21).split(/\\s/, 1)[0];
+  const comma = url.indexOf(',');
+  if (comma < 0 || url.length - comma > mapMaxChars || !/^data:application\\/json[;,]/.test(url))
+    return null;
+  try {
+    const payload = /;base64$/.test(url.slice(0, comma))
+      ? Buffer.from(url.slice(comma + 1), 'base64').toString('utf8')
+      : decodeURIComponent(url.slice(comma + 1));
+    return new SourceMap(JSON.parse(payload));
+  } catch {
+    return null;
+  }
+}
 function capture() {
   busy = true;
-  const files = new Map();
+  const started = performance.now();
+  // Scripts in the release, and whether what V8 runs has a source map.
+  const scripts = new Map();
   const session = new Session();
   let finished = false;
   const close = () => {
@@ -238,28 +263,64 @@ function capture() {
     write('outside-javascript', []);
     close();
   }, pauseMs);
+  // The line of the source a person wrote, or nothing: V8's line is tsx's output,
+  // the whole module on a line or two, and never passed off as a source line.
+  function place(frame, maps) {
+    const script = scripts.get(frame.location.scriptId);
+    const file = inside(frame.url) || (script && script.file);
+    if (!file) return undefined;
+    const { lineNumber, columnNumber } = frame.location;
+    if (script && !script.mapped) return { file, line: lineNumber + 1 };
+    const map = maps.get(frame.location.scriptId);
+    if (!map) return undefined;
+    let entry;
+    try { entry = map.findEntry(lineNumber, columnNumber || 0); } catch { return undefined; }
+    if (!entry || typeof entry.originalLine !== 'number') return undefined;
+    const original = inside(entry.originalSource);
+    return original ? { file: original, line: entry.originalLine + 1 } : undefined;
+  }
+  function source(scriptId) {
+    return new Promise((done) => {
+      const late = setTimeout(done, Math.max(0, mapMs - (performance.now() - started)));
+      session.post('Debugger.getScriptSource', { scriptId }, (error, result) => {
+        clearTimeout(late);
+        done(error ? undefined : result && result.scriptSource);
+      });
+    });
+  }
+  async function answer(callFrames) {
+    const maps = new Map();
+    for (const frame of callFrames) {
+      const id = frame.location.scriptId;
+      const script = scripts.get(id);
+      if (maps.has(id) || (script && !script.mapped) || !(inside(frame.url) || script)) continue;
+      if (performance.now() - started > mapMs) break;
+      maps.set(id, mapOf(await source(id)));
+    }
+    const frames = [];
+    for (const frame of callFrames) {
+      const at = place(frame, maps);
+      if (at) frames.push({ name: String(frame.functionName || '(anonymous)').slice(0, 80), ...at });
+      if (frames.length >= 40) break;
+    }
+    return frames;
+  }
   try {
     session.connectToMainThread();
     session.on('Debugger.scriptParsed', ({ params }) => {
       const file = inside(params.url);
-      if (file) files.set(params.scriptId, file);
+      if (file) scripts.set(params.scriptId, { file, mapped: Boolean(params.sourceMapURL) });
     });
     session.on('Debugger.paused', ({ params }) => {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      const frames = [];
-      for (const frame of params.callFrames.slice(0, 160)) {
-        const file = inside(frame.url) || files.get(frame.location.scriptId);
-        if (file)
-          frames.push({
-            name: String(frame.functionName || '(anonymous)').slice(0, 80),
-            file,
-            line: frame.location.lineNumber + 1,
-          });
-      }
-      write('javascript', frames.slice(0, 40));
-      session.post('Debugger.resume', () => close());
+      answer(params.callFrames.slice(0, 160))
+        .catch(() => [])
+        .then((frames) => {
+          write('javascript', frames);
+          session.post('Debugger.resume', () => close());
+        });
     });
     session.post('Debugger.enable', () => session.post('Debugger.pause'));
   } catch {
@@ -281,7 +342,7 @@ setInterval(() => {
  */
 export function answerEvidenceRequests(
   home: string,
-  options: { root?: string; pollMs?: number; pauseMs?: number } = {},
+  options: { root?: string; pollMs?: number; pauseMs?: number; mapMs?: number } = {},
 ): () => void {
   try {
     const worker = new Worker(WATCHER, {
@@ -298,6 +359,9 @@ export function answerEvidenceRequests(
         pid: process.pid,
         pollMs: options.pollMs ?? 250,
         pauseMs: options.pauseMs ?? 1_000,
+        // Finding source lines stops in time for the supervisor's bound.
+        mapMs: options.mapMs ?? EVIDENCE_BOUND_MS - 500,
+        mapMaxChars: MAP_MAX_CHARS,
       },
     });
     worker.on('error', () => undefined);

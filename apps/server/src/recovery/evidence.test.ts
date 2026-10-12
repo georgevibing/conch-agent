@@ -216,6 +216,60 @@ setTimeout(() => { process.send('stuck'); handleTurn(); }, 300);
     expect(child.exitCode).toBeNull();
   }, 20_000);
 
+  it('names the line of the TypeScript as written, not of what tsx runs', async () => {
+    const at = home();
+    const root = home();
+    const script = join(root, 'turns.ts');
+    // tsx runs this as a line or two; the loop is on line 14 of the file.
+    writeFileSync(
+      script,
+      `import { answerEvidenceRequests } from ${JSON.stringify(pathToFileURL(join(server, 'src', 'recovery', 'evidence.ts')).href)};
+
+interface Turn {
+  id: string;
+  steps: number;
+}
+
+answerEvidenceRequests(${JSON.stringify(at)}, { root: ${JSON.stringify(root)} });
+
+const pending: Turn[] = [{ id: 'a', steps: 1 }];
+
+function spinForever(turn: Turn): number {
+  let i: number = turn.steps;
+  for (;;) i = (i + 1) % 1_000_003;
+}
+
+function handleTurn(turns: Turn[]): void {
+  for (const turn of turns) spinForever(turn);
+}
+
+setTimeout(() => {
+  process.send?.('stuck');
+  handleTurn(pending);
+}, 300);
+`,
+    );
+    const child = spawn(process.execPath, ['--import', 'tsx', script], {
+      cwd: server,
+      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+    });
+    children.push(child);
+    await new Promise<void>((done, fail) => {
+      const timer = setTimeout(() => fail(new Error('fixture did not start')), 10_000);
+      child.once('message', () => {
+        clearTimeout(timer);
+        done();
+      });
+      child.once('exit', () => fail(new Error('fixture exited')));
+    });
+    await new Promise((done) => setTimeout(done, 200));
+    expect(await captureEvidence(child.pid, at)).toBe(true);
+    expect(readEvidence(at)[0]?.frames.slice(0, 2)).toEqual([
+      { name: 'spinForever', file: 'turns.ts', line: 14 },
+      { name: 'handleTurn', file: 'turns.ts', line: 18 },
+    ]);
+  }, 20_000);
+
   it('says so when the gateway is stuck outside JavaScript', async () => {
     const at = home();
     const child = await frozen(at, 'blockedInNative();');
