@@ -284,6 +284,25 @@ describe('bringing them in', () => {
     expect(detail?.messages.at(-1)?.text).toBe('And the refund page?');
   });
 
+  it('keeps a chat it has when it grew but can’t be read just now', async () => {
+    const path = claudeHome(home);
+    let locked = false;
+    const finder: ChatFinder = {
+      ...claudeCode,
+      read: async (file) => (locked ? undefined : claudeCode.read(file)),
+    };
+    const chats = service({ finders: [finder] });
+    await chats.start();
+    expect((await chats.list()).length).toBe(1);
+    appendFileSync(path, '\n');
+    locked = true;
+    expect(await chats.start()).toMatchObject({ added: 0, updated: 0, skipped: 1 });
+    expect((await chats.list()).length).toBe(1);
+    // And it's read again once it can be.
+    locked = false;
+    expect((await chats.status()).sources[0]?.fresh).toBe(1);
+  });
+
   it('leaves out the sessions behind Conch’s own chats', async () => {
     claudeHome(home);
     const chats = service({ ownSessions: async () => new Set([CLAUDE_SESSION]) });

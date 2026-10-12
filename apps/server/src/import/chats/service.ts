@@ -240,7 +240,10 @@ export class ChatImportService {
       };
       try {
         const session = await finders.get(file.source)?.read(file);
-        if (!session) {
+        if (!session && before && !before.empty) {
+          // Nothing read from a chat already here (locked, mid-write): kept, and read next time.
+          run.skipped += 1;
+        } else if (!session) {
           await this.store.putEmpty({ ...base, ...(file.project && { project: file.project }) });
         } else {
           const messages = session.messages.map((m) => {
