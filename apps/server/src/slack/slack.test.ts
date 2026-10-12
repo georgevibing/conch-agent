@@ -191,6 +191,23 @@ describe('the tools', () => {
     expect(out.messages.at(-1)?.from).toBe('Eve Mallory');
   });
 
+  it('pages back through a busy channel with the cursor it gives', async () => {
+    const { ctx } = context();
+    interface Read {
+      messages: { text: string }[];
+      more?: boolean;
+      cursor?: string;
+    }
+    const read = async (args: Record<string, unknown>) =>
+      JSON.parse(
+        text(await tool(ctx, 'slack_read_channel').run({ channel: 'C0LAUNCH01', ...args })),
+      ) as Read;
+    const newest = await read({ limit: 1 });
+    expect(newest).toMatchObject({ more: true, cursor: expect.any(String) });
+    const earlier = await read({ limit: 1, cursor: newest.cursor });
+    expect(earlier.messages[0]?.text).not.toBe(newest.messages[0]?.text);
+  });
+
   it('shows the person what it read as messages; the model reads the text', async () => {
     const { ctx } = context();
     const read = await tool(ctx, 'slack_read_channel').run({ channel: 'C0LAUNCH01', limit: 50 });

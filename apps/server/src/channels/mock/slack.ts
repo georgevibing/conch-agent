@@ -474,12 +474,12 @@ export class MockSlack {
         const missing = needs(found.is_private ? 'groups:history' : 'channels:history');
         if (missing) return missing;
         const oldest = Number(params.oldest ?? 0);
-        const messages = found.messages
+        // As Slack does: newest first, a page at a time, the cursor going further back.
+        const all = found.messages
           .filter((m) => !m.thread_ts || m.thread_ts === m.ts)
           .filter((m) => Number(m.ts) > oldest)
-          .reverse()
-          .slice(0, Number(params.limit ?? 100));
-        return { ok: true, messages, has_more: false };
+          .reverse();
+        return page(all, params);
       }
       case 'conversations.replies': {
         const found = channel(params.channel);
@@ -488,7 +488,8 @@ export class MockSlack {
           (m) => m.ts === params.ts || m.thread_ts === params.ts,
         );
         if (!messages.length) return { ok: false, error: 'thread_not_found' };
-        return { ok: true, messages, has_more: false };
+        // A thread comes oldest first, the cursor going forward.
+        return page(messages, params);
       }
       case 'search.messages': {
         const missing = needs('search:read');
@@ -536,4 +537,18 @@ export class MockSlack {
         return { ok: false, error: 'unknown_method' };
     }
   }
+}
+
+/** One page of a Slack list: `limit` from where the cursor says, and the cursor for the next. */
+function page<T>(all: T[], params: Record<string, string | undefined>) {
+  const from = Number(params.cursor ?? 0) || 0;
+  const limit = Number(params.limit ?? 100);
+  const messages = all.slice(from, from + limit);
+  const more = from + limit < all.length;
+  return {
+    ok: true,
+    messages,
+    has_more: more,
+    response_metadata: { next_cursor: more ? String(from + limit) : '' },
+  };
 }
