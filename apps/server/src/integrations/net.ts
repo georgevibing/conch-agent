@@ -27,6 +27,8 @@ privateNets.addSubnet('172.16.0.0', 12, 'ipv4');
 privateNets.addSubnet('192.168.0.0', 16, 'ipv4');
 privateNets.addSubnet('100.64.0.0', 10, 'ipv4');
 privateNets.addAddress('::1', 'ipv6');
+// The unspecified address: connecting to it reaches this computer.
+privateNets.addAddress('::', 'ipv6');
 privateNets.addSubnet('fc00::', 7, 'ipv6');
 
 export class EndpointError extends Error {}
@@ -46,16 +48,28 @@ export function unmapped(address: string): string {
   return [high >> 8, high & 255, low >> 8, low & 255].join('.');
 }
 
+/** An IPv4 address behind the well-known NAT64 prefix (`64:ff9b::a9fe:a9fe`), as IPv4. */
+function nat64(address: string): string {
+  const embedded = /^64:ff9b::(?:([0-9a-f]{1,4}):([0-9a-f]{1,4})|(\d+\.\d+\.\d+\.\d+))$/i.exec(
+    address,
+  );
+  if (embedded?.[3]) return embedded[3];
+  if (!embedded?.[1] || !embedded[2]) return address;
+  return unmapped(`::ffff:${embedded[1]}:${embedded[2]}`);
+}
+
+const inner = (address: string) => unmapped(nat64(address));
+
 export type Reach = 'public' | 'private';
 
 /** Is this address on this computer or the local network? */
 export function isPrivateAddress(address: string): boolean {
-  const a = unmapped(address);
+  const a = inner(address);
   return privateNets.check(a, family(a)) || linkLocal.check(a, family(a));
 }
 
 export function isBlockedAddress(address: string): boolean {
-  const a = unmapped(address);
+  const a = inner(address);
   return linkLocal.check(a, family(a));
 }
 

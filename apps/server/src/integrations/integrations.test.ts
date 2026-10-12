@@ -575,6 +575,15 @@ describe('SSRF guard', () => {
     expect(calls[2]?.headers.get('accept')).toBe('x/y');
   });
 
+  it('never calls the unspecified address, or this network through NAT64', async () => {
+    for (const url of [
+      'https://[::]/',
+      'https://[64:ff9b::a9fe:a9fe]/',
+      'https://[64:ff9b::7f00:1]/',
+    ])
+      await expect(checkEndpoint(new URL(url), 'public'), url).rejects.toThrow(EndpointError);
+  });
+
   it('refuses integrations at addresses it would never call', async () => {
     const { service } = await setup({ realCatalog: true });
     await expect(
