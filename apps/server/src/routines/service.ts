@@ -118,6 +118,8 @@ export class RoutineService {
 
   /** Event runs on their way (between being fired and running). */
   #firing = new Set<string>();
+  /** Runs past the busy check that aren't in `#running` yet: two presses never both start. */
+  #claimed = new Set<string>();
   /** When each routine's last run ended, so its own writes aren't news (ADR 0056). */
   #ended = new Map<string, number>();
   /** Routines' names, for the words of one that runs after another. */
@@ -348,7 +350,7 @@ export class RoutineService {
   /** Run a routine right now, regardless of its schedule. */
   async runNow(id: string): Promise<RoutineRun> {
     const routine = await this.#require(id);
-    if (this.#running.has(id) || this.#firing.has(id))
+    if (this.#running.has(id) || this.#firing.has(id) || this.#claimed.has(id))
       throw new RoutineError('busy', 'This routine is already running.');
     // A When-routine tries itself on the most recent thing that fits, when there is one.
     const file = isWhenSchedule(routine.schedule) ? await this.deps.when?.load(id) : undefined;
@@ -395,7 +397,7 @@ export class RoutineService {
       return {
         held: 'Conch is waiting for this computer to have room before starting this routine.',
       };
-    const going = new Set([...this.#running.keys(), ...this.#firing]);
+    const going = new Set([...this.#running.keys(), ...this.#firing, ...this.#claimed]);
     if (going.has(id) || going.size >= MAX_CONCURRENT) return 'busy';
     const engine = this.deps.engine(routine.options.engine);
     const status = await engine.detect().catch(() => undefined);
@@ -407,7 +409,7 @@ export class RoutineService {
       return {
         held: 'Conch is waiting for this computer to have room before starting this routine.',
       };
-    if (this.#running.has(id) || this.#firing.has(id)) return 'busy';
+    if (this.#running.has(id) || this.#firing.has(id) || this.#claimed.has(id)) return 'busy';
     this.#firing.add(id);
     void this.#execute(routine, 'event', undefined, batch)
       .catch(() => undefined)
@@ -417,7 +419,7 @@ export class RoutineService {
 
   /** Its run is going, or ended a moment ago: what it wrote isn't news. */
   busy(id: string): boolean {
-    if (this.#running.has(id) || this.#firing.has(id)) return true;
+    if (this.#running.has(id) || this.#firing.has(id) || this.#claimed.has(id)) return true;
     const ended = this.#ended.get(id);
     return ended !== undefined && this.#now - ended < 30_000;
   }
@@ -752,6 +754,42 @@ export class RoutineService {
     /** A run Conch paused for a restart: it carries on in its own chat. */
     resume?: RoutineRun,
   ): Promise<RoutineRun | undefined> {
+    if (this.#running.has(routine.id) || this.#claimed.has(routine.id)) {
+      // A person pressing Run now again is told it's going (runNow), not given a skipped run.
+      if (trigger === 'manual') return undefined;
+      await this.#record(routine, {
+        trigger,
+        status: 'skipped',
+        scheduledFor,
+        outcome: 'The previous run was still going.',
+      });
+      return undefined;
+    }
+    if (new Set([...this.#running.keys(), ...this.#claimed]).size >= MAX_CONCURRENT) {
+      await this.#record(routine, {
+        trigger,
+        status: 'skipped',
+        scheduledFor,
+        outcome: 'Too many routines were running at once.',
+      });
+      return undefined;
+    }
+    this.#claimed.add(routine.id);
+    try {
+      return await this.#begin(routine, trigger, scheduledFor, event, resume);
+    } finally {
+      this.#claimed.delete(routine.id);
+    }
+  }
+
+  /** A run that has its claim: everything from the provider check to its end. */
+  async #begin(
+    routine: StoredRoutine,
+    trigger: RoutineRun['trigger'],
+    scheduledFor?: number,
+    event?: FiredBatch,
+    resume?: RoutineRun,
+  ): Promise<RoutineRun | undefined> {
     /** A paused run that can't carry on says why, instead of a second run. */
     const cannotCarryOn = async (why: string) => {
       if (!resume) return false;
@@ -766,25 +804,6 @@ export class RoutineService {
       this.deps.emit({ type: 'routine.run', run });
       return true;
     };
-    if (this.#running.has(routine.id)) {
-      await this.#record(routine, {
-        trigger,
-        status: 'skipped',
-        scheduledFor,
-        outcome: 'The previous run was still going.',
-      });
-      return undefined;
-    }
-    if (this.#running.size >= MAX_CONCURRENT) {
-      await this.#record(routine, {
-        trigger,
-        status: 'skipped',
-        scheduledFor,
-        outcome: 'Too many routines were running at once.',
-      });
-      return undefined;
-    }
-
     const engine = this.deps.engine(routine.options.engine);
     const status = await engine.detect();
     if (status.state !== 'ready') {

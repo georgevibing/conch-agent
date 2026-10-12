@@ -339,6 +339,18 @@ describe('RoutineService', () => {
     expect((await s.routines.detail(r.id)).runs).toHaveLength(2);
   });
 
+  it('runs a routine once when Run now is pressed twice at once', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    const presses = await Promise.allSettled([s.routines.runNow(r.id), s.routines.runNow(r.id)]);
+    expect(presses.map((p) => p.status).sort()).toEqual(['fulfilled', 'rejected']);
+    await settled(s, r.id);
+    expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+  });
+
   it('completes one-off routines after they run', async () => {
     const s = await setup();
     const r = await s.routines.create(
