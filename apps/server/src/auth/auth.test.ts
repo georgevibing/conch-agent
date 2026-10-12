@@ -206,6 +206,17 @@ describe('this computer, proven', () => {
     expect(line).toMatch(/Max-Age=34560000/);
   });
 
+  it('throttles an IPv6 address by its /64, however it is written', async () => {
+    const { services } = await setup();
+    const key = (remoteAddress: string) =>
+      services.gate.clientKey({ headers: {}, socket: { remoteAddress } } as never);
+    expect(key('2001:db8::5')).toBe(key('2001:db8::6'));
+    expect(key('2001:db8::5')).toBe(key('2001:db8:0:0:1:2:3:4'));
+    expect(key('2001:db8:0:1::5')).not.toBe(key('2001:db8::5'));
+    expect(key('203.0.113.9')).toBe('203.0.113.9');
+    expect(key('::ffff:203.0.113.9')).toBe('::ffff:203.0.113.9');
+  });
+
   it('opens on this computer while failed sign-ins from elsewhere hold the global lock', async () => {
     const { app, services } = await setup();
     for (let i = 0; i < 100; i++) services.gate.limiter.fail(`203.0.113.${i}`);

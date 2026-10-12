@@ -106,6 +106,26 @@ function readCookie(header: string | undefined, name: string): string | undefine
 
 const FORWARDED = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-real-ip'];
 
+/** An IPv6 address's first four groups, written out: `2001:db8::5` and `2001:db8::6` are one /64. */
+function slash64(ip: string): string {
+  const address = ip.split('%')[0] ?? '';
+  const [head = '', tail] = address.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? left
+      : [
+          ...left,
+          ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'),
+          ...right,
+        ];
+  return groups
+    .slice(0, 4)
+    .map((group) => group.toLowerCase().replace(/^0+(?=.)/, ''))
+    .join(':');
+}
+
 /**
  * Decides who gets in. One instance per gateway; shared by the HTTP hooks,
  * the auth routes and the WebSocket handler.
@@ -232,7 +252,7 @@ export class Gatekeeper {
       forwarded && isLoopbackAddress(request.socket.remoteAddress)
         ? (String(forwarded).split(',').at(-1)?.trim() ?? '')
         : (request.socket.remoteAddress ?? '');
-    return ip.includes(':') && !ip.startsWith('::ffff:') ? ip.split(':').slice(0, 4).join(':') : ip;
+    return ip.includes(':') && !ip.startsWith('::ffff:') ? slash64(ip) : ip;
   }
 
   sessionToken(request: FastifyRequest): string | undefined {
