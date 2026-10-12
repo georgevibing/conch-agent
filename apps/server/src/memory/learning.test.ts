@@ -776,6 +776,26 @@ describe('skills you keep asking for', () => {
     expect(await suggester.list({ fresh: true })).toEqual([]);
   });
 
+  it('by words: turned down, it stays down as more requests come', async () => {
+    let asked = [
+      ask('Write my weekly summary of calendar meetings', 'a'),
+      ask('write the weekly summary of my calendar meetings', 'b'),
+      ask('Make my weekly calendar summary of meetings', 'c'),
+      ask('Make the weekly summary of calendar meetings', 'd'),
+    ];
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => asked,
+      skills: async () => [],
+      model: async () => undefined,
+    });
+    const [first] = await suggester.list();
+    expect(first?.times).toBe(4);
+    await suggester.dismiss(first?.id ?? '', true);
+    asked = [...asked, ask('Do the weekly summary of calendar meetings', 'e')];
+    expect(await suggester.list({ fresh: true })).toEqual([]);
+  });
+
   /** A model for meaning that knows summaries of the week are one thing, and so are trips. */
   const meaningOf: Embedder = {
     id: 'built-in:test',

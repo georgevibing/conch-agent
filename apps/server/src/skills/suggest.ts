@@ -226,6 +226,14 @@ export class SkillSuggester {
       const latest = group[0];
       if (!latest) continue;
       if (this.#dismissed(id, file) || meaning?.dismissed(group)) continue;
+      // Its id moves as the habit grows (the words most requests share): what it was about stays.
+      if (
+        Object.entries(file.about).some(
+          ([down, about]) =>
+            this.#dismissed(down, file) && group.some((a) => similar(about, a.text)),
+        )
+      )
+        continue;
       // Already a skill of yours: nothing to offer.
       if (skills.some((s) => similar(`${s.title} ${s.description}`, latest.text))) continue;
       if (meaning?.isSkill(group)) continue;
