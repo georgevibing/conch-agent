@@ -221,8 +221,9 @@ export function readFlag(front: string | undefined, key: string): boolean | unde
   return value === 'true' ? true : value === 'false' ? false : undefined;
 }
 
+/** What YAML would read as something else: a key, a comment, a flag, a number (`0x1F`, `.inf`). */
 const PLAIN_UNSAFE =
-  /^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|[\n\r\t]|\s$|^(?:true|false|null|yes|no|on|off|~|[-+]?\d[\d._]*(?:e[-+]?\d+)?)$/i;
+  /^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|:$|[\n\r\t]|\s$|^(?:true|false|null|yes|no|on|off|~|[-+]?\d[\d._]*(?:e[-+]?\d+)?|[-+]?\.\d[\d_]*(?:e[-+]?\d+)?|0x[\da-f_]+|0o[0-7_]+|[-+]?\.(?:inf|nan))$/i;
 
 /** A value written the way a person would, quoted only when it has to be. */
 export function formatValue(value: string | boolean): string {

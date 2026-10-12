@@ -129,6 +129,15 @@ disable-model-invocation: true`);
     expect(formatValue('- a list?')).toBe('"- a list?"');
     expect(formatValue(true)).toBe('true');
     // Whatever we write, we read back the same.
+    // A value ending in a colon, and what YAML would read as a number.
+    expect(formatValue('Use when you see:')).toBe('"Use when you see:"');
+    expect(formatValue('0x1F')).toBe('"0x1F"');
+    expect(formatValue('.inf')).toBe('".inf"');
+    expect(formatValue('-.Inf')).toBe('"-.Inf"');
+    expect(formatValue('.NaN')).toBe('".NaN"');
+    expect(formatValue('0o17')).toBe('"0o17"');
+    expect(formatValue('.5')).toBe('".5"');
+    expect(formatValue('Version 2.0')).toBe('Version 2.0');
     for (const value of ['a: b', 'it’s "quoted"', "o'clock", '1.0', 'back\\slash', 'x #y']) {
       const front = setKeys(undefined, [['description', value]]);
       expect(readKey(front, 'description')).toBe(value);
