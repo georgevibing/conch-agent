@@ -484,6 +484,32 @@ const DROP_BOXES =
 const UNQUOTED_RUN = `(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|[^|;&\\n'"])*`;
 
 const DOWNLOADER = /\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|fetch|aria2c)\b/i;
+/** The file a download is saved to: curl's `-o`, wget's `-O`, or wget's own name for it. */
+function savedDownload(piece: string): string | undefined {
+  const words = wordsOf(piece.trim());
+  const prog = (words[0] ?? '').replace(/^.*[\\/]/, '').toLowerCase();
+  if (prog !== 'curl' && prog !== 'wget') return undefined;
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i] ?? '';
+    const flag = prog === 'curl' ? /^-\w*o$|^--output$/ : /^-\w*O$|^--output-document$/;
+    if (flag.test(w)) return words[i + 1];
+    const joined = (
+      prog === 'curl' ? /^(?:-\w*o|--output=)(.+)$/ : /^(?:-O|--output-document=)(.+)$/
+    ).exec(w);
+    if (joined?.[1] && joined[1] !== '-') return joined[1];
+  }
+  // wget, and curl's `-O`, keep the address's own file name.
+  const remoteName =
+    prog === 'wget' || words.some((w) => /^-[a-zA-Z]*O[a-zA-Z]*$|^--remote-name$/.test(w));
+  const url = remoteName ? words.find((w) => /^https?:\/\//i.test(w)) : undefined;
+  return (
+    url
+      ?.replace(/[?#].*$/, '')
+      .split('/')
+      .pop() || undefined
+  );
+}
+
 /** A program in a pipeline that sends to another computer. */
 const SENDS =
   /(?:^|[\s|;&(`]|\$\()(?:curl|wget|nc|ncat|netcat|socat|telnet|http|https|xh|ssh|scp|sftp|rsync|ftp|lftp|rclone|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)(?=\s|$)/i;
@@ -1601,9 +1627,9 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     // Whole-line shapes: downloaded or decoded code handed straight to a shell. An installer
     // the person named by its host ("install it with the script from brew.sh") is theirs to
     // ask for (ADR 0128); code decoded from a blob is nobody's.
-    const downloaded =
+    let downloaded =
       new RegExp(
-        `${DOWNLOADER.source}${UNQUOTED_RUN}\\|\\s*(?:sudo\\s+(?:-\\S+\\s+)*)?(?:env\\s+)?(?:\\S*[\\\\/])?(?:(?:ba|z|da|k|fi)?sh|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh|powershell|iex|Invoke-Expression|osascript)(?=\\s*(?:$|[;&|)\\n])|\\s+-s\\b|\\s+-(?:\\s|$)|\\s+--(?:\\s|$))`,
+        `${DOWNLOADER.source}${UNQUOTED_RUN}(?:\\|\\s*[^|;&\\s][^|;&\\n]*)*?\\|\\s*(?:sudo\\s+(?:-\\S+\\s+)*)?(?:env\\s+)?(?:\\S*[\\\\/])?(?:(?:ba|z|da|k|fi)?sh|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh|powershell|iex|Invoke-Expression|osascript)(?=(?:\\s+-[\\w-]+)*\\s*(?:$|[;&|)\\n])|\\s+-s\\b|\\s+-(?:\\s|$)|\\s+--(?:\\s|$))`,
         'i',
       ).test(script) ||
       /(?:ba|z|da|k)?sh\s+<\(\s*(?:curl|wget)\b|(?:^|[\s;&|])(?:source|\.)\s+<\(\s*(?:curl|wget)\b/.test(
@@ -1618,6 +1644,16 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       /(?:^|[\s;&|])(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php)\s+-[ce]\s+["']?\$\(\s*(?:curl|wget)\b/.test(
         script,
       );
+    // Saved to a file first, then run: `curl -o i.sh … && bash i.sh`. Pip's own bootstrap isn't.
+    for (const piece of splitLine(script)) {
+      const saved = savedDownload(piece);
+      if (!saved || fromTooling(piece)) continue;
+      const name = saved.replace(/^\.\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const runs = new RegExp(
+        `(?:^|[;&|\\n]\\s*)(?:(?:(?:ba|z|da|k|fi)?sh|source|\\.|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh)\\s+(?:-\\S+\\s+)*["']?(?:\\.\\/)?|\\.\\/)${name}(?=$|[\\s;&|"'])`,
+      );
+      if (runs.test(script.slice(script.indexOf(piece) + piece.length))) downloaded = true;
+    }
     const decoded =
       /base64\s+(?:-d|--decode|-D)\b[^|;&]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python\d?|perl|node)\b/.test(
         script,
