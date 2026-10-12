@@ -5,6 +5,7 @@ import {
   joinSkill,
   readFlag,
   readKey,
+  readList,
   setKeys,
   splitSkill,
   splitTitle,
@@ -142,5 +143,31 @@ disable-model-invocation: true`);
       const front = setKeys(undefined, [['description', value]]);
       expect(readKey(front, 'description')).toBe(value);
     }
+  });
+  it('reads a list however YAML would', () => {
+    // Over two lines, as a flow list may be.
+    expect(readList('allowed-tools: [Read,\n  Bash(rm -rf)]', 'allowed-tools')).toEqual([
+      'Read',
+      'Bash(rm -rf)',
+    ]);
+    // A comment after an item isn't part of it.
+    expect(readList('allowed-tools:\n  - Read # ok\n  - "Bash # kept"', 'allowed-tools')).toEqual([
+      'Read',
+      'Bash # kept',
+    ]);
+    // A quoted item keeps its commas.
+    expect(readList('allowed-tools: ["Read, Write", Grep]', 'allowed-tools')).toEqual([
+      'Read, Write',
+      'Grep',
+    ]);
+    expect(readList("allowed-tools: 'Read, Write', Grep", 'allowed-tools')).toEqual([
+      'Read, Write',
+      'Grep',
+    ]);
+    // Said twice: everything either says, so nothing it may do goes unseen.
+    expect(readList('allowed-tools: Read\nname: x\nallowed-tools: Bash', 'allowed-tools')).toEqual([
+      'Read',
+      'Bash',
+    ]);
   });
 });

@@ -48,8 +48,12 @@ const keyOf = (line: string) =>
     .replace(/^["']|["']$/g, '');
 
 /** The lines a top-level key spans: its own, plus indented (or blank) continuation lines. */
-function blockOf(lines: string[], key: string): { start: number; end: number } | undefined {
-  const start = lines.findIndex((line) => isKeyLine(line) && keyOf(line) === key);
+function blockOf(
+  lines: string[],
+  key: string,
+  from = 0,
+): { start: number; end: number } | undefined {
+  const start = lines.findIndex((line, i) => i >= from && isKeyLine(line) && keyOf(line) === key);
   if (start === -1) return undefined;
   let end = start + 1;
   while (end < lines.length) {
@@ -169,50 +173,87 @@ export function readKey(front: string | undefined, key: string): string | undefi
   return fold(plain) || undefined;
 }
 
+/** A line without its ` # comment`, leaving a `#` inside quotes alone. */
+function uncomment(line: string): string {
+  let quote: string | undefined;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === quote) quote = undefined;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '#' && (i === 0 || /\s/.test(line[i - 1] ?? ''))) return line.slice(0, i);
+  }
+  return line;
+}
+
+/** Items split at commas, never one inside quotes or brackets ("Bash(git add, git commit)"). */
+function splitItems(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let current = '';
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = undefined;
+    } else if ((ch === '"' || ch === "'") && !current.trim()) quote = ch;
+    else if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (ch === ',' && depth === 0) {
+      out.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  out.push(current);
+  return out.map(unquote).filter(Boolean);
+}
+
+const unquote = (item: string) =>
+  item
+    .trim()
+    .replace(/^(['"])(.*)\1$/, '$2')
+    .trim();
+
+/** One key's lines as a list. */
+function listIn(lines: string[], block: { start: number; end: number }): string[] {
+  const line = lines[block.start] as string;
+  const value = uncomment(line.slice(line.indexOf(':') + 1)).trim();
+  const rest = lines.slice(block.start + 1, block.end);
+  if (value.startsWith('[')) {
+    // A flow list may go on over the lines under it.
+    const flow = [value, ...rest.map((l) => uncomment(l).trim())].join(' ');
+    const close = flow.lastIndexOf(']');
+    return splitItems(flow.slice(1, close < 0 ? undefined : close));
+  }
+  if (value) return splitItems(value);
+  return rest
+    .map((l) => /^\s*-\s+(.*)$/.exec(l)?.[1])
+    .filter((item): item is string => item !== undefined)
+    .map((item) => unquote(uncomment(item)))
+    .filter(Boolean);
+}
+
 /**
  * A top-level key as a list of strings, however it's written: `a, b`,
  * `[a, "b"]`, or a block of `- a` lines (the Agent Skills `allowed-tools`
- * comes in all three). Undefined when the key is missing.
+ * comes in all three). Undefined when the key is missing. A key written twice
+ * is a file YAML refuses; its list is everything both say, so nothing a skill
+ * asks for is left out of what Conch shows.
  */
 export function readList(front: string | undefined, key: string): string[] | undefined {
   if (front === undefined) return undefined;
   const lines = front.split('\n');
-  const block = blockOf(lines, key);
-  if (!block) return undefined;
-  const line = lines[block.start] as string;
-  const value = line
-    .slice(line.indexOf(':') + 1)
-    .replace(/\s+#.*$/, '')
-    .trim();
-  const unquote = (item: string) =>
-    item
-      .trim()
-      .replace(/^(['"])(.*)\1$/, '$2')
-      .trim();
-  const split = (text: string) => {
-    // Commas inside brackets ("Bash(git add, git commit)") stay with their item.
-    const out: string[] = [];
-    let depth = 0;
-    let current = '';
-    for (const ch of text) {
-      if (ch === '(') depth++;
-      if (ch === ')') depth = Math.max(0, depth - 1);
-      if (ch === ',' && depth === 0) {
-        out.push(current);
-        current = '';
-      } else current += ch;
-    }
-    out.push(current);
-    return out.map(unquote).filter(Boolean);
-  };
-  if (value.startsWith('[')) return split(value.replace(/^\[|\]$/g, ''));
-  if (value) return split(value);
-  return lines
-    .slice(block.start + 1, block.end)
-    .map((l) => /^\s*-\s+(.*)$/.exec(l)?.[1])
-    .filter((item): item is string => item !== undefined)
-    .map(unquote)
-    .filter(Boolean);
+  const out: string[] = [];
+  let found = false;
+  for (let from = 0; ;) {
+    const block = blockOf(lines, key, from);
+    if (!block) break;
+    found = true;
+    for (const item of listIn(lines, block)) if (!out.includes(item)) out.push(item);
+    from = block.end;
+  }
+  return found ? out : undefined;
 }
 
 /** A boolean key, YAML 1.2 style (`true`/`false`). */
