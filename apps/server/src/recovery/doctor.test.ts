@@ -94,7 +94,7 @@ it('says how often Conch froze this week, and where it was stuck the last time',
       title: 'Stopped answering',
       state: 'info',
       message:
-        'Conch stopped answering twice in the past week and started again on its own, last at 9:05 PM. It was stuck in readIndex (apps/server/src/memory/index.ts:120), called from handle (apps/server/src/app.ts:7).',
+        'Conch stopped answering twice in the past week and started again on its own, last at 9:05 PM. It was stuck in readIndex (apps/server/src/memory/index.ts:120), called from apps/server/src/memory/routes.ts:44.',
     },
   ]);
   expect(JSON.stringify(report)).not.toMatch(/12345|secret/);

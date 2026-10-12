@@ -39,7 +39,8 @@ export function when(at: number, now: number): string {
 const times = (count: number) => (count === 1 ? 'once' : count === 2 ? 'twice' : `${count} times`);
 
 /** `spin (apps/server/src/x.ts:12)`: a name and a place in the release, nothing else. */
-const place = ({ name, file, line }: StackFrame) => `${name} (${file}:${line})`;
+const place = ({ name, file, line }: StackFrame) =>
+  name === '(anonymous)' ? `${file}:${line}` : `${name} (${file}:${line})`;
 
 /**
  * Where the newest freeze was, from evidence that is already only function names

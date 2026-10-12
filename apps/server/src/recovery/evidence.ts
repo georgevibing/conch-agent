@@ -59,7 +59,7 @@ export function stackOnly(raw: unknown): StackFrame[] {
     const { name, file, line } = entry as Record<string, unknown>;
     if (
       typeof name !== 'string' ||
-      !NAME.test(name) ||
+      !(NAME.test(name) || name === '(anonymous)') ||
       typeof file !== 'string' ||
       !FILE.test(file) ||
       file.startsWith('/') ||

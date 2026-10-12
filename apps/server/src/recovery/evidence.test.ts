@@ -42,6 +42,8 @@ describe('only stack frames, never anything else', () => {
       stackOnly([
         { name: 'spinForever', file: 'apps/server/src/x.ts', line: 12 },
         { name: 'get value', file: 'node_modules/.pnpm/a@1.0.0/node_modules/a/i.js', line: 3 },
+        { name: '(anonymous)', file: 'apps/server/src/routes.ts', line: 7 },
+        { name: '(anything)', file: 'apps/x.ts', line: 1 },
         { name: 'leak', file: '/Users/someone/.ssh/id_rsa', line: 1 },
         { name: 'escape', file: '../outside/x.ts', line: 1 },
         { name: 'dots', file: 'apps/./x.ts', line: 1 },
@@ -58,6 +60,7 @@ describe('only stack frames, never anything else', () => {
     ).toEqual([
       { name: 'spinForever', file: 'apps/server/src/x.ts', line: 12 },
       { name: 'get value', file: 'node_modules/.pnpm/a@1.0.0/node_modules/a/i.js', line: 3 },
+      { name: '(anonymous)', file: 'apps/server/src/routes.ts', line: 7 },
       { name: 'extra', file: 'apps/x.ts', line: 2 },
     ]);
     expect(stackOnly('spinForever')).toEqual([]);
