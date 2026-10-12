@@ -1401,6 +1401,19 @@ function carriesData(word: string): boolean {
   }
 }
 
+/** ssh's own flags, before the computer it names: what follows is the command run there. */
+function sshFlags(words: string[]): string[] {
+  const flags: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i] ?? '';
+    if (!w.startsWith('-')) break;
+    flags.push(w);
+    // A flag that takes a value, given apart: `-i key`, `-p 22`, `-R 8080:localhost:80`.
+    if (/^-\w*[bcDEeFIiJLlmOopQRSWw]$/.test(w)) i++;
+  }
+  return flags;
+}
+
 /** One piece of a command line. */
 function partRisk(part: string, places: Places): Risk | undefined {
   const words = wordsOf(part);
@@ -1578,7 +1591,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
     /\b(?:http|tcp|tls|tunnel|local|funnel|start)\b|--port/.test(part)
   )
     return severe('exfiltration', 'open this computer to the internet', false, tunnel);
-  if (prog === 'ssh' && /\s-\w*R\b/.test(part))
+  if (prog === 'ssh' && sshFlags(words).some((w) => /^-\w*R/.test(w)))
     return severe('exfiltration', 'open this computer to another one', false, tunnel);
   const infra = infraRisk(part, prog, words);
   if (infra) return infra;

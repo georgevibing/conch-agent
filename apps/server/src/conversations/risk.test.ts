@@ -739,4 +739,16 @@ describe('the same step written another way', () => {
       expect(breaksCircuit('Bash', { command }, ctx), command).toBeDefined();
     expect(asks(bash('echo "$(sudo whoami)"'), false)).toBe(true);
   });
+
+  it('reads ssh’s own flags, not the command it runs over there', () => {
+    expect(assessRisk('Bash', { command: 'ssh build "grep -R TODO src"' }, ctx)?.reason).toBe(
+      'run a command on another computer',
+    );
+    expect(assessRisk('Bash', { command: 'ssh -R 8080:localhost:80 x.example' }, ctx)?.reason).toBe(
+      'open this computer to another one',
+    );
+    expect(
+      assessRisk('Bash', { command: 'ssh -NR 9000:localhost:9000 x.example' }, ctx)?.kind,
+    ).toBe('exfiltration');
+  });
 });
