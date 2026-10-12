@@ -169,6 +169,9 @@ export function useDraftAttachments(initial: readonly Attachment[] = []) {
         });
       }
       for (const original of fresh.slice(0, Math.max(0, space))) {
+        // Another drop may have landed while this one waited on a file: look again.
+        if (room() <= 0) break;
+        if (current.current.some((d) => d.signature === signature(original))) continue;
         const key = `file:${crypto.randomUUID().slice(0, 8)}`;
         const kind = guessKind(original);
         const draft: Draft = {
