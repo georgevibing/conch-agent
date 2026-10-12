@@ -56,6 +56,7 @@ describe('LiveChart', () => {
     const { container } = renderNacre(
       <LiveChart
         title="Cores"
+        format={percent}
         times={times}
         series={Array.from({ length: 9 }, (_, i) => ({
           id: `c${i}`,
