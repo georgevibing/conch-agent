@@ -785,4 +785,47 @@ describe('the same step written another way', () => {
     expect(assessRisk('Read', { file_path: `${workspace}/.npmrc` }, ctx)).toBeUndefined();
     expect(assessRisk('Bash', { command: 'cat .npmrc' }, ctx)).toBeUndefined();
   });
+
+  it('counts as declared only what a pyproject or Pipfile lists as a dependency', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-pyproject-'));
+    await writeFile(
+      join(dir, 'pyproject.toml'),
+      [
+        '[project]',
+        'name = "shop"',
+        'description = "A shop"',
+        'authors = [',
+        '  "Ada Lovelace <ada@example.com>",',
+        ']',
+        'dependencies = [',
+        '  "requests>=2",',
+        ']',
+        '[project.optional-dependencies]',
+        'pdf = ["fonttools[woff]>=4"]',
+        '[build-system]',
+        'requires = ["hatchling"]',
+        '[tool.poetry.group.dev.dependencies]',
+        'pytest = "^8"',
+        '[tool.black]',
+        'line-length = "88"',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      join(dir, 'Pipfile'),
+      '[source]\nurl = "https://pypi.org/simple"\n[packages]\nflask = "*"\n',
+    );
+    for (const name of ['requests', 'fonttools', 'hatchling', 'pytest', 'flask'])
+      expect(declared(dir, 'pypi', name), name).toBe(true);
+    for (const name of [
+      'name',
+      'description',
+      'authors',
+      'ada-lovelace',
+      'line-length',
+      'url',
+      'pdf',
+    ])
+      expect(declared(dir, 'pypi', name), name).toBe(false);
+  });
 });

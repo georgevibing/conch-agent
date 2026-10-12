@@ -278,8 +278,39 @@ function namesIn(registry: Registry, file: string, text: string): string[] {
       if (m[1]) names.push(m[1]);
     return names;
   }
-  // PyPI: a requirements line, a pyproject or Pipfile entry, a conda `pip:` line.
-  if (/pyproject\.toml$|Pipfile$|setup\.cfg$/.test(file)) {
+  // PyPI: a pyproject or Pipfile dependency, by the table or the list it's in, never any key.
+  if (/pyproject\.toml$|Pipfile$/.test(file)) {
+    let section = '';
+    let inList = false;
+    for (const line of text.split('\n')) {
+      const header = /^\s*\[\[?([^\]]+)\]\]?\s*(?:#.*)?$/.exec(line);
+      if (header && !inList) {
+        section = (header[1] ?? '').trim();
+        continue;
+      }
+      const lists = /(?:^|\.)(?:optional-dependencies|dependency-groups)$/.test(section);
+      const table =
+        !lists && /(?:^|\.)(?:dependencies|dev-dependencies|packages|dev-packages)$/.test(section);
+      let strings = '';
+      if (inList) strings = line;
+      else {
+        const [, key, value = ''] = /^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=\s*(.*)$/.exec(line) ?? [];
+        if (!key) continue;
+        if (value.startsWith('[') && (lists || table || /^(?:dependencies|requires)$/.test(key)))
+          strings = value;
+        else {
+          if (table) names.push(key);
+          continue;
+        }
+      }
+      inList = !/\]/.test(strings.replace(/"[^"]*"|'[^']*'/g, ''));
+      for (const m of strings.matchAll(/["']([A-Za-z0-9][A-Za-z0-9._-]*)/g))
+        if (m[1]) names.push(m[1]);
+    }
+    return names;
+  }
+  // A requirements line, setup.cfg's lists, a conda `pip:` line.
+  if (/setup\.cfg$/.test(file)) {
     for (const m of text.matchAll(
       /^\s*["']?([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*(?:[<>=!~;@ ]|["'],?\s*$)/gm,
     ))
