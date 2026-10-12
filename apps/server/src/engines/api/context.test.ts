@@ -167,6 +167,27 @@ describe('a single turn bigger than everything', () => {
     expect((messages[0]?.content as string).length).toBeGreaterThan(60_000);
   });
 
+  it('shortens the oldest of many middling results when none is long', () => {
+    const messages: WireMessage[] = [{ role: 'user', content: 'tidy the whole repo' }];
+    for (let i = 0; i < 200; i++)
+      messages.push(
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            { id: `c${i}`, type: 'function', function: { name: 'read', arguments: '{}' } },
+          ],
+        },
+        { role: 'tool', tool_call_id: `c${i}`, content: `${i} ${'r'.repeat(1_900)}` },
+      );
+    const out = shrink(messages, { from: 0, budget: 30_000, count });
+    expect(out.reduce((sum, m) => sum + count(m), 0)).toBeLessThanOrEqual(30_000);
+    // What was asked, and the newest results, are read as they came.
+    expect(out[0]).toBe(messages[0]);
+    expect(out.at(-1)).toBe(messages.at(-1));
+    expect(String(out[2]?.content)).toMatch(/characters left out so this fits/);
+  });
+
   it('stops when nothing long is left to shorten', () => {
     const messages: WireMessage[] = [{ role: 'assistant', content: 'w'.repeat(10_000) }];
     expect(shrink(messages, { from: 0, budget: 10, count })).toEqual(messages);

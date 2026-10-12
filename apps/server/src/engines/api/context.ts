@@ -273,8 +273,27 @@ export function shrink(
     const keep = Math.max(2_000, longest.length - over * 4 - 200);
     out[longest.message] = rewrite(out[longest.message] as WireMessage, longest, keep);
   }
+  // Still over with nothing long left (one long job of many middling results):
+  // what tools returned gives way oldest first, down to a few lines each.
+  let left = total() - options.budget;
+  for (const place of ownText(out, options.from)) {
+    if (left <= 0) break;
+    const message = out[place.message] as WireMessage;
+    const result = message.role === 'tool' || place.block !== undefined;
+    if (!result || place.length <= RESULT_FLOOR) continue;
+    if (place.block !== undefined) {
+      const block = (message.content as unknown[])[place.block];
+      if (!isRecord(block) || block.type !== 'tool_result') continue;
+    }
+    const shorter = rewrite(message, place, RESULT_FLOOR);
+    left -= options.count(message) - options.count(shorter);
+    out[place.message] = shorter;
+  }
   return out;
 }
+
+/** How short a result gets when a long job's many results must give way. */
+const RESULT_FLOOR = 300;
 
 // ── The summary in front ──────────────────────────────────────────────────
 
