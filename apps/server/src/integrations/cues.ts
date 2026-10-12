@@ -53,7 +53,33 @@ const ABOUT_THE_APP = [
   /\b(?:pricing|founders?|ceo|valuation|funding|history|website|logo|design\s+system|landing\s+page|homepage|competitors?)\s+(?:of|for)\s+[\p{L}\p{N}&.-]+/giu,
   /\b(?:work(?:s|ed|ing)?|jobs?|interview(?:ing|s)?|internships?|careers?)\s+(?:at|for)\s+[\p{L}\p{N}&.-]+/giu,
   /\b[\p{L}\p{N}&.-]+\s+(?:raised?|was\s+founded|went\s+public|was\s+acquired|got\s+acquired)\b/giu,
+  // The service itself: its servers, whether it's up, its offices, a habit of it.
+  /\b[\p{L}\p{N}&.-]+\s+(?:smtp|imap|pop3?|servers?|ports?|outages?|status\s+page|support\s+team|help\s+(?:center|centre)|hq|headquarters|offices?|lobby|campus)\b/giu,
+  /\b(?:is|are|was|were)\s+[\p{L}\p{N}&.-]+\s+(?:down|up|out|offline|broken|working|slow)\b/giu,
+  /\b(?:on|in|using)\s+[\p{L}\p{N}&.-]+\s+(?:all\s+day|all\s+the\s+time|too\s+much|constantly|24\/7|every\s+day)\b/giu,
+  // Building something that works with an app is coding: the rest of the sentence too.
+  /\b(?:build|building|make|making|write|writing|create|creating|develop\w*|code|coding)\s+(?:me\s+)?(?:a|an|my|our)\s+(?:[\p{L}-]+\s+){0,3}?(?:apps?|bots?|tools?|scripts?|extensions?|plugins?|integrations?|websites?|sites?|services?)\b[^.?!\n]*/giu,
 ];
+
+/**
+ * Words to work on, not a request of an app: what follows “Translate to
+ * German:” or “Rewrite this:”, and a quoted sentence.
+ */
+const TO_WORK_ON = [
+  /\b(?:translate|rewrite|rephrase|reword|proofread|paraphrase|polish|shorten|correct|fix\s+(?:the\s+)?(?:grammar|spelling|typos)(?:\s+in)?)\b[^:\n]{0,40}:[\s\S]*/giu,
+  /["“][^"”\n]{12,}["”]/gu,
+];
+
+/**
+ * A cue that ends with the app's name (“notes in my Granola”), when nothing
+ * follows the name but a word it doesn't describe: not “granola bars”,
+ * “Sentry Hill” or “square tiles”.
+ */
+export function ending(cue: RegExp): RegExp {
+  const after =
+    /(?![\p{L}\p{N}_@-])(?!\s+(?!(?:and|or|but|so|for|from|since|until|about|with|to|at|on|in|this|last|today|yesterday|tomorrow|now|please|account|app|projects?|workspace)\b)\p{L})/u;
+  return new RegExp(cue.source + after.source, `${cue.flags.replace('u', '')}u`);
+}
 
 const blank = (text: string, pattern: RegExp) => text.replace(pattern, (m) => ' '.repeat(m.length));
 
@@ -100,6 +126,7 @@ export function readMessage(text: string): Read {
     return ' '.repeat(m.length);
   });
   words = blank(words, FILE);
+  for (const pattern of TO_WORK_ON) words = blank(words, pattern);
   words = blank(words, NEGATED);
   for (const pattern of ABOUT_THE_APP) words = blank(words, pattern);
   return { words, links };

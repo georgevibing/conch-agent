@@ -430,6 +430,28 @@ const negatives: string[] = [
   'help me write a cover letter',
   'Why is the sky blue?',
   'Can you give me some slack on the deadline?',
+  // Everyday words that sit next to an app's: a shop, a snack, a painting, a place.
+  'Sales are down on my square tiles shop, write an ad',
+  'Write tasting notes for the cinnamon in my granola bars',
+  'I love the frames on Miro paintings at the museum',
+  'We hiked up to the old fort. Build one on Sentry Hill next.',
+  // Words to work on, not mail to open: text to translate or rewrite, a template, advice.
+  'Translate to German: I will check my email later.',
+  'Rewrite this: "Please check my email from yesterday"',
+  'check my mail merge template',
+  'My inbox is a mess, any tips?',
+  'Check my inbox for typos in the newsletter draft',
+  // About the service, not your account in it.
+  'the Gmail SMTP server port is what?',
+  'Is gmail down?',
+  'I am on Slack all day and feel burned out — any wellbeing tips?',
+  'I left my laptop in Slack HQ lobby',
+  // Making a calendar or an agenda, or free in another sense.
+  'Help me design my calendar for the wedding',
+  'Make my agenda for tomorrow: gym, groceries',
+  'Are we free for an MIT relicense?',
+  'I want to build a todo app that syncs to my Google calendar',
+  'My Drive to succeed is strong',
 ];
 
 describe('connect-from-chat cues', () => {

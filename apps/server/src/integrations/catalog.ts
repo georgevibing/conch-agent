@@ -1,7 +1,7 @@
 import { CatalogEntry } from '@conch/protocol';
 import type { z } from 'zod';
 
-import { coined, type Cues, named } from './cues';
+import { coined, type Cues, ending, named } from './cues';
 
 /** How a catalog entry turns into an MCP server, given what the user typed. */
 export type Blueprint =
@@ -105,11 +105,13 @@ const raw: CatalogItem[] = [
     cues: {
       match: [
         coined('Gmail'),
-        /\bmy\s+(?:g-?mail|e-?mail\s+inbox|inbox)\b/i,
+        /\bmy\s+g-?mail\b/i,
+        // Something in the inbox, not the inbox talked about (“my inbox is a mess, any tips?”).
+        /\b(?:in|from|through|across)\s+my\s+(?:e-?mail\s+)?inbox\b/i,
         /\b(?:in|from|check|search|open|through)\s+(?:my\s+)?g-?mail\b/i,
         /\bg-?mail\s+(?:inbox|threads?|messages?|e-?mails?|labels?|drafts?|search)\b/i,
         // “Check my email”, but not “check my email for typos”.
-        /\b(?:check|search|scan|go\s+through|look\s+(?:in|through)|summari[sz]e|triage|clean\s+up)\s+(?:my\s+|our\s+)?(?:inbox|mail|e-?mails?)\b(?!\s+(?:for|draft|copy|text|signature|template|address|tone|below|above|here|before|again)\b)/i,
+        /\b(?:check|search|scan|go\s+through|look\s+(?:in|through)|summari[sz]e|triage|clean\s+up)\s+(?:my\s+|our\s+)?(?:inbox|mail|e-?mails?)\b(?!\s+(?:for|draft|copy|text|signature|template|address|tone|below|above|here|before|again|merge|list|server|client|settings|app)\b)/i,
         /\bunread\s+(?:e-?mails?|mail)\b/i,
         /\b(?:latest|last|newest|recent|most\s+recent)\s+e-?mails?\s+(?:from|about|with)\b/i,
         /\be-?mails?\s+(?:I|we)\s+(?:got|received|missed)\b/i,
@@ -140,12 +142,13 @@ const raw: CatalogItem[] = [
         /\bgoogle\s+cal(?:endar)?\b/i,
         /\bg-?cal\b/i,
         /\b(?:my|our)\s+(?:google\s+|work\s+)?calendars?\b/i,
-        /\b(?:am|are)\s+(?:I|we)\s+(?:free|busy|available)\s+(?:on|at|this|next|tomorrow|today|tonight|in\s+the|for\s+(?:an?|\d)|between|before|after|later)\b/i,
+        /\b(?:am|are)\s+(?:I|we)\s+(?:free|busy|available)\s+(?:on|at|this|next|tomorrow|today|tonight|in\s+the|for\s+(?:an?\s+)?(?:\d|hour|half|few|minutes?|quick|call|meeting|chat|coffee|lunch|dinner|drinks?|catch[\s-]?up)|between|before|after|later)\b/i,
         /\bmy\s+(?:meetings|schedule|agenda|appointments|events)\s+(?:for\s+)?(?:today|tomorrow|tonight|this\s+(?:week|morning|afternoon|evening)|next\s+week|on\s+(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?)\b/i,
         /\bcalendar\s+(?:invites?|invitations?)\b/i,
       ],
-      // Calendars that aren't yours to open, and the one you're building.
+      // Calendars that aren't yours to open, and the one you're building or making.
       not: [
+        /\b(?:design|make|create|build|draw(?:\s+up)?|print|decorate|write|put\s+together)\s+(?:me\s+)?(?:a|an|my|our|the)\s+(?:\p{L}+\s+)?(?:calendars?|agendas?|schedules?)\b(?!\s+(?:invites?|invitations?|events?|entry|entries))/giu,
         /\bcalendars?\s+(?:components?|views?|widgets?|apps?|ui|librar(?:y|ies)|lib|pickers?|grids?|pages?|screens?|features?|modules?|code|files?|implementations?|designs?|mockups?|years?|months?|days?|systems?)\b/gi,
         /\b(?:gregorian|julian|lunar|advent|academic|fiscal|school|liturgical|hebrew|jewish|chinese|mayan|islamic|hijri|perpetual|wall|desk|content|editorial|release|marketing|social\s+media|publishing|tide|garden(?:ing)?|planting)\s+calendars?\b/gi,
       ],
@@ -171,7 +174,7 @@ const raw: CatalogItem[] = [
         /\bgoogle\s+(?:docs?|sheets?|spreadsheets?|slides?)\s+(?:called|named|titled|about|with|from|for)\b/i,
         // “My Drive”, “the shared Drive”, capital D: lowercase is usually a disk or a
         // commute, and “in Drive” alone may be the film.
-        /\b(?:[Mm]y|our|shared|team)\s+Drive\b(?!\s+(?:mode|train|shaft|thru|through|way|Street|St\b|Road|Rd\b|Avenue))/,
+        /\b(?:[Mm]y|our|shared|team)\s+Drive\b(?!\s+(?:mode|train|shaft|thru|through|way|Street|St\b|Road|Rd\b|Avenue|to\s+(?:succeed|win|be|do|achieve|improve|keep|make|get|work|grow|learn|change|help|finish|prove|excel)\b))/,
       ],
       not: [
         /\b(?:hard|usb|flash|c:|d:|e:|external|disk|thumb|test|network|solid[\s-]state|ssd|hdd|optical|cd|dvd|tape|zip|floppy|sex|long|short|scenic|road|country|boot|system|shared\s+network)\s+drives?\b/gi,
@@ -489,8 +492,10 @@ const raw: CatalogItem[] = [
     cues: {
       match: [
         /\bsentry\s+(?:errors?|issues?|events?|alerts?|projects?|dashboard|traces?|releases?|reports?|crash(?:es)?|exceptions?|performance|replays?|logs?)\b/i,
-        /\b(?:errors?|issues?|exceptions?|crash(?:es)?|events?|alerts?|traces?|replays?)\s+(?:in|on|from)\s+(?:my\s+|our\s+)?sentry\b/i,
-        /\b(?:in|on|from)\s+(?:my\s+|our\s+)?Sentry\b/,
+        ending(
+          /\b(?:errors?|issues?|exceptions?|crash(?:es)?|events?|alerts?|traces?|replays?)\s+(?:in|on|from)\s+(?:my\s+|our\s+)?sentry\b/i,
+        ),
+        ending(/\b(?:in|on|from)\s+(?:my\s+|our\s+)?Sentry\b/),
         /\bmy\s+sentry\b/i,
       ],
       // A guard, and a car's camera mode.
@@ -719,7 +724,9 @@ const raw: CatalogItem[] = [
       // Breakfast is the other granola: only next to the words for what it keeps.
       match: [
         /\bgranola\s+(?:notes?|meeting\s+notes?|transcripts?|meetings?|summar(?:y|ies)|recordings?)\b/i,
-        /\b(?:notes?|meetings?|transcripts?|summar(?:y|ies)|calls?)\b[^.?!\n]{0,40}\b(?:in|from)\s+(?:my\s+|our\s+)?granola\b/i,
+        ending(
+          /\b(?:notes?|meetings?|transcripts?|summar(?:y|ies)|calls?)\b[^.?!\n]{0,40}\b(?:in|from)\s+(?:my\s+|our\s+)?granola\b/i,
+        ),
       ],
     },
   },
@@ -785,7 +792,9 @@ const raw: CatalogItem[] = [
       // Joan Miró painted: only next to the words for a board.
       match: [
         /\bmiro\s+(?:boards?|whiteboards?|diagrams?|frames?|stick(?:y|ies)(?:\s+notes?)?|mind\s*maps?)\b/i,
-        /\b(?:boards?|whiteboards?|diagrams?|stick(?:y|ies)|frames?|mind\s*maps?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?miro\b/i,
+        ending(
+          /\b(?:boards?|whiteboards?|diagrams?|stick(?:y|ies)|frames?|mind\s*maps?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)?miro\b/i,
+        ),
       ],
       links: [/\bmiro\.com\/app\/board\b/i],
     },
@@ -898,7 +907,9 @@ const raw: CatalogItem[] = [
       // A shape, a place and a unit before it's a till: only next to what a shop keeps there.
       match: [
         /\bsquare\s+(?:payments?|invoices?|dashboard|pos|orders?|catalog(?:ue)?|sales|customers?|payouts?|transactions?|account)\b/i,
-        /\b(?:payments?|invoices?|orders?|sales|customers?|payouts?|transactions?|refunds?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)square\b/i,
+        ending(
+          /\b(?:payments?|invoices?|orders?|sales|customers?|payouts?|transactions?|refunds?)\b[^.?!\n]{0,40}\b(?:in|on|from)\s+(?:my\s+|our\s+)square\b/i,
+        ),
       ],
       not: [
         /\bsquare\s+(?:root|feet|foot|met(?:er|re)s?|miles?|inch(?:es)?|brackets?|kilomet\w+|yards?)\b/gi,
