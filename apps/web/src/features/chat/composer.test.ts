@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   composerHistory,
   forgetDrafts,
+  keepQueuedAsDraft,
   loadDraft,
   loadLocalDraft,
   loadQueue,
@@ -62,6 +63,31 @@ describe('drafts', () => {
     // A draft only of files is still a draft.
     saveLocalDraft('files', { text: '', attachments: [attachment], synced: true });
     expect(localDraftKeys()).toContain('files');
+  });
+
+  it('leaving with messages still waiting keeps their files with their words', () => {
+    const file = (id: string) => ({
+      id,
+      name: `${id}.pdf`,
+      mimeType: 'application/pdf',
+      size: 10,
+      kind: 'file' as const,
+      createdAt: 1,
+    });
+    saveLocalDraft('c1', { text: 'still typing', attachments: [file('att_a')], synced: true });
+    keepQueuedAsDraft('c1', 'still typing', [
+      { id: 'q1', text: 'Read this one', attachments: [file('att_b')] },
+      { id: 'q2', text: 'And this', attachments: [file('att_a'), file('att_c')] },
+    ]);
+    expect(loadLocalDraft('c1')).toMatchObject({
+      text: 'still typing\n\nRead this one\n\nAnd this',
+      synced: false,
+    });
+    expect(loadLocalDraft('c1')?.attachments?.map((a) => a.id)).toEqual([
+      'att_a',
+      'att_b',
+      'att_c',
+    ]);
   });
 
   it('reads a draft from before Conch kept them as one still to send', () => {

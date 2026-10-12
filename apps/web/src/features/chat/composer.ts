@@ -1,4 +1,4 @@
-import type { Attachment, TurnOptions } from '@conch/protocol';
+import { ATTACHMENT_LIMITS, type Attachment, type TurnOptions } from '@conch/protocol';
 
 /**
  * What the message box remembers between chats: what you were writing in
@@ -99,6 +99,24 @@ export function saveLocalDraft(key: string, draft: Omit<LocalDraft, 'at'>) {
 export function saveDraft(key: string, text: string) {
   const { at: _at, ...before } = loadLocalDraft(key) ?? { at: 0 };
   saveLocalDraft(key, { ...before, text, synced: false });
+}
+
+/**
+ * Leaving a chat with messages still waiting their turn: their words join what's
+ * in the box, and their files what's attached, as one draft to send when you're back.
+ */
+export function keepQueuedAsDraft(key: string, draft: string, queued: readonly QueuedMessage[]) {
+  const { at: _at, ...before }: LocalDraft = loadLocalDraft(key) ?? { text: '', at: 0 };
+  const seen = new Set<string>();
+  const attachments = [...(before.attachments ?? []), ...queued.flatMap((q) => q.attachments)]
+    .filter((a) => !seen.has(a.id) && Boolean(seen.add(a.id)))
+    .slice(0, ATTACHMENT_LIMITS.maxCount);
+  saveLocalDraft(key, {
+    ...before,
+    text: [draft, ...queued.map((q) => q.text)].filter((t) => t.trim()).join('\n\n'),
+    ...(attachments.length && { attachments }),
+    synced: false,
+  });
 }
 
 /** The chats this device has something unsent for. */

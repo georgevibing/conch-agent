@@ -79,10 +79,10 @@ import { NewChatTips } from './NewChatTips';
 import { attachmentUrl } from './uploads';
 import {
   composerHistory,
+  keepQueuedAsDraft,
   loadLocalDraft,
   loadQueue,
   rememberSent,
-  saveDraft,
   saveQueue,
   type QueuedMessage,
 } from './composer';
@@ -637,7 +637,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   // Leaving the chat before they went: they stay here as what you were writing.
   const leaving = useEffectEvent(() => {
     if (!queue.length) return;
-    saveDraft(key, [draft, ...queue.map((q) => q.text)].filter((t) => t.trim()).join('\n\n'));
+    keepQueuedAsDraft(key, draft, queue);
     // They're in the box now: not waiting a second time when you're back.
     saveQueue(key, []);
   });
