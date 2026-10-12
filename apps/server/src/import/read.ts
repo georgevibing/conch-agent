@@ -215,9 +215,13 @@ export function parseYaml(text: string): Record<string, unknown> {
 function scalar(text: string, n: number): string {
   const quote = text[0];
   if (quote === '"' || quote === "'") {
-    const end = text.indexOf(quote, 1);
-    if (end < 0) throw new Error(`Line ${n + 1} leaves a quote open.`);
-    return text.slice(1, end);
+    // "…" knows backslashes; '…' writes its own quote twice.
+    const shape = quote === '"' ? /^"((?:[^"\\]|\\.)*)"/ : /^'((?:[^']|'')*)'/;
+    const inside = shape.exec(text)?.[1];
+    if (inside === undefined) throw new Error(`Line ${n + 1} leaves a quote open.`);
+    return quote === '"'
+      ? inside.replace(/\\(.)/g, (_, c: string) => ({ n: '\n', t: '\t' })[c] ?? c)
+      : inside.replace(/''/g, "'");
   }
   if (/^[[{]/.test(text)) {
     const open = (text.match(/[[{]/g) ?? []).length;
@@ -260,7 +264,7 @@ export const str = (value: unknown): string | undefined =>
 
 /** Markdown front matter's `key: value` lines, and the body after it. */
 export function frontMatter(text: string): { keys: Record<string, string>; body: string } {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!match) return { keys: {}, body: text };
   const keys: Record<string, string> = {};
   for (const line of (match[1] ?? '').split('\n')) {

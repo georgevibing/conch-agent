@@ -15,7 +15,7 @@ import { FIXTURE_SLACK_BOT, hermesHome, openClawHome, openClawTeamHome } from '.
 import { readHermes } from './hermes';
 import { type CatalogEntry, hermesModel, mapModel, modelWords, openClawModel } from './model';
 import { readOpenClaw } from './openclaw';
-import { memoryEntries, parseEnv, parseJson5, parseYaml } from './read';
+import { frontMatter, memoryEntries, parseEnv, parseJson5, parseYaml } from './read';
 import { scheduleFrom } from './schedule';
 import { ImportService, type ImportTargets } from './service';
 
@@ -224,6 +224,14 @@ describe('the model it answered with (ADR 0042)', () => {
       list: ['x'],
       text: '',
       last: '1',
+    });
+    expect(parseYaml('a: "say \\"hi\\" \\\\ ok"  # c\nb: \'it\'\'s\'')).toEqual({
+      a: 'say "hi" \\ ok',
+      b: "it's",
+    });
+    expect(frontMatter('\uFEFF---\nname: x\n---\nbody')).toEqual({
+      keys: { name: 'x' },
+      body: 'body',
     });
     expect(() => parseYaml('model:\n\tdefault: x')).toThrow(/tab/);
     expect(() => parseYaml('model: "open')).toThrow(/quote/);
