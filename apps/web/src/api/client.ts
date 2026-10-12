@@ -84,8 +84,14 @@ export async function request<T extends z.ZodType>(
     throw new ApiError(0, 'offline', "Can't reach Conch. Is the gateway running?");
   }
   const text = await response.text();
-  const json: unknown = text ? JSON.parse(text) : undefined;
   if (!response.ok) {
+    // A proxy's or a front door's error page is HTML, not the gateway's JSON.
+    let json: unknown;
+    try {
+      json = text ? JSON.parse(text) : undefined;
+    } catch {
+      json = undefined;
+    }
     const body = (json ?? {}) as { error?: string; message?: string; retryAfter?: number };
     if (response.status === 401 && !path.startsWith('/api/auth'))
       window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
@@ -96,7 +102,7 @@ export async function request<T extends z.ZodType>(
       body.retryAfter,
     );
   }
-  return schema.parse(json);
+  return schema.parse(text ? JSON.parse(text) : undefined);
 }
 
 const Ok = z.object({ ok: z.boolean() });
