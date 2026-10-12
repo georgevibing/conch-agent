@@ -70,10 +70,17 @@ export class LiveSocket {
     return this.#ws?.readyState === WebSocket.OPEN;
   }
 
-  send(command: ClientCommand) {
-    const message = JSON.stringify(ClientCommand.parse(command));
+  /** Sends, or queues while offline; false when the command isn't one the gateway takes. */
+  send(command: ClientCommand): boolean {
+    const parsed = ClientCommand.safeParse(command);
+    if (!parsed.success) {
+      console.warn('Not sending an invalid command', command.type, parsed.error.issues[0]);
+      return false;
+    }
+    const message = JSON.stringify(parsed.data);
     if (this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(message);
     else if (command.type !== 'ping') this.#queue.push(message);
+    return true;
   }
 
   on(listener: Listener) {

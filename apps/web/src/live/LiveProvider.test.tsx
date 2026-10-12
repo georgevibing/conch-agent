@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FakeSocket, mockFetch, renderApp } from '../test/harness';
 import { useLive } from './LiveProvider';
+import { useLiveStore } from './store';
 
 type Live = ReturnType<typeof useLive>;
 
@@ -43,5 +44,13 @@ describe('LiveProvider', () => {
     act(() => void live.watch('c_early'));
     act(() => FakeSocket.last?.open());
     expect(subscribes('c_early')).toHaveLength(1);
+  });
+
+  it('a link to a chat with an id that can’t be one draws nothing there, without throwing', async () => {
+    const live = await mount();
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    expect(() => act(() => void live.watch('notes.md'))).not.toThrow();
+    expect(subscribes('notes.md')).toHaveLength(0);
+    expect(useLiveStore.getState().views['notes.md']?.loaded).toBe(true);
   });
 });

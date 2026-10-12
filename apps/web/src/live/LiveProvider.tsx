@@ -8,6 +8,7 @@ import type {
   MailEdit,
   TurnOptions,
 } from '@conch/protocol';
+import { Id } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -490,6 +491,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         });
       },
       watch(conversationId) {
+        // An address that can't be a chat (a mistyped or cut-off link): there's nothing to
+        // ask the gateway for, so it's drawn as a chat with nothing in it.
+        if (!Id.safeParse(conversationId).success) {
+          useLiveStore.getState().catchUp(conversationId, []);
+          return () => undefined;
+        }
         const count = watching.current.get(conversationId) ?? 0;
         watching.current.set(conversationId, count + 1);
         // Not connected yet: the open subscribes every watched chat, so asking now too
