@@ -321,34 +321,52 @@ export function ArtifactChart({
                   (() => {
                     let below = chart.labels.map(() => 0);
                     return chart.series.map((s, k) => {
-                      const tops = s.values.map((v, i) =>
-                        stacked ? (below[i] ?? 0) + (v ?? 0) : (v ?? 0),
-                      );
-                      const points = tops.map((v, i) => `${x(i)},${y(v)}`);
-                      const area =
-                        chart.type === 'area'
-                          ? `M ${points.join(' L ')} L ${[...below.map((b, i) => `${x(i)},${y(stacked ? b : 0)}`)].reverse().join(' L ')} Z`
-                          : undefined;
-                      if (stacked) below = tops;
+                      const sums = s.values.map((v, i) => (below[i] ?? 0) + (v ?? 0));
+                      // A missing value is a gap in the line, as the table's “—” says; a
+                      // stack still carries on from what's below it.
+                      const tops = stacked ? sums : s.values;
+                      const runs: number[][] = [];
+                      tops.forEach((v, i) => {
+                        if (v == null) runs.push([]);
+                        else if (runs.length) runs.at(-1)?.push(i);
+                        else runs.push([i]);
+                      });
+                      const lines = runs.filter((run) => run.length > 0);
+                      const at = (i: number) => `${x(i)},${y(tops[i] ?? 0)}`;
+                      const base = (i: number) => `${x(i)},${y(stacked ? (below[i] ?? 0) : 0)}`;
+                      if (stacked) below = sums;
                       return (
                         <g key={s.name}>
-                          {area && <path d={area} fill={color(k)} className={styles.area} />}
-                          <polyline
-                            points={points.join(' ')}
-                            stroke={color(k)}
-                            className={styles.line}
-                          />
-                          {tops.length <= 40 &&
-                            tops.map((v, i) => (
-                              <circle
-                                key={i}
-                                cx={x(i)}
-                                cy={y(v)}
-                                r={4}
+                          {chart.type === 'area' &&
+                            lines.map((run) => (
+                              <path
+                                key={`a${run[0]}`}
+                                d={`M ${run.map(at).join(' L ')} L ${[...run].reverse().map(base).join(' L ')} Z`}
                                 fill={color(k)}
-                                className={styles.dot}
+                                className={styles.area}
                               />
                             ))}
+                          {lines.map((run) => (
+                            <polyline
+                              key={`l${run[0]}`}
+                              points={run.map(at).join(' ')}
+                              stroke={color(k)}
+                              className={styles.line}
+                            />
+                          ))}
+                          {tops.length <= 40 &&
+                            tops.map((v, i) =>
+                              v == null ? null : (
+                                <circle
+                                  key={i}
+                                  cx={x(i)}
+                                  cy={y(v)}
+                                  r={4}
+                                  fill={color(k)}
+                                  className={styles.dot}
+                                />
+                              ),
+                            )}
                         </g>
                       );
                     });

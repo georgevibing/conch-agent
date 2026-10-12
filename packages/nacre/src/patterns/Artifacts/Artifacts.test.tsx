@@ -60,6 +60,25 @@ describe('ArtifactChart', () => {
     expect(screen.getByRole('status')).toHaveTextContent('aSales€3');
   });
 
+  it('leaves a gap for a missing value on a line, rather than dropping it to zero', () => {
+    const { container } = renderNacre(
+      <ArtifactChart
+        chart={{
+          type: 'line',
+          labels: ['Jan', 'Feb', 'Mar'],
+          series: [{ name: 'Visits', values: [100, null, 100] }],
+        }}
+      />,
+    );
+    const lines = [...container.querySelectorAll('polyline')];
+    const ys = lines.flatMap((l) =>
+      (l.getAttribute('points') ?? '').split(' ').map((p) => Number(p.split(',')[1])),
+    );
+    // Both points sit at 100; nothing is drawn at the zero line.
+    expect(new Set(ys).size).toBe(1);
+    expect(container.querySelectorAll('circle')).toHaveLength(2);
+  });
+
   it('picks clean ticks', () => {
     expect(niceTicks(180)).toEqual([0, 50, 100, 150, 200]);
     expect(niceTicks(9)).toEqual([0, 2.5, 5, 7.5, 10]);
