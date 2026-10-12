@@ -119,6 +119,12 @@ export interface GatewayRecoveryDeps {
   pace?: () => WorkloadPace;
   /** The event-loop delay histogram; a real one from `start` when absent. */
   loopDelay?: LoopDelay;
+  /** A p99 above this, `slowPolls` polls running, holds new work (ms). */
+  slowLoopMs?: number;
+  slowPolls?: number;
+  /** A p99 at or below this, `calmPolls` polls running, lets it in again (ms). */
+  calmLoopMs?: number;
+  calmPolls?: number;
 }
 
 /** A stalled optional reader must not suppress proof that HTTP still answers. */
@@ -157,6 +163,10 @@ export class GatewayRecovery {
   #probation = false;
   #lastPoll?: number;
   #loopDelay?: LoopDelay;
+  /** Conch's own loop is falling behind: hold new work before the probe fails. */
+  #slowLoop = false;
+  #slowRun = 0;
+  #calmRun = 0;
 
   constructor(private readonly deps: GatewayRecoveryDeps) {
     this.#mode = deps.recoveryMode ?? false;
@@ -173,6 +183,7 @@ export class GatewayRecovery {
       !this.#mode &&
       this.#answering &&
       this.#snapshot?.level === 'healthy' &&
+      !this.#slowLoop &&
       (this.deps.admit?.() ?? true)
     );
   }
@@ -219,6 +230,8 @@ export class GatewayRecovery {
           ? 'memory'
           : 'cpu',
       );
+    // Conch's own processing falling behind reads to a person as a busy processor.
+    if (this.#slowLoop) return held('cpu');
     if (this.deps.admit && !this.deps.admit()) {
       const pace = this.deps.pace?.();
       if (!pace) return held('held');
@@ -268,6 +281,7 @@ export class GatewayRecovery {
       const answering = response === true;
       this.#snapshot = snapshot;
       this.#answering = answering;
+      this.#pace(loopDelayMs);
       // Pressure holds work and sheds managed jobs; do not restart a responsive
       // gateway just because an unrelated application is using this computer.
       const healthy = answering;
@@ -279,7 +293,7 @@ export class GatewayRecovery {
       )
         this.#healthySince = undefined;
       this.#lastPoll = now;
-      if (answering && snapshot?.level === 'healthy') this.#healthySince ??= now;
+      if (answering && snapshot?.level === 'healthy' && !this.#slowLoop) this.#healthySince ??= now;
       else this.#healthySince = undefined;
       this.#send({
         type: 'conch.heartbeat',
@@ -318,6 +332,25 @@ export class GatewayRecovery {
       this.#answering = false;
       this.#healthySince = undefined;
       this.#send({ type: 'conch.heartbeat', healthy: false });
+    }
+  }
+
+  /**
+   * Holds new work while the loop stays slow and lets it in once it stays calm,
+   * with a gap between the two so it doesn't flap. Never restarts anything:
+   * the outside supervisor decides that from the probe.
+   */
+  #pace(loopDelayMs: number | undefined): void {
+    if (loopDelayMs === undefined) return;
+    if (loopDelayMs > (this.deps.slowLoopMs ?? 500)) {
+      this.#calmRun = 0;
+      if (++this.#slowRun >= (this.deps.slowPolls ?? 2)) this.#slowLoop = true;
+    } else if (loopDelayMs <= (this.deps.calmLoopMs ?? 200)) {
+      this.#slowRun = 0;
+      if (++this.#calmRun >= (this.deps.calmPolls ?? 6)) this.#slowLoop = false;
+    } else {
+      this.#slowRun = 0;
+      this.#calmRun = 0;
     }
   }
 
@@ -446,10 +479,12 @@ export class GatewayRecovery {
                 ? 'Conch is saving your place before it stops.'
                 : !this.#answering
                   ? 'Conch is checking that it can respond before starting more work.'
-                  : this.#snapshot?.level === 'healthy'
-                    ? 'Conch has room to work and is watching for slowdowns.'
-                    : (this.#snapshot?.reason ??
-                      'Conch is checking this computer before starting more work.'),
+                  : this.#snapshot?.level === 'healthy' && this.#slowLoop
+                    ? 'Conch is falling behind, so it’s holding new work until it catches up.'
+                    : this.#snapshot?.level === 'healthy'
+                      ? 'Conch has room to work and is watching for slowdowns.'
+                      : (this.#snapshot?.reason ??
+                        'Conch is checking this computer before starting more work.'),
         };
         return [item];
       },

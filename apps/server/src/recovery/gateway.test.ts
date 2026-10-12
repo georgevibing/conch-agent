@@ -263,6 +263,84 @@ describe('how late its own timers run', () => {
     expect(loopDelay.dispose).toHaveBeenCalledOnce();
   });
 
+  it('holds new work while its loop stays slow, before the probe fails, and lets it in once calm', async () => {
+    let delay: number | undefined = 0;
+    const loopDelay = { take: () => delay, dispose: vi.fn() };
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({
+      ...deps,
+      loopDelay,
+      slowLoopMs: 500,
+      slowPolls: 2,
+      calmLoopMs: 200,
+      calmPolls: 3,
+    });
+    const poll = async (ms: number | undefined) => {
+      delay = ms;
+      await recovery.poll();
+    };
+    try {
+      await recovery.start(async () => true);
+      expect(recovery.allowsWork).toBe(true);
+      // One late stretch is a hiccup, and a lull between two isn't "staying" slow.
+      await poll(900);
+      await poll(300);
+      await poll(900);
+      expect(recovery.allowsWork).toBe(true);
+      await poll(900);
+      expect(recovery.room()).toMatchObject({ room: false, reason: 'cpu' });
+      expect(recovery.allowsWork).toBe(false);
+      // Busy isn't broken: the listener still answers, so nothing restarts.
+      expect(deps.send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'conch.heartbeat', healthy: true }),
+      );
+      expect(deps.relieve).not.toHaveBeenCalled();
+      // Planned work isn't held by a busy processor.
+      expect(recovery.allowsPlanned).toBe(true);
+      const [item] = await recovery
+        .doctorCheck()
+        .run({ repair: false, signal: new AbortController().signal });
+      expect(item).toMatchObject({
+        state: 'info',
+        message: expect.stringMatching(/falling behind/),
+      });
+      // Better but not calm, or no reading at all, doesn't let work in.
+      await poll(300);
+      await poll(undefined);
+      await poll(100);
+      await poll(100);
+      await poll(400);
+      await poll(100);
+      await poll(100);
+      expect(recovery.allowsWork).toBe(false);
+      await poll(100);
+      expect(recovery.room()).toEqual({ room: true });
+      expect(recovery.allowsWork).toBe(true);
+    } finally {
+      recovery.stop();
+    }
+  });
+
+  it('keeps a recovering gateway from counting a slow loop as sustained health', async () => {
+    vi.useFakeTimers();
+    let delay = 900;
+    const { deps } = setup(true);
+    const recovery = new GatewayRecovery({
+      ...deps,
+      loopDelay: { take: () => delay, dispose() {} },
+    });
+    await recovery.start(async () => true);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(deps.resume).not.toHaveBeenCalled();
+    delay = 10;
+    // Six calm polls (half a minute), then a full healthy minute before it carries on.
+    await vi.advanceTimersByTimeAsync(30_000 + 55_000);
+    expect(deps.resume).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(deps.resume).toHaveBeenCalledOnce();
+    recovery.stop();
+  });
+
   it('measures its own loop when nothing is injected', async () => {
     const { recovery, deps } = setup();
     await recovery.start(async () => true);
