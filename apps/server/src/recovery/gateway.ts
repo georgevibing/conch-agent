@@ -1,3 +1,5 @@
+import { monitorEventLoopDelay } from 'node:perf_hooks';
+
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
@@ -68,6 +70,27 @@ export type RecoveryMessage =
   | { type: 'conch.booting'; phase: string }
   | { type: 'conch.recovered' };
 
+/** How late this process's own timers ran: the earliest sign it's falling behind. */
+export interface LoopDelay {
+  /** p99 in milliseconds since the last take, then starts over; undefined with no samples. */
+  take: () => number | undefined;
+  dispose: () => void;
+}
+
+/** A coarse histogram: one timer every 20 ms, cheap enough to leave running. */
+function eventLoopDelay(): LoopDelay {
+  const histogram = monitorEventLoopDelay({ resolution: 20 });
+  histogram.enable();
+  return {
+    take: () => {
+      const p99 = histogram.count ? histogram.percentile(99) / 1e6 : undefined;
+      histogram.reset();
+      return p99;
+    },
+    dispose: () => histogram.disable(),
+  };
+}
+
 export interface GatewayRecoveryDeps {
   sample: () => Promise<ResourceSnapshot>;
   relieve: () => { stopped: number; queued: number };
@@ -94,6 +117,8 @@ export interface GatewayRecoveryDeps {
   admitPlanned?: () => boolean;
   /** The shared managed-work budget, to say why `admit` holds work. */
   pace?: () => WorkloadPace;
+  /** The event-loop delay histogram; a real one from `start` when absent. */
+  loopDelay?: LoopDelay;
 }
 
 /** A stalled optional reader must not suppress proof that HTTP still answers. */
@@ -131,6 +156,7 @@ export class GatewayRecovery {
   #lastRepair = -Infinity;
   #probation = false;
   #lastPoll?: number;
+  #loopDelay?: LoopDelay;
 
   constructor(private readonly deps: GatewayRecoveryDeps) {
     this.#mode = deps.recoveryMode ?? false;
@@ -213,6 +239,7 @@ export class GatewayRecovery {
   async start(probe: () => Promise<boolean>): Promise<void> {
     if (this.#timer || this.#stopping) return;
     this.#probe = probe;
+    this.#loopDelay ??= this.deps.loopDelay ?? eventLoopDelay();
     if (this.#mode) {
       this.deps.pause('Conch is recovering. Waiting work will carry on once it stays responsive.');
       this.deps.note('Paused background work to recover. It will carry on after a healthy check.');
@@ -230,6 +257,8 @@ export class GatewayRecovery {
   async #poll(): Promise<void> {
     if (this.#stopping) return;
     const started = performance.now();
+    // Measured over the interval just gone, before this poll's own waiting.
+    const loopDelayMs = this.#loopDelay?.take();
     try {
       const [snapshot, response] = await Promise.all([
         within(() => this.deps.sample(), this.deps.checkMs ?? 2_500),
@@ -268,6 +297,7 @@ export class GatewayRecovery {
           }),
           gatewayRssBytes: process.memoryUsage.rss(),
           probeMs: Math.max(0, performance.now() - started),
+          ...(loopDelayMs !== undefined && { eventLoopDelayP99Ms: Math.round(loopDelayMs) }),
         },
       });
       if (this.#healthySince !== undefined) {
@@ -318,6 +348,8 @@ export class GatewayRecovery {
     this.#stopping = true;
     clearInterval(this.#timer);
     this.#timer = undefined;
+    this.#loopDelay?.dispose();
+    this.#loopDelay = undefined;
     this.deps.pause('Conch is saving your place before it stops.');
     this.#send({ type: 'conch.stopping' });
   }

@@ -78,6 +78,11 @@ describe('private, durable recovery history', () => {
         token: 'secret',
       }),
     ).toEqual({ memoryAvailableBytes: 32 });
+    expect(recoveryResource({ eventLoopDelayP99Ms: 640, probeMs: 3 })).toEqual({
+      eventLoopDelayP99Ms: 640,
+      probeMs: 3,
+    });
+    expect(recoveryResource({ eventLoopDelayP99Ms: -1 })).toBeUndefined();
     expect(readFileSync(join(folder, 'recovery/state.json'), 'utf8')).toBe('{');
   });
   it('keeps recovery mode across time and boots until an explicit repair', () => {

@@ -27,6 +27,7 @@ const resourceFields = [
   'memoryPressure',
   'cgroupMemoryLimitBytes',
   'cgroupMemoryAvailableBytes',
+  'eventLoopDelayP99Ms',
 ] as const;
 export type RecoveryResource = Partial<Record<(typeof resourceFields)[number], number>>;
 export function recoveryResource(value: unknown): RecoveryResource | undefined {

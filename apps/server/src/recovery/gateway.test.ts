@@ -241,6 +241,39 @@ describe('gateway recovery', () => {
   });
 });
 
+describe('how late its own timers run', () => {
+  it('reports the last interval’s p99 in each heartbeat and lets the histogram go on stop', async () => {
+    const delays: (number | undefined)[] = [undefined, 12.4, 640];
+    const loopDelay = { take: vi.fn(() => delays.shift()), dispose: vi.fn() };
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({ ...deps, loopDelay });
+    await recovery.start(async () => true);
+    expect(deps.send.mock.lastCall?.[0].resource).not.toHaveProperty('eventLoopDelayP99Ms');
+    await recovery.poll();
+    expect(deps.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resource: expect.objectContaining({ eventLoopDelayP99Ms: 12 }) }),
+    );
+    await recovery.poll();
+    expect(deps.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resource: expect.objectContaining({ eventLoopDelayP99Ms: 640 }) }),
+    );
+    // One reading per poll: each heartbeat covers only the interval before it.
+    expect(loopDelay.take).toHaveBeenCalledTimes(3);
+    recovery.stop();
+    expect(loopDelay.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('measures its own loop when nothing is injected', async () => {
+    const { recovery, deps } = setup();
+    await recovery.start(async () => true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await recovery.poll();
+    const resource = deps.send.mock.lastCall?.[0].resource;
+    expect(resource.eventLoopDelayP99Ms).toBeGreaterThanOrEqual(0);
+    recovery.stop();
+  });
+});
+
 describe('automatic recovery without a restart loop', () => {
   it('automatically resumes after sustained health but retains the crash budget through probation', async () => {
     vi.useFakeTimers();
