@@ -206,6 +206,17 @@ describe('this computer, proven', () => {
     expect(line).toMatch(/Max-Age=34560000/);
   });
 
+  it('opens on this computer while failed sign-ins from elsewhere hold the global lock', async () => {
+    const { app, services } = await setup();
+    for (let i = 0; i < 100; i++) services.gate.limiter.fail(`203.0.113.${i}`);
+    expect(services.gate.limiter.locked).toBe(true);
+    const { code } = (await app.inject({ method: 'POST', url: '/api/here/link' })).json() as {
+      code: string;
+    };
+    const res = await app.inject({ method: 'POST', url: '/api/here', payload: { code } });
+    expect(res.statusCode).toBe(200);
+  });
+
   it('uses a code once, and never through a proxy or from elsewhere', async () => {
     const { app } = await setup();
     const make = async () =>

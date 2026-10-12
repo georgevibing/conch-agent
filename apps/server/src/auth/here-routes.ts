@@ -43,7 +43,9 @@ export function registerHereRoutes(app: FastifyInstance, gate: Gatekeeper): void
         message: 'This link only works on the computer running Conch.',
       });
     const client = gate.clientKey(request);
-    const wait = gate.limiter.retryAfter(client, false);
+    // The global lock is for sign-ins from elsewhere, and this only works here: failures
+    // from other devices mustn't keep this computer out (its own address is still throttled).
+    const wait = gate.limiter.retryAfter(client, true);
     if (wait > 0) {
       const seconds = Math.ceil(wait / 1000);
       return reply
