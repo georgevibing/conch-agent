@@ -9,6 +9,12 @@ describe('toTelegramHtml', () => {
     );
   });
 
+  it('keeps parentheses that belong to a link’s address', () => {
+    expect(toTelegramHtml('See [wiki](https://en.wikipedia.org/wiki/Foo_(bar)).')).toBe(
+      'See <a href="https://en.wikipedia.org/wiki/Foo_(bar)">wiki</a>.',
+    );
+  });
+
   it('escapes what would otherwise be read as tags', () => {
     expect(toTelegramHtml('a <b> & c')).toBe('a &lt;b&gt; &amp; c');
   });

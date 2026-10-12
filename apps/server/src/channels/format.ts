@@ -64,8 +64,10 @@ export function inline(
   const keep = (s: string) => `\u0000${kept.push(s) - 1}\u0000`;
   let out = text.replace(/`([^`\n]+)`/g, (_, code: string) => keep(style.code(code)));
   // Links before escaping, so the address stays whole; the label is escaped on its own.
-  out = out.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) =>
-    keep(style.link(label, url)),
+  // An address may hold its own parentheses: Wikipedia's `Foo_(bar)`.
+  out = out.replace(
+    /\[([^\]\n]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g,
+    (_, label: string, url: string) => keep(style.link(label, url)),
   );
   out = style.escape(out);
   // Italic first: its pattern can't match `**`, and Slack writes bold with one `*`.
