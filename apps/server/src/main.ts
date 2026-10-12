@@ -107,6 +107,7 @@ const shutdown = shutdownHandler({
   begin: () => {
     boot.stop();
     services.recovery.stop();
+    services.leak.stop();
     services.routines.stop();
     services.tasks.close();
   },
@@ -163,6 +164,7 @@ await services.recovery.start(async () => {
 });
 // Its first heartbeat went out: the real ones carry on from here.
 boot.stop();
+services.leak.start();
 // The app's window opens on it now, by number (`askUrl`: `localhost` tries ::1 first).
 void desktop?.send({ type: 'listening', url: askUrl(config.CONCH_HOST, config.CONCH_PORT) });
 await recordGateway(config.CONCH_HOME, {

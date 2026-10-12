@@ -68,6 +68,7 @@ import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
 import { recoveryHistoryCheck } from './recovery/doctor';
+import { LeakWatch, recentRestartRequests } from './recovery/leak';
 import { ImageService } from './images/service';
 import { ChromiumPrinter } from './files/make/printer';
 import { FileMaker } from './files/make/tools';
@@ -312,6 +313,8 @@ export class Services {
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
   readonly recovery: GatewayRecovery;
+  /** A slow memory leak becomes one quiet restart while nothing is working. */
+  readonly leak: LeakWatch;
   /** Whether Conch can reach the internet (ADR 0023). */
   readonly network: NetworkWatch;
   /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
@@ -622,6 +625,14 @@ export class Services {
         this.checkins.stop();
         this.checkins.start();
       },
+    });
+    this.leak = new LeakWatch({
+      busy: () => this.conversations.busy() || this.processes.running > 0,
+      held: () => this.recovery.recoveryMode,
+      restart,
+      note: (message) => this.healed.note('gateway', message).then(() => undefined),
+      recentRestarts: () => recentRestartRequests(config.CONCH_HOME),
+      log: (message) => console.warn(message),
     });
     this.doctor.register(this.recovery.doctorCheck());
     this.doctor.register(recoveryHistoryCheck(config.CONCH_HOME));
