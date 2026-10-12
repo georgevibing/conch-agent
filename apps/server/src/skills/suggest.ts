@@ -330,8 +330,17 @@ export class SkillSuggester {
     this.#cache = undefined;
   }
 
+  /** Changes to the file, one at a time: two dismissals at once both stay. */
+  #writing: Promise<void> = Promise.resolve();
+
   /** Not now (a month), or never. */
-  async dismiss(id: string, forever: boolean): Promise<void> {
+  dismiss(id: string, forever: boolean): Promise<void> {
+    const next = this.#writing.catch(() => undefined).then(() => this.#dismiss(id, forever));
+    this.#writing = next;
+    return next;
+  }
+
+  async #dismiss(id: string, forever: boolean): Promise<void> {
     const file = await this.#file();
     file.dismissed[id] = forever ? 0 : this.#now + 30 * 86_400_000;
     // What it was about, in your words, so it stays down when you ask in new ones.

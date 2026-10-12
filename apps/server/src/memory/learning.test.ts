@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -794,6 +794,18 @@ describe('skills you keep asking for', () => {
     await suggester.dismiss(first?.id ?? '', true);
     asked = [...asked, ask('Do the weekly summary of calendar meetings', 'e')];
     expect(await suggester.list({ fresh: true })).toEqual([]);
+  });
+
+  it('turning several down at once keeps every one', async () => {
+    const suggester = new SkillSuggester({
+      home,
+      asked: async () => [],
+      skills: async () => [],
+      model: async () => undefined,
+    });
+    await Promise.all(['hs_a', 'hs_b', 'hs_c'].map((id) => suggester.dismiss(id, true)));
+    const kept = JSON.parse(readFileSync(join(home, 'skill-suggestions.json'), 'utf8'));
+    expect(Object.keys(kept.dismissed).sort()).toEqual(['hs_a', 'hs_b', 'hs_c']);
   });
 
   /** A model for meaning that knows summaries of the week are one thing, and so are trips. */
