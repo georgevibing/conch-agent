@@ -99,13 +99,17 @@ export function ArtifactChart({
   const geometry = useMemo(() => {
     const inner = { w: width - PAD.left - PAD.right, h: height - PAD.top - PAD.bottom };
     const stacked = Boolean(chart.stacked) && chart.type !== 'line';
-    const totals = chart.labels.map((_, i) =>
-      stacked
-        ? chart.series.reduce((sum, s) => sum + Math.max(0, s.values[i] ?? 0), 0)
-        : Math.max(...chart.series.map((s) => s.values[i] ?? 0)),
-    );
-    const min = Math.min(0, ...chart.series.flatMap((s) => s.values.map((v) => v ?? 0)));
-    const ticks = niceTicks(Math.max(...totals, 0), min);
+    // The reach of each label: a stack's bars go up from the positives and down
+    // from the negatives; a stacked area follows its running sum.
+    const reach = chart.labels.map((_, i) => {
+      const values = chart.series.map((s) => s.values[i] ?? 0);
+      if (!stacked) return values;
+      let run = 0;
+      const sum = (pick: (v: number) => boolean) => values.filter(pick).reduce((a, v) => a + v, 0);
+      return [sum((v) => v > 0), sum((v) => v < 0), ...values.map((v) => (run += v))];
+    });
+    const all = reach.flat();
+    const ticks = niceTicks(Math.max(...all, 0), Math.min(0, ...all));
     const top = ticks.at(-1) ?? 1;
     const bottom = ticks[0] ?? 0;
     const y = (v: number) => PAD.top + inner.h - ((v - bottom) / (top - bottom || 1)) * inner.h;
@@ -288,12 +292,14 @@ export function ArtifactChart({
                   chart.labels.map((_, i) => {
                     const groups = stacked ? 1 : chart.series.length;
                     const slot = Math.min(BAR_MAX, (band * 0.7) / groups);
-                    let base = 0;
+                    let up = 0;
+                    let down = 0;
                     return chart.series.map((s, k) => {
                       const v = s.values[i] ?? 0;
-                      const from = stacked ? base : 0;
+                      const from = stacked ? (v < 0 ? down : up) : 0;
                       const to = from + v;
-                      if (stacked) base = to;
+                      if (stacked && v < 0) down = to;
+                      else if (stacked) up = to;
                       const left = stacked
                         ? x(i) - slot / 2
                         : x(i) - (slot * groups) / 2 + slot * k;

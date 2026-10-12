@@ -79,6 +79,32 @@ describe('ArtifactChart', () => {
     expect(container.querySelectorAll('circle')).toHaveLength(2);
   });
 
+  it('stacks negative bars below the baseline, inside the plot', () => {
+    const { container } = renderNacre(
+      <ArtifactChart
+        chart={{
+          type: 'bar',
+          stacked: true,
+          labels: ['Q1'],
+          series: [
+            { name: 'Refunds', values: [-50] },
+            { name: 'Returns', values: [-50] },
+          ],
+        }}
+      />,
+    );
+    // Each bar's vertical edges: its foot (after M x) and every V.
+    const ys = [...container.querySelectorAll('path[class*="bar"]')].flatMap((bar) => {
+      const d = bar.getAttribute('d') ?? '';
+      const foot = /^M \S+ (\S+)/.exec(d)?.[1];
+      return [foot, ...[...d.matchAll(/V (\S+)/g)].map((m) => m[1])].map(Number);
+    });
+    expect(ys.length).toBeGreaterThan(0);
+    // Inside the plot: below the top padding, above the axis labels.
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(12);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(260 - 28);
+  });
+
   it('picks clean ticks', () => {
     expect(niceTicks(180)).toEqual([0, 50, 100, 150, 200]);
     expect(niceTicks(9)).toEqual([0, 2.5, 5, 7.5, 10]);
