@@ -48,6 +48,11 @@ describe('reading another agent’s files', () => {
       B: 'two words',
       C: 'x',
     });
+    expect(parseEnv('A="v1" # the key\nB=\'two # three\' # note\nC="has # inside"')).toEqual({
+      A: 'v1',
+      B: 'two # three',
+      C: 'has # inside',
+    });
   });
 
   it('splits memories the way each agent writes them, without headings or placeholders', () => {

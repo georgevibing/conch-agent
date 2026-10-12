@@ -236,7 +236,9 @@ export function parseEnv(text: string): Record<string, string> {
     const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
     if (!match?.[1]) continue;
     let value = (match[2] ?? '').trim();
-    if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1);
+    // A quoted value ends at its quote, whatever comment follows it.
+    const quoted = /^(['"])(.*?)\1(?:\s+#.*)?$/.exec(value);
+    if (quoted) value = quoted[2] ?? '';
     else value = value.replace(/\s+#.*$/, '');
     if (value) out[match[1]] = value;
   }
