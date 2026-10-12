@@ -202,6 +202,7 @@ function pythonBridge(python: string): PtyBackend {
       const { stdin, stdout } = pipes(child);
       const control = child.stdio[3] as Writable | undefined;
       const decoder = new StringDecoder('utf8');
+      const errors = new StringDecoder('utf8');
       return {
         pid: child.pid ?? 0,
         write: (data) => stdin.write(data),
@@ -230,12 +231,13 @@ export function basicBackend(): PtyBackend {
       const child = spawn(file, args, { cwd: options.cwd, env: options.env, stdio: 'pipe' });
       const { stdin, stdout, stderr } = pipes(child);
       const decoder = new StringDecoder('utf8');
+      const errors = new StringDecoder('utf8');
       const listeners = new Set<(data: string) => void>();
       const emit = (data: string) => {
         for (const listener of listeners) listener(data);
       };
       stdout.on('data', (chunk: Buffer) => emit(decoder.write(chunk).replace(/\r?\n/g, '\r\n')));
-      stderr?.on('data', (chunk: Buffer) => emit(String(chunk).replace(/\r?\n/g, '\r\n')));
+      stderr?.on('data', (chunk: Buffer) => emit(errors.write(chunk).replace(/\r?\n/g, '\r\n')));
       let line = '';
       return {
         pid: child.pid ?? 0,

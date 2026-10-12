@@ -133,3 +133,20 @@ describe('node-pty’s spawn helper', () => {
     expect(ensureSpawnHelper(root, () => {}, 'win32-x64')).toBe(true);
   });
 });
+
+describe('the basic terminal', () => {
+  it.skipIf(process.platform === 'win32')(
+    'never breaks a character its programs split across writes, errors included',
+    async () => {
+      const child = basicBackend().spawn(
+        'sh',
+        ['-c', "printf '\\303' >&2; sleep 0.2; printf '\\251\\n' >&2"],
+        { cwd: tmpdir(), env: process.env as Record<string, string>, cols: 80, rows: 24 },
+      );
+      let out = '';
+      child.onData((data) => (out += data));
+      await new Promise<void>((done) => child.onExit(() => done()));
+      expect(out).toBe('é\r\n');
+    },
+  );
+});
