@@ -484,9 +484,10 @@ describe('bringing things over', () => {
     expect(
       plan.items.filter((i) => i.detail?.startsWith('A note from')).every((i) => !i.checked),
     ).toBe(true);
+    // Its link to a file outside it is worth a word; the link itself is never brought.
     expect(by('skill:weekly-review')).toMatchObject({
       checked: true,
-      review: { verdict: 'clean' },
+      review: { verdict: 'caution' },
     });
     expect(by('skill:solana-helper')).toMatchObject({
       checked: false,

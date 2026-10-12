@@ -13,8 +13,9 @@
  * permission prompts still stand between any skill and your computer.
  */
 import { createHash } from 'node:crypto';
-import { lstat, readdir, readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { createReadStream } from 'node:fs';
+import { lstat, readdir, readFile, readlink } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { SkillFinding, SkillReview } from '@conch/protocol';
 
@@ -154,13 +155,27 @@ const SMUGGLED = /[\u202A-\u202E\u2066-\u2069\u{E0000}-\u{E007F}]/u;
 /** Zero-width marks that also turn up in pasted text; worth a word, not an alarm (emoji joiners aren't counted). */
 const ZERO_WIDTH = /[\u200B\u200C\u2060-\u2064]|(?!^)\uFEFF/u;
 
-async function files(
+/** What Conch doesn't read through: a folder of bundled packages, a link. */
+interface Unread {
+  path: string;
+  kind: 'folder' | 'link';
+  /** Where a link points. */
+  target?: string;
+  /** A link that leads out of the skill's folder. */
+  outside?: boolean;
+}
+
+/** Enough of a folder Conch doesn't read to know when it changed. */
+const MAX_UNREAD = 5_000;
+
+async function listing(
   folder: string,
   options: { withSignature?: boolean } = {},
-): Promise<{ path: string; size: number; text: boolean }[]> {
+): Promise<{ files: { path: string; size: number; text: boolean }[]; unread: Unread[] }> {
   const out: { path: string; size: number; text: boolean }[] = [];
+  const unread: Unread[] = [];
   const visit = async (dir: string, depth: number) => {
-    if (out.length >= MAX_FILES || depth > 4) return;
+    if (out.length >= MAX_FILES) return;
     let entries;
     try {
       entries = await readdir(dir, { withFileTypes: true });
@@ -169,22 +184,53 @@ async function files(
     }
     for (const entry of entries) {
       if (out.length >= MAX_FILES) return;
-      if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      if (entry.name === '.git') continue;
       // The signature is about the rest of the folder, so it isn't part of it (ADR 0031).
       if (depth === 1 && entry.name === 'SKILL.sig' && !options.withSignature) continue;
       const path = join(dir, entry.name);
       // Links aren't followed: a skill can't make Conch read your files as its own.
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) await visit(path, depth + 1);
-      else if (entry.isFile()) {
+      if (entry.isSymbolicLink()) {
+        const target = await readlink(path).catch(() => '');
+        const to = relative(folder, resolve(dir, target));
+        unread.push({ path, kind: 'link', target, outside: to.startsWith('..') || isAbsolute(to) });
+      } else if (entry.isDirectory()) {
+        // Bundled packages are other people's code, too much to read as a skill.
+        if (entry.name === 'node_modules') unread.push({ path, kind: 'folder' });
+        else await visit(path, depth + 1);
+      } else if (entry.isFile()) {
         const size = (await lstat(path).catch(() => undefined))?.size ?? 0;
         out.push({ path, size, text: TEXT.test(entry.name) || entry.name === 'SKILL.md' });
       }
     }
   };
   await visit(folder, 1);
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return { files: out.sort((a, b) => a.path.localeCompare(b.path)), unread };
 }
+
+/** Every file and link under a folder Conch doesn't read, up to `MAX_UNREAD`. */
+async function within(dir: string): Promise<{ path: string; link?: string }[]> {
+  const out: { path: string; link?: string }[] = [];
+  const visit = async (at: string) => {
+    let entries;
+    try {
+      entries = await readdir(at, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (out.length >= MAX_UNREAD) return;
+      const path = join(at, entry.name);
+      if (entry.isSymbolicLink()) out.push({ path, link: await readlink(path).catch(() => '') });
+      else if (entry.isDirectory()) await visit(path);
+      else if (entry.isFile()) out.push({ path });
+    }
+  };
+  await visit(dir);
+  return out;
+}
+
+const posix = (folder: string, path: string) => relative(folder, path).split(sep).join('/');
 
 /** Cheap: names, sizes and times. Reading the files again waits until one of them changed. */
 export async function folderSignature(
@@ -192,21 +238,49 @@ export async function folderSignature(
   options: { withSignature?: boolean } = {},
 ): Promise<string> {
   const parts: string[] = [];
-  for (const f of await files(folder, options)) {
-    const info = await lstat(f.path).catch(() => undefined);
-    parts.push(`${f.path}:${f.size}:${info?.mtimeMs ?? 0}`);
-  }
+  const { files, unread } = await listing(folder, options);
+  const stamp = async (path: string) => {
+    const info = await lstat(path).catch(() => undefined);
+    parts.push(`${path}:${info?.size ?? 0}:${info?.mtimeMs ?? 0}`);
+  };
+  for (const f of files) await stamp(f.path);
+  for (const u of unread)
+    if (u.kind === 'link') parts.push(`${u.path}->${u.target ?? ''}`);
+    else for (const f of await within(u.path)) await stamp(f.path);
   return parts.join('|');
 }
 
-/** A fingerprint of everything in the folder: a skill that changes gets a new one. */
+/**
+ * A fingerprint of everything in the folder: a skill that changes gets a new
+ * one. What Conch doesn't read through is in it too, after the rest, so a
+ * skill with none of it keeps the fingerprint it always had.
+ */
 export async function skillHash(folder: string): Promise<string> {
   const hash = createHash('sha256');
-  for (const f of await files(folder)) {
-    hash.update(relative(folder, f.path).split(sep).join('/'));
+  const { files, unread } = await listing(folder);
+  for (const f of files) {
+    hash.update(posix(folder, f.path));
     hash.update('\0');
     hash.update(await readFile(f.path).catch(() => Buffer.alloc(0)));
     hash.update('\0');
+  }
+  for (const u of unread) {
+    if (u.kind === 'link') {
+      hash.update(`\0link\0${posix(folder, u.path)}\0${u.target ?? ''}\0`);
+      continue;
+    }
+    for (const f of await within(u.path)) {
+      hash.update(`\0unread\0${posix(folder, f.path)}\0`);
+      if (f.link !== undefined) hash.update(`link\0${f.link}\0`);
+      else {
+        try {
+          for await (const chunk of createReadStream(f.path)) hash.update(chunk as Buffer);
+        } catch {
+          // Gone or unreadable: its name is still in the fingerprint.
+        }
+        hash.update('\0');
+      }
+    }
   }
   return hash.digest('hex');
 }
@@ -292,7 +366,24 @@ export async function scanSkill(folder: string): Promise<SkillReview> {
       return;
     findings.push(finding);
   };
-  const list = await files(folder);
+  const { files: list, unread } = await listing(folder);
+  for (const u of unread) {
+    const file = posix(folder, u.path);
+    if (u.kind === 'folder')
+      say({
+        kind: 'hidden',
+        severity: 'warning',
+        message: 'Carries bundled packages Conch doesn’t read through, so they weren’t looked at.',
+        file,
+      });
+    else if (u.outside)
+      say({
+        kind: 'hidden',
+        severity: 'warning',
+        message: 'Has a link to something outside its folder, which Conch didn’t read.',
+        file,
+      });
+  }
   if (list.length >= MAX_FILES)
     say({
       kind: 'hidden',
@@ -300,7 +391,7 @@ export async function scanSkill(folder: string): Promise<SkillReview> {
       message: 'Has more files than Conch reads, so not all of it was looked at.',
     });
   for (const f of list) {
-    const file = relative(folder, f.path).split(sep).join('/');
+    const file = posix(folder, f.path);
     if (!f.text) {
       const head = await readFile(f.path)
         .then((b) => b.subarray(0, 8))
