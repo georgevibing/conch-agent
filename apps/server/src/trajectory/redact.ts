@@ -65,6 +65,11 @@ function isPublic(ip: string): boolean {
   return true;
 }
 
+/** A field's name in lower-case words: `authToken` and `AUTH_TOKEN` are `auth_token`. */
+const fieldWords = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+const SECRET_FIELD =
+  /(?:^|[_ .-])(?:pass(?:word|wd|code|phrase)?|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|secret[_-]?key|client[_-]?secret)$/;
+
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -196,16 +201,24 @@ export class Redaction {
     return out;
   }
 
-  /** Every string in a value (a tool's arguments), taken through `text`. */
+  /**
+   * Every string in a value (a tool's arguments), taken through `text`. A
+   * string under a field that names a secret (`api_key`, `DB_PASSWORD`) is
+   * one whatever it looks like; past 20 levels the rest is read as one text.
+   */
   value(input: unknown, depth = 0): unknown {
     if (typeof input === 'string') return this.text(input);
-    if (depth > 20 || input === null || typeof input !== 'object') return input;
+    if (input === null || typeof input !== 'object') return input;
+    if (depth > 20) return this.text(JSON.stringify(input));
     if (Array.isArray(input)) return input.map((v) => this.value(v, depth + 1));
     return Object.fromEntries(
-      Object.entries(input as Record<string, unknown>).map(([k, v]) => [
-        k,
-        this.value(v, depth + 1),
-      ]),
+      Object.entries(input as Record<string, unknown>).map(([k, v]) => {
+        if (typeof v === 'string' && v.length >= 3 && SECRET_FIELD.test(fieldWords(k))) {
+          this.#count('key', 1);
+          return [k, TOKEN.key];
+        }
+        return [k, this.value(v, depth + 1)];
+      }),
     );
   }
 

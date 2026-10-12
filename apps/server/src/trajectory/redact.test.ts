@@ -83,6 +83,24 @@ describe('taking things out of a trajectory', () => {
     });
   });
 
+  it('takes out a value whose field names a secret, however deep', () => {
+    const r = new Redaction({});
+    expect(
+      r.value({
+        api_key: 'plainvalue123',
+        env: { DB_PASSWORD: 'hunter22', authToken: 'abc123def', HOME: '/root' },
+        max_tokens: 1000,
+      }),
+    ).toEqual({
+      api_key: '[key]',
+      env: { DB_PASSWORD: '[key]', authToken: '[key]', HOME: '/root' },
+      max_tokens: 1000,
+    });
+    let deep: unknown = { password: 'hunter22' };
+    for (let i = 0; i < 30; i++) deep = { next: deep };
+    expect(JSON.stringify(r.value(deep))).not.toContain('hunter22');
+  });
+
   it('knows a card number from any long number', () => {
     expect(luhn('4111111111111111')).toBe(true);
     expect(luhn('4111111111111112')).toBe(false);
