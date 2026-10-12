@@ -385,6 +385,25 @@ describe('RoutineService', () => {
     }
   });
 
+  it('looks once when the clock is asked twice at once', async () => {
+    const s = await setup();
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'interval', every: 1, unit: 'hours' } },
+      { createdBy: 'user' },
+    );
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + HOUR + 1000;
+      await Promise.all([s.routines.checkNow(), s.routines.checkNow()]);
+      await settled(s, r.id);
+      const { runs } = await s.routines.detail(r.id);
+      expect(runs.map((run) => run.status)).not.toContain('skipped');
+      expect(runs).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   it('completes one-off routines after they run', async () => {
     const s = await setup();
     const r = await s.routines.create(

@@ -682,7 +682,15 @@ export class RoutineService {
     }
   }
 
-  async #tick() {
+  #ticking: Promise<void> = Promise.resolve();
+
+  /** One look at the clock at a time: a second waits, then reads what the first saved. */
+  #tick(): Promise<void> {
+    this.#ticking = this.#ticking.catch(() => undefined).then(() => this.#look());
+    return this.#ticking;
+  }
+
+  async #look() {
     await this.#resumeWaiting();
     const now = this.#now;
     for (const { id } of await this.deps.store.all()) {
