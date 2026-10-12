@@ -19,6 +19,14 @@ describe('splitBlocks', () => {
       '- item\n\n  more',
     ]);
   });
+
+  it('keeps a fence inside a longer fence as code, as a README shows one', () => {
+    const text = '````markdown\n```js\nconst a = 1;\n\nconst b = 2;\n```\n````\n\nDone.';
+    expect(splitBlocks(text).map((b) => b.text)).toEqual([
+      '````markdown\n```js\nconst a = 1;\n\nconst b = 2;\n```\n````\n\n',
+      'Done.',
+    ]);
+  });
 });
 
 describe('closeOpenMarkdown', () => {
@@ -39,6 +47,14 @@ describe('closeOpenMarkdown', () => {
     expect(closeOpenMarkdown('* one\n* two')).toBe('* one\n* two');
     expect(closeOpenMarkdown('So 2 * 3 is six')).toBe('So 2 * 3 is six');
     expect(closeOpenMarkdown('*done* and more')).toBe('*done* and more');
+  });
+
+  it('closes the outer fence when a shorter one sits inside it', () => {
+    expect(closeOpenMarkdown('````markdown\n```js\nconst x = 1; // **important')).toBe(
+      '````markdown\n```js\nconst x = 1; // **important\n````',
+    );
+    // A fence with words after it opens, it never closes.
+    expect(closeOpenMarkdown('```\na\n```ts\nb')).toBe('```\na\n```ts\nb\n```');
   });
 
   it('leaves balanced text alone', () => {

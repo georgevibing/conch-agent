@@ -9,6 +9,20 @@ export interface Block {
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 
 /**
+ * Whether a line closes an open fence (CommonMark): the same character, at least
+ * as long, and nothing after it — so a ```js inside a ````markdown stays code.
+ */
+const closes = (fence: string, line: string) => {
+  const marker = FENCE.exec(line)?.[1];
+  return (
+    !!marker &&
+    marker.charAt(0) === fence.charAt(0) &&
+    marker.length >= fence.length &&
+    line.slice(line.indexOf(marker) + marker.length).trim() === ''
+  );
+};
+
+/**
  * Split Markdown into top-level blocks at blank lines (never inside a code
  * fence, never before an indented continuation), so finished blocks can be
  * memoised and only the growing tail is re-parsed on every frame.
@@ -21,11 +35,9 @@ export function splitBlocks(text: string): Block[] {
   let offset = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
-    const marker = FENCE.exec(line)?.[1];
-    if (marker) {
-      if (!fence) fence = marker.charAt(0);
-      else if (marker.charAt(0) === fence) fence = undefined;
-    }
+    if (fence) {
+      if (closes(fence, line)) fence = undefined;
+    } else fence = FENCE.exec(line)?.[1];
     offset += line.length + 1;
     const next = lines[i + 1];
     if (
@@ -52,11 +64,11 @@ export function closeOpenMarkdown(text: string): string {
   let fence: string | undefined;
   const prose: string[] = [];
   for (const line of text.split('\n')) {
-    const marker = FENCE.exec(line)?.[1];
-    if (marker && (!fence || marker.charAt(0) === fence.charAt(0))) {
-      fence = fence ? undefined : marker;
+    if (fence) {
+      if (closes(fence, line)) fence = undefined;
       continue;
     }
+    fence = FENCE.exec(line)?.[1];
     if (!fence) prose.push(line);
   }
   if (fence) return `${text}\n${fence}`;
