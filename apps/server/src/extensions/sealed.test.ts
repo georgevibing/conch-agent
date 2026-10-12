@@ -116,6 +116,17 @@ describe('a provider’s code, sealed', () => {
     expect(models.json).toEqual({ keys: {}, emit: 'undefined' });
   });
 
+  it('returns a long answer whole: what the model reads is cut, the answer itself isn’t', async () => {
+    const { runtime } = await app(`export const provider = {
+      async chat() {
+        return { toolCalls: [{ id: 'c1', name: 'write', arguments: { text: 'x'.repeat(120000) } }] };
+      },
+    };`);
+    const outcome = await runtime.callPart('provider.chat', {}, { keys: {} });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.json).toMatchObject({ toolCalls: [{ id: 'c1', name: 'write' }] });
+  });
+
   it('can’t stream outside an answer, or say something the gateway doesn’t take', async () => {
     const { runtime } = await app(`let later;
     export const provider = {
@@ -201,6 +212,19 @@ describe('a chat app’s code, sealed', () => {
       own: 'data,fetch,keys,log,now,settings',
       keys: { token: 't' },
     });
+  });
+
+  it('hands over a long poll whole, every message in it', async () => {
+    const { runtime } = await app(`export const channel = {
+      async identify() { return { id: 'b', name: 'B' }; },
+      async poll() {
+        return { cursor: 'c2', messages: Array.from({ length: 20 }, (_, i) => ({ id: String(i), chatId: 'c', text: 'y'.repeat(6000) })) };
+      },
+    };`);
+    const outcome = await runtime.callPart('channel.poll', { cursor: null }, { keys: {} });
+    expect(outcome.ok).toBe(true);
+    expect((outcome.json as { messages: unknown[] }).messages).toHaveLength(20);
+    expect(outcome.json).toMatchObject({ cursor: 'c2' });
   });
 
   it('runs only the functions Conch calls, never one it names itself', async () => {

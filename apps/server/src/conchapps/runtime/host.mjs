@@ -904,7 +904,12 @@ async function load(message) {
   send({ t: 'ready', tools: definitions, parts: found });
 }
 
-function textOf(value) {
+/**
+ * A result as text for the model, and as JSON. `whole` keeps the JSON when
+ * the text is cut: a provider's or chat app's answer is read as JSON, so
+ * cutting it would lose its messages or tool calls (the message cap still holds).
+ */
+function textOf(value, whole = false) {
   if (value === undefined) return { text: 'Done.' };
   if (typeof value === 'string') return { text: value };
   if (typeof value === 'bigint') return { text: value.toString() };
@@ -918,7 +923,10 @@ function textOf(value) {
   }
   if (json === undefined) throw new Error('The tool returned something that isn’t text or JSON.');
   if (json.length > limits.text)
-    return { text: `${json.slice(0, limits.text)}\n… (cut: the answer was too long)` };
+    return {
+      text: `${json.slice(0, limits.text)}\n… (cut: the answer was too long)`,
+      ...(whole && { json: jsonParse(json) }),
+    };
   return { text: json, json: jsonParse(json) };
 }
 
@@ -958,6 +966,7 @@ async function callPart(message) {
       await callContext.run({ cache: false }, () =>
         bare ? part[name](context) : part[name](freeze(message.input ?? {}), context),
       ),
+      true,
     );
     reply = { t: 'result', id: message.id, ok: true, text: trim(out.text, limits.text) };
     if (out.json !== undefined) reply.json = out.json;
