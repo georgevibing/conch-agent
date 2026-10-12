@@ -19,6 +19,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { serviceChildren } from './recovery/children';
+import { captureEvidence } from './recovery/evidence';
 import { serviceLabel, unitName } from './background/files';
 
 import {
@@ -264,6 +265,10 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         now: deps.now,
         stopping: () => stopping,
         incident: record,
+        // Bounded (2 s), never throws; the frozen gateway's kill grace covers it.
+        beforeKill: (frozen) => {
+          if (frozen) void captureEvidence(running.pid, home);
+        },
         repaired: () => {
           clearRecovery(recovery);
           record('repaired');

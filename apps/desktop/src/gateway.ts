@@ -27,6 +27,7 @@ import {
   type RecoveryReason,
   type RecoveryResource,
 } from '../../server/src/recovery/supervisor-state';
+import { captureEvidence } from '../../server/src/recovery/evidence';
 import { watchGateway, type WatchdogOptions } from '../../server/src/recovery/watchdog';
 import { nextStep, RESTART_CODE } from '../../server/src/supervisor';
 
@@ -159,6 +160,10 @@ export class Gateway extends EventEmitter<{
       now: this.deps.now,
       stopping: () => this.#stopping,
       incident: (reason, resource) => this.#record(reason, resource),
+      // Bounded (2 s), never throws; the frozen gateway's kill grace covers it.
+      beforeKill: (frozen) => {
+        if (frozen && this.#home) void captureEvidence(child.pid, this.#home);
+      },
       repaired: () => {
         clearRecovery(this.#recovery);
         this.#record('repaired');

@@ -25,6 +25,7 @@ import { SERVER_VERSION, Services } from './services';
 import { RESTART_CODE, SUPERVISOR_REVISION } from './supervisor';
 import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
+import { answerEvidenceRequests } from './recovery/evidence';
 
 // Supervised: proof of life until the first real heartbeat, so a slow start isn't killed as stuck.
 const boot = bootHeartbeat(parentChannel());
@@ -45,6 +46,8 @@ if (!desktop && process.env.CONCH_SUPERVISED === '1')
   process.once('disconnect', () => {
     if (!stopSoon()) process.exit(0);
   });
+// A supervisor (the background one or the app's) can ask where a frozen gateway is stuck.
+if (typeof process.send === 'function') answerEvidenceRequests(config.CONCH_HOME);
 // Before anything starts: is the port free, already a Conch, or another program's?
 const choose = async () =>
   choosePort({
