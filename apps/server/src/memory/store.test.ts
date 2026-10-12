@@ -33,6 +33,19 @@ describe('MemoryStore', () => {
     expect(await store.list()).toHaveLength(1);
   });
 
+  it('deduplicates when the same thing is said at once, and when it is long', async () => {
+    const store = new MemoryStore(await temp());
+    await Promise.all(
+      [1, 2, 3].map(() => store.add({ content: 'Lives in Berlin', source: 'agent' })),
+    );
+    expect(await store.list()).toHaveLength(1);
+    const long = `Notes on the garden: ${'roses and tulips, '.repeat(120)}`;
+    const a = await store.add({ content: long, source: 'agent' });
+    const b = await store.add({ content: long, source: 'agent' });
+    expect(b.id).toBe(a.id);
+    expect(await store.list()).toHaveLength(2);
+  });
+
   it('updates, removes and searches', async () => {
     const store = new MemoryStore(await temp());
     const coffee = await store.add({ content: 'Loves espresso', source: 'user' });

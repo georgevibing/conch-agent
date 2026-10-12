@@ -375,15 +375,31 @@ export class MemoryStore {
     return (await this.write(input, how)).memory;
   }
 
+  /** Writes of the same words on their way, so the same thing said at once is kept once. */
+  readonly #adding = new Map<string, Promise<unknown>>();
+
   /** `add`, with what the check said (the earlier pieces of a split plant, for the caller to hold). */
   async write(input: MemoryInput, how?: MemoryWrite): Promise<Written> {
-    const content = canonical(input.content);
-    if (!content) throw new Error('A memory needs words.');
+    // Compared as it's kept: in its canonical form, at most 2000 characters.
+    const same = canonical(input.content).slice(0, 2000).toLowerCase();
+    const before = this.#adding.get(same);
+    const mine = (async () => {
+      await before?.catch(() => undefined);
+      return this.#write(input, same, how);
+    })();
+    this.#adding.set(same, mine);
+    try {
+      return await mine;
+    } finally {
+      if (this.#adding.get(same) === mine) this.#adding.delete(same);
+    }
+  }
+
+  async #write(input: MemoryInput, same: string, how?: MemoryWrite): Promise<Written> {
+    if (!same) throw new Error('A memory needs words.');
     // Re-saying something we already know refreshes it instead of duplicating:
     // it neither goes back to waiting for an OK, nor comes out of it.
-    const existing = (await this.list()).find(
-      (m) => m.content.toLowerCase() === content.toLowerCase(),
-    );
+    const existing = (await this.list()).find((m) => m.content.toLowerCase() === same);
     if (existing) {
       const { memory, verdict } = await this.#commit(
         'add',
