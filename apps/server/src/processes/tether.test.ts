@@ -1,10 +1,11 @@
 import type { ChildProcess } from 'node:child_process';
+import { constants } from 'node:os';
 import type { Readable } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
 import { cleanUp, gone, until } from '../test/gateway';
-import { spawnTethered, stopTree } from './tether';
+import { spawnLinked, spawnTethered, stopTree } from './tether';
 
 const posix = process.platform !== 'win32';
 
@@ -47,6 +48,34 @@ describe('commands tied to their gateway', () => {
     expect((await ended).code).toBeNull();
     expect(child.signalCode).toBe('SIGTERM');
     expect(output()).toContain('through sh');
+  });
+
+  it.skipIf(!posix)("never opens Node's debugger when the command sends SIGUSR1", async () => {
+    // To the runtime that holds it, then to itself: dying of it made the runtime re-raise it.
+    const poke = spawnTethered('kill -USR1 $PPID; sleep 0.3; echo poked', [], {
+      env: { PATH: process.env.PATH ?? '' },
+      shell: '/bin/sh',
+      stdin: 'ignore',
+    });
+    const poked = run(poke);
+    expect((await poked.ended).code).toBe(0);
+    expect(poked.output()).toContain('poked');
+    const dies = spawnTethered('kill -USR1 $$', [], {
+      env: { PATH: process.env.PATH ?? '' },
+      shell: '/bin/sh',
+      stdin: 'ignore',
+    });
+    const died = run(dies);
+    expect((await died.ended).code).toBe(128 + constants.signals.SIGUSR1);
+    // The sandbox's runtime (engines/host.ts) is a linked one too.
+    const worker = spawnLinked(
+      ['-e', "process.kill(process.pid, 'SIGUSR1'); setTimeout(() => {}, 300)"],
+      { env: { PATH: process.env.PATH ?? '' }, stdin: 'ignore' },
+    );
+    const own = run(worker);
+    expect((await own.ended).code).toBe(0);
+    for (const output of [poked.output(), died.output(), own.output()])
+      expect(output).not.toContain('Debugger listening');
   });
 
   it('reports a program that cannot start as spawn does', async () => {

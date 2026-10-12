@@ -9,7 +9,14 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { Socket } from 'node:net';
+import { constants } from 'node:os';
 import { pathToFileURL } from 'node:url';
+
+/**
+ * Signals this runtime passes on to itself when its command died of one. Only those
+ * whose default is to end a program and that Node leaves alone: never one it handles.
+ */
+const ENDING = new Set(['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGABRT', 'SIGKILL', 'SIGALRM', 'SIGTERM']);
 
 /** Watch the gateway's pipe; `current` names the command to stop on Windows. */
 export function tie(current) {
@@ -65,9 +72,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   child = spawn(program, args, { env, shell, stdio: 'inherit', windowsHide: true });
   child.once('error', (error) => link.failed(error));
   child.once('exit', (code, signal) => {
-    // Ended by a signal: so does this runtime, and the gateway sees no exit code, as before.
-    if (signal) process.kill(process.pid, signal);
-    // Still here: Node ignores that signal (SIGPIPE).
-    process.exit(code ?? 1);
+    // Ended by a signal that ends any program: so does this runtime, and the gateway
+    // sees no exit code, as before.
+    if (signal && ENDING.has(signal)) process.kill(process.pid, signal);
+    // One Node keeps for itself (SIGUSR1 would open its debugger to anyone on this
+    // computer) or ignores (SIGPIPE): the shell's 128 + its number instead.
+    process.exit(signal ? 128 + (constants.signals[signal] ?? 0) : (code ?? 1));
   });
 }

@@ -28,9 +28,11 @@ export interface LinkedOptions {
 /**
  * Node with `args`, in its own process group, holding this gateway's pipe on fd 3.
  * A command the runtime could not start is this child's `error`, as with spawn.
+ * SIGUSR1 can't open its debugger: the command, or anyone on this computer, could
+ * otherwise reach it on 127.0.0.1:9229 with no password and run code as you.
  */
 export function spawnLinked(args: string[], options: LinkedOptions): ChildProcess {
-  const child = spawn(process.execPath, args, {
+  const child = spawn(process.execPath, ['--disable-sigusr1', ...args], {
     cwd: options.cwd,
     env: options.env,
     detached: process.platform !== 'win32',
