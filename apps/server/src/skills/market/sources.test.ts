@@ -153,6 +153,16 @@ describe('GitHub, file by file at a commit', () => {
     });
   });
 
+  it('a tree GitHub cut short is never taken for the whole skill', async () => {
+    const routes = repo('ada', 'tools', { 'n/SKILL.md': skillMd('n') });
+    const key = `api.github.com/repos/ada/tools/git/trees/${COMMIT}?recursive=1`;
+    routes[key] = { ...(routes[key] as object), truncated: true };
+    const github = new GitHubSkills({ ...deps, fetch: web(routes).fetch });
+    await expect(github.folder('ada', 'tools', COMMIT, 'n')).rejects.toMatchObject({
+      code: 'too-big',
+    });
+  });
+
   it('a redirect to another host stops there', async () => {
     const routes = repo('ada', 'tools', { 'n/SKILL.md': skillMd('n') });
     routes[`raw.githubusercontent.com/ada/tools/${COMMIT}/n/SKILL.md`] = () =>

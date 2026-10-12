@@ -55,6 +55,8 @@ export class GitHubSkills {
   readonly #raw: MarketHttp;
   /** Trees by `owner/repo@commit`: a commit never changes, so these never go stale. */
   readonly #trees = new Map<string, TreeFile[]>();
+  /** Trees GitHub cut short: fine for a listing, never for what's added. */
+  readonly #partial = new WeakSet<TreeFile[]>();
   /** The last answer for a ref, with its ETag, so asking again is free when nothing moved. */
   readonly #heads = new Map<string, { etag?: string; commit: string }>();
 
@@ -136,6 +138,7 @@ export class GitHubSkills {
       )
         files.push({ path: e.path, sha: e.sha, size: e.size, mode: e.mode });
     }
+    if (raw.truncated === true) this.#partial.add(files);
     this.#trees.set(key, files);
     while (this.#trees.size > 24) {
       const oldest = this.#trees.keys().next().value;
@@ -188,6 +191,11 @@ export class GitHubSkills {
       throw new MarketError('not-found', 'That isn’t a folder Conch can read.');
     const prefix = base ? `${base}/` : '';
     const tree = await this.tree(owner, repo, commit, signal);
+    if (this.#partial.has(tree))
+      throw new MarketError(
+        'too-big',
+        'This repository is too big for GitHub to list whole, so Conch can’t tell it has all of the skill.',
+      );
     const mine = tree.filter((f) => f.path.startsWith(prefix));
     if (!mine.some((f) => f.path === `${prefix}SKILL.md`))
       throw new MarketError('not-found', 'There’s no skill in that folder any more.');
