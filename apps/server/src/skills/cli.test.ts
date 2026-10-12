@@ -47,11 +47,9 @@ describe('conch skills', () => {
     const signed = JSON.parse(await readFile(join(folder, SIG_FILE), 'utf8'));
     expect(signed).toMatchObject({ name: 'weekly-review', publisher: { name: 'Ada Lovelace' } });
     // Trusted here from the start: you made it.
-    expect(await checkSignature(folder, 'weekly-review', await trust.fingerprints())).toMatchObject(
-      {
-        state: 'verified',
-      },
-    );
+    expect(await checkSignature(folder, 'weekly-review', await trust.keys())).toMatchObject({
+      state: 'verified',
+    });
     // Signing again keeps the same key, whatever name is typed.
     await skillsCommand(['sign', folder, '--as', 'Someone'], trust, io);
     expect(JSON.parse(await readFile(join(folder, SIG_FILE), 'utf8')).publisher.key).toBe(

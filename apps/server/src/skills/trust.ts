@@ -140,6 +140,11 @@ export class SkillTrust {
     return new Set((await this.#read()).publishers.map((p) => p.fingerprint));
   }
 
+  /** The keys you trust, whole: what a signature is checked against. */
+  async keys(): Promise<Set<string>> {
+    return new Set((await this.#read()).publishers.map((p) => p.key));
+  }
+
   /** Trust a key. Its fingerprint is worked out here, never taken on faith. */
   trust(entry: { key: string; name: string; you?: boolean }): Promise<TrustedPublisher> {
     return this.#mutex.run(async () => {

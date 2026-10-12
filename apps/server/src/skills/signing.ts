@@ -119,7 +119,8 @@ export async function signSkill(
 }
 
 /**
- * Whether a skill's signature holds. `trusted`: fingerprints you trust. The
+ * Whether a skill's signature holds. `trusted`: the keys you trust, whole
+ * (a fingerprint is short enough to compare by eye, not to match on). The
  * name checked is the skill's own (its front matter or folder): a signature
  * made for another skill doesn't hold here.
  */
@@ -164,7 +165,7 @@ export async function checkSignature(
   if ((await skillHash(folder)) !== parsed.hash)
     return invalid(`It was changed after ${parsed.publisher.name} signed it.`, who);
   return {
-    state: trusted.has(fingerprint) ? 'verified' : 'untrusted',
+    state: trusted.has(parsed.publisher.key) ? 'verified' : 'untrusted',
     ...who,
     key: parsed.publisher.key,
   };

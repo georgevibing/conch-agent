@@ -201,7 +201,7 @@ export class SkillStore {
     if (!options.fresh && this.#cache && Date.now() - this.#cache.at < 2_000) return this.#cache;
     const { modes, pins, acks } = await this.#choices();
     const publishers = (await this.trust?.list().catch(() => undefined)) ?? [];
-    const trusted = new Set(publishers.map((p) => p.fingerprint));
+    const trusted = (await this.trust?.keys().catch(() => undefined)) ?? new Set<string>();
     const trustedNames = new Set(publishers.map((p) => p.name.trim().toLowerCase()));
     const native = this.nativelyLoaded();
     const origins = this.origins();
@@ -219,7 +219,7 @@ export class SkillStore {
           { modes, pins, acks },
           ids,
           native.get(root.source),
-          { fingerprints: trusted, names: trustedNames },
+          { keys: trusted, names: trustedNames },
         );
         if (!skill) continue;
         const origin = origins.get(skill.id);
@@ -570,7 +570,7 @@ export class SkillStore {
     choices: z.infer<typeof ModesFile>,
     taken: Set<string>,
     loadedBy: string | undefined,
-    trusted: { fingerprints: ReadonlySet<string>; names: ReadonlySet<string> },
+    trusted: { keys: ReadonlySet<string>; names: ReadonlySet<string> },
   ): Promise<LoadedSkill | undefined> {
     const file = join(folder, 'SKILL.md');
     const folderName = folder.slice(folder.lastIndexOf(sep) + 1);
@@ -621,7 +621,7 @@ export class SkillStore {
     const review = await this.#review(folder);
     const pin = pins[id];
     // Who made it, provably (ADR 0031): a signature that doesn't hold turns it off.
-    const signature = await this.#signature(folder, name, trusted.fingerprints);
+    const signature = await this.#signature(folder, name, trusted.keys);
     const lookalike =
       signature.state === 'untrusted' &&
       trusted.names.has((signature.publisher ?? '').trim().toLowerCase());
