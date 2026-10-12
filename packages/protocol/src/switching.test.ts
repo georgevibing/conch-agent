@@ -192,6 +192,17 @@ describe('which model the person means (ADR 0132)', () => {
     ],
     ['use the most capable model', { engine: 'claude-code', model: 'haiku' }, 'claude-code/opus'],
     ['cheaper', { engine: 'anthropic-api', model: 'claude-opus-5-5' }, 'claude-code/opus'],
+    // The same, said in more words: the words of the phrase aren't names.
+    ['use something less expensive', ON_OPUS, 'claude-code/sonnet'],
+    ['save money', ON_OPUS, 'claude-code/sonnet'],
+    ['a lower cost model', ON_OPUS, 'claude-code/sonnet'],
+    ['one that costs less', ON_OPUS, 'claude-code/sonnet'],
+    [
+      'use a more intelligent model',
+      { engine: 'claude-code', model: 'sonnet' },
+      'claude-code/opus',
+    ],
+    ['something more advanced', { engine: 'claude-code', model: 'sonnet' }, 'claude-code/opus'],
     // This computer: one that can use apps, while the chat's can.
     ['use a local model', ON_OPUS, 'ollama/qwen3:8b'],
     ['run it offline on this computer', ON_OPUS, 'ollama/qwen3:8b'],

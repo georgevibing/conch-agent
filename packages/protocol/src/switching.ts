@@ -271,17 +271,21 @@ interface Wish {
 }
 
 function wishOf(request: string): Wish {
-  const words = switchWords(request);
   const wish: Wish = { names: [], back: false, local: false };
-  const text = ` ${words.join(' ')} `;
-  if (/ (?:pay per use|pay as you go|my own key|api key|per token) /.test(text))
+  let text = ` ${switchWords(request).join(' ')} `;
+  // A phrase's words say what it says, and are no model's name.
+  const phrase = (pattern: RegExp) => {
+    const found = pattern.test(text);
+    text = text.replace(new RegExp(pattern.source, 'g'), ' ');
+    return found;
+  };
+  if (phrase(/ (?:pay per use|pay as you go|my own key|api key|per token) /))
     wish.billing = 'metered';
-  if (/ (?:this computer|this machine|on device|on my mac|on my pc) /.test(text)) wish.local = true;
-  if (/ (?:more|most) (?:powerful|capable|intelligent|advanced) /.test(text))
+  if (phrase(/ (?:this computer|this machine|on device|on my mac|on my pc) /)) wish.local = true;
+  if (phrase(/ (?:more|most) (?:powerful|capable|intelligent|advanced) /))
     wish.direction = 'stronger';
-  if (/ (?:less expensive|costs? less|save money|lower cost) /.test(text))
-    wish.direction = 'cheaper';
-  for (const word of words) {
+  if (phrase(/ (?:less expensive|costs? less|save money|lower cost) /)) wish.direction = 'cheaper';
+  for (const word of text.split(' ').filter(Boolean)) {
     if (BACK.has(word)) wish.back = true;
     else if (STRONGER.has(word)) wish.direction ??= 'stronger';
     else if (CHEAPER.has(word)) wish.direction ??= 'cheaper';
