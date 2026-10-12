@@ -34,6 +34,15 @@ const NAVIGATES = [
   /<\s*a\b[^>]*\bhref\s*=\s*["']?\s*(?:https?:|\/\/|javascript:)/i,
   /<\s*(?:iframe|frame|object|embed)\b/i,
   /\.\s*(?:click|submit)\s*\(\s*\)/i,
+  // The address a part at a time, and the Navigation API.
+  /\blocation\s*\.\s*(?:host|hostname|protocol|port|pathname|search)\s*=(?!=)/i,
+  /\bnavigation\s*\.\s*(?:navigate|reload|traverseTo)\s*\(/i,
+  // A name worked out at run time on the page's own globals (`self["loc"+"ation"]`).
+  /\b(?:window|self|globalThis|document|frames)\s*\[/i,
+  // What CSP doesn't cover: a STUN lookup carries words out in its name, and so does a
+  // DNS prefetch (the header turns the page's own off; a declared one is still asked).
+  /\b(?:webkit)?RTC(?:PeerConnection|DataChannel|IceTransport)\b/i,
+  /<\s*link\b[^>]*\brel\s*=\s*["']?\s*(?:dns-prefetch|preconnect|prefetch|prerender|preload|modulepreload)\b/i,
 ];
 
 export function navigates(html: string): boolean {
@@ -68,6 +77,7 @@ export function frameHeaders(scripts: boolean): Record<string, string> {
     'cross-origin-resource-policy': 'same-origin',
     'cross-origin-opener-policy': 'same-origin',
     'referrer-policy': 'no-referrer',
+    'x-dns-prefetch-control': 'off',
     'permissions-policy':
       'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), clipboard-read=(), display-capture=()',
     'cache-control': 'no-store',
