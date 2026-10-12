@@ -360,6 +360,23 @@ describe('reading the log', () => {
     expect(previousModel([], { engine: 'claude-code' })).toBeUndefined();
   });
 
+  it('finds the model the chat started on, which wrote no choice of its own', () => {
+    const events = [
+      { ...at(1), type: 'user.message', text: 'hi' },
+      { ...at(2), type: 'turn.completed', engine: 'claude-code', model: 'opus' },
+      { ...at(3), type: 'options', options: { engine: 'codex-agent', model: 'gpt-5.5' } },
+      { ...at(4), type: 'turn.completed', engine: 'codex-agent', model: 'gpt-5.5-2026-09' },
+    ] as ConversationEvent[];
+    expect(previousModel(events, { engine: 'codex-agent', model: 'gpt-5.5' })).toEqual({
+      engine: 'claude-code',
+      model: 'opus',
+    });
+    // A turn since the change is the model now, however the provider named it.
+    expect(previousModel(events.slice(3), { engine: 'codex-agent', model: 'gpt-5.5' })).toBe(
+      undefined,
+    );
+  });
+
   it('knows a tapped chip only until the person says something else', () => {
     const choices = {
       ...at(3),

@@ -10,14 +10,22 @@ const same = (a: ModelRef, b: ModelRef | undefined) =>
 
 /**
  * The model the chat had before the one it has now, for "go back": the last
- * switch's `from`, or the last choice in the picker that was another one.
+ * switch's `from`, or the last choice in the picker that was another one. A
+ * chat's first model writes no choice, so before the first change, the turns
+ * say who answered.
  */
 export function previousModel(
   events: readonly ConversationEvent[],
   current: ModelRef | undefined,
 ): ModelRef | undefined {
+  // Only turns from before the first change: since then, choices say it.
+  const first = events.findIndex((e) => e.type === 'model.switched' || e.type === 'options');
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
+    if (i < first && event?.type === 'turn.completed' && event.engine) {
+      const then = { engine: event.engine, ...(event.model && { model: event.model }) };
+      if (!same(then, current)) return then;
+    }
     if (event?.type === 'model.switched') {
       const from = { engine: event.from, ...(event.fromModel && { model: event.fromModel }) };
       if (!same(from, current)) return from;
