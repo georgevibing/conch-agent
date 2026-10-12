@@ -155,6 +155,19 @@ describe('image creation and editing', () => {
     };
     expect(body.input_references[0]?.image_url.url).toBe(`data:image/png;base64,${png}`);
   });
+  it('edits one of this chat’s attachments by its id, for providers that never see paths', async () => {
+    const { run, store, fetcher } = await setup();
+    const sent = await store.save({ name: 'photo.png', bytes: Buffer.from(png, 'base64') });
+    await store.claim([sent.id], 'one');
+    await run({ source: sent.id });
+    const body = JSON.parse(String(fetcher.mock.calls.at(-1)?.[1]?.body)) as {
+      input_references: { image_url: { url: string } }[];
+    };
+    expect(body.input_references[0]?.image_url.url).toBe(`data:image/png;base64,${png}`);
+    const other = await store.save({ name: 'theirs.png', bytes: Buffer.from(png, 'base64') });
+    await store.claim([other.id], 'two');
+    await expect(run({ source: other.id })).rejects.toThrow('no attachment');
+  });
   it('offers setup, blocks plan mode and observes the monthly budget', async () => {
     const absent = await setup({}, []);
     expect(await absent.run({})).toBe('Connect card');

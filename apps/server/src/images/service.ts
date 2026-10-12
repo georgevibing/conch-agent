@@ -14,7 +14,7 @@ import type {
   ToolImage,
   TurnImage,
 } from '../engines/types';
-import { fileBytes } from '../files/read';
+import { namedBytes } from '../files/read';
 import { paidPictureAsk } from './ask';
 import {
   NotMade,
@@ -301,10 +301,11 @@ export class ImageService {
             const editing = typeof args.source === 'string';
             let source: Picture | undefined;
             if (editing) {
-              const bytes = await fileBytes(
-                await access(),
+              const bytes = await namedBytes(
+                access,
                 String(args.source),
                 ctx.signal,
+                { files: this.deps.store, conversationId: ctx.conversationId },
                 10 * 1024 * 1024,
               );
               const type = sniff(bytes, 'source', undefined);
