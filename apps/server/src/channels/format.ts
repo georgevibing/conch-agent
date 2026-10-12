@@ -379,18 +379,16 @@ export function split(markdown: string, max: number): string[] {
   const budget = Math.max(max - 24, Math.ceil(max / 2));
   while (rest.length > max) {
     const window = rest.slice(0, budget);
-    const cut =
-      lastBreak(window, '\n\n', budget * 0.4) ??
-      lastBreak(window, '\n', budget * 0.4) ??
-      lastBreak(window, ' ', budget * 0.6) ??
-      budget;
+    const atLine = lastBreak(window, '\n\n', budget * 0.4) ?? lastBreak(window, '\n', budget * 0.4);
+    const cut = atLine ?? lastBreak(window, ' ', budget * 0.6) ?? whole(rest, budget);
     let head = rest.slice(0, cut).trimEnd();
-    let tail = rest.slice(cut).replace(/^\s+/, '');
+    // Cut at a line: the next line's indentation is kept (it's code, or a nested list).
+    let tail = rest.slice(cut).replace(atLine === undefined ? /^\s+/ : /^\n+/, '');
     // Inside an open fence? Close it here and reopen it in the next part.
     const open = openFence(head);
     if (open !== undefined) {
-      head = `${head}\n\`\`\``;
-      tail = `\`\`\`${open}\n${tail}`;
+      head = `${head}\n${open.marker}`;
+      tail = `${open.marker}${open.language}\n${tail}`;
     }
     parts.push(head);
     // Guard against a part that can't shrink (a fence reopened into a tiny window).
@@ -409,19 +407,29 @@ function lastBreak(window: string, token: string, min: number): number | undefin
   return at >= min ? at : undefined;
 }
 
-/** The language of a fence left open at the end of `text`, or undefined. */
-function openFence(text: string): string | undefined {
-  let open: string | undefined;
+/** The fence left open at the end of `text` (its marker and language), or undefined. */
+function openFence(text: string): { marker: string; language: string } | undefined {
+  let open: { marker: string; language: string } | undefined;
   for (const line of text.split('\n')) {
     const fence = FENCE.exec(line);
     if (!fence) continue;
-    open = open === undefined ? (fence[2] ?? '') : undefined;
+    open = open === undefined ? { marker: fence[1] ?? '```', language: fence[2] ?? '' } : undefined;
   }
   return open;
 }
 
+/** `at`, or one before it when `at` would cut a character written in two halves (an emoji). */
+function whole(text: string, at: number): number {
+  const code = text.charCodeAt(at - 1);
+  return at > 1 && code >= 0xd800 && code <= 0xdbff ? at - 1 : at;
+}
+
 function hardSplit(text: string, max: number): string[] {
   const out: string[] = [];
-  for (let i = 0; i < text.length; i += max) out.push(text.slice(i, i + max));
+  for (let i = 0; i < text.length;) {
+    const end = i + max >= text.length ? text.length : Math.max(whole(text, i + max), i + 1);
+    out.push(text.slice(i, end));
+    i = end;
+  }
   return out;
 }

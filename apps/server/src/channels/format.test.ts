@@ -107,6 +107,30 @@ describe('split', () => {
     expect(parts[1]?.startsWith('```py\n')).toBe(true);
   });
 
+  it('never cuts an emoji in half', () => {
+    for (const parts of [split('😀'.repeat(300), 101), split('a😀'.repeat(200), 101)])
+      for (const part of parts) {
+        expect(part).not.toMatch(/[\uD800-\uDBFF]$/);
+        expect(part).not.toMatch(/^[\uDC00-\uDFFF]/);
+      }
+  });
+
+  it('keeps the indentation of code carried into the next part', () => {
+    const code = Array.from({ length: 40 }, (_, i) => `    x${i} = ${i}`).join('\n');
+    for (const max of [150, 170, 190, 210])
+      for (const part of split(`def f():\n\`\`\`py\n${code}\n\`\`\``, max))
+        for (const line of part.split('\n'))
+          if (/x\d+ =/.test(line)) expect(line.startsWith('    ')).toBe(true);
+  });
+
+  it('closes a ~~~ code block with its own fence', () => {
+    const code = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
+    const parts = split(`Here:\n~~~py\n${code}\n~~~`, 150);
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.join('\n')).not.toContain('```');
+    expect(parts[1]?.startsWith('~~~py\n')).toBe(true);
+  });
+
   it('cuts a single enormous word', () => {
     const parts = split('x'.repeat(250), 100);
     expect(parts.every((p) => p.length <= 100)).toBe(true);
