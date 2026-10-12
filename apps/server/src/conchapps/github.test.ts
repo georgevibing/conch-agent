@@ -24,7 +24,7 @@ function internet(handler: Handler) {
   const calls: { url: string; headers: Record<string, string> }[] = [];
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    calls.push({ url: url.href, headers: { ...(init?.headers as Record<string, string>) } });
+    calls.push({ url: url.href, headers: Object.fromEntries(new Headers(init?.headers)) });
     return handler(url, init ?? {});
   });
   return { fetch: fetch as unknown as typeof globalThis.fetch, calls };
