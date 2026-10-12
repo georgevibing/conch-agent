@@ -267,8 +267,15 @@ function reduce(input: unknown, walk: Walk, refs: number, depth: number): JsonSc
 /** An object root, the way every provider needs it. */
 function asRoot(schema: JsonSchema): JsonSchema {
   const { $schema: _schema, ...rest } = schema;
-  if (rest['type'] !== 'object') return { type: 'object', properties: {} };
-  return { ...rest, properties: isRecord(rest['properties']) ? rest['properties'] : {} };
+  // Fields with no `type` beside them are still an object's fields.
+  const object =
+    rest['type'] === 'object' || (rest['type'] === undefined && isRecord(rest['properties']));
+  if (!object) return { type: 'object', properties: {} };
+  return {
+    ...rest,
+    type: 'object',
+    properties: isRecord(rest['properties']) ? rest['properties'] : {},
+  };
 }
 
 /** Anthropic: no `anyOf`, `oneOf` or `allOf` at the root; their object branches are merged into it. */

@@ -173,6 +173,12 @@ describe('tool schemas for each provider family (ADR 0072)', () => {
     });
   });
 
+  it('reads a root with fields but no type as the object it is', () => {
+    const schema = { properties: { q: { type: 'string' } }, required: ['q'] };
+    for (const family of ['permissive', 'gemini', 'strict', 'anthropic'] as const)
+      expect(sanitise(schema, family).properties).toEqual({ q: { type: 'string' } });
+  });
+
   it('merges a union at the root for Anthropic, without making either field required', () => {
     expect(sanitise(MCP_SCHEMAS.rootUnion as JsonSchema, 'anthropic')).toEqual({
       type: 'object',
