@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { watchGateway } from './watchdog';
+import { watchGateway, watchTransition, type WatchState } from './watchdog';
 
 afterEach(() => vi.useRealTimers());
 function world() {
@@ -140,5 +140,35 @@ describe('independent gateway watchdog', () => {
       watch.close();
       child.kill('SIGKILL');
     }
+  });
+});
+
+describe('watchdog transitions', () => {
+  const limits = { startupMs: 100, unhealthyMs: 30, recoverMs: 20 };
+  const step = (state: WatchState, ...events: Parameters<typeof watchTransition>[1][]) =>
+    events.reduce((current, event) => watchTransition(current, event, limits), state);
+  const booting: WatchState = { phase: 'booting', since: 0, failed: false };
+
+  it('moves booting → healthy → reducing → terminating, one deadline at a time', () => {
+    expect(step(booting, { type: 'tick', at: 99 }).phase).toBe('booting');
+    expect(step(booting, { type: 'tick', at: 100 })).toMatchObject({
+      phase: 'reducing',
+      since: 100,
+    });
+    const healthy = step(booting, { type: 'healthy', at: 10 });
+    expect(step(healthy, { type: 'tick', at: 39 }).phase).toBe('healthy');
+    const reducing = step(healthy, { type: 'tick', at: 40 });
+    expect(reducing.phase).toBe('reducing');
+    expect(step(reducing, { type: 'tick', at: 59 }).phase).toBe('reducing');
+    expect(step(reducing, { type: 'tick', at: 60 })).toMatchObject({
+      phase: 'terminating',
+      failed: true,
+    });
+    expect(step(reducing, { type: 'healthy', at: 50 }).phase).toBe('healthy');
+  });
+  it('never leaves terminating, and a requested shutdown is not a failure', () => {
+    const stopping = step(booting, { type: 'shutdown', at: 5, failed: false });
+    expect(stopping).toMatchObject({ phase: 'terminating', failed: false });
+    expect(step(stopping, { type: 'healthy', at: 6 }, { type: 'tick', at: 1_000 })).toBe(stopping);
   });
 });
