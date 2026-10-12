@@ -110,6 +110,84 @@ describe('independent gateway watchdog', () => {
     expect(order).toEqual(['evidence', 'SIGKILL']);
     watch.close();
   });
+  it('takes back the kill of a frozen gateway that answers before it, until it keeps doing so', () => {
+    const { child, watch, incident } = world({ stopMs: 15_000 });
+    const beat = () => child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    /** Answers every heartbeat for `ms`, past the 2.5 s kill. */
+    const answer = (ms: number) => {
+      for (let t = 0; t < ms; t += 5) {
+        beat();
+        vi.advanceTimersByTime(5);
+      }
+    };
+    /** Frozen through reduction to the kill, then it answers 1.5 s into the 2.5 s grace. */
+    const freeze = () => {
+      vi.advanceTimersByTime(60);
+      expect(watch.failed()).toBe(true);
+      vi.advanceTimersByTime(1_500);
+      answer(1_100);
+    };
+    beat();
+    freeze();
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(watch.failed()).toBe(false);
+    expect(incident.mock.calls.map(([reason]) => reason)).toEqual([
+      'reduced-workload',
+      'unresponsive',
+      'responsive',
+    ]);
+    // It is watched as before: the next freeze reduces work again.
+    freeze();
+    expect(child.send).toHaveBeenCalledTimes(2);
+    expect(child.kill).not.toHaveBeenCalled();
+    // The third time in the flap window is a restart, whatever it says next.
+    vi.advanceTimersByTime(40);
+    expect(watch.failed()).toBe(true);
+    answer(3_000);
+    expect(child.kill.mock.calls).toEqual([['SIGKILL']]);
+    expect(watch.failed()).toBe(true);
+    watch.close();
+  });
+  it('never takes back a requested stop, or the kill of a gateway that was sent SIGTERM', () => {
+    const asked = world({ stopMs: 15_000 });
+    asked.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(50);
+    asked.watch.stop();
+    vi.advanceTimersByTime(1_500);
+    asked.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(1_010);
+    expect(asked.child.kill.mock.calls).toEqual([['SIGKILL']]);
+    asked.watch.close();
+    const quitting = world({ stopMs: 15_000 });
+    quitting.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(50);
+    quitting.child.emit('message', { type: 'conch.stopping' });
+    vi.advanceTimersByTime(1_500);
+    quitting.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(1_010);
+    expect(quitting.child.kill.mock.calls).toEqual([['SIGKILL']]);
+    quitting.watch.close();
+    let stopping = false;
+    const quit = world({ stopMs: 15_000, stopping: () => stopping });
+    quit.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(50);
+    stopping = true;
+    vi.advanceTimersByTime(1_500);
+    quit.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(1_010);
+    expect(quit.child.kill.mock.calls).toEqual([['SIGKILL']]);
+    quit.watch.close();
+    const answering = world({ frozenStopMs: 3 });
+    answering.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(35);
+    answering.child.emit('message', { type: 'conch.heartbeat', healthy: false });
+    vi.advanceTimersByTime(15);
+    answering.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(15);
+    expect(answering.child.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']]);
+    expect(answering.watch.failed()).toBe(true);
+    answering.watch.close();
+  });
   it('gives a gateway that still answers, unhealthily, the whole graceful stop', () => {
     const { child, watch } = world({ frozenStopMs: 3 });
     child.emit('message', { type: 'conch.heartbeat', healthy: true });

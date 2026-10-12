@@ -68,6 +68,13 @@ export interface WatchState {
   heardAt?: number;
   /** Terminating a gateway that sent nothing at all while it was reducing. */
   frozen?: boolean;
+  /**
+   * Terminating a frozen reduction, which sent no SIGTERM: a healthy heartbeat before the
+   * kill takes it back. Not a flap-limit restart, which follows health that keeps coming back.
+   */
+  revocable?: boolean;
+  /** Someone asked it to stop (Ctrl+C, `conch.stopping`): that is never taken back. */
+  requested?: boolean;
   /** When recent reductions started, within the flap window. */
   reductions?: number[];
   /** The latest `conch.booting` phase; old releases never send one. */
@@ -135,10 +142,31 @@ export function watchTransition(
   event: WatchEvent,
   limits: WatchLimits,
 ): WatchState {
-  if (state.phase === 'terminating') return state;
-  if (event.type === 'shutdown')
-    return { ...state, phase: 'terminating', since: event.at, failed: event.failed };
   const healthWindow = limits.healthWindowMs ?? 120_000;
+  if (state.phase === 'terminating') {
+    if (event.type === 'shutdown' && !event.failed) return { ...state, requested: true };
+    // It answered in time after all: back to watching it. The flap limit still counts this.
+    if (event.type === 'healthy' && state.revocable && !state.requested)
+      return {
+        ...state,
+        phase: 'healthy',
+        since: event.at,
+        failed: false,
+        frozen: undefined,
+        revocable: undefined,
+        beats: [event.at],
+        beatsFrom: event.at,
+      };
+    return state;
+  }
+  if (event.type === 'shutdown')
+    return {
+      ...state,
+      phase: 'terminating',
+      since: event.at,
+      failed: event.failed,
+      requested: !event.failed,
+    };
   if (event.type === 'healthy') {
     const beats = [...(state.beats ?? []).filter((at) => event.at - at < healthWindow), event.at];
     return {
@@ -224,7 +252,14 @@ export function watchTransition(
   if (state.phase === 'reducing') {
     if (elapsed >= limits.recoverMs * stretch(limits.recoverMs)) {
       const frozen = state.heardAt === undefined || state.heardAt < state.since;
-      return { ...ticked, phase: 'terminating', since: event.at, failed: true, frozen };
+      return {
+        ...ticked,
+        phase: 'terminating',
+        since: event.at,
+        failed: true,
+        frozen,
+        revocable: frozen,
+      };
     }
     // A stretched reduction keeps shedding work, once per recoverMs but never inside the
     // gateway's cooldown, which would drop the request.
@@ -287,7 +322,17 @@ export function watchGateway(
       if (state.phase === 'reducing' && state.shedAt !== before.shedAt) recover();
       return;
     }
-    if (state.phase === 'reducing') {
+    if (before.phase === 'terminating') {
+      // Being stopped on request (the desktop app quitting) is never taken back.
+      if (options.stopping()) {
+        state = before;
+        return;
+      }
+      // A frozen gateway that answered before its kill: nothing was sent that it must survive.
+      clearTimeout(forced);
+      forced = undefined;
+      options.incident('responsive', current());
+    } else if (state.phase === 'reducing') {
       quiet = reported !== undefined && state.since - reported < limits.flapWindowMs;
       if (!quiet) {
         reported = state.since;
@@ -319,9 +364,10 @@ export function watchGateway(
     }
   };
   const stop = (signal: NodeJS.Signals = 'SIGTERM') => {
-    if (state.phase === 'terminating') return;
+    const terminating = state.phase === 'terminating';
+    // Already on its way out, it is only marked as asked to stop: never taken back.
     apply({ type: 'shutdown', at: now(), failed: false });
-    child.kill(signal);
+    if (!terminating) child.kill(signal);
   };
   const message = (value: unknown) => {
     if (!value || typeof value !== 'object' || !('type' in value)) return;
