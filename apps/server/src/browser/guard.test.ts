@@ -46,6 +46,9 @@ describe('BrowserGuard', () => {
         'http://127.0.0.1:4317/api/state',
         'http://localhost:4317/',
         'http://[::1]:4317/',
+        // An IPv4 address inside IPv6, which the URL writes as [::ffff:7f00:1].
+        'http://[::ffff:127.0.0.1]:4317/',
+        'http://[::ffff:7f00:1]:4317/',
         'ws://127.0.0.1:4317/ws',
         'http://rebind.evil.test:4317/api/permissions',
       ]) {

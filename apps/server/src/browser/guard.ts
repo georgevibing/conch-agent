@@ -1,7 +1,7 @@
 import { networkInterfaces } from 'node:os';
 import { isIP } from 'node:net';
 
-import { addresses, isBlockedAddress, isPrivateAddress } from '../integrations/net';
+import { addresses, isBlockedAddress, isPrivateAddress, unmapped } from '../integrations/net';
 
 /**
  * Where the agent's browser may go (ADR 0014, "Containment"). Every request
@@ -121,8 +121,10 @@ export class BrowserGuard {
     }
     const { allowLocal, gatewayPort } = this.policy();
     const port = defaultPort(url);
-    const onThisComputer = (a: string) =>
-      this.#local.has(a.toLowerCase()) || a.startsWith('127.') || a === '::1';
+    const onThisComputer = (address: string) => {
+      const a = unmapped(address);
+      return this.#local.has(a.toLowerCase()) || a.startsWith('127.') || a === '::1';
+    };
     if (port === gatewayPort && found.some(onThisComputer)) {
       return {
         ok: false,

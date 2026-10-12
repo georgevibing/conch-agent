@@ -35,9 +35,15 @@ function family(address: string): 'ipv4' | 'ipv6' {
   return isIP(address) === 6 ? 'ipv6' : 'ipv4';
 }
 
-function unmapped(address: string): string {
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
-  return mapped?.[1] ?? address;
+/** An IPv4 address carried in IPv6 (`::ffff:127.0.0.1`, or as a URL writes it, `::ffff:7f00:1`), as IPv4. */
+export function unmapped(address: string): string {
+  const mapped = /^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped?.[1]) return mapped[1];
+  const hex = /^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(address);
+  if (!hex?.[1] || !hex[2]) return address;
+  const high = parseInt(hex[1], 16);
+  const low = parseInt(hex[2], 16);
+  return [high >> 8, high & 255, low >> 8, low & 255].join('.');
 }
 
 export type Reach = 'public' | 'private';
