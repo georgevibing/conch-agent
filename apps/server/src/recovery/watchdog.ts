@@ -32,6 +32,8 @@ export interface WatchdogOptions {
     resource?: RecoveryResource,
   ) => void;
   repaired: () => void;
+  /** Once, as an unresponsive gateway is about to be stopped; it never delays the kill. */
+  beforeKill?: (frozen: boolean) => void;
 }
 
 /** booting → healthy → reducing → terminating; `since` is the current deadline's reference. */
@@ -214,7 +216,14 @@ export function watchGateway(
     } else if (state.phase === 'healthy' && before.phase === 'reducing') {
       if (!quiet) options.incident('responsive', resource);
     } else if (state.phase === 'terminating') {
-      if (state.failed) options.incident('unresponsive', resource);
+      if (state.failed) {
+        options.incident('unresponsive', resource);
+        try {
+          options.beforeKill?.(state.frozen === true);
+        } catch {
+          /* Evidence is best effort; the kill is not. */
+        }
+      }
       children?.sample();
       const stopMs = options.stopMs ?? 15_000;
       forced = setTimeout(

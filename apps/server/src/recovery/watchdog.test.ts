@@ -192,6 +192,40 @@ describe('independent gateway watchdog', () => {
     expect(child.send).toHaveBeenCalledOnce();
     watch.close();
   });
+  it('calls beforeKill once, saying whether the gateway was frozen', () => {
+    const frozenKill = vi.fn();
+    const frozen = world({ beforeKill: frozenKill });
+    frozen.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(200);
+    expect(frozenKill.mock.calls).toEqual([[true]]);
+    frozen.watch.close();
+    const beforeKill = vi.fn();
+    const alive = world({ beforeKill });
+    alive.child.emit('message', { type: 'conch.heartbeat', healthy: true });
+    vi.advanceTimersByTime(35);
+    alive.child.emit('message', { type: 'conch.heartbeat', healthy: false });
+    vi.advanceTimersByTime(200);
+    expect(beforeKill.mock.calls).toEqual([[false]]);
+    alive.watch.close();
+  });
+  it('kills on time when beforeKill throws, and does not call it for a requested stop', () => {
+    const beforeKill = vi.fn(() => {
+      throw new Error('no evidence');
+    });
+    const { child, watch } = world({ beforeKill, frozenStopMs: 3 });
+    vi.advanceTimersByTime(120);
+    expect(beforeKill.mock.calls).toEqual([[true]]);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    vi.advanceTimersByTime(3);
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    watch.close();
+    const stopped = world({ beforeKill });
+    stopped.child.emit('message', { type: 'conch.stopping' });
+    stopped.watch.stop();
+    vi.advanceTimersByTime(200);
+    expect(beforeKill).toHaveBeenCalledOnce();
+    stopped.watch.close();
+  });
   it('ignores malformed heartbeats and cancels timers and listeners on exit', () => {
     const { child, watch, repaired } = world();
     child.emit('message', { type: 'conch.heartbeat', healthy: 'true' });
