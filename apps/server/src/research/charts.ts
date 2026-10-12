@@ -121,10 +121,16 @@ function mend(args: Record<string, unknown>): Record<string, unknown> {
     out.labels = out.labels.map((l) =>
       typeof l === 'number' || typeof l === 'boolean' ? String(l) : l,
     );
-  // One series written flat: `values` beside the labels.
-  if (!out.series && Array.isArray(out.values))
+  // One series written flat: `values` beside the labels (or under `series` itself, once
+  // `values` or `data` is read as its other name).
+  const flat = (list: unknown[]) => list.every((v) => !v || typeof v !== 'object');
+  if (!out.series && Array.isArray(out.values)) {
+    out.series = out.values;
+    delete out.values;
+  }
+  if (Array.isArray(out.series) && out.series.length && flat(out.series))
     out.series = [
-      { name: typeof out.title === 'string' ? out.title : 'Value', values: out.values },
+      { name: typeof out.title === 'string' ? out.title : 'Value', values: out.series },
     ];
   if (Array.isArray(out.series))
     out.series = out.series.map((s) => {

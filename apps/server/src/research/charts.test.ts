@@ -2,6 +2,7 @@ import { ToolView } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { cleanView } from '../conversations/views';
+import { checkHostArgs } from '../engines/tools/args';
 import { hostToolText, type HostTool } from '../engines/types';
 import { chartKind, chartTools, chartView } from './charts';
 
@@ -227,6 +228,17 @@ describe('chart_show', () => {
       type: 'pie',
       labels: ['2024', '2025', '2026'],
       series: [{ name: 'Orders', values: [10, 20, null] }],
+    });
+  });
+
+  it('reads one series written flat, as a model’s call really arrives', () => {
+    const checked = (args: Record<string, unknown>) => checkHostArgs(tool(), args);
+    expect(
+      checked({ type: 'pie', title: 'Split', labels: ['a', 'b'], values: [1, 2] }),
+    ).toMatchObject({ ok: true, args: { series: [{ name: 'Split', values: [1, 2] }] } });
+    expect(checked({ type: 'column', labels: ['a', 'b'], data: [3, 4] })).toMatchObject({
+      ok: true,
+      args: { series: [{ name: 'Value', values: [3, 4] }] },
     });
   });
 
