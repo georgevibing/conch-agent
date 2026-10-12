@@ -133,6 +133,59 @@ describe('independent gateway watchdog', () => {
     ]);
     watch.close();
   });
+  it('gives a gateway that says it is still starting until readyMs to answer', () => {
+    const { child, watch } = world({ readyMs: 300 });
+    const boot = (phase = 'services') => child.emit('message', { type: 'conch.booting', phase });
+    for (let t = 0; t < 250; t += 50) {
+      boot();
+      vi.advanceTimersByTime(50);
+    }
+    expect(child.send).not.toHaveBeenCalled();
+    boot();
+    vi.advanceTimersByTime(50);
+    expect(child.send).toHaveBeenCalledWith({ type: 'conch.recover' }, expect.any(Function));
+    watch.close();
+  });
+  it('still holds a starting gateway to startupMs of silence', () => {
+    const { child, watch } = world({ readyMs: 300 });
+    vi.advanceTimersByTime(50);
+    child.emit('message', { type: 'conch.booting', phase: 'app' });
+    vi.advanceTimersByTime(95);
+    expect(child.send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5);
+    expect(child.send).toHaveBeenCalledOnce();
+    watch.close();
+  });
+  it('lets a start wait for another Conch to close for as long as it keeps saying so', () => {
+    const { child, watch } = world({ readyMs: 300 });
+    for (let t = 0; t < 1_000; t += 50) {
+      child.emit('message', { type: 'conch.booting', phase: 'waiting' });
+      vi.advanceTimersByTime(50);
+    }
+    child.emit('message', { type: 'conch.booting', phase: 'listen' });
+    vi.advanceTimersByTime(95);
+    expect(child.send).not.toHaveBeenCalled();
+    watch.close();
+  });
+  it('tracks health from the first heartbeat of a release that announces its start', () => {
+    const { child, watch } = world({ readyMs: 300 });
+    child.emit('message', { type: 'conch.booting', phase: 'probe' });
+    child.emit('message', { type: 'conch.heartbeat', healthy: false });
+    vi.advanceTimersByTime(30);
+    expect(child.send).toHaveBeenCalledOnce();
+    watch.close();
+  });
+  it('keeps the startup deadline for an older release that never announces its start', () => {
+    const { child, watch } = world({ readyMs: 300 });
+    for (let t = 0; t < 95; t += 5) {
+      child.emit('message', { type: 'conch.heartbeat', healthy: false });
+      vi.advanceTimersByTime(5);
+    }
+    expect(child.send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5);
+    expect(child.send).toHaveBeenCalledOnce();
+    watch.close();
+  });
   it('ignores malformed heartbeats and cancels timers and listeners on exit', () => {
     const { child, watch, repaired } = world();
     child.emit('message', { type: 'conch.heartbeat', healthy: 'true' });
@@ -219,6 +272,7 @@ describe('independent gateway watchdog', () => {
 describe('watchdog transitions', () => {
   const limits = {
     startupMs: 100,
+    readyMs: 300,
     unhealthyMs: 30,
     recoverMs: 20,
     pollMs: 100,

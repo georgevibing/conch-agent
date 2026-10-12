@@ -7,7 +7,10 @@ export interface WatchdogOptions {
   now?: () => number;
   /** Old releases have no heartbeat sender; retain crash/stop supervision only. */
   enabled?: boolean;
+  /** Silence allowed while starting: no message at all, import time included. */
   startupMs?: number;
+  /** A gateway saying it is still starting has this long to answer its first probe. */
+  readyMs?: number;
   unhealthyMs?: number;
   recoverMs?: number;
   pollMs?: number;
@@ -44,14 +47,19 @@ export interface WatchState {
   frozen?: boolean;
   /** When recent reductions started, within the flap window. */
   reductions?: number[];
+  /** The latest `conch.booting` phase; old releases never send one. */
+  bootPhase?: string;
 }
 export type WatchEvent =
   | { type: 'tick'; at: number }
   | { type: 'healthy'; at: number }
   | { type: 'message'; at: number }
+  | { type: 'booting'; at: number; phase: string }
+  | { type: 'heartbeat'; at: number }
   | { type: 'shutdown'; at: number; failed: boolean };
 export interface WatchLimits {
   startupMs: number;
+  readyMs: number;
   unhealthyMs: number;
   recoverMs: number;
   pollMs: number;
@@ -70,13 +78,29 @@ export function watchTransition(
     return { ...state, phase: 'terminating', since: event.at, failed: event.failed };
   if (event.type === 'healthy') return { ...state, phase: 'healthy', since: event.at };
   if (event.type === 'message') return { ...state, heardAt: event.at };
+  if (event.type === 'booting') {
+    if (state.phase !== 'booting') return state;
+    // Waiting for another Conch to close can last indefinitely: readiness counts from after it.
+    const since = event.phase === 'waiting' ? event.at : state.since;
+    return { ...state, since, bootPhase: event.phase };
+  }
+  if (event.type === 'heartbeat')
+    // A release that announces its start tracks health from its first heartbeat, healthy or not.
+    return state.phase === 'booting' && state.bootPhase !== undefined
+      ? { ...state, phase: 'healthy', since: event.at }
+      : state;
   const ticked = { ...state, lastTick: event.at };
   // The monotonic clock counts a laptop's sleep (macOS): a nap is not silence.
   if (state.lastTick !== undefined && event.at - state.lastTick > limits.pollMs * 3)
     return { ...ticked, since: event.at };
   const elapsed = event.at - state.since;
+  const silent = event.at - Math.max(state.since, state.heardAt ?? state.since);
+  const booted =
+    state.bootPhase === undefined
+      ? elapsed >= limits.startupMs
+      : silent >= limits.startupMs || (state.bootPhase !== 'waiting' && elapsed >= limits.readyMs);
   if (
-    (state.phase === 'booting' && elapsed >= limits.startupMs) ||
+    (state.phase === 'booting' && booted) ||
     (state.phase === 'healthy' && elapsed >= limits.unhealthyMs)
   ) {
     const reductions = [
@@ -107,6 +131,7 @@ export function watchGateway(
   const now = options.now ?? (() => performance.now());
   const limits: WatchLimits = {
     startupMs: options.startupMs ?? 120_000,
+    readyMs: options.readyMs ?? 15 * 60_000,
     unhealthyMs: options.unhealthyMs ?? 30_000,
     recoverMs: options.recoverMs ?? 20_000,
     pollMs: options.pollMs ?? 5_000,
@@ -170,7 +195,10 @@ export function watchGateway(
     apply({ type: 'message', at: now() });
     if (value.type === 'conch.recovered') options.repaired();
     if (value.type === 'conch.stopping') apply({ type: 'shutdown', at: now(), failed: false });
+    if (value.type === 'conch.booting' && 'phase' in value && typeof value.phase === 'string')
+      apply({ type: 'booting', at: now(), phase: value.phase });
     if (value.type !== 'conch.heartbeat') return;
+    apply({ type: 'heartbeat', at: now() });
     if ('resource' in value) resource = recoveryResource(value.resource);
     if ('healthy' in value && value.healthy === true) apply({ type: 'healthy', at: now() });
   };
