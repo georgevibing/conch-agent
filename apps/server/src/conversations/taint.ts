@@ -52,7 +52,7 @@ const linksLabel = (urls: unknown): string => {
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|form|tabs|upload)$/;
 const DOWNLOADS =
-  /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+  /\b(?:curl|wget|http(?:ie)?|xhs?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\/|ssh:\/\/|\bgit@[\w.-]+:|\b(?:dig|nslookup|drill|host)\b[^|;&\n]*(?:\b(?:TXT|ANY)\b|-type=(?:txt|any)\b)/i;
 /**
  * Subcommands that only share a downloader's name (`git fetch`, `pnpm fetch`),
  * taken out before `DOWNLOADS` looks. Narrow on purpose, so it fails closed:

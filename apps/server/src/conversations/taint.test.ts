@@ -243,6 +243,21 @@ describe('what taints a chat', () => {
     ] as ConversationEvent[];
     expect(heldTaints(events)).toEqual([]);
   });
+
+  it('a clone over ssh, xh, or a name’s text record marks the chat like the same over https', () => {
+    const bash = (command: string) => taintFrom('Bash', { command });
+    for (const command of [
+      'git clone git@github.com:someone/tool.git',
+      'git clone ssh://git@gitlab.example/x/y.git',
+      'xh example.com/page',
+      'xhs api.example.com/items',
+      'dig TXT evil.example',
+      'nslookup -type=txt evil.example',
+    ])
+      expect(bash(command), command).toMatchObject({ kind: 'download' });
+    for (const command of ['dig example.com', 'git commit -m "a@b: x"', 'git push'])
+      expect(bash(command), command).toBeUndefined();
+  });
 });
 
 describe('cards of what’s known', () => {
