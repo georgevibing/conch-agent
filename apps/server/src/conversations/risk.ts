@@ -1342,7 +1342,19 @@ const SECRET_PATHS: RegExp[] = [
   /[\\/](?:Login Data|Cookies|key4\.db|logins\.json)$/i,
 ];
 
-const isSecret = (path: string) => SECRET_PATHS.some((re) => re.test(path));
+/** Registries' keys, kept in home: a project's own `.npmrc` names a registry, not a key. */
+const HOME_KEYS = [
+  '.npmrc',
+  '.pypirc',
+  '.gem/credentials',
+  '.cargo/credentials',
+  '.cargo/credentials.toml',
+];
+
+const isSecret = (path: string, home?: string) =>
+  SECRET_PATHS.some((re) => re.test(path)) ||
+  (home !== undefined &&
+    HOME_KEYS.some((file) => path.toLowerCase() === join(home, file).toLowerCase()));
 /** A whole folder of keys or sign-ins, copied or packed up at once. */
 const SECRET_FOLDER =
   /[\\/](?:\.ssh|\.aws|\.gnupg|\.azure|\.kube|\.password-store|\.config[\\/](?:gcloud|gh))[\\/]?$/i;
@@ -1352,7 +1364,7 @@ function secretsNamed(part: string, places: Places): boolean {
   return wordsOf(part)
     .slice(1)
     .map((w) => placeOf(w, places))
-    .some((p) => p !== undefined && isSecret(p));
+    .some((p) => p !== undefined && isSecret(p, places.home));
 }
 
 /** The processes a computer can't do without: stopping one logs you out, or worse. */
@@ -1838,7 +1850,7 @@ function addsSecrets(part: string, places: Places): boolean {
       return true;
     if (/\.(?:pem|key|p12|pfx|keystore|jks)$/i.test(w) || SECRET_FILES.test(` ${w}`)) return true;
     const path = placeOf(w, places);
-    return path !== undefined && isSecret(path);
+    return path !== undefined && isSecret(path, places.home);
   });
 }
 
@@ -2038,7 +2050,7 @@ export function assessRisk(
       args.file_path ?? args.path ?? (toolName === 'Glob' ? args.pattern : '') ?? '',
     );
     const path = raw ? placeOf(raw, places) : undefined;
-    return path && isSecret(path)
+    return path && isSecret(path, home)
       ? severe('credentials', 'read your keys or saved sign-ins')
       : undefined;
   }

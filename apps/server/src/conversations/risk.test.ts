@@ -772,4 +772,17 @@ describe('the same step written another way', () => {
     ])
       expect(asks(bash(command), true), command).toBe(true);
   });
+
+  it('knows the registry keys in home: ~/.npmrc, ~/.pypirc', () => {
+    for (const command of [
+      'cat ~/.npmrc',
+      'cat /Users/ada/.pypirc',
+      'cat ~/.cargo/credentials.toml',
+    ])
+      expect(assessRisk('Bash', { command }, ctx)?.kind, command).toBe('credentials');
+    expect(assessRisk('Read', { file_path: '/Users/ada/.npmrc' }, ctx)?.kind).toBe('credentials');
+    // A project's own .npmrc names a registry, not a key.
+    expect(assessRisk('Read', { file_path: `${workspace}/.npmrc` }, ctx)).toBeUndefined();
+    expect(assessRisk('Bash', { command: 'cat .npmrc' }, ctx)).toBeUndefined();
+  });
 });
