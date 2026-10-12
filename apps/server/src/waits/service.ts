@@ -662,12 +662,8 @@ export class WaitService {
       for (;;) {
         if (a.abort.signal.aborted) return this.#stoppedEnd(a, end);
         const now = this.#now;
-        if (now >= a.note.deadline)
-          return end(
-            'timed-out',
-            `Stopped waiting after ${span(now - a.note.startedAt)}: ${a.note.status}`,
-            `Stopped waiting for ${watcher.title} after ${span(now - a.note.startedAt)}: it hadn’t ended. Last seen: ${a.note.status}. Wait again with a longer timeout_minutes, or tell the person.`,
-          );
+        // Past the deadline it looks once more first: after sleep or a restart, it may have ended.
+        const late = now >= a.note.deadline;
         let r: Reading;
         if (skipLook && first) {
           r = first;
@@ -687,6 +683,12 @@ export class WaitService {
           const status = r.status || waitHeadline({ ...a.note, state: 'done' });
           return end('done', status, r.summary ?? status, r);
         }
+        if (late)
+          return end(
+            'timed-out',
+            `Stopped waiting after ${span(now - a.note.startedAt)}: ${a.note.status}`,
+            `Stopped waiting for ${watcher.title} after ${span(now - a.note.startedAt)}: it hadn’t ended. Last seen: ${a.note.status}. Wait again with a longer timeout_minutes, or tell the person.`,
+          );
         const status = r.blip ? a.note.status : r.status || a.note.status;
         const parts = r.parts ?? a.note.parts;
         const print = fp({ status, ...(parts && { parts }) });

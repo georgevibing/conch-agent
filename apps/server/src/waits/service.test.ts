@@ -518,6 +518,32 @@ describe('wait_for CI', () => {
     expect(JSON.parse(await readFile(join(home, 'waits.json'), 'utf8')).waits).toHaveLength(1);
   });
 
+  it('a time that came while Conch was off or asleep wakes as the time, not as timed out', async () => {
+    vi.useFakeTimers();
+    const at = Date.now() - 10 * 60_000;
+    await writeFile(
+      join(home, 'waits.json'),
+      JSON.stringify({
+        waits: [
+          {
+            waitId: 'wait_1',
+            conversationId: 'chat',
+            spec: { kind: 'time', at },
+            startedAt: at - 30 * 60_000,
+            deadline: at + 60_000,
+          },
+        ],
+      }),
+    );
+    const { service, wakes } = setup();
+    expect(await service.start()).toBe(1);
+    await vi.advanceTimersByTimeAsync(100);
+    await service.settled();
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0]?.prompt).toMatch(/the time you were waiting for/);
+    expect(wakes[0]?.prompt).not.toMatch(/took too long|hadn’t ended/);
+  });
+
   it('at most four waits in one chat', async () => {
     vi.useFakeTimers();
     const { client } = fakeGitHub({
