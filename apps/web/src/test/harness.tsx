@@ -14,6 +14,8 @@ export class FakeSocket {
   static last?: FakeSocket;
   /** Answer a subscribe with `conversation.synced` by itself; off, a test sends it when it likes. */
   static autoSync = true;
+  /** Hold the next sockets connecting until a test calls `open()`. */
+  static holdOpen = false;
   static readonly OPEN = 1;
   readonly OPEN = 1;
   readyState = 0;
@@ -24,10 +26,12 @@ export class FakeSocket {
 
   constructor(readonly url: string) {
     FakeSocket.last = this;
-    queueMicrotask(() => {
-      this.readyState = 1;
-      this.onopen?.();
-    });
+    if (!FakeSocket.holdOpen) queueMicrotask(() => this.open());
+  }
+
+  open() {
+    this.readyState = 1;
+    this.onopen?.();
   }
 
   send(data: string) {

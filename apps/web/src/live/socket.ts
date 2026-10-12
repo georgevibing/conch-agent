@@ -65,6 +65,11 @@ export class LiveSocket {
     };
   }
 
+  /** Connected now; until then, `onOpen` is where a caller says what it wants. */
+  get open() {
+    return this.#ws?.readyState === WebSocket.OPEN;
+  }
+
   send(command: ClientCommand) {
     const message = JSON.stringify(ClientCommand.parse(command));
     if (this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(message);

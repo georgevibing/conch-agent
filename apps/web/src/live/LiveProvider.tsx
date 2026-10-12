@@ -492,7 +492,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
       watch(conversationId) {
         const count = watching.current.get(conversationId) ?? 0;
         watching.current.set(conversationId, count + 1);
-        if (count === 0) {
+        // Not connected yet: the open subscribes every watched chat, so asking now too
+        // would have the gateway send its whole log twice.
+        if (count === 0 && socketRef.current?.open) {
           askFor(conversationId);
           const lastSeq = useLiveStore.getState().views[conversationId]?.lastSeq;
           socketRef.current?.send({
