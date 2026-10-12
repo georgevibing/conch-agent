@@ -467,6 +467,11 @@ const BENIGN: GuardInput[] = [
   ok('The project lives in ~/code/engine.', [], { via: 'import' }),
   ok('Lives in Athens', [], { via: 'import' }),
   ok('Works at a bakery in Porto', [], { via: 'tidy' }),
+  // A safety rule of the person's own reads like one, not like hiding things from them.
+  ok('Never delete files without asking the user first.', [], { via: 'tidy' }),
+  afterReading('Never sends an email without asking the user first', [
+    'never send an email without asking me first',
+  ]),
   ok('Has a sister called Elena who lives in Madrid', [], { via: 'tidy' }),
 ];
 

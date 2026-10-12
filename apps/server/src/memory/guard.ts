@@ -623,6 +623,14 @@ interface Signals {
 }
 
 /** What the text says, by pattern alone. */
+/**
+ * “Never delete files without asking the user first”: the person's own safety
+ * rule, a never … without asking. Left out before looking for hiding things
+ * from them, which “without asking the user” alone would be.
+ */
+const ASKS_FIRST =
+  /\b(?:never|not|don['’]?t|won['’]?t)\b[^.!?;\n]{0,60}?\bwithout\s+(?:first\s+)?(?:asking|checking with|confirming with)\s+(?:the\s+user|the\s+person|them|me)(?:\s+first)?/gi;
+
 function signalsOf(text: string): Signals {
   const strong = new Set<MemoryReasonCode>();
   const context = new Set<MemoryReasonCode>();
@@ -637,8 +645,9 @@ function signalsOf(text: string): Signals {
   if (encodedIn(seen)) strong.add('encoded');
   if (BEACON.test(seen) || PLACEHOLDER.test(seen)) strong.add('exfiltration');
   if (DANGEROUS_COMMAND.test(seen)) strong.add('directive');
+  const told = seen.replace(ASKS_FIRST, ' ');
   // The skill scanner's sure findings (ADR 0028) mean the same in a memory.
-  for (const f of scanText(seen).findings)
+  for (const f of scanText(told).findings)
     if (f.severity === 'danger')
       strong.add(
         f.kind === 'exfiltration'
@@ -657,7 +666,7 @@ function signalsOf(text: string): Signals {
     CHANGED.test(seen)
   )
     context.add('redirect');
-  if (INSTRUCTION.some((p) => p.test(seen))) context.add('instruction');
+  if (INSTRUCTION.some((p) => p.test(told))) context.add('instruction');
   if ((STANDING.test(seen) && ACT.test(seen)) || IMPERATIVE.test(seen)) context.add('directive');
   if (AUTHORITY.some((p) => p.test(seen))) context.add('authority');
   if (LEAK.some((p) => p.test(seen))) context.add('exfiltration');
