@@ -37,4 +37,16 @@ describe('Stop, in the store', () => {
     live.apply(event(0, { type: 'status', status: 'idle' }));
     expect('c1' in useLiveStore.getState().stopping).toBe(false);
   });
+
+  it('a Stop that lands after the reply ended doesn’t stop the next one', () => {
+    const live = useLiveStore.getState();
+    live.apply(event(0, { type: 'user.message', messageId: 'u1', text: 'Go' }));
+    live.apply(event(1, { type: 'status', status: 'running' }));
+    live.apply(event(2, { type: 'turn.completed', outcome: 'success' }));
+    live.apply(event(3, { type: 'status', status: 'idle' }));
+    live.stop('c1');
+    live.apply(event(4, { type: 'user.message', messageId: 'u2', text: 'And now?' }));
+    live.apply(event(5, { type: 'status', status: 'running' }));
+    expect('c1' in useLiveStore.getState().stopping).toBe(false);
+  });
 });

@@ -159,7 +159,19 @@ export const useLiveStore = create<LiveState>((set) => ({
       const view = next.views[conversationId] ?? emptyView;
       return { ...next, views: { ...next.views, [conversationId]: { ...view, loaded: true } } };
     }),
-  stop: (key) => set((state) => ({ stopping: { ...state.stopping, [key]: Date.now() } })),
+  stop: (key) =>
+    set((state) => {
+      // A reply this tab already saw end, with nothing waiting to send: there's nothing to
+      // draw as stopped, and nothing would settle it before the next reply.
+      const view = state.views[key];
+      const settled =
+        view !== undefined &&
+        view.lastSeq >= 0 &&
+        view.status !== 'running' &&
+        view.status !== 'awaiting-permission' &&
+        !(state.pending[key]?.length ?? 0);
+      return settled ? state : { stopping: { ...state.stopping, [key]: Date.now() } };
+    }),
   decide: (conversationId, permissionId, decision) =>
     set((state) => {
       const view = state.views[conversationId];
