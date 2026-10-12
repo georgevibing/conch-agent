@@ -362,6 +362,21 @@ describe('what mustn’t run together', () => {
     );
   });
 
+  it('one set after another never holds it up for the same file, whatever order their ids sort', () => {
+    const file = '/work\u0000readme.md';
+    const first = slot({ id: 'task_zzz', title: 'Write it', touches: [file], createdAt: NOW });
+    const second = slot({
+      id: 'task_aaa',
+      title: 'Check it',
+      touches: [file],
+      after: [first.id],
+      createdAt: NOW,
+    });
+    const plan = run({ queued: [first, second] });
+    expect(plan.start).toEqual([first.id]);
+    expect(plan.waiting.get(second.id)?.reason).toBe('after');
+  });
+
   it('one set after another waits for it, then starts', () => {
     const first = slot({ title: 'Web fetch', startedAt: NOW - 60_000 });
     const second = slot({ after: [first.id] });

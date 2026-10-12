@@ -303,6 +303,20 @@ export function schedule(input: ScheduleInput): Schedule {
       : `Starts when one of the ${active.length} working finishes`;
   };
 
+  const byId = new Map([...input.running, ...input.queued].map((s) => [s.id, s]));
+  /** `later` is set to go after `slot`, directly or through others of its batch. */
+  const goesAfter = (later: Slot, slot: Slot): boolean => {
+    const seen = new Set<string>();
+    const look = [...later.after];
+    for (let id = look.pop(); id !== undefined; id = look.pop()) {
+      if (id === slot.id) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      look.push(...(byId.get(id)?.after ?? []));
+    }
+    return false;
+  };
+
   /** Why `slot` can't start now, or undefined when it can. */
   const check = (slot: Slot): TaskWaiting | undefined => {
     // 1. After another of its batch.
@@ -329,6 +343,8 @@ export function schedule(input: ScheduleInput): Schedule {
           (other) =>
             other.id !== slot.id &&
             !started.has(other.id) &&
+            // One set to go after this one waits for it: never the other way round.
+            !goesAfter(other, slot) &&
             (other.createdAt < slot.createdAt ||
               (other.createdAt === slot.createdAt && other.id < slot.id)) &&
             other.touches.some((t) => mine.has(t)),
