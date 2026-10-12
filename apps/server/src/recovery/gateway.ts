@@ -1,4 +1,4 @@
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { createHistogram } from 'node:perf_hooks';
 
 import type { DoctorItem } from '@conch/protocol';
 
@@ -82,17 +82,31 @@ export interface LoopDelay {
   dispose: () => void;
 }
 
-/** A coarse histogram: one timer every 20 ms, cheap enough to leave running. */
-function eventLoopDelay(): LoopDelay {
-  const histogram = monitorEventLoopDelay({ resolution: 20 });
-  histogram.enable();
+/**
+ * A coarse histogram: one timer every 20 ms, cheap enough to leave running. Its own
+ * timer, not monitorEventLoopDelay: that one forgets the stretch it was in when
+ * reset, so a block that began just after a take never counted.
+ */
+export function eventLoopDelay(resolutionMs = 20): LoopDelay {
+  const histogram = createHistogram();
+  let last = performance.now();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    // How much later than asked it ran, in nanoseconds (1 is the least a histogram takes).
+    histogram.record(Math.max(1, Math.round((now - last - resolutionMs) * 1e6)));
+    last = now;
+  }, resolutionMs).unref();
   return {
     take: () => {
+      // The stretch running right now counts too: a loop that's still blocked can't tick.
+      const running = performance.now() - last - resolutionMs;
+      if (running > 0) histogram.record(Math.max(1, Math.round(running * 1e6)));
       const p99 = histogram.count ? histogram.percentile(99) / 1e6 : undefined;
       histogram.reset();
+      last = performance.now();
       return p99;
     },
-    dispose: () => histogram.disable(),
+    dispose: () => clearInterval(timer),
   };
 }
 
@@ -176,6 +190,8 @@ export class GatewayRecovery {
   #slowLoop = false;
   #slowRun = 0;
   #calmRun = 0;
+  /** The timer's last reading: the window it covers is one interval, whoever polls. */
+  #loopDelayMs?: number;
 
   constructor(private readonly deps: GatewayRecoveryDeps) {
     this.#mode = deps.recoveryMode ?? false;
@@ -268,9 +284,21 @@ export class GatewayRecovery {
       this.deps.pause('Conch is recovering. Waiting work will carry on once it stays responsive.');
       this.deps.note('Paused background work to recover. It will carry on after a healthy check.');
     }
-    await this.poll();
+    await this.#tick();
     if (!this.#stopping)
-      this.#timer = setInterval(() => void this.poll(), this.deps.intervalMs ?? 5_000).unref();
+      this.#timer = setInterval(() => void this.#tick(), this.deps.intervalMs ?? 5_000).unref();
+  }
+
+  /**
+   * The timer's poll, and the only one that reads the loop's delay: a doctor's look or
+   * the supervisor's ask polls too, and taking a reading then would cut a window short.
+   */
+  #tick(): Promise<void> {
+    if (this.#stopping) return Promise.resolve();
+    // Measured over the interval just gone, before this poll's own waiting.
+    this.#loopDelayMs = this.#loopDelay?.take();
+    this.#pace(this.#loopDelayMs);
+    return this.poll();
   }
 
   poll(): Promise<void> {
@@ -281,8 +309,7 @@ export class GatewayRecovery {
   async #poll(): Promise<void> {
     if (this.#stopping) return;
     const started = performance.now();
-    // Measured over the interval just gone, before this poll's own waiting.
-    const loopDelayMs = this.#loopDelay?.take();
+    const loopDelayMs = this.#loopDelayMs;
     try {
       const [snapshot, response] = await Promise.all([
         within(() => this.deps.sample(), this.deps.checkMs ?? 2_500),
@@ -292,7 +319,6 @@ export class GatewayRecovery {
       const answering = response === true;
       this.#snapshot = snapshot;
       this.#answering = answering;
-      this.#pace(loopDelayMs);
       // Pressure holds work and sheds managed jobs; do not restart a responsive
       // gateway just because an unrelated application is using this computer.
       const healthy = answering;
@@ -347,8 +373,8 @@ export class GatewayRecovery {
   }
 
   /**
-   * Holds new work while the loop stays slow and lets it in once it stays calm,
-   * with a gap between the two so it doesn't flap. Never restarts anything:
+   * Holds new work while the loop stays slow and lets it in once it stays calm, one
+   * timer interval to a reading, with a gap between the two so it doesn't flap. Never restarts anything:
    * the outside supervisor decides that from the probe.
    */
   #pace(loopDelayMs: number | undefined): void {

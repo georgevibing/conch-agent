@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProcessService } from '../processes/service';
-import { GatewayRecovery } from './gateway';
+import { eventLoopDelay, GatewayRecovery } from './gateway';
 import type { WorkloadPace } from './pace';
 import { resourcePolicy } from './resources';
 
@@ -309,33 +309,41 @@ describe('gateway recovery', () => {
 
 describe('how late its own timers run', () => {
   it('reports the last interval’s p99 in each heartbeat and lets the histogram go on stop', async () => {
+    vi.useFakeTimers();
     const delays: (number | undefined)[] = [undefined, 12.4, 640];
     const loopDelay = { take: vi.fn(() => delays.shift()), dispose: vi.fn() };
     const { deps } = setup();
-    const recovery = new GatewayRecovery({ ...deps, loopDelay });
+    const recovery = new GatewayRecovery({ ...deps, loopDelay, intervalMs: 5_000 });
     await recovery.start(async () => true);
     expect(deps.send.mock.lastCall?.[0].resource).not.toHaveProperty('eventLoopDelayP99Ms');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(deps.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resource: expect.objectContaining({ eventLoopDelayP99Ms: 12 }) }),
+    );
+    // A poll between the timer's repeats the last reading rather than cutting a new one short.
     await recovery.poll();
     expect(deps.send).toHaveBeenLastCalledWith(
       expect.objectContaining({ resource: expect.objectContaining({ eventLoopDelayP99Ms: 12 }) }),
     );
-    await recovery.poll();
+    await vi.advanceTimersByTimeAsync(5_000);
     expect(deps.send).toHaveBeenLastCalledWith(
       expect.objectContaining({ resource: expect.objectContaining({ eventLoopDelayP99Ms: 640 }) }),
     );
-    // One reading per poll: each heartbeat covers only the interval before it.
+    // One reading per timer interval: each heartbeat covers only the interval before it.
     expect(loopDelay.take).toHaveBeenCalledTimes(3);
     recovery.stop();
     expect(loopDelay.dispose).toHaveBeenCalledOnce();
   });
 
   it('holds new work while its loop stays slow, before the probe fails, and lets it in once calm', async () => {
+    vi.useFakeTimers();
     let delay: number | undefined = 0;
     const loopDelay = { take: () => delay, dispose: vi.fn() };
     const { deps } = setup();
     const recovery = new GatewayRecovery({
       ...deps,
       loopDelay,
+      intervalMs: 5_000,
       slowLoopMs: 500,
       slowPolls: 2,
       calmLoopMs: 200,
@@ -343,7 +351,7 @@ describe('how late its own timers run', () => {
     });
     const poll = async (ms: number | undefined) => {
       delay = ms;
-      await recovery.poll();
+      await vi.advanceTimersByTimeAsync(5_000);
     };
     try {
       await recovery.start(async () => true);
@@ -387,6 +395,52 @@ describe('how late its own timers run', () => {
     }
   });
 
+  it('counts only whole timer intervals, however often the doctor or the supervisor looks', async () => {
+    vi.useFakeTimers();
+    const loopDelay = { take: vi.fn((): number | undefined => 900), dispose: vi.fn() };
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({
+      ...deps,
+      loopDelay,
+      intervalMs: 5_000,
+      slowLoopMs: 500,
+      slowPolls: 2,
+      recheckMs: 10,
+    });
+    try {
+      loopDelay.take.mockReturnValueOnce(0);
+      await recovery.start(async () => true);
+      // One slow interval.
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(recovery.allowsWork).toBe(true);
+      // Looks between the timer's, a moment apart: none of them is an interval of its own.
+      await recovery.doctorCheck().run({ repair: false, signal: new AbortController().signal });
+      recovery.receive({ type: 'conch.recover' });
+      await recovery.poll();
+      expect(recovery.allowsWork).toBe(true);
+      expect(loopDelay.take).toHaveBeenCalledTimes(2);
+      // The second slow interval holds work.
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(recovery.room()).toMatchObject({ room: false, reason: 'cpu' });
+    } finally {
+      recovery.stop();
+    }
+  });
+
+  it('counts a block that starts right after a reading', async () => {
+    const loopDelay = eventLoopDelay();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      loopDelay.take();
+      const until = performance.now() + 700;
+      while (performance.now() < until);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(loopDelay.take()).toBeGreaterThan(500);
+    } finally {
+      loopDelay.dispose();
+    }
+  });
+
   it('keeps a recovering gateway from counting a slow loop as sustained health', async () => {
     vi.useFakeTimers();
     let delay = 900;
@@ -408,10 +462,10 @@ describe('how late its own timers run', () => {
   });
 
   it('measures its own loop when nothing is injected', async () => {
-    const { recovery, deps } = setup();
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({ ...deps, intervalMs: 60 });
     await recovery.start(async () => true);
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    await recovery.poll();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     const resource = deps.send.mock.lastCall?.[0].resource;
     expect(resource.eventLoopDelayP99Ms).toBeGreaterThanOrEqual(0);
     recovery.stop();
