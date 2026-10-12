@@ -75,6 +75,9 @@ export function toCron(schedule: Schedule): string | undefined {
   }
 }
 
+/** How many runs ahead the shortest gap is looked for (a week or more of anything allowed). */
+const GAPS_CHECKED = 700;
+
 /** Throws ScheduleError with a plain-language reason if the schedule can't run. */
 export function validate(schedule: Schedule, timezone: string, now = Date.now()) {
   try {
@@ -102,8 +105,9 @@ export function validate(schedule: Schedule, timezone: string, now = Date.now())
     throw new ScheduleError(`That schedule isn’t valid: ${(error as Error).message}`);
   }
   if (!cron.nextRun()) throw new ScheduleError('That schedule never runs.');
-  const [a, b] = cron.nextRuns(2);
-  if (a && b && b.getTime() - a.getTime() < MIN_INTERVAL_MINUTES * 60_000) {
+  // Every gap counts, not just the next one: “0,5 9 * * *” is too often at any time of day.
+  const runs = cron.nextRuns(GAPS_CHECKED, new Date(now)).map((d) => d.getTime());
+  if (runs.some((t, i) => i > 0 && t - (runs[i - 1] ?? t) < MIN_INTERVAL_MINUTES * 60_000)) {
     throw new ScheduleError(`Routines can run at most every ${MIN_INTERVAL_MINUTES} minutes.`);
   }
 }

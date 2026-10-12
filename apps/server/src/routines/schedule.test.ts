@@ -1,5 +1,5 @@
 import type { Schedule } from '@conch/protocol';
-import { describe as suite, expect, it } from 'vitest';
+import { describe as suite, expect, it, vi } from 'vitest';
 
 import {
   describe,
@@ -78,6 +78,21 @@ suite('schedules', () => {
     expect(() => validate({ type: 'cron', expression: '* * * * *' }, TZ)).toThrow(
       /every 15 minutes/,
     );
+    // Two runs close together, whatever the time of day it's set up.
+    vi.useFakeTimers();
+    try {
+      for (const at of ['2030-01-15T07:00:00Z', '2030-01-15T08:02:00Z', '2030-01-15T07:59:30Z']) {
+        vi.setSystemTime(Date.parse(at));
+        expect(() => validate({ type: 'cron', expression: '0,5 9 * * *' }, TZ)).toThrow(
+          /every 15 minutes/,
+        );
+        expect(() => validate({ type: 'cron', expression: '0,59 * * * *' }, TZ)).toThrow(
+          /every 15 minutes/,
+        );
+      }
+    } finally {
+      vi.useRealTimers();
+    }
     expect(() => validate({ type: 'once', at: '2020-01-01T00:00:00Z' }, TZ)).toThrow(
       /already passed/,
     );
