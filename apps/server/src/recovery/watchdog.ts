@@ -75,7 +75,8 @@ export interface WatchLimits {
 
 /**
  * How much longer a gateway that still answers gets when something else is starving
- * this computer. None when the gateway itself is the likely culprit: a restart cures that.
+ * this computer. None when the gateway itself is the likely culprit, by its memory or by a
+ * loop that runs late while the computer is calm: a restart cures that.
  */
 export function pressureStretch(resource: RecoveryResource | undefined, max = 3): number {
   if (!resource) return 1;
@@ -92,6 +93,10 @@ export function pressureStretch(resource: RecoveryResource | undefined, max = 3)
   const share = total && available !== undefined ? available / total : 1;
   const load = resource.loadPerCpu ?? 0;
   const pressure = resource.memoryPressure ?? 0;
+  // A loop running late on idle processors with memory to spare is busy with its own work:
+  // only short processors or critical memory stalls explain it.
+  const busy = (resource.eventLoopDelayP99Ms ?? 0) > 500;
+  if (busy && load < 1.5 && share >= 0.1 && pressure < 20) return 1;
   const starved = Math.max(
     share < 0.05 ? 3 : share < 0.1 ? 2 : 1,
     load >= 3 ? 3 : load >= 1.5 ? 2 : 1,

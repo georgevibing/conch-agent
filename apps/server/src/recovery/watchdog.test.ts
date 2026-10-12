@@ -386,6 +386,21 @@ describe('pressure stretch', () => {
     expect(pressureStretch({ ...limited, cgroupMemoryAvailableBytes: 0.2 * GiB })).toBe(1);
     expect(pressureStretch({ ...limited, gatewayRssBytes: 2.5 * GiB })).toBe(1);
   });
+  it('does not stretch for a loop that runs late while the computer is calm', () => {
+    const calm = { ...host, memoryAvailableBytes: 8 * GiB, loadPerCpu: 0.5 };
+    expect(pressureStretch({ ...calm, eventLoopDelayP99Ms: 2_000 })).toBe(1);
+    expect(pressureStretch({ ...calm, memoryPressure: 8, eventLoopDelayP99Ms: 2_000 })).toBe(1);
+    expect(pressureStretch({ ...calm, memoryPressure: 8, eventLoopDelayP99Ms: 40 })).toBe(2);
+    expect(pressureStretch({ ...calm, memoryPressure: 8 })).toBe(2);
+  });
+  it('stretches as before for a late loop on a starved computer', () => {
+    const late = { ...host, eventLoopDelayP99Ms: 2_000 };
+    expect(pressureStretch({ ...late, loadPerCpu: 1.5 })).toBe(2);
+    expect(pressureStretch({ ...late, loadPerCpu: 8 })).toBe(3);
+    expect(pressureStretch({ ...late, memoryAvailableBytes: 1.2 * GiB })).toBe(2);
+    expect(pressureStretch({ ...late, memoryAvailableBytes: 8 * GiB, memoryPressure: 25 })).toBe(3);
+    expect(pressureStretch({ ...late, loadPerCpu: 8, gatewayRssBytes: 6 * GiB })).toBe(1);
+  });
 });
 
 describe('watchdog transitions', () => {
