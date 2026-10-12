@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { sandboxSupport } from '../conversations/sandbox';
+import { cleanUp, gone, standInGateway, until } from '../test/gateway';
 import { buildTools } from './api/engine';
 import { authorizeTool, hostComputerTools, hostEnvironment, hostPath } from './host';
 import type { TurnInput } from './types';
@@ -202,4 +204,47 @@ describe('commands, on every provider that uses Conch’s tools', () => {
         ?.run({ command: `cat ${secret}`, dangerouslyDisableSandbox: true }, 'b2'),
     ).resolves.toMatchObject({ isError: true, text: expect.stringMatching(/passwords/) });
   });
+});
+
+describe('a command when its gateway goes away (ADR 0094)', () => {
+  /** A gateway running one command that leaves a job behind; the shell and the job write their ids. */
+  async function crashMidCommand(unsealed: boolean) {
+    const { cwd } = await turn();
+    const gateway = standInGateway(`
+      import { runHostCommand } from './src/engines/host.ts';
+      const input = {
+        conversationId: 'c1', cwd: ${JSON.stringify(cwd)}, prompt: '', systemAppend: '', tools: [],
+        options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
+        signal: new AbortController().signal, requestPermission: async () => 'allow',
+        ${unsealed ? '' : 'sandbox: { allowWrite: [], denyRead: [] },'}
+      };
+      await runHostCommand(input, 'sleep 300 & echo "$$ $!" > pids; wait', 600_000, { unsealed: ${unsealed} });
+    `);
+    let pids: number[] = [];
+    try {
+      const text = await until(
+        () => readFile(join(cwd, 'pids'), 'utf8').catch(() => ''),
+        (t) => /^\d+ \d+\n/.test(t),
+      ).catch((error: Error) => {
+        throw new Error(`${error.message}\n${gateway.output()}`);
+      });
+      pids = text.trim().split(' ').map(Number);
+      for (const pid of pids) expect(await gone(pid)).toBe(false);
+      await gateway.crash();
+      for (const pid of pids) await until(() => gone(pid), Boolean);
+    } finally {
+      await gateway.crash();
+      cleanUp(...pids);
+    }
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'ends a command run with your access, and what it started',
+    async () => crashMidCommand(true),
+  );
+
+  it.skipIf(process.platform === 'win32' || !sandboxSupport().available)(
+    'ends a sealed command, and what it started',
+    async () => crashMidCommand(false),
+  );
 });

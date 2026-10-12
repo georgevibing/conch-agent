@@ -1,5 +1,4 @@
 /** Shared, permission-checked host tools for engines that supply only inference. */
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath, readdir } from 'node:fs/promises';
@@ -10,6 +9,7 @@ import { z } from 'zod';
 
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
+import { LINK_MODULE, spawnLinked, spawnTethered, stopTree } from '../processes/tether';
 import { SEALED_HINT } from './trust';
 import { PlaceUnavailable } from '../workplaces/types';
 import type { HostTool, TurnInput } from './types';
@@ -94,16 +94,21 @@ export async function hostPath(input: FileAccess, raw: string, writing = false):
 /** A model asking for 1s to run `pnpm check` only gets it killed: no command gets less than this. */
 const MIN_COMMAND_MS = 10_000;
 
-/** A separate runtime per command: its global sandbox policy cannot cross conversations. */
+/**
+ * A separate runtime per command: its global sandbox policy cannot cross conversations.
+ * Tied to the gateway (processes/link.mjs), so the box goes with it.
+ */
 const WORKER = `
 import { spawn } from 'node:child_process';
+const { tie } = await import(process.argv[1]);
+let child; tie(() => child);
 let data = ''; for await (const part of process.stdin) data += part;
 const { module, command, cwd, config } = JSON.parse(data);
 const { SandboxManager } = await import(module);
 try {
   await SandboxManager.initialize(config);
   const wrapped = await SandboxManager.wrapWithSandbox(command);
-  const child = spawn(wrapped, { shell: '/bin/sh', cwd, env: process.env, stdio: ['ignore', 'inherit', 'inherit'] });
+  child = spawn(wrapped, { shell: '/bin/sh', cwd, env: process.env, stdio: ['ignore', 'inherit', 'inherit'] });
   process.exitCode = await new Promise((done) => { child.once('error', () => done(1)); child.once('exit', (code) => done(code ?? 1)); });
 } catch { console.error('The command sandbox could not start. Check Settings → Health.'); process.exitCode = 1; }
 finally { await SandboxManager.reset(); }
@@ -181,32 +186,23 @@ export async function runHostCommand(
     const places = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)];
     if (touchesProtected({ command }, places)) throw new Error(PROTECTED_MESSAGE);
   }
+  // Its own process group, tied to this gateway: it dies with it (ADR 0094).
   const child = unboxed
-    ? spawn(command, {
+    ? spawnTethered(command, [], {
         cwd: input.cwd,
         env: hostEnvironment(),
         // The system's own shell: sh where there is one, cmd on Windows.
         shell: process.platform === 'win32' ? true : '/bin/sh',
-        detached: process.platform !== 'win32',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
+        stdin: 'ignore',
       })
-    : spawn(process.execPath, ['--input-type=module', '-e', WORKER], {
+    : spawnLinked(['--input-type=module', '-e', WORKER, '--', LINK_MODULE], {
         cwd: input.cwd,
         env: hostEnvironment(),
-        detached: process.platform !== 'win32',
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdin: 'pipe',
       });
   let output = '';
   let timedOut = false;
-  const stop = () => {
-    try {
-      if (child.pid && process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
-      else child.kill('SIGKILL');
-    } catch {
-      /* Already exited. */
-    }
-  };
+  const stop = () => stopTree(child);
   const timer = setTimeout(
     () => {
       timedOut = true;
