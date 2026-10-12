@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { useEffect, useId, useMemo, useState, type ComponentProps } from 'react';
 
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { cx } from '../../utils/cx';
@@ -53,18 +53,18 @@ const format = (v: number, unit?: string) => {
     : `${text} ${unit}`;
 };
 
+/** The plot's width, watched from whenever the plot is shown (it isn't in Table). */
 function useWidth() {
-  const ref = useRef<HTMLDivElement>(null);
+  const [el, ref] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(560);
   useEffect(() => {
-    const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setWidth(Math.max(240, Math.round(entry.contentRect.width)));
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [el]);
   return { ref, width };
 }
 

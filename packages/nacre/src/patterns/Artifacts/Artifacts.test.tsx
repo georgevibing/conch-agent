@@ -105,6 +105,28 @@ describe('ArtifactChart', () => {
     expect(Math.max(...ys)).toBeLessThanOrEqual(260 - 28);
   });
 
+  it('follows its space when it starts on the table and switches to the chart', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly report: ResizeObserverCallback) {}
+        observe() {
+          this.report(
+            [{ contentRect: { width: 300 } } as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          );
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    renderNacre(<ArtifactChart chart={visitors} defaultView="table" />);
+    await user.click(screen.getByRole('radio', { name: 'Chart' }));
+    expect(screen.getByRole('img').getAttribute('width')).toBe('300');
+    vi.unstubAllGlobals();
+  });
+
   it('picks clean ticks', () => {
     expect(niceTicks(180)).toEqual([0, 50, 100, 150, 200]);
     expect(niceTicks(9)).toEqual([0, 2.5, 5, 7.5, 10]);
