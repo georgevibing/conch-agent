@@ -18,7 +18,8 @@ class FakeChild extends EventEmitter {
   exitCode: number | null = null;
   /** Like Node's: set instead of exitCode when a signal ended it. */
   signalCode: NodeJS.Signals | null = null;
-  pid = Math.floor(Math.random() * 10_000) + 1;
+  /** Above any pid a real process can have (Linux allows up to 2^22): the watchdog signals it for real. */
+  pid = 4_194_304 + Math.floor(Math.random() * 10_000) + 1;
   sent: unknown[] = [];
   constructor(readonly env: NodeJS.ProcessEnv) {
     super();
