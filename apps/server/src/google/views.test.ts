@@ -62,6 +62,20 @@ describe('the calendar as an agenda', () => {
     });
   });
 
+  it('ends where its events stop when there are more than it can show', () => {
+    const items = Array.from({ length: 90 }, (_, i) => ({
+      summary: `Event ${i}`,
+      start: { dateTime: `2026-10-${String(1 + Math.floor(i / 3)).padStart(2, '0')}T09:00:00Z` },
+    }));
+    const view = agendaView(
+      { items },
+      { start: '2026-10-01T00:00:00Z', end: '2026-10-31T00:00:00Z' },
+    );
+    expect(view.kind === 'agenda' && view.items).toHaveLength(60);
+    // Days after the last one shown aren't drawn as free.
+    expect(view).toMatchObject({ from: '2026-10-01T00:00:00Z', to: '2026-10-21T09:00:00Z' });
+  });
+
   it('leaves out what was cancelled or declined, and what has no start', () => {
     const view = agendaView(
       {
@@ -288,6 +302,23 @@ describe('the tools give the model text and the person a view', () => {
       from: WINDOW.start,
       items: [{ title: 'Dentist' }],
     });
+  });
+
+  it('the calendar, every page of a busy month', async () => {
+    const google = service((_path, query) =>
+      query?.pageToken === 'p2'
+        ? { items: [{ summary: 'Late', start: { dateTime: '2026-10-04T15:00:00+02:00' } }] }
+        : {
+            items: [{ summary: 'Early', start: { dateTime: '2026-10-03T15:00:00+02:00' } }],
+            nextPageToken: 'p2',
+          },
+    );
+    const out = await run(google, 'google_calendar_briefing', { accountId: 'account1', ...WINDOW });
+    if (typeof out === 'string') throw new Error('no view');
+    expect(JSON.parse(out.text).items.map((i: { summary: string }) => i.summary)).toEqual([
+      'Early',
+      'Late',
+    ]);
   });
 
   it('Gmail search: ids for the model, who and what for the person', async () => {

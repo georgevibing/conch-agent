@@ -24,6 +24,8 @@ import {
 } from './views';
 
 const resourceId = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
+/** Pages of 250 events a calendar read follows: a month of a very busy calendar. */
+const CALENDAR_PAGES = 4;
 
 const DraftInput = z.object({
   accountId: accountRef,
@@ -318,20 +320,32 @@ export function googleTools(
         Date.parse(String(args.end)) - Date.parse(String(args.start)) > 31 * 86_400_000
       )
         throw new GoogleError('invalid', 'Choose a calendar window of up to 31 days.');
-      const result = await service.api(
-        String(args.accountId),
-        'calendar-read',
-        `/calendar/v3/calendars/${encodeURIComponent(String(args.calendarId))}/events`,
-        {
-          query: {
-            timeMin: String(args.start),
-            timeMax: String(args.end),
-            singleEvents: 'true',
-            orderBy: 'startTime',
-            maxResults: '100',
+      // A busy month is more than one page: read them all, up to a bound.
+      const items: unknown[] = [];
+      let result: Record<string, unknown> = {};
+      let pageToken: string | undefined;
+      for (let page = 0; page < CALENDAR_PAGES; page++) {
+        const got: unknown = await service.api(
+          String(args.accountId),
+          'calendar-read',
+          `/calendar/v3/calendars/${encodeURIComponent(String(args.calendarId))}/events`,
+          {
+            query: {
+              timeMin: String(args.start),
+              timeMax: String(args.end),
+              singleEvents: 'true',
+              orderBy: 'startTime',
+              maxResults: '250',
+              ...(pageToken && { pageToken }),
+            },
           },
-        },
-      );
+        );
+        result = got && typeof got === 'object' ? (got as Record<string, unknown>) : {};
+        if (Array.isArray(result.items)) items.push(...(result.items as unknown[]));
+        pageToken = typeof result.nextPageToken === 'string' ? result.nextPageToken : undefined;
+        if (!pageToken) break;
+      }
+      result = { ...result, items };
       // The days asked about, so a day with nothing on shows as free.
       return new Found(result, () =>
         agendaView(result, { start: String(args.start), end: String(args.end) }),

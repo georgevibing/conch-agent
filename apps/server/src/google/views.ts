@@ -95,20 +95,26 @@ const declined = (event: Record<string, unknown>) =>
 
 /**
  * Google Calendar's events list as an agenda for the window that was asked
- * about, so a day with nothing on still shows as free.
+ * about, so a day with nothing on still shows as free. With more events than
+ * a card holds, it ends where the first one left out starts: the days after
+ * aren't free, just not shown.
  */
 export function agendaView(result: unknown, window: { start: string; end: string }): ToolView {
   const data = isRecord(result) ? result : {};
   const calendar = clip(data.summary, 120);
   const items: AgendaItem[] = [];
+  let shownTo = window.end;
   for (const raw of list(data.items)) {
-    if (items.length >= 60) break;
     if (!isRecord(raw) || raw.status === 'cancelled' || declined(raw)) continue;
     const start = isRecord(raw.start) ? raw.start : {};
     const end = isRecord(raw.end) ? raw.end : {};
     const allDay = !start.dateTime && Boolean(start.date);
     const startsAt = when(start.dateTime ?? start.date);
     if (!startsAt) continue;
+    if (items.length >= 60) {
+      shownTo = startsAt;
+      break;
+    }
     const endsAt = when(end.dateTime ?? end.date);
     const location = clip(raw.location, 300);
     const color = typeof raw.colorId === 'string' ? EVENT_COLORS[raw.colorId] : undefined;
@@ -130,7 +136,7 @@ export function agendaView(result: unknown, window: { start: string; end: string
     kind: 'agenda',
     items,
     ...(when(window.start) && { from: window.start }),
-    ...(when(window.end) && { to: window.end }),
+    ...(when(shownTo) && { to: shownTo }),
   };
 }
 
