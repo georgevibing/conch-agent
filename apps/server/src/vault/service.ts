@@ -35,6 +35,7 @@ import {
   type VaultItemType,
   type VaultRequest,
   type VaultCopyOutResult,
+  type VaultSignIn,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -64,6 +65,7 @@ import {
   SourceError,
 } from './sources';
 import { ServiceAccountStore } from './serviceAccount';
+import { pickSignInItem, signInWords, withSignIn } from './signin';
 import { type ItemRecord, VaultStore, WrongPassword } from './store';
 import { type SyncState, Transfers } from './transfer';
 import { isValidTotp, parseTotp, totpNow, TotpError } from './totp';
@@ -199,6 +201,47 @@ export interface FillPolicy {
   account?: string;
   /** Another manager it lives in. */
   source?: VaultSourceId;
+  /** It signs in another way than a password (ADR 0133): "Sign in with Google", a passkey. */
+  signIn?: VaultSignIn;
+}
+
+/**
+ * How one of Conch's own items signs in: what was saved, with a passkey's
+ * `usable` from whether Conch really holds one. A login with passkeys and no
+ * password signs in with a passkey even when nobody said so.
+ */
+function signInOf(r: ItemRecord): VaultSignIn | undefined {
+  const password = r.fields.some((f) => f.role === 'password' && f.value);
+  if (r.signIn?.via === 'passkey') return { ...r.signIn, usable: r.passkeys.length > 0 };
+  if (r.signIn) return r.signIn;
+  if (r.type === 'login' && r.passkeys.length && !password) return { via: 'passkey', usable: true };
+  return undefined;
+}
+
+/**
+ * What a save says about how the item signs in, tidied: only logins sign in,
+ * and whether a passkey is usable is Conch's to say (`signInOf`), not the
+ * browser's.
+ */
+function signInFrom(body: SaveVaultItemBody): VaultSignIn | undefined {
+  const s = body.signIn;
+  if (!s || body.type !== 'login') return undefined;
+  if (s.via === 'provider') {
+    if (!s.provider || (s.provider === 'other' && !s.name)) return undefined;
+    return {
+      via: 'provider',
+      provider: s.provider,
+      ...(s.provider === 'other' && s.name && { name: s.name }),
+      ...(s.account && { account: s.account }),
+    };
+  }
+  if (s.via === 'passkey') return { via: 'passkey' };
+  return { via: s.via, ...(s.name && { name: s.name }), ...(s.account && { account: s.account }) };
+}
+
+/** A password's problems (weak, reused, breached, plain http) mean nothing for one that signs in through someone else. */
+function passwordless(signIn: VaultSignIn | undefined): boolean {
+  return signIn !== undefined && signIn.via !== 'passkey';
 }
 
 function lastFour(value: string): string {
@@ -299,6 +342,8 @@ export class VaultService {
   #syncTimer?: NodeJS.Timeout;
   /** What each manager in `PROMPTS` listed when last looked at: names only, in memory only. */
   #listed = new Map<VaultSourceId, ExternalItem[]>();
+  /** Everything the last `list()` showed (names only), for `signInItemFor`. */
+  #lastItems: VaultItemSummary[] = [];
 
   #deviceKey?: Promise<Buffer>;
 
@@ -374,7 +419,7 @@ export class VaultService {
     const seen = new Map<string, number>();
     const prints = new Map<string, string[]>();
     for (const r of records) {
-      if (r.deletedAt) continue;
+      if (r.deletedAt || passwordless(signInOf(r))) continue;
       const fps: string[] = [];
       for (const f of r.fields) {
         if (f.role !== 'password' || !f.value) continue;
@@ -387,9 +432,10 @@ export class VaultService {
     const out = new Map<string, VaultProblem[]>();
     for (const r of records) {
       const problems = new Set<VaultProblem>();
+      const other = passwordless(signInOf(r));
       if (!r.deletedAt) {
         for (const f of r.fields) {
-          if (f.role === 'password' && f.value) {
+          if (f.role === 'password' && f.value && !other) {
             if (passwordScore(f.value) < 2) problems.add('weak');
             const b = r.breach[f.id];
             if (b && b.count > 0 && b.fp === fingerprint(vk, f.value)) problems.add('compromised');
@@ -397,7 +443,7 @@ export class VaultService {
           if (expired(f, now)) problems.add('expired');
         }
         if ((prints.get(r.id) ?? []).some((fp) => (seen.get(fp) ?? 0) > 1)) problems.add('reused');
-        if (r.type === 'login' && r.urls.some(insecureUrl)) problems.add('insecure');
+        if (r.type === 'login' && !other && r.urls.some(insecureUrl)) problems.add('insecure');
       }
       out.set(r.id, [...problems]);
     }
@@ -444,6 +490,7 @@ export class VaultService {
       favorite: r.favorite,
       totp: r.fields.some((f) => f.kind === 'totp' && f.value),
       passkey: r.passkeys.length > 0,
+      ...(signInOf(r) && { signIn: signInOf(r) }),
       problems,
       readOnly: false,
       createdAt: r.createdAt,
@@ -478,7 +525,8 @@ export class VaultService {
       tags: item.tags,
       favorite: item.favorite,
       totp: item.totp,
-      passkey: false,
+      passkey: item.passkey ?? false,
+      ...(item.signIn && { signIn: item.signIn }),
       problems: [],
       readOnly: true,
       ...(item.container && { container: item.container }),
@@ -633,6 +681,7 @@ export class VaultService {
       }
     }
     items.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    this.#lastItems = items;
     // You're looking at Passwords: a good moment to bring copies up to date.
     if (!locked)
       void this.syncDue(undefined, { interactive: Boolean(options.looking) }).catch(
@@ -713,11 +762,20 @@ export class VaultService {
     if (source) {
       const item = (await source.list()).find((i) => i.ref === id);
       if (!item) throw new VaultError('not-found', `That item isn’t in ${source.name} any more.`);
-      const { fields, notes } = await source.fields(id).catch((e: Error) => {
+      const read = await source.fields(id).catch((e: Error) => {
         throw new VaultError('unavailable', e.message);
       });
-      return {
+      const { fields, notes } = read;
+      // Reading the item can tell more than its list did (Proton Pass, Keeper, 1Password).
+      const summary = {
         ...this.#external(source, item),
+        ...(read.signIn && { signIn: read.signIn }),
+        ...(read.passkey && { passkey: true }),
+      };
+      const signInItem = await this.#signInItem(summary);
+      return {
+        ...summary,
+        ...(signInItem && { signInItem: signInItem.id }),
         fields: fields.map((f) => ({
           id: f.id,
           label: f.label,
@@ -740,8 +798,11 @@ export class VaultService {
     const record = records.find((r) => r.id === id);
     if (!record) throw new VaultError('not-found', 'That item isn’t in your passwords.');
     const problems = (await this.#problems(records)).get(id) ?? [];
+    const summary = this.#summary(record, problems);
+    const signInItem = await this.#signInItem(summary);
     return {
-      ...this.#summary(record, problems),
+      ...summary,
+      ...(signInItem && { signInItem: signInItem.id }),
       fields: record.fields.map((f) => this.#view(f)),
       urls: record.urls,
       notes: record.notes,
@@ -767,6 +828,26 @@ export class VaultService {
         },
       }),
     };
+  }
+
+  /** The provider's own login for an item that signs in through it, from a fresh list (no prompt). */
+  async #signInItem(item: VaultItemSummary): Promise<VaultItemSummary | undefined> {
+    if (item.signIn?.via !== 'provider') return undefined;
+    const { items } = await this.list().catch(() => ({ items: this.#lastItems }));
+    return pickSignInItem(item, items);
+  }
+
+  /**
+   * The saved login for the account an item signs in through (ADR 0133): for
+   * "Sign in with Google" as ada@gmail.com, the Google login for
+   * ada@gmail.com, on Google's own sites only (`SIGN_IN_PROVIDERS`, matched
+   * by `match.ts`, never a look-alike). With no account known, the one
+   * Google login when there's exactly one. From what Passwords last listed:
+   * cheap, and it never asks another app anything. Names only; filling it
+   * still goes through `fillPolicy` on the provider's page.
+   */
+  signInItemFor(item: VaultItemSummary): VaultItemSummary | undefined {
+    return pickSignInItem(item, this.#lastItems);
   }
 
   // ── Values ──────────────────────────────────────────────────────────────
@@ -935,6 +1016,7 @@ export class VaultService {
       uses: [],
       breach: {},
       passkeys: [],
+      ...(signInFrom(body) && { signIn: signInFrom(body) }),
     };
     await this.store.put(record);
     this.#changed();
@@ -955,8 +1037,12 @@ export class VaultService {
         if (old.value && next?.value !== old.value)
           history.unshift({ fieldId: old.id, value: old.value, changedAt: now });
       }
+      const { signIn: _, ...rest } = before;
+      const signIn = signInFrom(body);
       await this.store.put({
-        ...before,
+        ...rest,
+        // The body is the whole item: no `signIn` means it signs in with its password again.
+        ...(signIn && { signIn }),
         type: body.type,
         title: body.title,
         fields,
@@ -1111,6 +1197,7 @@ export class VaultService {
         .map((p) => toPasskey(p, now))
         .filter((p): p is NonNullable<typeof p> => Boolean(p))
         .slice(0, 20),
+      ...(i.signIn && i.type === 'login' && { signIn: i.signIn }),
     }));
     await this.store.putMany(records);
     this.#changed();
@@ -1146,7 +1233,8 @@ export class VaultService {
         r.favorite ? '1' : '',
         r.type === 'login' ? 'login' : 'note',
         r.title,
-        r.notes,
+        // No column says how it signs in: a line every manager keeps, and Conch reads back.
+        withSignIn(r.notes, signInOf(r)),
         other,
         r.urls.join(','),
         r.type === 'login' ? role('username') : '',
@@ -1575,9 +1663,11 @@ export class VaultService {
         result.skipped++;
         continue;
       }
+      const signIn = signInOf(r);
       const item: OutgoingItem = {
         type: r.type,
         title: r.title,
+        ...(signIn && { signIn }),
         fields: r.fields.map((f) => ({
           label: f.label,
           kind: f.kind,
@@ -1838,10 +1928,17 @@ export class VaultService {
    * What the agent may know: names, kinds and sites. Never a value, a hint
    * or a last four (ADR 0025 § The agent).
    */
-  async forAgent(
-    query?: string,
-  ): Promise<
-    { id: string; title: string; type: string; sites: string[]; source: string; passkey: boolean }[]
+  async forAgent(query?: string): Promise<
+    {
+      id: string;
+      title: string;
+      type: string;
+      sites: string[];
+      source: string;
+      passkey: boolean;
+      /** How it signs in when not with a password: "Google", "a passkey" (ADR 0133). */
+      signIn?: VaultSignIn;
+    }[]
   > {
     const { items } = await this.list();
     const q = query?.trim().toLowerCase();
@@ -1851,7 +1948,11 @@ export class VaultService {
         (i) => !i.deletedAt && i.source !== 'system' && records.get(i.id)?.agentAccess !== 'never',
       )
       .filter(
-        (i) => !q || i.title.toLowerCase().includes(q) || i.domains.some((d) => d.includes(q)),
+        (i) =>
+          !q ||
+          i.title.toLowerCase().includes(q) ||
+          i.domains.some((d) => d.includes(q)) ||
+          signInWords(i.signIn).includes(q),
       )
       .slice(0, 50)
       .map((i) => ({
@@ -1861,6 +1962,7 @@ export class VaultService {
         sites: i.domains,
         source: i.source,
         passkey: i.passkey,
+        ...(i.signIn && { signIn: i.signIn }),
       }));
   }
 
@@ -1983,7 +2085,8 @@ export class VaultService {
       if (record.fields.some((f) => f.kind === 'totp' && f.value)) has.push('totp');
     } else {
       if (summary?.subtitle) has.push('username');
-      has.push('password');
+      // One that signs in another way has no password to type (its list said so).
+      if (!summary?.signIn) has.push('password');
       if (summary?.totp) has.push('totp');
     }
     return {
@@ -1995,6 +2098,7 @@ export class VaultService {
       has,
       ...(view?.subtitle && { account: view.subtitle }),
       ...(source && { source: source.id }),
+      ...(view?.signIn && { signIn: view.signIn }),
     };
   }
 

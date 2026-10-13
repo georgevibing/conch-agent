@@ -22,6 +22,7 @@ import type {
   VaultFieldKind,
   VaultFieldRole,
   VaultItemType,
+  VaultSignIn,
   VaultSource,
   VaultSourceId,
 } from '@conch/protocol';
@@ -29,7 +30,8 @@ import { isConcealed, siteOf } from '@conch/protocol';
 
 import { agentEnv, findExecutable, run, type RunResult } from '../lib/proc';
 import { parseCsv } from './importers';
-import { type BitwardenFido2, fromBitwarden, type PasskeyInput } from './passkeys';
+import { type BitwardenFido2, fromBitwarden, isEs256Key, type PasskeyInput } from './passkeys';
+import { signInFrom, withSignIn } from './signin';
 import { parseTotp, totpNow } from './totp';
 
 export interface ExternalField {
@@ -56,6 +58,22 @@ export interface ExternalItem {
   /** Known when the list carries them (Bitwarden, KeePassXC); fetched on demand otherwise. */
   fields?: ExternalField[];
   notes?: string;
+  /** It holds a passkey (in the manager; Conch may not get its key). */
+  passkey?: boolean;
+  /**
+   * How it signs in when it isn't a password (ADR 0133), as far as the list
+   * can tell without a secret. Reading the item may tell more (`fields`).
+   */
+  signIn?: VaultSignIn;
+}
+
+/** What `fields` read of one item. */
+export interface ExternalRead {
+  fields: ExternalField[];
+  notes: string;
+  /** Learned from the item itself when its list couldn't say (Proton Pass, Keeper). */
+  signIn?: VaultSignIn;
+  passkey?: boolean;
 }
 
 /** Everything an item holds, values included: only for copying it into Conch's vault. */
@@ -63,6 +81,8 @@ export interface FullItem {
   fields: (Omit<ExternalField, 'value'> & { value: string })[];
   notes: string;
   passkeys?: PasskeyInput[];
+  /** How it signs in, when the item says (ADR 0133); otherwise the list's `signIn`. */
+  signIn?: VaultSignIn;
 }
 
 /** One of Conch's own items, going into a manager through Copy to (ADR 0062). */
@@ -73,6 +93,8 @@ export interface OutgoingItem {
   urls: string[];
   tags: string[];
   notes: string;
+  /** How it signs in (ADR 0133). A manager without a place for it gets it as a line in the notes. */
+  signIn?: VaultSignIn;
 }
 
 /** Where in a manager a copy can go: a 1Password vault. */
@@ -119,7 +141,11 @@ export interface PasswordSource {
   readonly available?: boolean;
   state(options?: { force?: boolean }): Promise<Pick<VaultSource, 'state' | 'message'>>;
   list(options?: { force?: boolean; signal?: AbortSignal }): Promise<ExternalItem[]>;
-  fields(ref: string, signal?: AbortSignal): Promise<{ fields: ExternalField[]; notes: string }>;
+  /**
+   * What one item holds, no concealed value among it. A password field that's
+   * empty isn't a field: a login that signs in another way (ADR 0133) has none.
+   */
+  fields(ref: string, signal?: AbortSignal): Promise<ExternalRead>;
   /** One secret value, for one use. */
   value(ref: string, fieldId: string, signal?: AbortSignal): Promise<string>;
   /** The current one-time code. */
@@ -271,13 +297,15 @@ export function toOpTemplate(item: OutgoingItem) {
     } else
       fields.push({ type: OP_FIELD_TYPES[f.kind] ?? 'STRING', label: f.label, value: f.value });
   }
-  if (item.notes)
+  // `op` has no way to make a "Sign in with" item: how it signs in goes in its notes.
+  const notes = withSignIn(item.notes, item.signIn);
+  if (notes)
     fields.push({
       id: 'notesPlain',
       type: 'STRING',
       purpose: 'NOTES',
       label: 'notesPlain',
-      value: item.notes,
+      value: notes,
     });
   return {
     title: item.title,
@@ -805,7 +833,8 @@ export function toBitwardenItem(item: OutgoingItem) {
   return {
     type,
     name: item.title,
-    notes: item.notes || null,
+    // Bitwarden has no place for how a login signs in: it goes in the notes.
+    notes: withSignIn(item.notes, item.signIn) || null,
     favorite: false,
     folderId: null,
     reprompt: 0,
@@ -977,6 +1006,16 @@ export class BitwardenSource implements PasswordSource {
           (i.card?.number ? `•••• ${i.card.number.slice(-4)}` : '') ||
           i.identity?.email ||
           '';
+        // `login.fido2Credentials` holds its passkeys, private keys and all: only whether
+        // there's one, and whether Conch could use it, is kept.
+        const fido2 = i.login?.fido2Credentials ?? [];
+        const signIn =
+          type === 'login'
+            ? bitwardenSignIn(
+                i,
+                fido2.some((c) => isEs256Key(fromBitwarden(c)?.privateKey ?? '')),
+              )
+            : undefined;
         return {
           ref: `bw_${i.id}`,
           type,
@@ -989,6 +1028,8 @@ export class BitwardenSource implements PasswordSource {
           ...(i.revisionDate && { updatedAt: Date.parse(i.revisionDate) || undefined }),
           fields: this.#fieldsOf(i),
           notes: type === 'note' ? '' : (i.notes ?? ''),
+          ...(fido2.length && { passkey: true }),
+          ...(signIn && { signIn }),
         };
       });
     this.#list = { items, at: Date.now() };
@@ -1083,6 +1124,28 @@ export class BitwardenSource implements PasswordSource {
   }
 }
 
+/**
+ * How a Bitwarden login signs in (ADR 0133). Bitwarden has no "sign in with"
+ * of its own: a login with passkeys (`fido2Credentials`) and no password signs
+ * in with a passkey; one with neither, as its name, notes or plain custom
+ * fields say ("Sign in with Google").
+ */
+function bitwardenSignIn(item: BwItem, usable: boolean): VaultSignIn | undefined {
+  const signIn = signInFrom({
+    password: Boolean(item.login?.password),
+    passkeys: item.login?.fido2Credentials?.length ?? 0,
+    texts: [
+      item.name,
+      item.notes ?? '',
+      item.login?.username ?? '',
+      ...(item.fields ?? [])
+        .filter((f) => f.type !== 1)
+        .map((f) => `${f.name ?? ''}: ${f.value ?? ''}`),
+    ],
+  });
+  return signIn?.via === 'passkey' ? { ...signIn, usable } : signIn;
+}
+
 // ── KeePassXC ───────────────────────────────────────────────────────────────
 
 /**
@@ -1103,6 +1166,8 @@ export class KeePassXcSource implements PasswordSource {
    * (which derives the database key each time, a second or more).
    */
   #values = new Map<string, { password?: string; totp?: string }>();
+  /** Entries that hold a passkey, as far as the list can tell. */
+  #passkeys = new Set<string>();
   #list?: { items: ExternalItem[]; at: number };
 
   constructor(
@@ -1168,6 +1233,7 @@ export class KeePassXcSource implements PasswordSource {
     this.#list = undefined;
     this.#paths.clear();
     this.#values.clear();
+    this.#passkeys.clear();
   }
 
   async list(options: { force?: boolean; signal?: AbortSignal } = {}): Promise<ExternalItem[]> {
@@ -1190,6 +1256,7 @@ export class KeePassXcSource implements PasswordSource {
     ].map(col);
     this.#paths.clear();
     this.#values.clear();
+    this.#passkeys.clear();
     const items = rows.map((r): ExternalItem => {
       const group = (r[g ?? -1] ?? '').replace(/^Root\/?/, '');
       const title = r[t ?? -1] ?? 'Untitled';
@@ -1213,10 +1280,21 @@ export class KeePassXcSource implements PasswordSource {
         fields.push({ id: 'password', label: 'Password', kind: 'secret', role: 'password' });
       if (r[totp ?? -1])
         fields.push({ id: 'totp', label: 'One-time code', kind: 'totp', role: 'totp' });
+      // KeePassXC's CSV has no attributes: a passkey it made is an entry titled
+      // "<site> (Passkey)" with no password (BrowserService.cpp).
+      const passkey = KEEPASS_PASSKEY_TITLE.test(title);
+      if (passkey) this.#passkeys.add(ref);
+      const signIn = signInFrom({
+        password: Boolean(r[p ?? -1]),
+        passkeys: passkey ? 1 : 0,
+        texts: [title, r[n ?? -1], r[u ?? -1]],
+      });
       return {
         ref,
         type: 'login',
         title,
+        ...(passkey && { passkey: true }),
+        ...(signIn && { signIn }),
         subtitle: r[u ?? -1] ?? '',
         urls: [r[url ?? -1] ?? ''].filter((x) => siteOf(x)),
         tags: group ? [group.split('/')[0] ?? group] : [],
@@ -1271,6 +1349,44 @@ export class KeePassXcSource implements PasswordSource {
     return value;
   }
 
+  /**
+   * Everything of one entry, for Copy into Conch: what the list read, and a
+   * passkey's attributes (`KPEX_PASSKEY_*`, EntryAttributes.cpp), read in one
+   * `show` with the protected ones shown (`-s`), its PEM key made PKCS#8.
+   */
+  async full(ref: string, signal?: AbortSignal): Promise<FullItem> {
+    const item = (await this.list()).find((i) => i.ref === ref);
+    if (!item) throw new SourceError('That KeePassXC entry isn’t there any more.');
+    const kept = this.#values.get(ref) ?? {};
+    const fields: FullItem['fields'] = [];
+    for (const f of item.fields ?? []) {
+      const value =
+        f.value ?? (f.id === 'password' ? kept.password : f.id === 'totp' ? kept.totp : undefined);
+      if (value) fields.push({ ...f, value });
+    }
+    const passkey = this.#passkeys.has(ref) ? await this.#passkey(ref, signal) : undefined;
+    return { fields, notes: item.notes ?? '', ...(passkey && { passkeys: [passkey] }) };
+  }
+
+  async #passkey(ref: string, signal?: AbortSignal): Promise<PasskeyInput | undefined> {
+    const show = (names: readonly string[]) =>
+      this.#cli('show', ['-q', ...names.flatMap((a) => ['-a', a])], [this.#path(ref)], signal);
+    // With -a, each value comes alone on its own line, in the order asked, protected ones
+    // in the clear (Show.cpp); the PEM, over several lines, last.
+    const all = await show(KEEPASS_PASSKEY);
+    if (all.code === 0) return keepassPasskey(all.stdout.split(/\r?\n/));
+    // One is missing (an error, and the rest would shift): ask for each on its own.
+    const lines: string[] = [];
+    for (const name of KEEPASS_PASSKEY) {
+      const one = await show([name]);
+      const value = one.code === 0 ? one.stdout.replace(/\r?\n$/, '') : '';
+      lines.push(
+        ...(name === 'KPEX_PASSKEY_PRIVATE_KEY_PEM' ? [value] : [value.split(/\r?\n/)[0] ?? '']),
+      );
+    }
+    return keepassPasskey(lines);
+  }
+
   async totp(ref: string, signal?: AbortSignal): Promise<string> {
     const setup = this.#values.get(ref)?.totp;
     if (setup) {
@@ -1285,6 +1401,58 @@ export class KeePassXcSource implements PasswordSource {
     if (result.code !== 0 || !/^\d{6,8}$/.test(code))
       throw new SourceError('That entry has no one-time code.');
     return code;
+  }
+}
+
+/** The title KeePassXC gives an entry it made for a passkey: "Example (Passkey)". */
+const KEEPASS_PASSKEY_TITLE = /\(passkey\)\s*$/i;
+
+/** A passkey's attributes on an entry (EntryAttributes.cpp), in the order Conch asks for them. */
+const KEEPASS_PASSKEY = [
+  'KPEX_PASSKEY_RELYING_PARTY',
+  'KPEX_PASSKEY_CREDENTIAL_ID',
+  'KPEX_PASSKEY_USER_HANDLE',
+  'KPEX_PASSKEY_USERNAME',
+  'KPEX_PASSKEY_PRIVATE_KEY_PEM',
+] as const;
+
+/**
+ * A passkey from `keepassxc-cli show -a …` output, one value a line in
+ * `KEEPASS_PASSKEY`'s order, the PEM over the rest. Only an ES256 key is
+ * kept (`toPasskey` checks it again).
+ */
+export function keepassPasskey(lines: readonly string[]): PasskeyInput | undefined {
+  const values = new Map<string, string>(
+    KEEPASS_PASSKEY.map((name, i) => [
+      name,
+      name === 'KPEX_PASSKEY_PRIVATE_KEY_PEM' ? lines.slice(i).join('\n') : (lines[i] ?? ''),
+    ]),
+  );
+  const get = (name: string) => values.get(name)?.trim() ?? '';
+  const rpId = get('KPEX_PASSKEY_RELYING_PARTY');
+  const credentialId = get('KPEX_PASSKEY_CREDENTIAL_ID');
+  const pem = get('KPEX_PASSKEY_PRIVATE_KEY_PEM');
+  if (!rpId || !/^[A-Za-z0-9_-]{16,}={0,2}$/.test(credentialId) || !pem.includes('PRIVATE KEY'))
+    return undefined;
+  try {
+    const der = createPrivateKey({ key: pem, format: 'pem' }).export({
+      type: 'pkcs8',
+      format: 'der',
+    });
+    const handle = get('KPEX_PASSKEY_USER_HANDLE');
+    const user = get('KPEX_PASSKEY_USERNAME');
+    const privateKey = der.toString('base64url');
+    if (!isEs256Key(privateKey)) return undefined;
+    return {
+      credentialId: credentialId.replace(/=+$/, ''),
+      rpId,
+      ...(/^[A-Za-z0-9_-]+={0,2}$/.test(handle) && { userHandle: handle.replace(/=+$/, '') }),
+      ...(user && { userName: user.slice(0, 200) }),
+      privateKey,
+      signCount: 0,
+    };
+  } catch {
+    return undefined;
   }
 }
 
@@ -1496,14 +1664,40 @@ export class ProtonPassSource implements PasswordSource {
         kind === 'Hidden' ? 'secret' : kind === 'Totp' ? 'totp' : 'text';
       if (f.name) add({ id: `extra${n}`, label: f.name.slice(0, 80), kind: mapped }, value);
     });
-    return { fields, notes: data.note ?? '' };
+    // Its passkeys (`Login.passkeys`) keep their key in MessagePack/COSE, which Conch doesn't
+    // read: a login with one and no password signs in with a passkey Conch can't use.
+    const passkeys = login && Array.isArray(login.passkeys) ? login.passkeys.length : 0;
+    const signIn = login
+      ? signInFrom({
+          password: typeof login.password === 'string' && login.password !== '',
+          passkeys,
+          texts: [
+            data.title,
+            data.note,
+            ...fields.filter((f) => !isConcealedKind(f.kind)).map((f) => `${f.label}: ${f.value}`),
+          ],
+        })
+      : undefined;
+    const known = this.#list?.items.find((i) => i.ref === ref);
+    if (known) {
+      // What the list couldn't say, it knows from now on.
+      if (passkeys) known.passkey = true;
+      if (signIn) known.signIn = signIn.via === 'passkey' ? { ...signIn, usable: false } : signIn;
+    }
+    return {
+      fields,
+      notes: data.note ?? '',
+      ...(signIn && { signIn: signIn.via === 'passkey' ? { ...signIn, usable: false } : signIn }),
+    };
   }
 
-  async fields(ref: string, signal?: AbortSignal) {
-    const { fields, notes } = await this.full(ref, signal);
+  async fields(ref: string, signal?: AbortSignal): Promise<ExternalRead> {
+    const { fields, notes, signIn } = await this.full(ref, signal);
     return {
       fields: fields.map(({ value, ...f }) => (isConcealedKind(f.kind) ? f : { ...f, value })),
       notes,
+      ...(signIn && { signIn }),
+      ...(this.#list?.items.find((i) => i.ref === ref)?.passkey && { passkey: true }),
     };
   }
 
@@ -1699,6 +1893,12 @@ export class DashlaneSource implements PasswordSource {
         fields.push({ id: 'password', label: 'Password', kind: 'secret', role: 'password' });
       if (c.otpSecret || c.otpUrl)
         fields.push({ id: 'totp', label: 'One-time code', kind: 'totp', role: 'totp' });
+      // Dashlane has no "sign in with" of its own: a login without a password says it in its
+      // words. Its note is only looked at here, never kept.
+      const signIn = signInFrom({
+        password: Boolean(c.password),
+        texts: [c.title, c.category, c.note, c.email, c.login],
+      });
       items.push({
         ref,
         type: 'login',
@@ -1711,6 +1911,7 @@ export class DashlaneSource implements PasswordSource {
         fields,
         // Dashlane's notes on a login can hold anything: read with the item, not kept here.
         notes: '',
+        ...(signIn && { signIn }),
         ...(c.modificationDatetime && { updatedAt: dashlaneTime(c.modificationDatetime) }),
       });
     }
@@ -1943,6 +2144,7 @@ export class KeeperSource implements PasswordSource {
     try {
       return JSON.parse(result.stdout) as {
         type?: string;
+        title?: string;
         fields?: KeeperField[];
         custom?: KeeperField[];
         notes?: string;
@@ -1960,6 +2162,7 @@ export class KeeperSource implements PasswordSource {
     const record = await this.#get(ref, signal);
     const fields: FullItem['fields'] = [];
     const passkeys: PasskeyInput[] = [];
+    let held = 0;
     const add = (f: Omit<ExternalField, 'value'>, value: unknown) => {
       if (typeof value === 'string' && value && fields.length < 60) fields.push({ ...f, value });
     };
@@ -2047,6 +2250,7 @@ export class KeeperSource implements PasswordSource {
           return add({ id: 'port', label: 'Port', kind: 'text', role: 'port' }, h.port);
         }
         case 'passkey': {
+          held++;
           const p = keeperPasskey(v);
           if (p) passkeys.push(p);
           return;
@@ -2055,14 +2259,40 @@ export class KeeperSource implements PasswordSource {
           if (typeof v === 'string') add({ id, label, kind: 'text' }, v);
       }
     });
-    return { fields, notes: record.notes ?? '', ...(passkeys.length && { passkeys }) };
+    // A `passkey` field (record_types.py) and no password: it signs in with the passkey,
+    // which Conch can use when its JWK is an ES256 key. Keeper has no "sign in with":
+    // the record's own words say it.
+    const said = signInFrom({
+      password: fields.some((f) => f.role === 'password'),
+      passkeys: held,
+      texts: [
+        record.title,
+        record.notes,
+        ...fields.filter((f) => !isConcealedKind(f.kind)).map((f) => `${f.label}: ${f.value}`),
+      ],
+    });
+    const signIn = said?.via === 'passkey' ? { ...said, usable: passkeys.length > 0 } : said;
+    const known = this.#list?.items.find((i) => i.ref === ref);
+    if (known) {
+      if (held) known.passkey = true;
+      if (signIn) known.signIn = signIn;
+    }
+    return {
+      fields,
+      notes: record.notes ?? '',
+      ...(passkeys.length && { passkeys }),
+      ...(signIn && { signIn }),
+    };
   }
 
-  async fields(ref: string, signal?: AbortSignal) {
-    const { fields, notes } = await this.full(ref, signal);
+  async fields(ref: string, signal?: AbortSignal): Promise<ExternalRead> {
+    const { fields, notes, signIn } = await this.full(ref, signal);
+    const known = this.#list?.items.find((i) => i.ref === ref);
     return {
       fields: fields.map(({ value, ...f }) => (isConcealedKind(f.kind) ? f : { ...f, value })),
       notes,
+      ...(signIn && { signIn }),
+      ...(known?.passkey && { passkey: true }),
     };
   }
 

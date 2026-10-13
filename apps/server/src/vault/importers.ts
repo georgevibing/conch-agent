@@ -17,10 +17,17 @@
  * `generic`. The text is parsed in memory and never written anywhere but the
  * encrypted vault.
  */
-import type { ImportFormat, VaultFieldKind, VaultFieldRole, VaultItemType } from '@conch/protocol';
-import { siteOf, VAULT_LIMITS } from '@conch/protocol';
+import type {
+  ImportFormat,
+  VaultFieldKind,
+  VaultFieldRole,
+  VaultItemType,
+  VaultSignIn,
+} from '@conch/protocol';
+import { isConcealed, siteOf, VAULT_LIMITS } from '@conch/protocol';
 
 import { type BitwardenFido2, fromBitwarden, type PasskeyInput } from './passkeys';
+import { signInFrom } from './signin';
 
 /** One item read from a file, before it gets an id. */
 export interface Imported {
@@ -33,6 +40,8 @@ export interface Imported {
   favorite: boolean;
   /** Passkeys the file carries (Bitwarden JSON), checked in `passkeys.ts`. */
   passkeys?: PasskeyInput[];
+  /** How it signs in when there's no password (ADR 0133): its passkeys, or what its words say. */
+  signIn?: VaultSignIn;
 }
 
 export class ImportError extends Error {}
@@ -408,7 +417,24 @@ export function parseImport(
       }
     });
   }
-  const kept = items.filter((i) => i.fields.some((f) => f.value) || i.notes);
+  // No column in any of these says how a login signs in: a passkey says it, or the item's own words.
+  items = items.map((i) => {
+    if (i.type !== 'login') return i;
+    const signIn = signInFrom({
+      password: i.fields.some((f) => f.role === 'password' && f.value),
+      passkeys: i.passkeys?.length ?? 0,
+      texts: [
+        i.title,
+        ...i.tags,
+        i.notes,
+        ...i.fields.filter((f) => !isConcealed(f.kind)).map((f) => `${f.label}: ${f.value}`),
+      ],
+    });
+    return signIn ? { ...i, signIn } : i;
+  });
+  const kept = items.filter(
+    (i) => i.fields.some((f) => f.value) || i.notes || i.passkeys?.length || i.signIn,
+  );
   if (kept.length > VAULT_LIMITS.maxImport)
     throw new ImportError(
       `That file has more than ${VAULT_LIMITS.maxImport} items. Split it and import each part.`,

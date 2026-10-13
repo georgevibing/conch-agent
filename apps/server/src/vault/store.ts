@@ -15,6 +15,7 @@ import {
   VaultField,
   VaultItemType,
   VaultPasskey,
+  VaultSignIn,
   VaultSourceId,
   VaultUrl,
 } from '@conch/protocol';
@@ -63,6 +64,8 @@ export const ItemRecord = z.object({
   history: z.array(z.object({ fieldId: Id, value: z.string(), changedAt: z.number() })).default([]),
   uses: z.array(Use).default([]),
   passkeys: z.array(VaultPasskey).max(20).default([]),
+  /** How it signs in when it isn't (only) a password: "Sign in with Google", a passkey (ADR 0133). */
+  signIn: VaultSignIn.optional(),
   /**
    * Copied from another password manager (ADR 0025 § Moving in): which item
    * it was, and a keyed fingerprint of what it held, to tell when it changed.

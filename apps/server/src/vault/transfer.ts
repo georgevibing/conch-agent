@@ -84,7 +84,7 @@ export class Transfers {
   /** Every value of one item, from the manager's own program. */
   async full(source: PasswordSource, ref: string, signal?: AbortSignal): Promise<FullItem> {
     if (source.full) return source.full(ref, signal);
-    const { fields, notes } = await source.fields(ref, signal);
+    const { fields, notes, signIn } = await source.fields(ref, signal);
     const out: FullItem['fields'] = [];
     for (const f of fields) {
       if (f.value !== undefined) {
@@ -98,7 +98,7 @@ export class Transfers {
       });
       if (value) out.push({ ...f, value });
     }
-    return { fields: out, notes };
+    return { fields: out, notes, ...(signIn && { signIn }) };
   }
 
   /** What a copy would bring in, without reading a single password. */
@@ -330,6 +330,10 @@ export class Transfers {
       0,
       VAULT_LIMITS.maxUrls,
     );
+    // How it signs in (ADR 0133): a "Sign in with Google" login comes in as that, not as a
+    // login with an empty password. A passkey's `usable` is the vault's to say (`signInOf`).
+    const said = item.type === 'login' ? (full.signIn ?? item.signIn) : undefined;
+    const signIn = said?.via === 'passkey' ? { via: 'passkey' as const } : said;
     const content = {
       type: item.type,
       title: item.title,
@@ -337,6 +341,7 @@ export class Transfers {
       urls,
       notes: full.notes,
       passkeys: passkeys.map((p) => p.credentialId),
+      ...(signIn && { signIn }),
     };
     const fp = fingerprint(vk, JSON.stringify(content));
     const history = [...(before?.history ?? [])];
@@ -365,6 +370,7 @@ export class Transfers {
       uses: before?.uses ?? [],
       breach: before?.breach ?? {},
       passkeys,
+      ...(signIn && { signIn }),
       origin: { source, ref: item.ref, fp, syncedAt: now, detached: false },
     };
   }
