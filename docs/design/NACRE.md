@@ -327,6 +327,18 @@ What is still on its way holds its exact place (`VaultRowSkeleton`,
 `VaultFieldsSkeleton`), and waits a beat before showing, so a quick answer
 never flashes.
 
+An item's page says little and says it once. Its top is the face, the name
+and one short line of facts (`VaultItemHeader`); on a narrow pane the buttons
+move under the name rather than squeeze it. Where it lives is one quiet line
+with at most one button (`VaultSourceStrip`): "Stored in 1Password · Private"
+beside **Copy into Conch**, never a paragraph. An account that signs in
+another way leads its fields with how (`VaultSignInRow`): "Signs in with
+Google" on the provider's own bundled mark (`VaultSignInMark`), the account,
+and the Google login it uses one press away. A passkey Conch can't use says
+where it's kept. There's no password row for an item with no password: dots
+over nothing would pass for one. In the list, a small mark at the row's end
+says the same (`VaultSignInGlyph`).
+
 ### Attachments (chat)
 
 A paste, a picture and a PDF each look like what they are before anyone opens

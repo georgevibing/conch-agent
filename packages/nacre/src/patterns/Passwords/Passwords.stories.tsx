@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { ChevronRight, MoreHorizontal, Pencil } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { fn } from 'storybook/test';
 
 import { Button } from '../../components/Button';
+import { IconButton } from '../../components/IconButton';
 import { Stack } from '../../components/Stack';
 import { VirtualList } from '../../components/VirtualList';
 import {
@@ -15,14 +17,20 @@ import {
   VaultUnlockCard,
   VaultFieldRow,
   VaultFieldsSkeleton,
+  VaultFavoriteButton,
   VaultHealth,
+  VaultItemHeader,
+  VaultItemIcon,
   VaultListHeading,
   VaultPasskeyRow,
   VaultRow,
   VaultRowSkeleton,
   VaultSelectionBar,
+  VaultSignInRow,
+  VaultSourceBadge,
   VaultSourceFilter,
   VaultSourceRow,
+  VaultSourceStrip,
   VaultTransferProgress,
 } from './Passwords';
 
@@ -662,5 +670,319 @@ export const UnlockInTheChat: Story = {
       />
       <VaultUnlockCard state="done" />
     </div>
+  ),
+};
+
+// ── How an item signs in, and an item's page ───────────────────────────────
+
+const card = {
+  overflow: 'hidden',
+  borderRadius: 16,
+  background: 'var(--nc-surface)',
+  boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
+} as const;
+
+const openLogin = (name: string) => (
+  <Button size="sm" variant="ghost" trailingIcon={<ChevronRight />} aria-label={`Open ${name}`}>
+    Open
+  </Button>
+);
+
+/**
+ * Every way an item can sign in when it isn't a password: through another
+ * account (the provider's own mark), a passkey Conch can or can't use,
+ * single sign-on, and an emailed link. The row says it in a few words and
+ * offers the one next step.
+ */
+export const SignInMethods: Story = {
+  render: () => (
+    <div style={{ ...card, maxInlineSize: 520 }}>
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'google', name: 'Google', account: 'james@claw.dev' }}
+        action={openLogin('your Google login')}
+        onCopyAccount={fn()}
+      />
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'apple', name: 'Apple', account: 'ada@icloud.com' }}
+        hint="No Apple login saved"
+        onCopyAccount={fn()}
+      />
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'microsoft', name: 'Microsoft' }}
+        hint="No Microsoft login saved"
+      />
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'github', name: 'GitHub', account: 'ada-lovelace' }}
+        action={openLogin('your GitHub login')}
+      />
+      <VaultSignInRow signIn={{ via: 'passkey', account: 'ada', usable: true }} />
+      <VaultSignInRow
+        signIn={{ via: 'passkey', account: 'ada', usable: false }}
+        keptIn="1Password"
+      />
+      <VaultSignInRow signIn={{ via: 'sso', name: 'Okta', account: 'ada@acme.com' }} />
+      <VaultSignInRow signIn={{ via: 'link', account: 'ada@example.com' }} />
+      <VaultSignInRow signIn={{ via: 'provider', provider: 'other', name: 'Acme ID' }} />
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'other', account: 'james@claw.dev' }}
+        hint="Which one is set in 1Password"
+      />
+    </div>
+  ),
+};
+
+/** Rows that sign in some other way say so with a small mark at their end. */
+export const RowsThatSignInOtherwise: Story = {
+  render: () => (
+    <Stack gap={1} style={{ maxInlineSize: 380 }}>
+      <VaultRow
+        kind="login"
+        title="Product Hunt"
+        subtitle="james@claw.dev"
+        domain="producthunt.com"
+        source="1password"
+        signIn={{ via: 'provider', provider: 'google', name: 'Google' }}
+      />
+      <VaultRow
+        kind="login"
+        title="Figma"
+        subtitle="ada@example.com"
+        domain="figma.com"
+        signIn={{ via: 'provider', provider: 'apple', name: 'Apple' }}
+      />
+      <VaultRow
+        kind="login"
+        title="Shop"
+        subtitle="ada"
+        domain="shop.example"
+        passkey
+        signIn={{ via: 'passkey', usable: true }}
+      />
+      <VaultRow
+        kind="login"
+        title="Acme intranet"
+        subtitle="ada@acme.com"
+        domain="intranet.acme.com"
+        signIn={{ via: 'sso', name: 'Okta' }}
+      />
+      <VaultRow
+        kind="login"
+        title="Newsletter"
+        subtitle="ada@example.com"
+        domain="news.example"
+        signIn={{ via: 'link' }}
+      />
+    </Stack>
+  ),
+};
+
+/** The column an item's page sits in, as Passwords draws it. */
+function Page({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxInlineSize: 640 }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * An item from 1Password that signs in with Google: its name and one line
+ * of facts; where it lives, with **Copy into Conch**; then how it signs in,
+ * and the Google login it uses. No password row, because there is none.
+ */
+export const ItemFromAnotherManager: Story = {
+  render: () => (
+    <Page>
+      <VaultItemHeader
+        icon={
+          <VaultItemIcon kind="login" domain="producthunt.com" title="Product Hunt" size="lg" />
+        }
+        title="Product Hunt"
+        meta={['Login', 'Edited 1 Apr 2023']}
+      />
+      <VaultSourceStrip
+        source="1password"
+        label="Stored in 1Password"
+        detail="James Claw"
+        action={
+          <Button size="sm" variant="surface" leadingIcon={<VaultSourceBadge source="conch" />}>
+            Copy into Conch
+          </Button>
+        }
+      />
+      <div style={card}>
+        <VaultSignInRow
+          signIn={{
+            via: 'provider',
+            provider: 'google',
+            name: 'Google',
+            account: 'james@claw.dev',
+          }}
+          action={openLogin('your Google login')}
+          onCopyAccount={fn()}
+        />
+        <VaultFieldRow
+          label="Website"
+          value="https://www.producthunt.com/"
+          href="https://www.producthunt.com/"
+          onCopy={fn()}
+        />
+      </div>
+    </Page>
+  ),
+};
+
+/**
+ * The same item when 1Password doesn't say whose account it signs in with:
+ * it says so plainly, and where that's chosen.
+ */
+export const ItemSignsInWithAnUnnamedAccount: Story = {
+  render: () => (
+    <Page>
+      <VaultItemHeader
+        icon={
+          <VaultItemIcon kind="login" domain="producthunt.com" title="Product Hunt" size="lg" />
+        }
+        title="Product Hunt"
+        meta={['Login', 'Edited 1 Apr 2023']}
+      />
+      <VaultSourceStrip
+        source="1password"
+        label="Stored in 1Password"
+        detail="James Claw"
+        action={
+          <Button size="sm" variant="surface" leadingIcon={<VaultSourceBadge source="conch" />}>
+            Copy into Conch
+          </Button>
+        }
+      />
+      <div style={card}>
+        <VaultSignInRow
+          signIn={{ via: 'provider', provider: 'other' }}
+          hint="Which one is set in 1Password"
+        />
+        <VaultFieldRow
+          label="Website"
+          value="https://www.producthunt.com/"
+          href="https://www.producthunt.com/"
+          onCopy={fn()}
+        />
+      </div>
+    </Page>
+  ),
+};
+
+/**
+ * One of Conch's own: favourite, Edit and More beside its name (under it on
+ * a phone), and the same account in 1Password one press away.
+ */
+export const ItemOfConch: Story = {
+  render: () => (
+    <Page>
+      <VaultItemHeader
+        icon={<VaultItemIcon kind="login" domain="github.com" title="GitHub" size="lg" />}
+        title="GitHub"
+        meta={['Login', 'Edited 3 days ago', 'Used yesterday']}
+        actions={
+          <>
+            <VaultFavoriteButton favorite onToggle={fn()} />
+            <Button size="sm" variant="surface" leadingIcon={<Pencil />}>
+              Edit
+            </Button>
+            <IconButton label="More">
+              <MoreHorizontal />
+            </IconButton>
+          </>
+        }
+      />
+      <VaultSourceStrip
+        source="conch"
+        label="In Conch"
+        action={
+          <Button size="sm" variant="ghost" leadingIcon={<VaultSourceBadge source="1password" />}>
+            Also in 1Password
+          </Button>
+        }
+      />
+      <div style={card}>
+        <VaultFieldRow label="Username" value="ada-lovelace" onCopy={fn()} />
+        <VaultFieldRow label="Password" concealed onReveal={reveal} onCopy={fn()} strength={4} />
+        <TotpCode period={30} onFetch={code} onCopy={fn()} />
+        <VaultFieldRow label="Website" value="github.com" href="https://github.com" onCopy={fn()} />
+      </div>
+    </Page>
+  ),
+};
+
+/** A passkey kept only in 1Password: the row says Conch can't use it, in a few words. */
+export const ItemPasskeyOnly: Story = {
+  render: () => (
+    <Page>
+      <VaultItemHeader
+        icon={<VaultItemIcon kind="login" domain="shop.example" title="Shop" size="lg" />}
+        title="Shop"
+        meta={['Login', 'Edited 2 days ago']}
+      />
+      <VaultSourceStrip
+        source="1password"
+        label="Stored in 1Password"
+        detail="Private"
+        action={
+          <Button size="sm" variant="surface" leadingIcon={<VaultSourceBadge source="conch" />}>
+            Copy into Conch
+          </Button>
+        }
+      />
+      <div style={card}>
+        <VaultSignInRow
+          signIn={{ via: 'passkey', account: 'ada', usable: false }}
+          keptIn="1Password"
+        />
+        <VaultFieldRow
+          label="Website"
+          value="shop.example"
+          href="https://shop.example"
+          onCopy={fn()}
+        />
+      </div>
+    </Page>
+  ),
+};
+
+/** A copy kept up to date from 1Password, and a key Conch uses: one line each. */
+export const ItemCopiedAndSystem: Story = {
+  render: () => (
+    <Stack gap={8}>
+      <Page>
+        <VaultItemHeader
+          icon={<VaultItemIcon kind="login" domain="mail.example" title="Mail" size="lg" />}
+          title="Mail"
+          meta={['Login', 'Edited today']}
+          actions={
+            <Button size="sm" variant="surface" leadingIcon={<Pencil />}>
+              Edit
+            </Button>
+          }
+        />
+        <VaultSourceStrip source="conch" label="Kept up to date from 1Password" detail="2 h ago" />
+      </Page>
+      <Page>
+        <VaultItemHeader
+          icon={<VaultItemIcon kind="apiKey" title="OpenRouter" size="lg" />}
+          title="OpenRouter"
+          meta={['API key']}
+        />
+        <VaultSourceStrip
+          source="system"
+          label="Used by OpenRouter"
+          detail="works while locked"
+          action={
+            <Button size="sm" variant="surface">
+              Open Providers
+            </Button>
+          }
+        />
+      </Page>
+    </Stack>
   ),
 };

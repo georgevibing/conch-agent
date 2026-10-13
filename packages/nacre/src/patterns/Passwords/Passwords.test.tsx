@@ -11,14 +11,19 @@ import {
   VaultFieldRow,
   VaultFieldsSkeleton,
   VaultHealth,
+  VaultItemHeader,
+  VaultItemIcon,
   VaultListHeading,
   VaultRequestCard,
   VaultPasskeyRow,
   VaultRow,
   VaultRowSkeleton,
   VaultSelectionBar,
+  VaultSignInRow,
   VaultSourceFilter,
   VaultSourceRow,
+  VaultSourceStrip,
+  vaultSignInWords,
   siteName,
   VaultTransferProgress,
   VaultUnlockCard,
@@ -435,6 +440,120 @@ describe('where items live, and choosing several', () => {
     expect(screen.queryByRole('button', { name: /Select all/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onDone).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+});
+
+describe('how an item signs in', () => {
+  it('says “Signs in with Google” with the account, and offers the Google login', async () => {
+    const onOpen = vi.fn();
+    const onCopy = vi.fn();
+    const { container } = renderNacre(
+      <VaultSignInRow
+        signIn={{ via: 'provider', provider: 'google', name: 'Google', account: 'james@claw.dev' }}
+        onCopyAccount={onCopy}
+        action={
+          <button type="button" onClick={onOpen}>
+            Open
+          </button>
+        }
+      />,
+    );
+    const row = screen.getByRole('group', { name: 'Signs in with Google' });
+    expect(row).toHaveTextContent('james@claw.dev');
+    // The provider's own mark, bundled: never a picture from the web.
+    expect(row.querySelector('svg path')).not.toBeNull();
+    expect(row.querySelector('img')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy account' }));
+    expect(onCopy).toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpen).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
+  it('says where a passkey Conch can’t use is kept, and a quiet hint otherwise', async () => {
+    const { container } = renderNacre(
+      <div>
+        <VaultSignInRow signIn={{ via: 'passkey', usable: false }} keptIn="1Password" />
+        <VaultSignInRow
+          signIn={{ via: 'provider', provider: 'apple', name: 'Apple' }}
+          hint="No Apple login saved"
+        />
+        <VaultSignInRow signIn={{ via: 'sso', name: 'Okta' }} />
+        <VaultSignInRow signIn={{ via: 'link' }} />
+      </div>,
+    );
+    expect(screen.getByRole('group', { name: 'Signs in with a passkey' })).toHaveTextContent(
+      'Only in 1Password, out of Conch’s reach',
+    );
+    expect(screen.getByRole('group', { name: 'Signs in with Apple' })).toHaveTextContent(
+      'No Apple login saved',
+    );
+    expect(screen.getByRole('group', { name: 'Signs in with Okta' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Signs in with an emailed link or code' }),
+    ).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('names it on a list row, with a small mark at its end', async () => {
+    const { container } = renderNacre(
+      <VaultRow
+        kind="login"
+        title="Product Hunt"
+        subtitle="james@claw.dev"
+        domain="producthunt.com"
+        signIn={{ via: 'provider', provider: 'google', name: 'Google' }}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Product Hunt, james@claw.dev, signs in with Google' }),
+    ).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('words every method', () => {
+    expect(vaultSignInWords({ via: 'provider', name: 'GitHub' })).toBe('Signs in with GitHub');
+    expect(vaultSignInWords({ via: 'provider' })).toBe('Signs in with another account');
+    expect(vaultSignInWords({ via: 'sso' })).toBe('Signs in with single sign-on');
+    expect(vaultSignInWords({ via: 'passkey', name: 'x' })).toBe('Signs in with a passkey');
+  });
+});
+
+describe('an item’s page', () => {
+  it('heads it with its name and one line of facts, its buttons beside', async () => {
+    const { container } = renderNacre(
+      <VaultItemHeader
+        icon={<VaultItemIcon kind="login" title="GitHub" domain="github.com" size="lg" />}
+        title="GitHub"
+        meta={['Login', '', 'Edited 3 days ago', undefined]}
+        actions={<button type="button">Edit</button>}
+      />,
+    );
+    expect(screen.getByRole('heading', { level: 2, name: 'GitHub' })).toBeInTheDocument();
+    expect(container).toHaveTextContent(/Login\s·\sEdited 3 days ago/);
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('says where it lives in one line, with its one button', async () => {
+    const onCopy = vi.fn();
+    const { container } = renderNacre(
+      <VaultSourceStrip
+        source="1password"
+        label="Stored in 1Password"
+        detail="James Claw"
+        action={
+          <button type="button" onClick={onCopy}>
+            Copy into Conch
+          </button>
+        }
+      />,
+    );
+    expect(screen.getByRole('note')).toHaveTextContent(/Stored in 1Password\s·\sJames Claw/);
+    await userEvent.click(screen.getByRole('button', { name: 'Copy into Conch' }));
+    expect(onCopy).toHaveBeenCalled();
     await expectAccessible(container);
   });
 });

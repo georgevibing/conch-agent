@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BadgeCheck,
+  Building2,
   Check,
   Copy,
   CreditCard,
@@ -12,6 +13,8 @@ import {
   KeyRound,
   Landmark,
   LockKeyhole,
+  LogIn,
+  Mail,
   RefreshCw,
   ScrollText,
   Server,
@@ -30,6 +33,7 @@ import { ToggleGroup } from 'radix-ui';
 import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
+import { Heading } from '../../components/Text';
 import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { IconButton } from '../../components/IconButton';
 import { Pearl } from '../../components/Pearl';
@@ -39,6 +43,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { Slider } from '../../components/Slider';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
+import { brandMarks } from '../Integrations/brands';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import styles from './Passwords.module.css';
 import { META_SEP } from '../../components/MetaList';
@@ -331,6 +336,8 @@ export interface VaultRowProps extends Omit<ComponentProps<'button'>, 'children'
   totp?: boolean;
   /** Has a passkey. */
   passkey?: boolean;
+  /** Signs in some other way than a password: its glyph at the row's end ("G" for Google). */
+  signIn?: VaultSignInShape;
   issues?: VaultIssue[];
   selected?: boolean;
   /** "Deleted 3 days ago" for Recently deleted. */
@@ -364,6 +371,7 @@ export function VaultRow({
   favorite,
   totp,
   passkey,
+  signIn,
   issues = [],
   selected,
   note,
@@ -389,8 +397,9 @@ export function VaultRow({
     subtitle,
     where,
     favorite ? 'favourite' : undefined,
+    signIn ? vaultSignInWords(signIn).replace(/^S/, 's') : undefined,
     totp ? 'has a one-time code' : undefined,
-    passkey ? 'has a passkey' : undefined,
+    passkey && signIn?.via !== 'passkey' ? 'has a passkey' : undefined,
     ...issues.map((i) => ISSUE_WORDS[i].toLowerCase()),
     note,
     meta?.toLowerCase(),
@@ -443,6 +452,9 @@ export function VaultRow({
         )}
       </span>
       <span className={styles.rowEnd} aria-hidden>
+        {signIn && !(signIn.via === 'passkey' && passkey) && (
+          <VaultSignInGlyph signIn={signIn} className={styles.rowGlyph} />
+        )}
         {passkey && <Fingerprint className={styles.rowGlyph} />}
         {totp && <Timer className={styles.rowGlyph} />}
         {worst && (
@@ -1312,6 +1324,291 @@ export function VaultPasskeyRow({
         </span>
       </div>
       {action && <div className={styles.sourceAction}>{action}</div>}
+    </div>
+  );
+}
+
+// ── How an item signs in ────────────────────────────────────────────────────
+
+/**
+ * How an account signs in when it isn't (only) a password: through another
+ * account ("Sign in with Google"), a passkey, a company's single sign-on, or a
+ * link or code sent by email. (Mirrors `VaultSignIn` in @conch/protocol;
+ * Nacre stays dependency-free.)
+ */
+export interface VaultSignInShape {
+  via: 'provider' | 'passkey' | 'sso' | 'link';
+  /** For `provider`: whose account, by the id its mark goes by (`google`, `apple`…). */
+  provider?: string;
+  /** Who, in words: "Google", "Acme SSO". */
+  name?: string;
+  /** The account there, usually an email. Not a secret. */
+  account?: string;
+  /** For a passkey: Conch can sign in with it itself. */
+  usable?: boolean;
+}
+
+/** Each provider's colour, for its tile (the mark is white on it, like an app icon). */
+const SIGN_IN_COLORS: Record<string, string> = {
+  google: '#4285F4',
+  apple: '#000000',
+  microsoft: '#737373',
+  facebook: '#0866FF',
+  github: '#181717',
+  gitlab: '#FC6D26',
+  x: '#000000',
+  linkedin: '#0A66C2',
+  amazon: '#FF9900',
+  discord: '#5865F2',
+  okta: '#007DC1',
+};
+
+const SIGN_IN_GLYPHS = {
+  provider: LogIn,
+  passkey: Fingerprint,
+  sso: Building2,
+  link: Mail,
+} as const;
+
+/** Who it signs in through, in words: "Google", "Acme SSO", "a passkey". */
+function signInWho(signIn: VaultSignInShape): string {
+  if (signIn.via === 'passkey') return 'a passkey';
+  if (signIn.via === 'link') return 'an emailed link or code';
+  return signIn.name || (signIn.via === 'sso' ? 'single sign-on' : 'another account');
+}
+
+/** "Signs in with Google", "Signs in with a passkey": for a row's name and the words around it. */
+export function vaultSignInWords(signIn: VaultSignInShape): string {
+  return `Signs in with ${signInWho(signIn)}`;
+}
+
+/**
+ * The face of a sign-in method: the provider's own mark on its colour
+ * ("G" for Google), or a tinted glyph for a passkey, single sign-on or an
+ * emailed link. Bundled, never fetched.
+ */
+export function VaultSignInMark({
+  signIn,
+  size = 'sm',
+  className,
+}: {
+  signIn: VaultSignInShape;
+  size?: 'xs' | 'sm' | 'md';
+  className?: string;
+}) {
+  const id = signIn.via === 'provider' && signIn.provider !== 'other' ? signIn.provider : undefined;
+  // A provider by its mark, or by its name's monogram; one nobody named, by a glyph.
+  if (id || (signIn.via === 'provider' && signIn.name)) {
+    return (
+      <IntegrationLogo
+        brand={id}
+        name={signInWho(signIn)}
+        color={id ? SIGN_IN_COLORS[id] : undefined}
+        size={size}
+        decorative
+        className={cx(styles.signInMark, className)}
+      />
+    );
+  }
+  const Icon = SIGN_IN_GLYPHS[signIn.via];
+  return (
+    <span
+      aria-hidden
+      data-via={signIn.via}
+      data-size={size}
+      className={cx(styles.signInGlyphTile, className)}
+    >
+      <Icon />
+    </span>
+  );
+}
+
+/**
+ * A sign-in method's plain glyph, the size of the text around it: the
+ * provider's mark in one colour, for a list row's end, a menu or a choice.
+ */
+export function VaultSignInGlyph({
+  signIn,
+  className,
+}: {
+  signIn: VaultSignInShape;
+  className?: string;
+}) {
+  const path =
+    signIn.via === 'provider' && signIn.provider ? brandMarks[signIn.provider] : undefined;
+  if (path)
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden className={cx(styles.signInGlyph, className)}>
+        <path d={path} fill="currentColor" />
+      </svg>
+    );
+  const Icon = SIGN_IN_GLYPHS[signIn.via];
+  return <Icon aria-hidden className={cx(styles.signInGlyph, className)} />;
+}
+
+export interface VaultSignInRowProps extends Omit<ComponentProps<'div'>, 'children'> {
+  signIn: VaultSignInShape;
+  /**
+   * For a passkey Conch can't use: the app it's kept in ("1Password"), so
+   * the row can say where to sign in from.
+   */
+  keptIn?: string;
+  /** A quiet line under the account: "No Google login saved". */
+  hint?: string;
+  /** One button at the end: open the Google login Conch would use. */
+  action?: ReactNode;
+  /** Copy the account (an email isn't a secret, so it's copied as is). */
+  onCopyAccount?: () => void | Promise<void>;
+}
+
+/**
+ * How an item signs in, as the first row of its fields when it isn't a
+ * password: "Signs in with Google" with the provider's mark, the account,
+ * and the one thing to do next (open the Google login it uses). A passkey
+ * kept where Conch can't reach it says so, in a few words.
+ */
+export function VaultSignInRow({
+  signIn,
+  keptIn,
+  hint,
+  action,
+  onCopyAccount,
+  className,
+  ...props
+}: VaultSignInRowProps) {
+  const labelId = useId();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const out =
+    signIn.via === 'passkey' && signIn.usable === false
+      ? keptIn
+        ? `Only in ${keptIn}, out of Conch’s reach`
+        : 'Kept where Conch can’t use it'
+      : undefined;
+  const note = out ?? hint;
+  return (
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      data-via={signIn.via}
+      className={cx(styles.field, styles.signIn, className)}
+      {...props}
+    >
+      <VaultSignInMark signIn={signIn} />
+      <div className={styles.fieldMain}>
+        <span id={labelId} className={styles.signInTitle}>
+          {vaultSignInWords(signIn)}
+        </span>
+        {signIn.account && <span className={styles.signInAccount}>{signIn.account}</span>}
+        {note && (
+          <span className={styles.signInNote} data-out={out ? '' : undefined}>
+            {out && <AlertTriangle aria-hidden />}
+            {note}
+          </span>
+        )}
+      </div>
+      {(onCopyAccount || action) && (
+        <div className={styles.fieldActions}>
+          {onCopyAccount && signIn.account && (
+            <IconButton
+              size="sm"
+              label={copied ? 'Copied' : 'Copy account'}
+              onClick={() => void Promise.resolve(onCopyAccount()).then(() => setCopied(true))}
+            >
+              {copied ? <Check /> : <Copy />}
+            </IconButton>
+          )}
+          {action}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── An item's page ──────────────────────────────────────────────────────────
+
+export interface VaultItemHeaderProps extends Omit<ComponentProps<'div'>, 'title'> {
+  /** Its face: a `VaultItemIcon` at `lg`. */
+  icon: ReactNode;
+  title: ReactNode;
+  /** A short line of facts under the name: "Login", "Edited 3 days ago". Empty ones are left out. */
+  meta?: readonly (string | false | null | undefined)[];
+  /** Favourite, Edit, More… Beside the name where there's room, under it on a phone. */
+  actions?: ReactNode;
+}
+
+/**
+ * The top of an item's page: its face, its name, one short line of facts,
+ * and what you can do with it. Where the pane is narrow (a phone), the
+ * buttons move under the name instead of squeezing it into a sliver.
+ */
+export function VaultItemHeader({
+  icon,
+  title,
+  meta = [],
+  actions,
+  className,
+  ...props
+}: VaultItemHeaderProps) {
+  const facts = meta.filter((m): m is string => Boolean(m));
+  return (
+    // A div, not a header: inside the app's page, a second banner landmark would say nothing.
+    <div className={cx(styles.itemHeader, className)} {...props}>
+      <div className={styles.itemHeaderBody}>
+        <span className={styles.itemHeaderIcon}>{icon}</span>
+        <div className={styles.itemHeaderText}>
+          <Heading level={2} size="xl" className={styles.itemHeaderTitle}>
+            {title}
+          </Heading>
+          {facts.length > 0 && (
+            <span className={styles.itemHeaderMeta}>{facts.join(META_SEP)}</span>
+          )}
+        </div>
+        {actions && <div className={styles.itemHeaderActions}>{actions}</div>}
+      </div>
+    </div>
+  );
+}
+
+export interface VaultSourceStripProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** Whose it is: the badge at its start. */
+  source: VaultSourceKind;
+  /** What to know, in a few words: "Stored in 1Password". */
+  label: string;
+  /** After it, quieter: the vault ("Private"), when it was synced. */
+  detail?: string;
+  /** The one thing to do about it: Copy into Conch, Open 1Password, the other copy. */
+  action?: ReactNode;
+}
+
+/**
+ * Where an item lives, in one quiet line under its name: the place's mark,
+ * a few words, and at most one or two buttons. It replaces a paragraph: an
+ * item from 1Password reads "Stored in 1Password · Private" with **Copy into
+ * Conch** beside it, and nothing more.
+ */
+export function VaultSourceStrip({
+  source,
+  label,
+  detail,
+  action,
+  className,
+  ...props
+}: VaultSourceStripProps) {
+  return (
+    <div role="note" className={cx(styles.strip, className)} data-source={source} {...props}>
+      <span className={styles.stripText}>
+        <VaultSourceBadge source={source} className={styles.stripBadge} />
+        <span>
+          <span className={styles.stripLabel}>{label}</span>
+          {detail && <span className={styles.stripDetail}>{`${META_SEP}${detail}`}</span>}
+        </span>
+      </span>
+      {action && <span className={styles.stripAction}>{action}</span>}
     </div>
   );
 }
