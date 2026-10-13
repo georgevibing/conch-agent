@@ -235,12 +235,41 @@ export const BrowserFillKind = z.enum(['sign-in', 'code', 'new-password', 'card'
 export type BrowserFillKind = z.infer<typeof BrowserFillKind>;
 
 /**
+ * How the item saved for a page signs in when it isn't a password (ADR 0133),
+ * for the live view: names only, never a value.
+ */
+export const BrowserSignInOffer = z.object({
+  via: z.enum(['provider', 'passkey', 'sso', 'link']),
+  /** For a provider Conch knows: its id ("google"), for its mark. */
+  provider: z.string().max(40).optional(),
+  /** Who: "Google", "Acme SSO"; for a passkey or a link, the item's name. */
+  name: z.string().max(80),
+  /** The account it signs in as, usually an email. */
+  account: z.string().max(200).optional(),
+  /** The page's own button for it, which Conch found and can press ("Continue with Google"). */
+  button: z.string().max(120).optional(),
+  /**
+   * Saved as "another account" without saying whose (1Password's "Sign in with"
+   * often doesn't): the page's provider buttons, for the person to choose.
+   */
+  buttons: z.array(z.string().max(120)).max(4).optional(),
+  /** For a provider: the saved login Conch fills on the provider's pages. */
+  with: BrowserFillAccount.optional(),
+  /** For a passkey: Conch holds it, so it can sign in with it here. */
+  usable: z.boolean().optional(),
+  /** For a passkey Conch can't use: where it's kept ("1Password"). */
+  keptIn: z.string().max(40).optional(),
+});
+export type BrowserSignInOffer = z.infer<typeof BrowserSignInOffer>;
+
+/**
  * You're in a box Passwords can fill (ADR 0130): the live view offers it.
  * `lookalike` is the saved site this page only pretends to be; `blocked`
  * says why nothing is offered (not https, a box from another site).
  */
 export const BrowserFillOffer = z.object({
-  field: z.enum(['username', 'password', 'new-password', 'code', 'card']),
+  /** `sign-in`: no box, the page's own sign-in ("Continue with Google"): see `signIn`. */
+  field: z.enum(['username', 'password', 'new-password', 'code', 'card', 'sign-in']),
   /** The page's host, as shown. */
   site: z.string().max(253),
   items: z.array(BrowserFillAccount).max(8).default([]),
@@ -248,6 +277,14 @@ export const BrowserFillOffer = z.object({
   blocked: z.enum(['insecure', 'frame']).optional(),
   /** Passwords is locked: unlock it first. */
   locked: z.boolean().optional(),
+  /**
+   * The item saved for this site signs in some other way than a password (ADR
+   * 0133): through Google, a company's SSO, a passkey, a link by email. `items`
+   * holds that one item.
+   */
+  signIn: BrowserSignInOffer.optional(),
+  /** On a provider's page: the sign-in it's for ("Product Hunt"), its item first in `items`. */
+  for: z.string().max(200).optional(),
 });
 export type BrowserFillOffer = z.infer<typeof BrowserFillOffer>;
 
@@ -276,6 +313,11 @@ export const BrowserPermission = z.object({
   accounts: z.array(BrowserFillAccount).max(8).optional(),
   /** For `fill`: the item is saved for another part of this site ("accounts.google.com"). */
   savedFor: z.string().max(253).optional(),
+  /**
+   * For `fill` on a provider's page (ADR 0133): the sign-in it's for, "Product
+   * Hunt" when Product Hunt signs in with Google. One answer covers the whole of it.
+   */
+  for: z.string().max(200).optional(),
 });
 export type BrowserPermission = z.infer<typeof BrowserPermission>;
 
@@ -472,11 +514,17 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
    * Fill the box you're in from Passwords (ADR 0130): `item` is one of the
    * offer's, or `generate` makes a strong password and saves it. The gateway
    * finds the box itself and checks the site again; nothing comes back.
+   * `signIn`: the item signs in another way (ADR 0133), and the press starts
+   * it: the page's own "Continue with Google" (or the `button` chosen), or the
+   * passkey Conch holds.
    */
   z.object({
     type: z.literal('fill'),
     item: z.string().max(300).optional(),
     generate: z.boolean().optional(),
+    signIn: z.boolean().optional(),
+    /** With `signIn`, for an item that doesn't say whose account: the button chosen, by its words. */
+    button: z.string().max(120).optional(),
   }),
 ]);
 export type BrowserLiveCommand = z.infer<typeof BrowserLiveCommand>;
