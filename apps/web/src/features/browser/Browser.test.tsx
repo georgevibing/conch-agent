@@ -188,6 +188,32 @@ describe('browser cards in the transcript', () => {
     expect(onRespond).toHaveBeenCalledWith('p2', 'allow', undefined, 'pw_b');
   });
 
+  it('says which site a provider’s sign-in is for (ADR 0133)', () => {
+    const view = reduceAll(
+      log({
+        type: 'permission.requested',
+        permissionId: 'p3',
+        toolName: 'browser_fill',
+        input: {},
+        summary: 'sign in to “Product Hunt” with Google on accounts.google.com',
+        browser: {
+          kind: 'fill',
+          fill: 'sign-in',
+          site: 'accounts.google.com',
+          url: 'https://accounts.google.com/v3/signin/challenge/pwd',
+          title: 'Sign in – Google Accounts',
+          action: 'Sign in to “Product Hunt” with Google as ada@gmail.com',
+          for: 'Product Hunt',
+        },
+      }),
+    );
+    show(view, vi.fn());
+    expect(
+      screen.getByText('Sign in to “Product Hunt” with Google as ada@gmail.com?'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/for the whole sign-in to Product Hunt/)).toBeInTheDocument();
+  });
+
   it('hands the browser back from the transcript with “I’m done”', async () => {
     const view = reduceAll(
       log({

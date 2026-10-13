@@ -121,7 +121,8 @@ export function BrowserPanel({
       running={running}
       onStop={onStop}
       onClose={onClose}
-      // In a sign-in, sign-up, code or card box: fill it from Passwords in one press (ADR 0130).
+      // In a sign-in, sign-up, code or card box: fill it from Passwords in one press (ADR 0130),
+      // or on a page whose item signs in another way, start that (ADR 0133).
       {...(live.fill && {
         fill: {
           offer: live.fill,
@@ -131,6 +132,11 @@ export function BrowserPanel({
           },
           onGenerate: () => {
             live.send({ type: 'fill', generate: true });
+            live.clearFill();
+          },
+          // A site that signs in another way (ADR 0133): its own "Continue with Google", pressed for you.
+          onSignIn: (item: string, button?: string) => {
+            live.send({ type: 'fill', item, signIn: true, ...(button && { button }) });
             live.clearFill();
           },
           onUnlock: () => void navigate('/passwords'),

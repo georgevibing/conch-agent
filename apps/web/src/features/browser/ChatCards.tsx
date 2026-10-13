@@ -97,6 +97,7 @@ export function BrowserApprovalItem({
       fill={detail.fill}
       accounts={detail.accounts}
       savedFor={detail.savedFor}
+      signingInTo={detail.for}
       busy={busy}
       onChoose={(id) => {
         chosen.current = id;
