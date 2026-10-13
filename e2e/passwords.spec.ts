@@ -337,3 +337,44 @@ test('on a phone, an item is a page of its own: Passwords › its name above it,
   await expect(trail).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Pixelfed,/ })).toBeVisible();
 });
+
+test('on a phone, a login that signs in with Google says so, with no password, and opens the Google login', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/vault/items', {
+    data: {
+      type: 'login',
+      title: 'Google',
+      fields: [
+        { label: 'Username', kind: 'email', role: 'username', value: 'james@claw.dev' },
+        { label: 'Password', kind: 'secret', role: 'password', value: 'a-long-google-password-1' },
+      ],
+      urls: ['https://accounts.google.com'],
+    },
+  });
+  const saved = await request.post('/api/vault/items', {
+    data: {
+      type: 'login',
+      title: 'Product Hunt',
+      urls: ['https://www.producthunt.com/'],
+      signIn: { via: 'provider', provider: 'google', account: 'james@claw.dev' },
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/passwords');
+  await page.getByRole('button', { name: /^Product Hunt,/ }).click();
+  await expect(page.getByRole('heading', { name: 'Product Hunt', level: 2 })).toBeVisible();
+  await expect(page.getByText('Signs in with Google')).toBeVisible();
+  await expect(page.getByText('james@claw.dev')).toBeVisible();
+  // No password to show, copy or reveal.
+  await expect(page.getByText(/^password$/i)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /reveal|show password/i })).toHaveCount(0);
+  // Nothing sticks out of a phone's width.
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(wide).toBeLessThanOrEqual(390);
+  await snap(page, 'phone-sign-in-with-google');
+  await page.getByRole('button', { name: 'Open your Google login' }).click();
+  await expect(page.getByRole('heading', { name: 'Google', level: 2 })).toBeVisible();
+});

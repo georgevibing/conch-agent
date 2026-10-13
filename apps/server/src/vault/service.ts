@@ -2291,6 +2291,7 @@ export class VaultService {
       '- Missing a credential you need: call passwords_request with a short reason. The user types it into a secure card in the chat and it’s saved; you get its id, never the value.',
       '- Needing a value yourself (a PIN for a phone menu, a note, a key for a command): passwords_read, with a reason; the user is asked first. Use it for that and never repeat it in a reply.',
       '- Passkeys: when a site offers “Sign in with a passkey” and passwords_find shows one saved for it, call browser_passkey with sign_in, then click that button. When a site offers to create a passkey and the user wants one, call browser_passkey with save first.',
+      '- A login that signs in with Google (or another account, SSO, a passkey, an emailed link) has no password: press the site’s own button for it; on the provider’s page, browser_type with an empty text fills the provider’s own saved login.',
       '- If Passwords is locked, the user sees an Unlock card and you carry on once they unlock it.',
     ].join('\n');
   }

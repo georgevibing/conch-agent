@@ -101,6 +101,7 @@ Your assistant sees names and sites, never a value. In [Conch's browser](./brows
 - For a sign-in you haven't saved, a card in the chat asks you. What you type goes to Passwords, not the chat.
 - To read something itself, such as a PIN or a note, it asks: **Don’t**, **Always for this item** or **Allow once**.
 - Passkeys are kept with their logins. After asking, your assistant signs in with one in Conch's browser, on that site only, and can save a new one a site offers. It never sees the key.
+- **Sign in with Google** and the like: your assistant presses the site's own _Continue with Google_, and on Google's page Conch fills your saved Google login, after one question for the whole sign-in. If the account isn't named, it asks you which one. A passkey kept only in another manager is handed to you, with an offer to make one in Conch next time.
 
 ### When you drive the browser
 
