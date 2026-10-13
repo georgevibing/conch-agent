@@ -1,7 +1,8 @@
 # 0025 — Passwords: a vault of your own, and the managers you already use
 
 - Status: accepted (amended by [ADR 0062](./0062-copy-to-another-password-manager.md): Copy to;
-  [ADR 0130](./0130-passwords-in-the-browser.md): filling in the browser)
+  [ADR 0130](./0130-passwords-in-the-browser.md): filling in the browser;
+  [ADR 0133](./0133-how-an-account-signs-in.md): how an account signs in)
 - Date: 2026-10-01
 
 ## Context
