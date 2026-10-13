@@ -2,6 +2,27 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.11](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-13)
+
+### New
+
+- Passwords knows how an account signs in: with Google, Apple or another account, a passkey, single sign-on, or an emailed link
+- An item that signs in with Google says so, with the account, and opens the Google login it uses
+- In Conch's browser, your assistant presses the site's Continue with Google and Conch fills your Google sign-in, after one question
+- A passkey kept only in another password manager is handed to you, with the offer to make one in Conch next time
+- Choose how one of your own items signs in when you edit it, and find them by searching "google", "passkey" or "sso"
+
+### Better
+
+- An item's page is calmer on a phone: one short line under its name, and the buttons below it
+- Items from 1Password and other managers say where they're kept in one line, with Copy into Conch beside it
+- Copy into Conch keeps how an item signs in
+
+### Fixed
+
+- A 1Password item saved as Sign in with Google no longer shows an empty password that does nothing
+- Logins without a password are no longer counted as weak or reused in the Security check
+
 ## [0.1.0-alpha.10](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-12)
 
 ### New
