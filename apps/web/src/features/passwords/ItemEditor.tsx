@@ -4,11 +4,14 @@ import {
   isConcealed,
   passwordScore,
   type SaveVaultItemBody,
+  SIGN_IN_PROVIDERS,
   templateFor,
   type VaultFieldKind,
   type VaultFieldRole,
   type VaultItemDetail,
   type VaultItemType,
+  type VaultSignIn,
+  type VaultSignInProvider,
 } from '@conch/protocol';
 import {
   Button,
@@ -25,10 +28,12 @@ import {
   Textarea,
   toast,
   VaultItemIcon,
+  VaultSignInGlyph,
+  vaultSourceName,
   type GeneratorSettings,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Sparkles, X } from 'lucide-react';
+import { KeyRound, Plus, Sparkles, X } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 
 import { useAutoFocus } from '../../lib/useAutoFocus';
@@ -62,6 +67,55 @@ const KIND_CHOICES: { kind: VaultFieldKind; label: string }[] = [
   { kind: 'multiline', label: 'Several lines' },
   { kind: 'secretText', label: 'Hidden text' },
 ];
+
+/**
+ * How a login signs in, as the editor's one choice: a password (the
+ * usual), another account, a passkey, single sign-on or an emailed link.
+ * `provider:google` and the like for another account.
+ */
+type Method = 'password' | `provider:${VaultSignInProvider}` | 'passkey' | 'sso' | 'link';
+
+const PROVIDERS = Object.entries(SIGN_IN_PROVIDERS) as [
+  Exclude<VaultSignInProvider, 'other'>,
+  { name: string },
+][];
+
+function methodOf(signIn?: VaultSignIn): Method {
+  if (!signIn) return 'password';
+  if (signIn.via === 'provider') return `provider:${signIn.provider ?? 'other'}`;
+  return signIn.via;
+}
+
+/** The method chosen, as the contract says it (none for a password). */
+function signInOf(method: Method, account: string, name: string): VaultSignIn | undefined {
+  if (method === 'password') return undefined;
+  const who = name.trim() || undefined;
+  const at = account.trim() || undefined;
+  if (method.startsWith('provider:')) {
+    const provider = method.slice('provider:'.length) as VaultSignInProvider;
+    return {
+      via: 'provider',
+      provider,
+      ...(provider === 'other' && who && { name: who }),
+      ...(at && { account: at }),
+    };
+  }
+  if (method === 'sso')
+    return { via: 'sso', ...(who && { name: who }), ...(at && { account: at }) };
+  if (method === 'link') return { via: 'link', ...(at && { account: at }) };
+  return { via: 'passkey' };
+}
+
+/**
+ * A field the method makes pointless, while it's empty: the password of a
+ * login that signs in with Google, and its username when the account is
+ * asked for instead. A saved one stays in view, so nothing goes unseen.
+ */
+function unneeded(field: DraftField, method: Method): boolean {
+  if (method === 'password' || field.stored || field.value) return false;
+  if (field.role === 'password') return true;
+  return field.role === 'username' && method !== 'passkey';
+}
 
 let counter = 0;
 const key = () => `f${++counter}`;
@@ -225,6 +279,14 @@ export function ItemEditor({
   const [favorite, setFavorite] = useState(item?.favorite ?? false);
   const [agentAccess, setAgentAccess] = useState(item?.agentAccess ?? 'ask');
   const [agentRead, setAgentRead] = useState(item?.agentRead ?? 'ask');
+  const [method, setMethod] = useState<Method>(() => methodOf(item?.signIn));
+  const [account, setAccount] = useState(item?.signIn?.account ?? '');
+  const [who, setWho] = useState(item?.signIn?.name ?? '');
+  const providerName = method.startsWith('provider:')
+    ? (SIGN_IN_PROVIDERS[method.slice('provider:'.length) as keyof typeof SIGN_IN_PROVIDERS]
+        ?.name ??
+      (who.trim() || 'that account'))
+    : undefined;
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string>();
   const titleRef = useAutoFocus<HTMLInputElement>();
@@ -236,13 +298,14 @@ export function ItemEditor({
     event.preventDefault();
     setProblem(undefined);
     const site = urls.find(Boolean);
+    const signIn = type === 'login' ? signInOf(method, account, who) : undefined;
     const body: SaveVaultItemBody = {
       type,
       title:
         title.trim() ||
         (site ? site.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : template.name),
       fields: fields
-        .filter((f) => f.label.trim())
+        .filter((f) => f.label.trim() && !(type === 'login' && unneeded(f, method)))
         .map((f) => ({
           ...(f.id && { id: f.id }),
           label: f.label.trim(),
@@ -260,6 +323,7 @@ export function ItemEditor({
       agentAccess,
       agentRead,
       allowedSites: item?.allowedSites ?? [],
+      ...(signIn && { signIn }),
     };
     setSaving(true);
     try {
@@ -305,26 +369,110 @@ export function ItemEditor({
         </div>
       </div>
 
+      {type === 'login' && (
+        <Field>
+          <Field.Label size="sm" id="sign-in-method">
+            Signs in with
+          </Field.Label>
+          <Select
+            aria-labelledby="sign-in-method"
+            value={method}
+            onValueChange={(v) => setMethod(v as Method)}
+          >
+            <Select.Item value="password" icon={<KeyRound />}>
+              A password
+            </Select.Item>
+            <Select.Group label="Another account">
+              {PROVIDERS.map(([id, p]) => (
+                <Select.Item
+                  key={id}
+                  value={`provider:${id}`}
+                  icon={<VaultSignInGlyph signIn={{ via: 'provider', provider: id }} />}
+                >
+                  {p.name}
+                </Select.Item>
+              ))}
+              <Select.Item
+                value="provider:other"
+                icon={<VaultSignInGlyph signIn={{ via: 'provider', provider: 'other' }} />}
+              >
+                Another one
+              </Select.Item>
+            </Select.Group>
+            <Select.Group label="Without a password">
+              <Select.Item value="passkey" icon={<VaultSignInGlyph signIn={{ via: 'passkey' }} />}>
+                A passkey
+              </Select.Item>
+              <Select.Item value="sso" icon={<VaultSignInGlyph signIn={{ via: 'sso' }} />}>
+                Single sign-on
+              </Select.Item>
+              <Select.Item value="link" icon={<VaultSignInGlyph signIn={{ via: 'link' }} />}>
+                A link or code by email
+              </Select.Item>
+            </Select.Group>
+          </Select>
+          {method === 'passkey' && (
+            <Field.Description>
+              Make the passkey on the site, in Conch’s browser: it’s saved here.
+            </Field.Description>
+          )}
+        </Field>
+      )}
+      {type === 'login' && (method === 'provider:other' || method === 'sso') && (
+        <Field>
+          <Field.Label size="sm">
+            {method === 'sso' ? 'Whose sign-on' : 'Which account'}
+          </Field.Label>
+          <Input
+            size="sm"
+            placeholder={method === 'sso' ? 'Okta, Acme SSO' : 'Notion, Yahoo'}
+            value={who}
+            maxLength={80}
+            onChange={(e) => setWho(e.target.value)}
+          />
+        </Field>
+      )}
+      {type === 'login' && method !== 'password' && method !== 'passkey' && (
+        <Field>
+          <Field.Label size="sm">
+            {providerName ? `${providerName} account` : method === 'sso' ? 'Account' : 'Email'}
+          </Field.Label>
+          <Input
+            size="sm"
+            type={method === 'link' ? 'email' : 'text'}
+            inputMode="email"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="you@example.com"
+            value={account}
+            maxLength={200}
+            onChange={(e) => setAccount(e.target.value)}
+          />
+        </Field>
+      )}
+
       <div className={styles.editorGrid}>
-        {fields.map((f) => (
-          <div key={f.key} className={styles.editorRow}>
-            <Input
-              aria-label="Field name"
-              size="sm"
-              value={f.label}
-              onChange={(e) => patch(f.key, { label: e.target.value })}
-              className={styles.editorLabel}
-            />
-            <FieldInput field={f} onChange={(value) => patch(f.key, { value })} />
-            <IconButton
-              size="sm"
-              label={`Remove ${f.label || 'field'}`}
-              onClick={() => setFields((list) => list.filter((x) => x.key !== f.key))}
-            >
-              <X />
-            </IconButton>
-          </div>
-        ))}
+        {fields
+          .filter((f) => !(type === 'login' && unneeded(f, method)))
+          .map((f) => (
+            <div key={f.key} className={styles.editorRow}>
+              <Input
+                aria-label="Field name"
+                size="sm"
+                value={f.label}
+                onChange={(e) => patch(f.key, { label: e.target.value })}
+                className={styles.editorLabel}
+              />
+              <FieldInput field={f} onChange={(value) => patch(f.key, { value })} />
+              <IconButton
+                size="sm"
+                label={`Remove ${f.label || 'field'}`}
+                onClick={() => setFields((list) => list.filter((x) => x.key !== f.key))}
+              >
+                <X />
+              </IconButton>
+            </div>
+          ))}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <Button size="sm" variant="ghost" leadingIcon={<Plus />} className={styles.addField}>
@@ -450,6 +598,11 @@ export function ItemEditor({
       )}
       <Switch label="Favourite" checked={favorite} onCheckedChange={setFavorite} />
 
+      {item?.origin?.syncing && (
+        <Text size="xs" tone="subtle">
+          Saving makes this copy yours: {vaultSourceName(item.origin.source)} stops updating it.
+        </Text>
+      )}
       {problem && (
         <Text tone="danger" size="sm" role="alert">
           {problem}

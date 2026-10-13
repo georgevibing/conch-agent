@@ -101,10 +101,10 @@ function open(
 ) {
   const calls = mockFetch({
     'GET /api/vault': () => list(items, options.sources),
-    ...options.routes,
     ...Object.fromEntries(
       items.map((item) => [`GET /api/vault/items/${item.id}`, () => detail(item)]),
     ),
+    ...options.routes,
   });
   const quick = globalThis.fetch;
   let answer = () => {};
@@ -254,7 +254,7 @@ describe('opening an item', () => {
     const { container, answer } = open(items, { route: '/passwords/op_v_1', slow: 'op_v_1' });
 
     expect(await screen.findByRole('heading', { name: 'amazon.com' })).toBeInTheDocument();
-    expect(screen.getByText(/From 1Password · Private/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent(/Stored in 1Password\s·\sPrivate/);
     const pane = screen.getByRole('region', { name: 'Item' });
     expect(pane.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(container.querySelectorAll('[data-vault-skeleton="field"]').length).toBeGreaterThan(0);
@@ -503,7 +503,7 @@ describe('where items live, and doing things to several', () => {
       ],
       { route: '/passwords/pw_1', sources: [source({}), onePassword()] },
     );
-    const other = await screen.findByRole('button', { name: /^1Password/ });
+    const other = await screen.findByRole('button', { name: 'Also in 1Password' });
     await userEvent.click(other);
     await waitFor(() => expect(where()).toBe('/passwords/op_v_1'));
   });
@@ -589,5 +589,151 @@ describe('1Password on a computer without its app', () => {
         calls.find((c) => c.method === 'DELETE' && c.path === '/api/vault/sources/1password/token'),
       ).toBeDefined(),
     );
+  });
+});
+
+describe('an account that signs in another way', () => {
+  const onePassword = () =>
+    source({ id: '1password', name: '1Password', writable: false, unlock: 'app' });
+  const hunt = (over: Partial<VaultItemSummary> = {}) =>
+    summary({
+      id: 'op_v_9',
+      title: 'Product Hunt',
+      domains: ['producthunt.com'],
+      source: '1password',
+      container: 'James Claw',
+      readOnly: true,
+      signIn: { via: 'provider', provider: 'google', account: 'james@claw.dev' },
+      ...over,
+    });
+  const google = summary({
+    id: 'pw_g',
+    title: 'Google',
+    subtitle: 'james@claw.dev',
+    domains: ['accounts.google.com'],
+  });
+
+  it('says “Signs in with Google”, opens the Google login, and shows no empty password', async () => {
+    const user = userEvent.setup();
+    open([hunt(), google], {
+      route: '/passwords/op_v_9',
+      sources: [source({}), onePassword()],
+      routes: {
+        'GET /api/vault/items/op_v_9': () => ({
+          ...detail(hunt()),
+          // What a 1Password Login keeps even when it signs in with Google: nothing to reveal.
+          fields: [
+            {
+              id: 'username',
+              label: 'username',
+              kind: 'text',
+              value: 'james@claw.dev',
+              filled: true,
+            },
+            { id: 'password', label: 'password', kind: 'secret', filled: false },
+          ],
+          urls: ['https://www.producthunt.com/'],
+          signInItem: 'pw_g',
+        }),
+      },
+    });
+    const row = await screen.findByRole('group', { name: 'Signs in with Google' });
+    expect(row).toHaveTextContent('james@claw.dev');
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Website' })).toBeInTheDocument());
+    expect(screen.queryByRole('group', { name: 'password' })).not.toBeInTheDocument();
+    // The account is the sign-in row's, not a second line under it.
+    expect(screen.queryByRole('group', { name: 'username' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Copy into Conch' })).toHaveLength(1);
+    expect(screen.getByRole('note')).toHaveTextContent(/Stored in 1Password\s·\sJames Claw/);
+    await user.click(screen.getByRole('button', { name: 'Open your Google login' }));
+    await waitFor(() => expect(where()).toBe('/passwords/pw_g'));
+  });
+
+  it('says so quietly when the Google login isn’t saved', async () => {
+    open([hunt()], {
+      route: '/passwords/op_v_9',
+      sources: [source({}), onePassword()],
+    });
+    expect(await screen.findByText('No Google login saved')).toBeInTheDocument();
+  });
+
+  it('says where a provider nobody named is chosen', async () => {
+    open([hunt({ signIn: { via: 'provider', provider: 'other' } })], {
+      route: '/passwords/op_v_9',
+      sources: [source({}), onePassword()],
+    });
+    const row = await screen.findByRole('group', { name: 'Signs in with another account' });
+    expect(row).toHaveTextContent('Which one is set in 1Password');
+  });
+
+  it('finds it by how it signs in, and filters to it', async () => {
+    const user = userEvent.setup();
+    open([hunt(), google], { sources: [source({}), onePassword()] });
+    await screen.findByRole('button', { name: /^Product Hunt,/ });
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search passwords' }),
+      'sign in with google',
+    );
+    await waitFor(() => expect(rowsDrawn()).toHaveLength(1));
+    expect(
+      screen.getByRole('button', { name: /^Product Hunt,.*signs in with Google/ }),
+    ).toBeInTheDocument();
+    await user.clear(screen.getByRole('textbox', { name: 'Search passwords' }));
+    await user.click(screen.getByRole('button', { name: /^All items/ }));
+    await user.click(await screen.findByRole('menuitemradio', { name: /Sign in with Google · 1/ }));
+    await waitFor(() => expect(rowsDrawn()).toHaveLength(1));
+  });
+
+  it('can be set on one of Conch’s own, in place of a password, and saves it', async () => {
+    const user = userEvent.setup();
+    const mine = summary({ id: 'pw_5', title: 'Figma', domains: ['figma.com'] });
+    const { calls } = open([mine], {
+      route: '/passwords/pw_5',
+      routes: {
+        'GET /api/vault/items/pw_5': () => ({
+          ...detail(mine),
+          fields: [
+            {
+              id: 'username',
+              label: 'Username',
+              kind: 'text',
+              role: 'username',
+              value: '',
+              filled: false,
+            },
+            { id: 'password', label: 'Password', kind: 'secret', role: 'password', filled: false },
+          ],
+        }),
+        'PUT /api/vault/items/pw_5': (body) => ({
+          ...detail(mine),
+          signIn: (body as { signIn?: unknown }).signIn,
+        }),
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await screen.findByRole('combobox', { name: 'Signs in with' });
+    await user.click(screen.getByRole('combobox', { name: 'Signs in with' }));
+    await user.click(await screen.findByRole('option', { name: 'Google' }));
+    // No password to type: its field goes, and the Google account is asked for instead.
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'Password' })).not.toBeInTheDocument(),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Google account' }), 'ada@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({
+        signIn: { via: 'provider', provider: 'google', account: 'ada@gmail.com' },
+        fields: [],
+      }),
+    );
+  });
+
+  it('has no Copy password, and ⌘/Ctrl+C says why', async () => {
+    const user = userEvent.setup();
+    open([hunt()], { route: '/passwords/op_v_9', sources: [source({}), onePassword()] });
+    await screen.findByRole('heading', { name: 'Product Hunt' });
+    await user.keyboard('{Control>}c{/Control}');
+    expect(await screen.findByText('“Product Hunt” has no password')).toBeInTheDocument();
+    expect(screen.getByText('It signs in with Google.')).toBeInTheDocument();
   });
 });

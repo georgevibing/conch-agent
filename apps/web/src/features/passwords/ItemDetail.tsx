@@ -1,5 +1,10 @@
-import type { VaultFieldView, VaultItemDetail, VaultItemSummary } from '@conch/protocol';
-import { siteOf } from '@conch/protocol';
+import type {
+  VaultFieldView,
+  VaultItemDetail,
+  VaultItemSummary,
+  VaultSignIn,
+} from '@conch/protocol';
+import { isConcealed, siteOf } from '@conch/protocol';
 import {
   AlertDialog,
   Badge,
@@ -16,15 +21,19 @@ import {
   VaultFavoriteButton,
   VaultFieldRow,
   VaultFieldsSkeleton,
+  VaultItemHeader,
   VaultItemIcon,
   VaultPasskeyRow,
+  VaultSignInRow,
   VaultSourceBadge,
+  VaultSourceStrip,
+  joinMeta,
   toast,
   vaultSourceName,
   META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronRight, History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigate } from 'react-router';
@@ -35,7 +44,7 @@ import { errorText } from '../integrations/queries';
 import { vaultApi } from './api';
 import type { CopyTarget, ItemActions } from './actions';
 import { copyPlain, copySecret } from './clipboard';
-import { ago, TYPE_NAMES } from './filter';
+import { ago, signInShape, TYPE_NAMES } from './filter';
 import styles from './Passwords.module.css';
 import { useVaultItem, vaultKeys } from './queries';
 
@@ -47,6 +56,25 @@ const ACCESS_WORDS: Record<VaultItemDetail['agentAccess'], string> = {
 
 function isLink(field: VaultFieldView) {
   return field.kind === 'url' && field.value && siteOf(field.value);
+}
+
+/**
+ * The fields worth a row. A concealed one with nothing in it is left out
+ * (dots over nothing would pass for a password that isn't there: an item
+ * that signs in with Google has none), and so is an empty line, and the
+ * username a sign-in row already shows.
+ */
+export function shownFields(fields: VaultFieldView[], signIn?: VaultSignIn): VaultFieldView[] {
+  return fields.filter((f) => {
+    if (isConcealed(f.kind)) return f.filled || f.value !== undefined;
+    if (!f.value?.trim()) return false;
+    return !(signIn?.account && f.value.trim() === signIn.account);
+  });
+}
+
+/** A provider you could save a login for ("Google"), not "another account". */
+function namedProvider(signIn: VaultSignIn): boolean {
+  return signIn.via === 'provider' && (signIn.provider !== 'other' || Boolean(signIn.name));
 }
 
 /** How many fields an item like this usually has, to hold their place while they're fetched. */
@@ -168,28 +196,50 @@ export function ItemDetail({
 
   const problems = item.problems;
   const site = item.domains[0];
-  return (
-    <div className={styles.detail} aria-busy={loading || undefined}>
-      <div className={styles.detailHead}>
-        <VaultItemIcon kind={item.type} domain={site} title={item.title} size="lg" />
-        <div className={styles.detailTitle}>
-          <Heading level={2} size="xl">
-            {item.title}
-          </Heading>
-          <Text size="sm" tone="subtle" className={styles.detailWhere}>
-            <VaultSourceBadge source={item.source} />
-            <span>
-              {item.source === 'conch'
-                ? 'In Conch'
-                : `${vaultSourceName(item.source)}${item.container ? `${META_SEP}${item.container}` : ''}`}
-              {`${META_SEP}${TYPE_NAMES[item.type].one}`}
-              {item.updatedAt ? `${META_SEP}edited ${ago(item.updatedAt)}` : ''}
-              {`${META_SEP}${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
-            </span>
-          </Text>
-        </div>
-        <div className={styles.detailActions}>
-          {external && item.source !== 'system' && actions && (
+  const signIn = item.signIn;
+  const shape = signIn && signInShape(signIn);
+  const conchTwin = twins.find((t) => t.source === 'conch');
+  const twinButtons = onOpenItem
+    ? twins.map((t) => (
+        <Button
+          key={t.id}
+          size="sm"
+          variant="ghost"
+          leadingIcon={<VaultSourceBadge source={t.source} />}
+          onClick={() => onOpenItem(t.id)}
+        >
+          Also in {t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}
+        </Button>
+      ))
+    : [];
+  // Where it lives, in one line: whose it is and the one thing to do about it.
+  const strip =
+    item.source === 'system' ? (
+      <VaultSourceStrip
+        source="system"
+        label={`Used by ${full?.usedBy[0] ?? 'Conch'}`}
+        detail="works while locked"
+        action={
+          full?.manage && (
+            <Button
+              size="sm"
+              variant="surface"
+              onClick={() => openPlace(full.manage?.place ?? '', full.manage?.focus)}
+            >
+              {full.manage.label}
+            </Button>
+          )
+        }
+      />
+    ) : external ? (
+      <VaultSourceStrip
+        source={item.source}
+        label={`Stored in ${vaultSourceName(item.source)}`}
+        detail={item.container}
+        action={
+          conchTwin || !actions ? (
+            twinButtons.length > 0 && twinButtons
+          ) : (
             <Button
               size="sm"
               variant="surface"
@@ -198,143 +248,131 @@ export function ItemDetail({
             >
               Copy into Conch
             </Button>
-          )}
-          {full && !external && !deleted && (
-            <VaultFavoriteButton
-              favorite={item.favorite}
-              onToggle={() => void vaultApi.patch(id, { favorite: !item.favorite }).then(refresh)}
-            />
-          )}
-          {full && !external && !deleted && (
-            <Button size="sm" variant="surface" leadingIcon={<Pencil />} onClick={onEdit}>
-              Edit
-            </Button>
-          )}
-          {full && deleted && (
-            <Button
-              size="sm"
-              leadingIcon={<RotateCcw />}
-              onClick={() =>
-                void vaultApi.restore([id]).then(() => {
-                  refresh();
-                  toast.success(`“${item.title}” is back`);
-                })
-              }
-            >
-              Restore
-            </Button>
-          )}
-          {full && !external && (
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <IconButton label="More">
-                  <MoreHorizontal />
-                </IconButton>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="end">
-                {!deleted &&
-                  actions &&
-                  targets.flatMap((t) =>
-                    (t.places.length > 1 ? t.places : [undefined]).map((p) => (
-                      <DropdownMenu.Item
-                        key={`${t.id}:${p?.id ?? ''}`}
-                        icon={<VaultSourceBadge source={t.id} />}
-                        onSelect={() => void actions.copyTo([item], t, p ?? t.places[0])}
-                      >
-                        Copy to {t.name}
-                        {p && t.places.length > 1 ? `${META_SEP}${p.name}` : ''}
-                      </DropdownMenu.Item>
-                    )),
-                  )}
-                {!deleted && actions && targets.length > 0 && <DropdownMenu.Separator />}
-                {full.history > 0 && (
-                  <DropdownMenu.Item
-                    icon={<History />}
-                    onSelect={() =>
-                      void guard(() => vaultApi.history(id)).then((h) => h && setHistory(h.entries))
-                    }
-                  >
-                    Earlier passwords ({full.history})
-                  </DropdownMenu.Item>
-                )}
-                <DropdownMenu.Item
-                  icon={<Trash2 />}
-                  tone="danger"
-                  onSelect={() => setConfirmDelete(true)}
-                >
-                  {deleted ? 'Delete now' : 'Delete'}
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
+    ) : full?.origin ? (
+      <VaultSourceStrip
+        source="conch"
+        label={
+          full.origin.syncing
+            ? `Kept up to date from ${vaultSourceName(full.origin.source)}`
+            : `Copied from ${vaultSourceName(full.origin.source)}`
+        }
+        detail={full.origin.syncedAt ? ago(full.origin.syncedAt) : undefined}
+        action={twinButtons.length > 0 && twinButtons}
+      />
+    ) : twinButtons.length > 0 ? (
+      <VaultSourceStrip source="conch" label="In Conch" action={twinButtons} />
+    ) : null;
 
-      {full?.source === 'system' && full.manage && (
-        <Callout
-          tone="info"
-          className={styles.detailNote}
-          action={
-            <Button
-              size="sm"
-              variant="surface"
-              onClick={() => openPlace(full.manage?.place ?? '', full.manage?.focus)}
-            >
-              {full.manage.label}
-            </Button>
-          }
-        >
-          A key Conch uses for {full.usedBy[0] ?? 'itself'}. It’s sealed with this computer’s key,
-          so it works even while Passwords is locked. Change it where it’s used.
-        </Callout>
-      )}
-      {external && item.source !== 'system' && (
-        <Callout tone="info" className={styles.detailNote}>
-          From {vaultSourceName(item.source)}
-          {item.container ? `${META_SEP}${item.container}` : ''}. Change it there; Conch shows it
-          here and can fill it in for you.
-          {twins.every((t) => t.source !== 'conch') &&
-            ' To keep it in Conch too, even when the app isn’t there, copy it into Conch.'}
-        </Callout>
-      )}
-      {twins.length > 0 && onOpenItem && (
-        <div className={styles.detailTwins}>
-          <Text as="span" size="sm" tone="subtle">
-            Also in
-          </Text>
-          {twins.map((t) => (
-            <Button
-              key={t.id}
-              size="sm"
-              variant="ghost"
-              leadingIcon={<VaultSourceBadge source={t.source} />}
-              onClick={() => onOpenItem(t.id)}
-            >
-              {t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}
-              {t.container ? `${META_SEP}${t.container}` : ''}
-            </Button>
-          ))}
-        </div>
-      )}
-      {full?.origin && (
-        <Callout tone="info" className={styles.detailNote}>
-          {full.origin.syncing
-            ? `Copied from ${vaultSourceName(full.origin.source)} and kept up to date from it${full.origin.syncedAt ? `, last ${ago(full.origin.syncedAt)}` : ''}. Changing it here makes this copy yours: syncs leave it alone after that.`
-            : `Copied from ${vaultSourceName(full.origin.source)}${full.origin.syncedAt ? ` ${ago(full.origin.syncedAt)}` : ''}. It’s Conch’s own now.`}
-        </Callout>
-      )}
+  return (
+    <div className={styles.detail} aria-busy={loading || undefined}>
+      <VaultItemHeader
+        icon={<VaultItemIcon kind={item.type} domain={site} title={item.title} size="lg" />}
+        title={item.title}
+        meta={[
+          TYPE_NAMES[item.type].one,
+          item.updatedAt ? `Edited ${ago(item.updatedAt)}` : undefined,
+          item.usedAt ? `Used ${ago(item.usedAt)}` : undefined,
+        ]}
+        actions={
+          full &&
+          (!external || deleted) && (
+            <>
+              {!external && !deleted && (
+                <VaultFavoriteButton
+                  favorite={item.favorite}
+                  onToggle={() =>
+                    void vaultApi.patch(id, { favorite: !item.favorite }).then(refresh)
+                  }
+                />
+              )}
+              {!external && !deleted && (
+                <Button size="sm" variant="surface" leadingIcon={<Pencil />} onClick={onEdit}>
+                  Edit
+                </Button>
+              )}
+              {deleted && (
+                <Button
+                  size="sm"
+                  leadingIcon={<RotateCcw />}
+                  onClick={() =>
+                    void vaultApi.restore([id]).then(() => {
+                      refresh();
+                      toast.success(`“${item.title}” is back`);
+                    })
+                  }
+                >
+                  Restore
+                </Button>
+              )}
+              {!external && (
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <IconButton label="More">
+                      <MoreHorizontal />
+                    </IconButton>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content align="end">
+                    {!deleted &&
+                      actions &&
+                      targets.flatMap((t) =>
+                        (t.places.length > 1 ? t.places : [undefined]).map((p) => (
+                          <DropdownMenu.Item
+                            key={`${t.id}:${p?.id ?? ''}`}
+                            icon={<VaultSourceBadge source={t.id} />}
+                            onSelect={() => void actions.copyTo([item], t, p ?? t.places[0])}
+                          >
+                            Copy to {t.name}
+                            {p && t.places.length > 1 ? `${META_SEP}${p.name}` : ''}
+                          </DropdownMenu.Item>
+                        )),
+                      )}
+                    {!deleted && actions && targets.length > 0 && <DropdownMenu.Separator />}
+                    {full.history > 0 && (
+                      <DropdownMenu.Item
+                        icon={<History />}
+                        onSelect={() =>
+                          void guard(() => vaultApi.history(id)).then(
+                            (h) => h && setHistory(h.entries),
+                          )
+                        }
+                      >
+                        Earlier passwords ({full.history})
+                      </DropdownMenu.Item>
+                    )}
+                    <DropdownMenu.Item
+                      icon={<Trash2 />}
+                      tone="danger"
+                      onSelect={() => setConfirmDelete(true)}
+                    >
+                      {deleted ? 'Delete now' : 'Delete'}
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
+              )}
+            </>
+          )
+        }
+      />
+
+      {strip}
       {problems.includes('compromised') && (
         <Callout
           tone="danger"
           title="This password was in a data breach"
           className={styles.detailNote}
+          action={
+            full &&
+            !external && (
+              <Button size="sm" variant="surface" onClick={onEdit}>
+                Change password
+              </Button>
+            )
+          }
         >
           Anyone could try it. Change it on {site ?? 'the site'}, then here.
-          {full && !external && (
-            <Button size="sm" variant="surface" onClick={onEdit} style={{ marginInlineStart: 8 }}>
-              Change password
-            </Button>
-          )}
         </Callout>
       )}
       {!problems.includes('compromised') && problems.includes('reused') && (
@@ -362,11 +400,43 @@ export function ItemDetail({
       )}
 
       <div className={styles.card}>
+        {signIn && shape && (
+          <VaultSignInRow
+            signIn={shape}
+            keptIn={external ? vaultSourceName(item.source) : undefined}
+            hint={
+              signIn.via === 'provider' && !namedProvider(signIn)
+                ? external
+                  ? `Which one is set in ${vaultSourceName(item.source)}`
+                  : undefined
+                : full && !full.signInItem && namedProvider(signIn)
+                  ? `No ${shape.name} login saved`
+                  : undefined
+            }
+            action={
+              full?.signInItem &&
+              onOpenItem && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  trailingIcon={<ChevronRight />}
+                  aria-label={`Open your ${shape.name} login`}
+                  onClick={() => full.signInItem && onOpenItem(full.signInItem)}
+                >
+                  Open
+                </Button>
+              )
+            }
+            onCopyAccount={
+              signIn.account ? () => copyPlain(signIn.account ?? '', 'Account') : undefined
+            }
+          />
+        )}
         {!full ? (
-          <VaultFieldsSkeleton rows={likelyFields(item)} />
+          <VaultFieldsSkeleton rows={Math.max(1, likelyFields(item) - (signIn ? 1 : 0))} />
         ) : (
           <>
-            {full.fields.map((field) =>
+            {shownFields(full.fields, signIn).map((field) =>
               field.kind === 'totp' ? (
                 <TotpCode
                   key={field.id}
@@ -409,7 +479,7 @@ export function ItemDetail({
                 onCopy={() => copyPlain(url, 'Address')}
               />
             ))}
-            {!full.fields.length && !full.urls.length && (
+            {!signIn && !shownFields(full.fields).length && !full.urls.length && (
               <div className={styles.emptyFields}>
                 <Text tone="subtle">Nothing saved in this item yet.</Text>
               </div>
@@ -455,10 +525,12 @@ export function ItemDetail({
               />
             ))}
           </Stack>
-          <Text size="xs" tone="subtle">
-            Your assistant signs in with a passkey in Conch’s browser, on {full.passkeys[0]?.rpId}{' '}
-            only, after asking you. The key itself never leaves Conch.
-          </Text>
+          {!external && (
+            <Text size="xs" tone="subtle">
+              Used in Conch’s browser on {full.passkeys[0]?.rpId} only, after asking. The key never
+              leaves Conch.
+            </Text>
+          )}
         </section>
       )}
 
@@ -492,13 +564,12 @@ export function ItemDetail({
               full.domains.length > 0 &&
               `${META_SEP}only on ${[...full.domains, ...full.allowedSites].join(', ')}`}
           </Text>
-          <Text size="xs" tone="subtle">
-            It never sees the password: Conch types it into the page.
-            {item.usedAt ? ` Last used ${ago(item.usedAt)}.` : ''}
-          </Text>
-          {full.usedBy.length > 0 && (
+          {(!signIn || full.usedBy.length > 0) && (
             <Text size="xs" tone="subtle">
-              Used by {full.usedBy.join(', ')}.
+              {joinMeta([
+                !signIn && 'It never sees the password',
+                full.usedBy.length > 0 && `Used by ${full.usedBy.join(', ')}`,
+              ])}
             </Text>
           )}
         </section>

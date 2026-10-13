@@ -1,5 +1,5 @@
 import type { VaultFieldView, VaultItemSummary, VaultSource, VaultSourceId } from '@conch/protocol';
-import { AlertDialog, Button, toast, vaultSourceName } from '@conch/nacre';
+import { AlertDialog, Button, toast, vaultSignInWords, vaultSourceName } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
@@ -7,6 +7,7 @@ import { useState, type ReactNode } from 'react';
 import { errorText } from '../integrations/queries';
 import { vaultApi } from './api';
 import { copyPlain, copySecret } from './clipboard';
+import { signInShape } from './filter';
 import { vaultItemQuery, vaultKeys } from './queries';
 
 type Guard = <T>(task: () => Promise<T>) => Promise<T | undefined>;
@@ -40,10 +41,11 @@ export function mayHaveCode(item: VaultItemSummary): boolean {
 }
 
 function passwordField(fields: VaultFieldView[]) {
-  return (
+  const field =
     fields.find((f) => f.role === 'password') ??
-    fields.find((f) => f.kind === 'secret' && f.role !== 'totp')
-  );
+    fields.find((f) => f.kind === 'secret' && f.role !== 'totp');
+  // An empty one isn't a password (an item that signs in with Google keeps none).
+  return field && (field.filled || field.value) ? field : undefined;
 }
 
 function usernameField(fields: VaultFieldView[]) {
@@ -94,6 +96,7 @@ export function useItemActions({
       try {
         const field = usernameField(await fields(item));
         if (field) return await revealCopy(item, field, 'Username');
+        if (item.signIn?.account) return await copyPlain(item.signIn.account, 'Account');
         if (item.subtitle && item.type === 'login')
           return await copyPlain(item.subtitle, 'Username');
         toast(`“${item.title}” has no username`);
@@ -104,6 +107,10 @@ export function useItemActions({
 
     async copyPassword(item: VaultItemSummary) {
       try {
+        if (item.signIn)
+          return void toast(`“${item.title}” has no password`, {
+            description: `It ${vaultSignInWords(signInShape(item.signIn)).replace(/^S/, 's')}.`,
+          });
         const field = passwordField(await fields(item));
         if (!field) return void toast(`“${item.title}” has no password`);
         await revealCopy(item, field, 'Password');

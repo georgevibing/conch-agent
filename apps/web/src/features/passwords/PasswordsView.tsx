@@ -80,6 +80,7 @@ import {
   indexItems,
   listRows,
   range,
+  signInShape,
   titleRanges,
   twins,
   TYPE_NAMES,
@@ -148,6 +149,7 @@ const PasswordRow = memo(function PasswordRow({
 }) {
   const menu = useContext(RowMenuContext);
   const ranges = useMemo(() => titleRanges(item.title, query), [item.title, query]);
+  const signIn = useMemo(() => item.signIn && signInShape(item.signIn), [item.signIn]);
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <ContextMenu.Root onOpenChange={setMenuOpen}>
@@ -157,7 +159,8 @@ const PasswordRow = memo(function PasswordRow({
           kind={item.type}
           title={item.title}
           titleRanges={ranges}
-          subtitle={item.subtitle}
+          subtitle={item.subtitle || item.signIn?.account}
+          signIn={signIn}
           domain={item.domains[0]}
           source={item.source}
           sourceMark={sourceMark}
@@ -234,6 +237,7 @@ const SavedFilter = z.union([
   z.object({ kind: z.literal('type'), type: VaultItemType }),
   z.object({ kind: z.literal('problem'), problem: VaultProblem }),
   z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(100) }),
+  z.object({ kind: z.literal('signIn'), key: z.string().min(1).max(100) }),
 ]);
 function savedView(): Partial<SavedView> {
   try {
@@ -896,7 +900,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                     trailingIcon={<ChevronDown />}
                     className={styles.filterButton}
                   >
-                    {filterName(filter)}
+                    {filterName(filter, items)}
                     {filter.kind !== 'deleted' && !isLoading && (
                       <Text as="span" size="xs" tone="subtle" className={styles.count}>
                         {shown.length}
@@ -935,6 +939,19 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                         {TYPE_NAMES[type].many} · {n}
                       </DropdownMenu.RadioItem>
                     ))}
+                    {tally.signIns.length > 0 && (
+                      <>
+                        <DropdownMenu.Separator />
+                        {tally.signIns.map((m) => (
+                          <DropdownMenu.RadioItem
+                            key={m.key}
+                            value={JSON.stringify({ kind: 'signIn', key: m.key })}
+                          >
+                            {m.name} · {m.count}
+                          </DropdownMenu.RadioItem>
+                        ))}
+                      </>
+                    )}
                     {tally.tags.length > 0 && (
                       <>
                         <DropdownMenu.Separator />
@@ -1064,7 +1081,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
                   title={
                     sought
                       ? `Nothing matches “${sought}”`
-                      : `No ${filterName(filter).toLowerCase()}`
+                      : `Nothing in ${filterName(filter, items)}`
                   }
                   description={sought ? 'Try a site name or a username.' : undefined}
                 />

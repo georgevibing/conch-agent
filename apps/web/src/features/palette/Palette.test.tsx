@@ -2281,6 +2281,20 @@ describe('Palette search', () => {
             problems: [],
             readOnly: false,
           },
+          {
+            id: 'op_hunt',
+            source: '1password',
+            type: 'login',
+            title: 'Product Hunt',
+            subtitle: '',
+            domains: ['producthunt.com'],
+            tags: [],
+            favorite: false,
+            totp: false,
+            problems: [],
+            readOnly: true,
+            signIn: { via: 'provider', provider: 'google', account: 'james@claw.dev' },
+          },
         ],
         status: {
           protection: 'keychain',
@@ -2310,6 +2324,12 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'netflix');
     expect(await screen.findByRole('option', { name: /Netflix/ })).toBeInTheDocument();
+    // One that signs in with Google, by its account and by Google.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'google');
+    expect(await screen.findByRole('option', { name: /Product Hunt/ })).toHaveTextContent(
+      'james@claw.dev',
+    );
     // A password manager is an app to find by name; one this computer has no way to run is not.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'bitwarden');

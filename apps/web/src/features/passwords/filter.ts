@@ -1,7 +1,9 @@
-import { vaultSourceName } from '@conch/nacre';
+import { vaultSourceName, type VaultSignInShape } from '@conch/nacre';
 import {
   sameAccountKey,
+  signInName,
   type VaultItemSummary,
+  type VaultSignIn,
   type VaultItemType,
   type VaultProblem,
   type VaultSourceId,
@@ -16,6 +18,8 @@ export type VaultFilter =
   | { kind: 'problem'; problem: VaultProblem }
   | { kind: 'source'; source: VaultSourceId }
   | { kind: 'tag'; tag: string }
+  /** How it signs in when it isn't a password: a provider (`google`) or `passkey`, `sso`, `link`. */
+  | { kind: 'signIn'; key: string }
   | { kind: 'deleted' };
 
 export type VaultSort = 'name' | 'recent' | 'used';
@@ -48,11 +52,46 @@ export const PROBLEM_NAMES: Record<VaultProblem, string> = {
   no2fa: 'Two-factor available',
 };
 
+/** What Nacre needs to draw a sign-in method: the contract's, with its name in words. */
+export function signInShape(signIn: VaultSignIn): VaultSignInShape {
+  return { ...signIn, name: signInName(signIn) };
+}
+
+/** Which sign-in filter an item falls under: its provider, or how else it signs in. */
+export function signInKey(signIn: VaultSignIn): string {
+  if (signIn.via !== 'provider') return signIn.via;
+  return signIn.provider && signIn.provider !== 'other'
+    ? signIn.provider
+    : `other:${(signIn.name ?? '').toLowerCase()}`;
+}
+
+/** The filter's name: "Sign in with Google", "Passkey only". */
+export function signInFilterName(signIn: VaultSignIn): string {
+  if (signIn.via === 'passkey') return 'Passkey only';
+  if (signIn.via === 'link') return 'Emailed link or code';
+  if (signIn.via === 'sso')
+    return signIn.name ? `${signIn.name} (single sign-on)` : 'Single sign-on';
+  return `Sign in with ${signInName(signIn)}`;
+}
+
+/** What someone would type to find an item by how it signs in: "google", "sign in with google", "sso". */
+function signInWords(signIn: VaultSignIn | undefined): string {
+  if (!signIn) return '';
+  const words: Record<VaultSignIn['via'], string> = {
+    provider: 'sign in with signs in with',
+    passkey: 'passkey only',
+    sso: 'sso single sign-on',
+    link: 'emailed link magic link code',
+  };
+  return [words[signIn.via], signInName(signIn), signIn.account].filter(Boolean).join(' ');
+}
+
 /** Words a person types, matched against everything they'd remember an item by. */
 function haystack(item: VaultItemSummary): string {
   return [
     item.title,
     item.subtitle,
+    signInWords(item.signIn),
     ...item.domains,
     ...item.tags,
     item.container,
@@ -106,6 +145,8 @@ export function inFilter(item: VaultItemSummary, filter: VaultFilter): boolean {
       return item.source === filter.source;
     case 'tag':
       return item.tags.includes(filter.tag);
+    case 'signIn':
+      return item.signIn !== undefined && signInKey(item.signIn) === filter.key;
   }
 }
 
@@ -247,9 +288,18 @@ export function counts(items: VaultItemSummary[], from: VaultFrom = 'all') {
   const live = mine.filter((i) => !i.deletedAt);
   const types = new Map<VaultItemType, number>();
   const tags = new Map<string, number>();
+  const signIns = new Map<string, { name: string; count: number }>();
   for (const i of live) {
     types.set(i.type, (types.get(i.type) ?? 0) + 1);
     for (const t of i.tags) tags.set(t, (tags.get(t) ?? 0) + 1);
+    if (i.signIn) {
+      const key = signInKey(i.signIn);
+      const was = signIns.get(key);
+      signIns.set(key, {
+        name: was?.name ?? signInFilterName(i.signIn),
+        count: (was?.count ?? 0) + 1,
+      });
+    }
   }
   return {
     sources,
@@ -260,10 +310,14 @@ export function counts(items: VaultItemSummary[], from: VaultFrom = 'all') {
     deleted: items.filter((i) => i.deletedAt).length,
     types,
     tags: [...tags.entries()].sort((a, b) => collator.compare(a[0], b[0])),
+    /** Each way of signing in that isn't a password, most used first. */
+    signIns: [...signIns.entries()]
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => b.count - a.count || collator.compare(a.name, b.name)),
   };
 }
 
-export function filterName(filter: VaultFilter): string {
+export function filterName(filter: VaultFilter, items: VaultItemSummary[] = []): string {
   switch (filter.kind) {
     case 'all':
       return 'All items';
@@ -279,6 +333,10 @@ export function filterName(filter: VaultFilter): string {
       return vaultSourceName(filter.source);
     case 'tag':
       return filter.tag;
+    case 'signIn': {
+      const one = items.find((i) => i.signIn && signInKey(i.signIn) === filter.key)?.signIn;
+      return one ? signInFilterName(one) : 'Signs in another way';
+    }
     case 'deleted':
       return 'Recently deleted';
   }

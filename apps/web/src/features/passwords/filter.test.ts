@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ago,
   counts,
+  filterName,
   indexItems,
+  inFilter,
   listRows,
   matches,
   titleRanges,
@@ -226,5 +228,38 @@ describe('ago', () => {
     expect(ago(now - 8 * 3_600_000, now)).toBe('today');
     expect(ago(now - 26 * 3_600_000, now)).toBe('yesterday');
     expect(ago(undefined, now)).toBe('never');
+  });
+});
+
+describe('how an account signs in', () => {
+  const hunt = item({
+    id: 'op_1',
+    title: 'Product Hunt',
+    signIn: { via: 'provider', provider: 'google', account: 'james@claw.dev' },
+  });
+  const shop = item({ id: 'pw_2', title: 'Shop', signIn: { via: 'passkey', usable: true } });
+  const work = item({ id: 'pw_3', title: 'Intranet', signIn: { via: 'sso', name: 'Okta' } });
+  const plain = item({ id: 'pw_4', title: 'Bank' });
+
+  it('is found by the provider, the phrase and the account', () => {
+    for (const q of ['google', 'sign in with google', 'james@claw'])
+      expect(matches(hunt, q)).toBe(true);
+    expect(matches(shop, 'passkey')).toBe(true);
+    expect(matches(work, 'sso')).toBe(true);
+    expect(matches(work, 'okta')).toBe(true);
+    expect(matches(plain, 'google')).toBe(false);
+  });
+
+  it('is a filter of its own, named the way the list says it', () => {
+    const tally = counts([hunt, shop, work, plain]);
+    expect(tally.signIns.map((s) => [s.name, s.count])).toEqual([
+      ['Okta (single sign-on)', 1],
+      ['Passkey only', 1],
+      ['Sign in with Google', 1],
+    ]);
+    const google: VaultFilter = { kind: 'signIn', key: 'google' };
+    expect(inFilter(hunt, google)).toBe(true);
+    expect(inFilter(plain, google)).toBe(false);
+    expect(filterName(google, [hunt])).toBe('Sign in with Google');
   });
 });

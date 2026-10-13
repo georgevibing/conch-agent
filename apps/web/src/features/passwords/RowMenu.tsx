@@ -92,7 +92,7 @@ export function RowMenu({
           {!item.deletedAt && (
             <>
               <ContextMenu.Separator />
-              {(item.type === 'login' || item.subtitle) && (
+              {(item.type === 'login' || item.subtitle || item.signIn?.account) && (
                 <ContextMenu.Item
                   icon={<UserRound />}
                   shortcut="mod+shift+c"
@@ -101,7 +101,7 @@ export function RowMenu({
                   Copy username
                 </ContextMenu.Item>
               )}
-              {item.type === 'login' && (
+              {item.type === 'login' && !item.signIn && (
                 <ContextMenu.Item
                   icon={<KeyRound />}
                   shortcut="mod+c"

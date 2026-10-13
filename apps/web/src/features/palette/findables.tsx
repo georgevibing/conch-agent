@@ -4,6 +4,7 @@ import {
   type FuzzyMatch,
   canUseApps,
   generatePassword,
+  signInName,
   type TaskList,
   type TextRange,
   chatAgentId,
@@ -835,13 +836,25 @@ export function useFindables(query: string, conversationId: string | undefined):
     (vault?.items ?? []).filter((i) => !i.deletedAt),
     q,
     (i) => i.title,
-    (i) => [i.subtitle, ...i.domains, ...i.tags, i.type, 'password login'].join(' '),
+    (i) =>
+      [
+        i.subtitle,
+        ...i.domains,
+        ...i.tags,
+        i.type,
+        'password login',
+        // "google" finds what signs in with Google.
+        i.signIn && `sign in with ${signInName(i.signIn)}`,
+        i.signIn?.account,
+      ]
+        .filter(Boolean)
+        .join(' '),
     5,
   ).map(({ item, match }): Findable => ({
     id: `password:${item.id}`,
     label: item.title,
     ranges: match.ranges,
-    description: item.subtitle || item.domains[0],
+    description: item.subtitle || item.signIn?.account || item.domains[0],
     icon: <VaultKindGlyph kind={item.type} />,
     run: () => void navigate(`/passwords/${item.id}`),
   }));
