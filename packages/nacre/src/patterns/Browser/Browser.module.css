@@ -1290,6 +1290,42 @@
     color: var(--nc-text-muted);
   }
 
+  /* "Product Hunt signs in with Google" (ADR 0133): words that wrap, its button beside them. */
+  .fillLabel[data-sign-in] {
+    flex: 1 1 18rem;
+    align-items: flex-start;
+  }
+
+  .fillLabel[data-sign-in] > svg {
+    margin-block-start: 0.2em;
+  }
+
+  .fillMain {
+    display: flex;
+    flex: 1 1 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .fillMain + button {
+    align-self: flex-start;
+  }
+
+  .fillItems[data-sign-in] {
+    flex: 0 1 auto;
+  }
+
+  .fillMark {
+    flex: none;
+  }
+
+  .fillHintLine {
+    display: block;
+    color: var(--nc-text-muted);
+  }
+
   .approvalDone {
     display: inline-flex;
     align-items: center;

@@ -53,6 +53,11 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
   accounts?: BrowserFillAccount[];
   /** For `fill`: it's saved for another part of this site ("accounts.google.com"). */
   savedFor?: string;
+  /**
+   * For `fill` on a provider's page (ADR 0133): the site this sign-in is for,
+   * "Product Hunt" when it signs in with Google. One answer covers all of it.
+   */
+  signingInTo?: string;
   onDecide?: (decision: BrowserApprovalDecision) => void;
   /** One of `accounts` was pressed. */
   onChoose?: (id: string) => void;
@@ -64,8 +69,11 @@ function heading(
   action: string,
   name: string,
   fill?: BrowserFillKind,
+  signingInTo?: string,
 ) {
   if (kind === 'site') return `Let ${name} use ${site}?`;
+  // "Sign in to “Product Hunt” with Google as ada@gmail.com?": the site's own page is said below.
+  if (kind === 'fill' && signingInTo) return `${action}?`;
   if (kind === 'fill' && fill === 'new-password') return `${action}?`;
   if (kind === 'fill') return `${action} on ${site}?`;
   if (kind === 'download')
@@ -141,6 +149,7 @@ export function BrowserApproval({
   fill,
   accounts,
   savedFor,
+  signingInTo,
   onDecide,
   onChoose,
   className,
@@ -216,11 +225,17 @@ export function BrowserApproval({
           <span className={styles.approvalIcon} aria-hidden>
             <Icon />
           </span>
-          <p className={styles.approvalTitle}>{heading(kind, site, action, name, fill)}</p>
+          <p className={styles.approvalTitle}>
+            {heading(kind, site, action, name, fill, signingInTo)}
+          </p>
         </div>
         {kind === 'site' && <p className={styles.approvalAction}>First: {action}</p>}
         <p className={styles.approvalDetail}>
-          {kind === 'fill' ? fillDetail(fill, name) : detail(kind, site, name, ownChrome)}
+          {kind === 'fill' && signingInTo
+            ? `Conch types it in on ${site} from your Passwords, for the whole sign-in to ${signingInTo}. ${name} never sees it.`
+            : kind === 'fill'
+              ? fillDetail(fill, name)
+              : detail(kind, site, name, ownChrome)}
           {kind === 'fill' && savedFor && ` It’s saved for ${savedFor}.`}
         </p>
         {guard && <GuardNote>{guard}</GuardNote>}

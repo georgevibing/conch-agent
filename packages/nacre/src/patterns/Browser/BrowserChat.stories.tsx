@@ -3,6 +3,7 @@ import { fn } from 'storybook/test';
 
 import { Stack } from '../../components/Stack';
 import { BrowserApproval } from './BrowserApproval';
+import { BrowserFill } from './BrowserFill';
 import { BrowserHandoff } from './BrowserHandoff';
 import { BrowserTrail } from './BrowserTrail';
 import { checkoutPage, hotelsPage, placeOrderBox, trailSteps } from './fixtures';
@@ -188,6 +189,86 @@ export const ChooseAnAccount: Story = {
       onDecide={fn()}
       onChoose={fn()}
     />
+  ),
+};
+
+/** On Google’s page, for Product Hunt (ADR 0133): one question for the whole sign-in. */
+export const SignInThroughGoogle: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="fill"
+      fill="sign-in"
+      site="accounts.google.com"
+      action="Sign in to “Product Hunt” with Google as ada@gmail.com"
+      signingInTo="Product Hunt"
+      onDecide={fn()}
+    />
+  ),
+};
+
+/**
+ * The live view's bar for sites that sign in another way (ADR 0133), as it
+ * wraps on a phone: with Google, with an account Passwords doesn’t name, a
+ * passkey kept in 1Password, and Google’s own page for a site.
+ */
+export const SignInBars: Story = {
+  render: () => (
+    <Stack gap={3}>
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'producthunt.com',
+          items: [{ id: 'op_ph', title: 'Product Hunt', account: 'ada@gmail.com' }],
+          signIn: {
+            via: 'provider',
+            provider: 'google',
+            name: 'Google',
+            account: 'ada@gmail.com',
+            button: 'Continue with Google',
+            with: { id: 'pw_g', title: 'Google', account: 'ada@gmail.com' },
+          },
+        }}
+        onSignIn={fn()}
+        onDismiss={fn()}
+      />
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'producthunt.com',
+          items: [{ id: 'op_ph', title: 'Product Hunt', account: 'ada@gmail.com' }],
+          signIn: {
+            via: 'provider',
+            name: 'another account',
+            account: 'ada@gmail.com',
+            buttons: ['Continue with Google', 'Continue with Apple'],
+          },
+        }}
+        onSignIn={fn()}
+        onDismiss={fn()}
+      />
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'shop.example',
+          items: [{ id: 'op_s', title: 'Shop' }],
+          signIn: { via: 'passkey', name: 'Shop', usable: false, keptIn: '1Password' },
+        }}
+        onDismiss={fn()}
+      />
+      <BrowserFill
+        offer={{
+          field: 'username',
+          site: 'accounts.google.com',
+          for: 'Product Hunt',
+          items: [
+            { id: 'pw_g', title: 'Google', account: 'ada@gmail.com' },
+            { id: 'pw_w', title: 'Google (work)', account: 'ada@work.example' },
+          ],
+        }}
+        onFill={fn()}
+        onDismiss={fn()}
+      />
+    </Stack>
   ),
 };
 

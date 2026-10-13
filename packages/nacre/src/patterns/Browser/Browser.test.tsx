@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -720,6 +720,28 @@ describe('BrowserApproval', () => {
     await expectAccessible(container);
   });
 
+  it('names the site a provider’s sign-in is for (ADR 0133)', async () => {
+    const { container } = renderNacre(
+      <BrowserApproval
+        kind="fill"
+        fill="sign-in"
+        site="accounts.google.com"
+        action="Sign in to “Product Hunt” with Google as ada@gmail.com"
+        signingInTo="Product Hunt"
+        onDecide={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Sign in to “Product Hunt” with Google as ada@gmail.com?'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /types it in on accounts\.google\.com from your Passwords, for the whole sign-in to Product Hunt/,
+      ),
+    ).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('asks every time before making a new password or filling a card', () => {
     const { rerender } = renderNacre(
       <BrowserApproval
@@ -788,6 +810,132 @@ describe('BrowserFill', () => {
     expect(screen.getByText('This isn’t paypal.com.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Should not show/ })).not.toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it('says how a site signs in with Google, and presses its button (ADR 0133)', async () => {
+    const user = userEvent.setup();
+    const onSignIn = vi.fn();
+    const { container } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'producthunt.com',
+          items: [{ id: 'ph', title: 'Product Hunt', account: 'ada@gmail.com' }],
+          signIn: {
+            via: 'provider',
+            provider: 'google',
+            name: 'Google',
+            account: 'ada@gmail.com',
+            button: 'Continue with Google',
+            with: { id: 'g1', title: 'Google', account: 'ada@gmail.com' },
+          },
+        }}
+        onSignIn={onSignIn}
+        onFill={vi.fn()}
+      />,
+    );
+    const bar = screen.getByRole('group', { name: 'Passwords' });
+    expect(bar).toHaveTextContent('Product Hunt signs in with Google · ada@gmail.com');
+    expect(bar).toHaveTextContent('Conch fills Google’s sign-in from “Google”.');
+    // Nothing to fill on Product Hunt itself.
+    expect(screen.queryByRole('button', { name: /Fill from/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    expect(onSignIn).toHaveBeenCalledWith('ph', undefined);
+    await expectAccessible(container);
+  });
+
+  it('asks which, when the item doesn’t say whose account', async () => {
+    const user = userEvent.setup();
+    const onSignIn = vi.fn();
+    const { container } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'producthunt.com',
+          items: [{ id: 'ph', title: 'Product Hunt' }],
+          signIn: {
+            via: 'provider',
+            name: 'another account',
+            buttons: ['Continue with Google', 'Continue with Apple'],
+          },
+        }}
+        onSignIn={onSignIn}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Passwords' })).toHaveTextContent(
+      'Product Hunt signs in with another account Which one do you use?',
+    );
+    const ways = within(screen.getByRole('list', { name: 'Ways to sign in on this page' }));
+    await user.click(ways.getByRole('button', { name: 'Continue with Apple' }));
+    expect(onSignIn).toHaveBeenCalledWith('ph', 'Continue with Apple');
+    await expectAccessible(container);
+  });
+
+  it('a passkey kept in 1Password: said plainly, with nothing to press', async () => {
+    const { container } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'shop.example',
+          items: [{ id: 's', title: 'Shop' }],
+          signIn: { via: 'passkey', name: 'Shop', usable: false, keptIn: '1Password' },
+        }}
+        onSignIn={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Passwords' })).toHaveTextContent(
+      'Shop’s passkey is in 1Password, which this browser can’t use.',
+    );
+    expect(screen.queryByRole('button', { name: /passkey/i })).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('a passkey Conch holds, a company sign-in, and Google’s page for a site', async () => {
+    const user = userEvent.setup();
+    const onSignIn = vi.fn();
+    const onFill = vi.fn();
+    const { rerender } = renderNacre(
+      <BrowserFill
+        offer={{
+          field: 'sign-in',
+          site: 'shop.example',
+          items: [{ id: 's', title: 'Shop' }],
+          signIn: { via: 'passkey', name: 'Shop', usable: true },
+        }}
+        onSignIn={onSignIn}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Use your passkey' }));
+    expect(onSignIn).toHaveBeenLastCalledWith('s', undefined);
+    rerender(
+      <BrowserFill
+        offer={{
+          field: 'username',
+          site: 'linear.app',
+          items: [{ id: 'l', title: 'Linear', account: 'ada@acme.example' }],
+          signIn: { via: 'sso', name: 'Acme SSO', account: 'ada@acme.example' },
+        }}
+        onFill={onFill}
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Passwords' })).toHaveTextContent(
+      'Linear signs in through Acme SSO',
+    );
+    // The work email still fills from the item.
+    await user.click(screen.getByRole('button', { name: 'Fill from “Linear”, ada@acme.example' }));
+    expect(onFill).toHaveBeenCalledWith('l');
+    rerender(
+      <BrowserFill
+        offer={{
+          field: 'username',
+          site: 'accounts.google.com',
+          for: 'Product Hunt',
+          items: [{ id: 'g1', title: 'Google', account: 'ada@gmail.com' }],
+        }}
+        onFill={onFill}
+      />,
+    );
+    expect(screen.getByText(/For Product Hunt/)).toBeInTheDocument();
   });
 
   it('shows only while you drive', () => {

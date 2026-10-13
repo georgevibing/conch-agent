@@ -251,6 +251,135 @@ export const LooksLikeYourSite: Story = {
   },
 };
 
+const productHunt: BrowserWindowTab = {
+  url: 'https://www.producthunt.com/login',
+  title: 'Product Hunt',
+  control: 'user',
+  canGoBack: true,
+};
+
+/**
+ * Product Hunt is saved as “Sign in with Google” (ADR 0133): no password to
+ * fill, so the bar says how it signs in and presses the page’s own button.
+ * Google’s pages then fill from the Google login, one question for it all.
+ */
+export const SignInWithGoogle: Story = {
+  args: {
+    frame: signInPage,
+    tab: productHunt,
+    fill: {
+      offer: {
+        field: 'sign-in',
+        site: 'producthunt.com',
+        items: [
+          { id: 'op_ph', title: 'Product Hunt', account: 'ada@gmail.com', source: '1password' },
+        ],
+        signIn: {
+          via: 'provider',
+          provider: 'google',
+          name: 'Google',
+          account: 'ada@gmail.com',
+          button: 'Continue with Google',
+          with: { id: 'pw_g', title: 'Google', account: 'ada@gmail.com' },
+        },
+      },
+      onSignIn: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
+/** Saved as “another account” without saying whose: the page’s ways in, to choose from. */
+export const SignInWithAnotherAccount: Story = {
+  args: {
+    frame: signInPage,
+    tab: productHunt,
+    fill: {
+      offer: {
+        field: 'sign-in',
+        site: 'producthunt.com',
+        items: [
+          { id: 'op_ph', title: 'Product Hunt', account: 'ada@gmail.com', source: '1password' },
+        ],
+        signIn: {
+          via: 'provider',
+          name: 'another account',
+          account: 'ada@gmail.com',
+          buttons: ['Continue with Google', 'Continue with Apple', 'Continue with X'],
+        },
+      },
+      onSignIn: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
+/** On Google’s own page, in Product Hunt’s sign-in: its Google account comes first. */
+export const OnTheProvidersPage: Story = {
+  args: {
+    frame: signInPage,
+    tab: {
+      ...signingIn,
+      url: 'https://accounts.google.com/v3/signin/identifier',
+      title: 'Sign in – Google Accounts',
+    },
+    fill: {
+      offer: {
+        field: 'username',
+        site: 'accounts.google.com',
+        for: 'Product Hunt',
+        items: [
+          { id: 'pw_g', title: 'Google', account: 'ada@gmail.com' },
+          { id: 'pw_w', title: 'Google (work)', account: 'ada@work.example' },
+        ],
+      },
+      onFill: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
+/** A passkey kept in 1Password: said plainly, nothing pretends to work. */
+export const PasskeyKeptElsewhere: Story = {
+  args: {
+    frame: signInPage,
+    tab: { ...signingIn, url: 'https://shop.example/signin', title: 'Sign in' },
+    fill: {
+      offer: {
+        field: 'sign-in',
+        site: 'shop.example',
+        items: [{ id: 'op_s', title: 'Shop', source: '1password' }],
+        signIn: { via: 'passkey', name: 'Shop', usable: false, keptIn: '1Password' },
+      },
+      onSignIn: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
+/** A company’s single sign-on: the page’s own button, pressed for you. */
+export const CompanySignIn: Story = {
+  args: {
+    frame: signInPage,
+    tab: { ...signingIn, url: 'https://linear.app/login', title: 'Linear' },
+    fill: {
+      offer: {
+        field: 'sign-in',
+        site: 'linear.app',
+        items: [{ id: 'pw_l', title: 'Linear', account: 'ada@acme.example' }],
+        signIn: {
+          via: 'sso',
+          name: 'Acme SSO',
+          account: 'ada@acme.example',
+          button: 'Continue with SAML SSO',
+        },
+      },
+      onSignIn: fn(),
+      onDismiss: fn(),
+    },
+  },
+};
+
 /** Passwords is locked: unlock it, then fill. */
 export const PasswordsLocked: Story = {
   args: {
