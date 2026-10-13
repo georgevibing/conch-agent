@@ -207,3 +207,125 @@ Tests:
   isn't documented and its desktop export has no passkeys). Proton Pass passkeys (COSE). Passkeys
   through the FIDO Credential Exchange Protocol. Asking 1Password which provider a "Sign in with"
   item uses when `op` doesn't say (when 1Password's CLI does, `#linked` reads it).
+
+## In the browser
+
+`browser/signin.ts`, with `browser/fill.ts` and `browser/tools.ts`. What ADR 0130 does for a
+password, done for every other way in, for the agent and for you in the live view.
+
+### The page's own buttons
+
+- **By their names.** "Continue with Google", "Sign in with Apple", "Log in with Microsoft",
+  "Mit Google anmelden", a button named only "Google" (an icon), "Sign in with SSO", "Sign in
+  with a passkey", "Email me a sign-in link" (`buttonKind`). Never a link that only names the
+  company (a footer's "Facebook"), "X" alone (a close button), or a product ("Google Pay", "Get it
+  on Google Play"). The agent's copy comes from the page as it reads it, so each has its ref.
+- **Only the page's own.** A button counts when it's in the page's own origin, or, for a
+  provider's button, in a secure frame on that provider's own sign-in site (Google draws its
+  button in a frame from accounts.google.com). A sign-in button another site put in the page is
+  left out (`ownButtons`, `pageButtons`).
+- Finding one fills nothing and grants nothing. It only says where to press, and pressing still
+  asks what any click asks (the site question of ADR 0014).
+
+### The agent
+
+- **Beside the page.** When a page has sign-in buttons and the item saved for the site signs in
+  another way, the page's text ends with Conch's word on it, outside the page's own frame and once
+  per page: _(Passwords: “Product Hunt” signs in with Google (ada@gmail.com), not a password on this
+  site. Click its “Continue with Google” [ref=e12] button. On Google’s page, call browser_type with
+  an empty text on the email box, then on the password box: Conch fills them from “Google”
+  (ada@gmail.com) after the user agrees…)_
+- **On a box.** `browser_type` on the site's email or password box says the same instead of
+  hunting for a password, and asks nothing. For a company's SSO or an emailed link, the email box
+  is still filled (it's where those start), and the words say what comes next.
+- **The chain.** Clicking the provider's button (or being told to) remembers, on the chat's tab
+  for ten minutes (ADR 0130's sign-in time), that Product Hunt's sign-in with Google is under way
+  (`startChain`). On Google's pages, in this tab or a popup:
+  - Of the logins **already saved for that page**, the one for Product Hunt's account is chosen
+    (`signInItemFor`), without a list to pick from.
+  - The one question says what it's for: _Sign in to “Product Hunt” with Google as
+    ada@gmail.com?_ (`BrowserPermission.for`). Its OK covers the email page, the password page
+    and the code, as any sign-in.
+  - If Google's chooser already shows the account, the agent is told to click it: nothing is
+    filled.
+  - With nothing saved for Google, the person signs in to Google (a handoff that says so).
+- **A chain never widens anything.** It only chooses among what `matching` already returned for
+  the page, by each item's own sites, and `fillPolicy` checks every value again. It ends on the
+  site it started from, and doesn't hold on a provider page that says it will send the sign-in
+  to another site (`redirectHosts`: `redirect_uri`, `continue` and the like, followed through the
+  provider's own pages), so the question can't be dressed up as one site's while it's
+  another's. A look-alike (`accounts.google.com.evil.io`) is no provider's
+  (`providerOfHost`), matches nothing saved, and gets ADR 0130's look-alike warning.
+- **"Another account", unnamed.** 1Password's "Sign in with" often doesn't say whose. Conch
+  never guesses: the agent hears the page's provider buttons and is told to ask the person which
+  (with the `ask` tool), or, when the page has only one, to say which it pressed. The button
+  pressed then names the provider for the chain and for `signInItemFor`. The live view offers
+  the page's buttons to choose from.
+- **A passkey.** One Conch holds: `browser_passkey` with `sign_in`, then the page's passkey
+  button. One kept in 1Password or the system (`usable: false`): Conch doesn't pretend. The box
+  is handed to the person with the reason (_Your passkey for Shop is kept in 1Password, which
+  Conch’s browser can’t use. Sign in yourself, then hand the browser back._), and the agent hears
+  why, and that it can offer to make a passkey Conch keeps (`browser_passkey` with `save`) once
+  they're in. `browser_passkey` says the same when asked.
+- **A link or a code by email.** The email is filled, then the agent is told the site sends a
+  link or a code: if a mail app is connected it reads the newest message from the site and types
+  the code or opens the link (never repeating it), otherwise it asks the person. A code box with
+  nothing saved hands over with the words _Type the code Substack sent to ada@example.com_.
+- `passwords_find` says it beside each item (_signs in with Google as ada@gmail.com, no
+  password_), and the browser's prompt says it for every engine.
+
+### You, in the live view
+
+- On a sign-in page whose item signs in another way, the bar says so: **Product Hunt** signs in
+  with Google · ada@gmail.com, _Conch fills Google’s sign-in from “Google”_, and the page's own
+  **Continue with Google**. Pressing it sends `{ type: 'fill', item, signIn: true }`; the gateway
+  finds the item, its way in and the page's own button again, presses it, and starts the chain.
+  An unnamed account shows the page's provider buttons (`button` names the one chosen). A
+  passkey Conch holds is put in for that site and its button pressed; one kept elsewhere is said
+  plainly, with nothing to press. A company's SSO and an emailed link keep the email to fill.
+- On Google's page in that sign-in, its saved accounts come with Product Hunt's first, _For
+  Product Hunt_ (`BrowserFillOffer.for`).
+- The press is the OK, as ADR 0130's; everything it shows is names, never a value.
+
+### Security, beyond the vault's
+
+- **A hostile page** can name a button "Continue with Google" that goes elsewhere. Pressing it
+  starts a chain at most; on the page it leads to, only items saved for that page fill, so a fake
+  Google gets nothing and is called a look-alike. A sign-in button in another site's frame is
+  never offered or pressed.
+- **A prompt-injected agent** can click any button or name any item, as before. A chain adds no
+  item, no site and no value: it orders what the page already matches and words the one
+  question, and a provider page bound for another site drops it. The passkey handoff and the
+  guidance are words to the agent, never a value.
+- **A crafted URL** on the provider's page can only take the chain's words away
+  (`redirectHosts`), never add one.
+
+Sources, beyond the vault's: OAuth 2.0 Security Best Current Practice (RFC 9700, redirect URI
+handling) and OpenID Connect Core 1.0 (the `redirect_uri` an authorization request carries);
+Google Identity Services' button (rendered in an accounts.google.com frame); the WebAuthn Level 3
+rpId rule, kept by `browser/passkeys.ts`; Greshake et al. 2023 for the agent's and the page's
+words never widening where anything is filled.
+
+Tests:
+
+- `browser/signin.test.ts`: buttons by name in several languages, and the near misses that must
+  not count (a footer link, "X", Google Pay); reading them with their refs, frames included;
+  choosing sign-in over sign-up; the provider's own sites and look-alikes; the chain's redirect
+  check through Google's nested `continue`; the words for each way in; an account in a chooser;
+  an unnamed account offered, never guessed, then named by the button pressed.
+- `browser/signin-browser.test.ts` (a real Chromium, a fake Passwords): Product Hunt's note and
+  its button, a box on it asking nothing, the click starting the chain, Google's page filling the
+  account Product Hunt uses out of two with one question that names Product Hunt, Product Hunt's
+  own password box never getting Google's password, Google's chooser, an unnamed account, a
+  passkey in 1Password handed over (and `browser_passkey` saying so), an emailed link, and the
+  live view's offer, its press (only while you drive, only an item saved for the page), and
+  Google's offer with Product Hunt's account first. No result carries a value.
+- `vault/tools.test.ts`: `passwords_find`'s words.
+- Nacre `Browser.test.tsx`: the bar for Google, an unnamed account (choosing a button), a
+  passkey Conch holds and one it can't use, a company sign-in, Google's page for a site, and the
+  card that names the site (axe on each); web `Browser.test.tsx`: the card from the log.
+
+Not done yet: pressing "Continue with Google" for the agent without it clicking (the agent
+presses, Conch says which); a mail app reading the code by itself (the agent does, when one is
+connected); passkeys through a phone (hybrid transport) for a passkey kept on the person's own
+device.

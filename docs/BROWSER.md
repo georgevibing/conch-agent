@@ -102,8 +102,21 @@ saved in **Passwords** (or a password manager you connected), Conch fills it:
   tells you.
 - Conch fills only over https, and never into a sign-in box from another site inside a page.
 
+Some accounts have no password: they sign in with Google (or Apple, Microsoft…), your
+company's sign-in, a passkey, or a link sent by email. Conch knows from Passwords:
+
+- **Continue with Google.** Conch presses the site's own button, and on Google's page fills your
+  Google login for that account. One question covers it all: _Sign in to “Product Hunt” with
+  Google as ada@gmail.com?_ If Google already shows the account, it's just clicked.
+- Saved as "another account" without saying which? Conch asks you which one, never guesses.
+- A passkey kept in 1Password or on your device can't be used by Conch's browser. Conch says so
+  and hands you the page, and can make a passkey of its own once you're in.
+- A link or a code by email: Conch fills your email, then reads the code from your mail app if
+  it's connected, or asks you.
+
 Driving yourself? Click a sign-in box and a bar offers what's saved for that site, or **Use a
-strong password** on a sign-up form.
+strong password** on a sign-up form. On a page whose account signs in with Google, the bar says
+so and offers **Continue with Google**.
 
 ## "Your turn"
 
@@ -220,7 +233,8 @@ only an administrator can install; Conch then shows the one command to run.
   records are [ADR 0014](./adr/0014-browser.md),
   [ADR 0080](./adr/0080-the-browser-does-what-you-do.md) (tabs, uploads, clicking by
   position, your own Chrome and the cloud),
-  [ADR 0130](./adr/0130-passwords-in-the-browser.md) (signing in from Passwords) and
+  [ADR 0130](./adr/0130-passwords-in-the-browser.md) (signing in from Passwords),
+  [ADR 0133](./adr/0133-how-an-account-signs-in.md) (Sign in with Google, passkeys, SSO, links) and
   [ADR 0131](./adr/0131-everyday-browsing.md) (the page's own questions, forms in one step,
   long pages, bot checks, find on page, Stop in the panel).
 - Testing your own app on `localhost`? Turn on **Open local apps** (under Advanced). Conch's own port
