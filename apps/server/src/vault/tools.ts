@@ -1,8 +1,10 @@
 import {
+  signInName,
   siteOf,
   VaultFieldKind,
   VaultFieldRole,
   VaultItemType,
+  VaultSignIn,
   type VaultRequest,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -10,6 +12,20 @@ import { z } from 'zod';
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import { VaultError, type VaultService } from './service';
+
+/** "signs in with Google as ada@gmail.com": how an item signs in, for the agent (ADR 0133). Never a value. */
+export function signInWords(raw: unknown): string | undefined {
+  const parsed = VaultSignIn.safeParse(raw);
+  if (!parsed.success) return undefined;
+  const signIn = parsed.data;
+  const as = signIn.account ? ` as ${signIn.account}` : '';
+  if (signIn.via === 'provider') return `signs in with ${signInName(signIn)}${as}, no password`;
+  if (signIn.via === 'sso') return `signs in through ${signInName(signIn)}${as}, no password`;
+  if (signIn.via === 'link') return `signs in with a link or code sent by email${as}, no password`;
+  return signIn.usable === false
+    ? 'signs in with a passkey kept in another app, which Conch’s browser can’t use'
+    : 'signs in with a passkey Conch holds';
+}
 
 /**
  * What the agent may do with Passwords (ADR 0025 § The agent):
@@ -36,7 +52,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
     name: 'passwords_find',
     effect: 'read',
     description:
-      'List the user’s saved passwords, cards, notes and keys by name and website (never their values). Use it to pick the item to fill with browser_type, or to read with passwords_read.',
+      'List the user’s saved passwords, cards, notes and keys by name and website (never their values), and how a login signs in when it isn’t a password (with Google, a company’s single sign-on, a passkey, an emailed link). Use it to pick the item to fill with browser_type, or to read with passwords_read.',
     searchHint: 'password login sign in credentials saved account card note key secret',
     input: {
       query: z
@@ -53,12 +69,17 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
         return query
           ? `Nothing saved matches “${query}”. If you need it, ask the user with passwords_request.`
           : 'The user has no saved passwords yet.';
-      return items
-        .map(
-          (i) =>
-            `- ${i.title} (${i.type}${i.sites.length ? `, ${i.sites.join(', ')}` : ''}${i.source === 'conch' ? '' : `, from ${i.source}`}) id=${i.id}`,
-        )
-        .join('\n');
+      let other = false;
+      const lines = items.map((i) => {
+        const how = 'signIn' in i ? signInWords(i.signIn) : undefined;
+        if (how) other = true;
+        return `- ${i.title} (${i.type}${i.sites.length ? `, ${i.sites.join(', ')}` : ''}${i.source === 'conch' ? '' : `, from ${i.source}`}${how ? `; ${how}` : ''}) id=${i.id}`;
+      });
+      if (other)
+        lines.push(
+          'A login that signs in with another account has no password of its own: on its site, press the site’s own button for it (“Continue with Google”), then use browser_type with an empty text on the provider’s page, and Conch fills the provider’s own saved login. A passkey Conch can’t use, or a sign-in with nothing saved, is for the user: call browser_handoff.',
+        );
+      return lines.join('\n');
     },
   };
 
