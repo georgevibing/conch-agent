@@ -302,6 +302,90 @@ export const VaultPasskeyView = z.object({
 });
 export type VaultPasskeyView = z.infer<typeof VaultPasskeyView>;
 
+// ── How an account signs in ─────────────────────────────────────────────────
+
+/**
+ * The accounts people sign in to *through* another one ("Continue with
+ * Google"). Password managers keep these as a login with no password: 1Password's
+ * "Sign in with", Bitwarden and Keeper notes, Conch's own items.
+ */
+export const VaultSignInProvider = z.enum([
+  'google',
+  'apple',
+  'microsoft',
+  'facebook',
+  'github',
+  'gitlab',
+  'x',
+  'linkedin',
+  'amazon',
+  'discord',
+  'slack',
+  'okta',
+  /** Anything else: `name` says who. */
+  'other',
+]);
+export type VaultSignInProvider = z.infer<typeof VaultSignInProvider>;
+
+/** Each provider's name, and the sites its sign-in happens on (for its own item and the browser). */
+export const SIGN_IN_PROVIDERS: Record<
+  Exclude<VaultSignInProvider, 'other'>,
+  { name: string; domains: string[] }
+> = {
+  google: { name: 'Google', domains: ['accounts.google.com', 'google.com'] },
+  apple: { name: 'Apple', domains: ['appleid.apple.com', 'account.apple.com', 'apple.com'] },
+  microsoft: {
+    name: 'Microsoft',
+    domains: ['login.microsoftonline.com', 'login.live.com', 'microsoft.com', 'live.com'],
+  },
+  facebook: { name: 'Facebook', domains: ['facebook.com'] },
+  github: { name: 'GitHub', domains: ['github.com'] },
+  gitlab: { name: 'GitLab', domains: ['gitlab.com'] },
+  x: { name: 'X', domains: ['x.com', 'twitter.com'] },
+  linkedin: { name: 'LinkedIn', domains: ['linkedin.com'] },
+  amazon: { name: 'Amazon', domains: ['amazon.com'] },
+  discord: { name: 'Discord', domains: ['discord.com'] },
+  slack: { name: 'Slack', domains: ['slack.com'] },
+  okta: { name: 'Okta', domains: ['okta.com'] },
+};
+
+/**
+ * How an item signs in when it isn't (only) a password. Absent means a
+ * password, as before.
+ *
+ * - `provider`: through another account ("Sign in with Google"); `provider`
+ *   says whose, `account` which one.
+ * - `passkey`: a passkey and nothing else to type. `usable` says whether
+ *   Conch holds the key itself (its own vault, or a manager that hands keys
+ *   over); a passkey kept only in 1Password or the system can't be used by
+ *   Conch's browser.
+ * - `sso`: a company's single sign-on (`name`: "Okta", "Acme SSO").
+ * - `link`: a code or link sent by email or text, no password at all.
+ */
+export const VaultSignIn = z.object({
+  via: z.enum(['provider', 'passkey', 'sso', 'link']),
+  provider: VaultSignInProvider.optional(),
+  /** Who, when `provider` is `other` or for `sso`. */
+  name: z.string().trim().max(80).optional(),
+  /** The account at the provider, usually an email. Not a secret. */
+  account: z.string().trim().max(200).optional(),
+  /** For `passkey`: Conch can sign in with it itself. */
+  usable: z.boolean().optional(),
+});
+export type VaultSignIn = z.infer<typeof VaultSignIn>;
+
+/** What to call a sign-in method: "Google", "Acme SSO", "a passkey". */
+export function signInName(signIn: VaultSignIn): string {
+  if (signIn.via === 'provider') {
+    if (signIn.provider && signIn.provider !== 'other')
+      return SIGN_IN_PROVIDERS[signIn.provider].name;
+    return signIn.name || 'another account';
+  }
+  if (signIn.via === 'sso') return signIn.name || 'single sign-on';
+  if (signIn.via === 'passkey') return 'a passkey';
+  return 'an emailed link or code';
+}
+
 // ── Health ──────────────────────────────────────────────────────────────────
 
 export const VaultProblem = z.enum([
@@ -339,6 +423,8 @@ export const VaultItemSummary = z.object({
   totp: z.boolean().default(false),
   /** Has a passkey. */
   passkey: z.boolean().default(false),
+  /** Signs in some other way than a password ("Sign in with Google", a passkey only). */
+  signIn: VaultSignIn.optional(),
   problems: z.array(VaultProblem).default([]),
   /** Where it sits in its own app ("Personal" vault, a folder), for external items. */
   container: z.string().optional(),
@@ -367,6 +453,11 @@ export const VaultItemDetail = VaultItemSummary.extend({
   /** The agent may read a value itself (a note, a PIN), with your OK each time or without asking. */
   agentRead: z.enum(['ask', 'allow']).default('ask'),
   passkeys: z.array(VaultPasskeyView).default([]),
+  /**
+   * For `signIn.via === 'provider'`: the saved item for that provider's
+   * account (the Google login for `signIn.account`), when there is one.
+   */
+  signInItem: z.string().min(1).max(300).optional(),
   /** A copy of an item in another password manager, kept up to date from it. */
   origin: z
     .object({
@@ -408,6 +499,7 @@ export const SaveVaultItemBody = z.object({
   agentAccess: z.enum(['ask', 'allow', 'never']).default('ask'),
   agentRead: z.enum(['ask', 'allow']).default('ask'),
   allowedSites: z.array(z.string().trim().min(1).max(253)).max(20).default([]),
+  signIn: VaultSignIn.optional(),
 });
 export type SaveVaultItemBody = z.infer<typeof SaveVaultItemBody>;
 
