@@ -14,13 +14,14 @@ import type { ToolContext } from '../conversations/manager';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
-import { agentFill, type AgentFillDeps } from './fill';
+import { agentFill, chainFromClick, pageSignInNote, type AgentFillDeps } from './fill';
 import { focused, targetAt } from './point';
 import { asksHighStakes, isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk';
 import { BrowserProblemError } from './runtime';
 import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
 import { armCreate, armSignIn } from './passkeys';
+import { keptIn, passkeyHandoffReason, signInSteps } from './signin';
 import { markSecrets, readChanges, readPage } from './snapshot';
 import { MAX_TABS, quoteDialog, type DialogAnswer, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
@@ -58,6 +59,9 @@ const CLOSED =
 const WATCHED_PAUSE_MS = 420;
 /** More than a search, a size or a name: typed after reading, it could carry what was read. */
 const LONG_TYPING = 300;
+
+/** What each chat's tab was already told about signing in, so a page doesn't say it twice. */
+const signInSaid = new WeakMap<Tab, Set<string>>();
 
 /** How long a handoff waits for you before the agent is told to move on. */
 const HANDOFF_WAIT_MS = 30 * 60_000;
@@ -574,15 +578,32 @@ export function browserTools(
       .join(' · ');
     return `Tabs: ${tabs}\n${text}`;
   };
+  /**
+   * Conch's word on signing in, beside the page (ADR 0133): "Product Hunt signs in
+   * with Google: click “Continue with Google” [ref=e12]…". Once per page and thing said.
+   */
+  const signInNote = async (tab: Tab, text: string): Promise<string> => {
+    const note = await pageSignInNote(service.passwords, tab, text).catch(() => undefined);
+    if (!note) return '';
+    const said = signInSaid.get(tab) ?? new Set<string>();
+    signInSaid.set(tab, said);
+    const key = `${tab.page.url().split('#')[0]}\n${note}`;
+    if (said.has(key)) return '';
+    said.add(key);
+    if (said.size > 50) said.delete(said.values().next().value as string);
+    return `\n(${note})`;
+  };
   /** After an action: only what changed on the page (the whole page when it's a new one). */
   const pageText = async (tab: Tab) => {
     await tab.dialogsSettled();
-    return withTabs(tab, (await readChanges(tab.page)).text);
+    const text = (await readChanges(tab.page)).text;
+    return withTabs(tab, `${text}${await signInNote(tab, text)}`);
   };
   /** The whole page: on opening one, or when the agent asks for it (a part at a time when it's long). */
   const wholePage = async (tab: Tab, options: { find?: string; part?: number } = {}) => {
     await tab.dialogsSettled();
-    return withTabs(tab, (await readPage(tab.page, options)).text);
+    const text = (await readPage(tab.page, options)).text;
+    return withTabs(tab, `${text}${await signInNote(tab, text)}`);
   };
 
   const secretOf = async (locator: Locator): Promise<SecretKind | undefined> => {
@@ -729,6 +750,12 @@ export function browserTools(
             await settle(tab.page);
             return { text: await pageText(tab) };
           }
+          // A provider's button for the site's own sign-in ("Continue with Google", ADR 0133):
+          // its pages then fill the account this site signs in with.
+          const chained =
+            how === 'click'
+              ? await chainFromClick(service.passwords, tab, own).catch(() => undefined)
+              : undefined;
           const press = () =>
             target.click({
               timeout: 6_000,
@@ -746,7 +773,7 @@ export function browserTools(
             downloaded = await catchDownload(tab, press);
           }
           await settle(tab.page);
-          return { text: `${downloaded}${await pageText(tab)}` };
+          return { text: `${downloaded}${chained ? `${chained}\n` : ''}${await pageText(tab)}` };
         },
       );
     },
@@ -761,7 +788,7 @@ export function browserTools(
   }> = {
     name: 'browser_type',
     description:
-      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. Signing in, signing up or paying: give an empty text on the username, password, new password, one-time code or card field, and Conch fills it from the user’s Passwords (after asking them, and asking which account if there are several), makes and saves a strong password on a sign-up or change form, or hands the field to the user. You never see or type those values yourself.',
+      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. Signing in, signing up or paying: give an empty text on the username, password, new password, one-time code or card field, and Conch fills it from the user’s Passwords (after asking them, and asking which account if there are several), makes and saves a strong password on a sign-up or change form, or hands the field to the user. When the account signs in another way (Continue with Google, a company’s single sign-on, a passkey, an emailed link), Conch says which of the page’s buttons to press instead; on the provider’s own page, the same empty text fills the provider’s saved login. You never see or type those values yourself.',
     input: {
       ref: Ref,
       element: Element,
@@ -796,21 +823,25 @@ export function browserTools(
           if (filled?.kind === 'filled')
             return { label: filled.label, text: `${filled.text}\n${await pageText(tab)}` };
           if (filled?.kind === 'said') return { label: filled.label, text: filled.text };
-          if (secret) {
-            // Secrets never pass through the model: the user types this one.
+          // Secrets never pass through the model: the user types this one. A sign-in only the
+          // person can do (a passkey kept in another app, ADR 0133) is theirs too, whatever the box.
+          const theirs = filled?.kind === 'handoff' ? filled : undefined;
+          if (secret || theirs?.reason) {
             const outcome = await handoff(
               tab,
-              (filled?.kind === 'handoff' && filled.reason) ||
-                `Please type ${secretLabel(secret)} into “${element}”, then hand the browser back.`,
+              theirs?.reason ||
+                `Please type ${secret ? secretLabel(secret) : 'it'} into “${element}”, then hand the browser back.`,
             );
             return {
               label:
                 outcome !== 'cancelled'
-                  ? `You filled in “${element}”`
+                  ? theirs?.note
+                    ? 'You signed in'
+                    : `You filled in “${element}”`
                   : `Waited for you at “${element}”`,
               text:
                 outcome !== 'cancelled'
-                  ? `That field takes ${secretLabel(secret)}, so the user typed it themselves (you never see it). Carry on from here.\n${await pageText(tab)}`
+                  ? `${theirs?.note ?? `That field takes ${secret ? secretLabel(secret) : 'something only the user can give'}, so the user typed it themselves (you never see it).`} Carry on from here.\n${await pageText(tab)}`
                   : 'The user didn’t fill in the field. Ask them how they’d like to continue.',
             };
           }
@@ -1298,7 +1329,7 @@ export function browserTools(
   }> = {
     name: 'browser_passkey',
     description:
-      'Use a passkey on the page that’s open. `sign_in`: Conch holds the user’s saved passkey for this site (after asking them); then click the site’s “Sign in with a passkey” button and Conch answers it. `save`: when the site offers to create a passkey, call this first, then click its button; the new passkey is kept in the user’s Passwords. You never see the key.',
+      'Use a passkey on the page that’s open. `sign_in`: Conch holds the user’s saved passkey for this site (after asking them); then click the site’s “Sign in with a passkey” button and Conch answers it. `save`: when the site offers to create a passkey, call this first, then click its button; the new passkey is kept in the user’s Passwords. A passkey kept only in another app (1Password, the system) can’t be used here: Conch says so, and the user signs in. You never see the key.',
     input: {
       action: z
         .enum(['sign_in', 'save'])
@@ -1394,11 +1425,31 @@ export function browserTools(
           }
           const saved = await passwords.passkeysFor(host).catch(() => []);
           const chosen = item ? saved.filter((p) => p.itemId === item) : saved;
-          if (!chosen.length)
+          if (!chosen.length) {
+            // Saved as passkey-only, but kept where Conch can't use it (ADR 0133): say so plainly.
+            const kept = (await passwords.matching(host).catch(() => [])).find(
+              (i) =>
+                i.signIn?.via === 'passkey' &&
+                i.signIn.usable === false &&
+                (!item || i.id === item),
+            );
+            if (kept) {
+              const only = {
+                id: kept.id,
+                title: kept.title,
+                ...(kept.source && { source: kept.source }),
+                signIn: { via: 'passkey' as const, usable: false },
+              };
+              return {
+                label: `${kept.title}’s passkey is in ${keptIn(kept.source)}`,
+                text: `${signInSteps(only)} A reason for browser_handoff: “${passkeyHandoffReason(only)}”`,
+              };
+            }
             return {
               label: `No passkey saved for ${host}`,
               text: `The user has no passkey saved for ${host}. Sign in with the password instead (browser_type fills it), or ask the user.`,
             };
+          }
           if (chosen.length > 1)
             return {
               label: `Found ${chosen.length} passkeys for ${host}`,

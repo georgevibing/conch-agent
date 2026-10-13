@@ -1,5 +1,8 @@
 import {
   generatePassword,
+  SIGN_IN_PROVIDERS,
+  type VaultSignInProvider,
+  type BrowserSignInOffer,
   type BrowserFillAccount,
   type BrowserFillKind,
   type BrowserFillOffer,
@@ -14,6 +17,33 @@ import type { FillPolicy, FillWant } from '../vault/service';
 import { registrable } from '../vault/match';
 import { SECRET_ATTR, type SecretKind } from './risk';
 import type { PasswordFiller } from './service';
+import { armSignIn } from './passkeys';
+import {
+  accountEntry,
+  buttonFor,
+  buttonKind,
+  chainOn,
+  keptIn,
+  ownButtons,
+  pageButtons,
+  passkeyHandedNote,
+  passkeyHandoffReason,
+  pressButton,
+  providerChoices,
+  providerLogin,
+  providerOfHost,
+  signInButtons,
+  signInItemOf,
+  signInSteps,
+  startChain,
+  siteKey as chainSite,
+  viaName,
+  unnamed,
+  type Chain,
+  type PageButton,
+  type SignInButton,
+  type SignInItem,
+} from './signin';
 import { markSecrets } from './snapshot';
 import type { Tab } from './tab';
 
@@ -461,12 +491,24 @@ async function typedAccount(at: Around): Promise<string> {
   return user ? (await valueOf(at.frame, user.mark)).trim().toLowerCase() : '';
 }
 
+type Matched = Awaited<ReturnType<PasswordFiller['matching']>>[number];
+
+/** A saved item a box could take, by name: never a value. */
+type Candidate = BrowserFillAccount & {
+  match?: string;
+  totp?: boolean;
+  /** How it signs in, when it isn't a password (ADR 0133). */
+  signIn?: Matched['signIn'];
+  /** The item as the vault listed it, for `signInItemFor`. */
+  item?: Matched;
+};
+
 /** Saved items for a box, closest first: logins for this site, or cards. Names only. */
 async function candidates(
   passwords: PasswordFiller,
   host: string,
   role: FieldRole,
-): Promise<(BrowserFillAccount & { match?: string; totp?: boolean })[]> {
+): Promise<Candidate[]> {
   if (CARD_ROLES.has(role))
     return (await passwords.cards().catch(() => [])).map((c) => ({
       id: c.id,
@@ -483,7 +525,166 @@ async function candidates(
       ...(i.source && i.source !== 'conch' && { source: i.source }),
       ...(i.match && { match: i.match }),
       totp: i.totp,
+      ...(i.signIn && { signIn: i.signIn }),
+      item: i,
     }));
+}
+
+/** An item that signs in some other way, as the words about it need it. */
+function signInItem(c: Candidate & { signIn: NonNullable<Candidate['signIn']> }): SignInItem {
+  return {
+    id: c.id,
+    title: c.title,
+    ...(c.account && { subtitle: c.account }),
+    ...(c.source && { source: c.source }),
+    signIn: c.signIn,
+  };
+}
+
+/**
+ * The provider's sign-in under way on this page (ADR 0133), if the page is
+ * part of it: on the provider's own site, or where its saved login belongs.
+ * Only ever chooses among what's already saved for this page.
+ */
+function chainHere(tab: Tab, host: string, found: readonly Candidate[]): Chain | undefined {
+  const chain = chainOn(tab, tab.page.url());
+  if (!chain) return undefined;
+  if (chain.provider && providerOfHost(host) === chain.provider) return chain;
+  if (chain.with && found.some((f) => f.id === chain.with?.id)) return chain;
+  return undefined;
+}
+
+/** In a chain: the saved login for the provider's account, if it's one of this page's. */
+function chainedItem(chain: Chain | undefined, found: readonly Candidate[]): string | undefined {
+  if (!chain) return undefined;
+  if (chain.with && found.some((f) => f.id === chain.with?.id)) return chain.with.id;
+  const account = chain.account?.trim().toLowerCase();
+  return account ? found.find((f) => f.account?.trim().toLowerCase() === account)?.id : undefined;
+}
+
+/**
+ * The page's own button for how an item signs in, with its ref for the agent,
+ * or for an item that doesn't say whose account, the provider buttons to ask about.
+ */
+async function agentButtons(
+  tab: Tab,
+  item: SignInItem,
+  snapshot?: string,
+): Promise<{ button?: SignInButton; choices?: SignInButton[] }> {
+  const text =
+    snapshot ??
+    (await tab.page
+      .locator('body')
+      .ariaSnapshot({ mode: 'ai', timeout: 4_000 })
+      .catch(() => ''));
+  const own = await ownButtons(tab.page, signInButtons(text)).catch(() => []);
+  if (unnamed(item.signIn)) return { choices: providerChoices(own) };
+  const button = buttonFor(own, item.signIn);
+  return button ? { button } : {};
+}
+
+/** Remember that a provider's sign-in starts here for an item, so its pages fill the right account. */
+async function beginChain(
+  passwords: PasswordFiller,
+  tab: Tab,
+  host: string,
+  item: SignInItem,
+  listed: Matched | undefined,
+  /** For an item that doesn't say whose account: the provider whose button was pressed. */
+  resolved?: Exclude<VaultSignInProvider, 'other'>,
+): Promise<BrowserFillAccount | undefined> {
+  if (item.signIn.via !== 'provider') return undefined;
+  const known =
+    item.signIn.provider && item.signIn.provider !== 'other' ? item.signIn.provider : undefined;
+  const provider = known ?? (unnamed(item.signIn) ? resolved : undefined);
+  // Saved as "another account" and no provider pressed yet: nothing to follow.
+  if (unnamed(item.signIn) && !provider) return undefined;
+  const login = listed
+    ? await providerLogin(passwords, listed, provider).catch(() => undefined)
+    : undefined;
+  startChain(tab, {
+    fromItem: item.id,
+    fromTitle: item.title,
+    fromSite: chainSite(host),
+    ...(provider && { provider }),
+    name: provider ? SIGN_IN_PROVIDERS[provider].name : viaName(item.signIn),
+    ...(item.signIn.account && { account: item.signIn.account }),
+    ...(login && { with: login }),
+  });
+  return login;
+}
+
+/**
+ * What the agent should hear about signing in on the page it just read (ADR
+ * 0133), in Conch's words beside the page: how the item saved for this site
+ * signs in and which of the page's own buttons to press, or, on a provider's
+ * page during a site's sign-in, the account to pick in its chooser. Nothing
+ * when the page has no sign-in buttons, or nothing saved signs in another way.
+ */
+export async function pageSignInNote(
+  passwords: PasswordFiller | undefined,
+  tab: Tab,
+  snapshot: string,
+): Promise<string | undefined> {
+  if (!passwords) return undefined;
+  const where = fillHost(tab.page.url(), undefined);
+  if ('blocked' in where) return undefined;
+  const chain = chainOn(tab, tab.page.url());
+  if (chain) {
+    const account = chain.with?.account ?? chain.account;
+    const entry = accountEntry(snapshot, account);
+    if (!entry) return undefined;
+    if (!chain.provider || providerOfHost(where.host) !== chain.provider) {
+      // A provider Conch doesn't know: only where its saved login belongs.
+      const found = await candidates(passwords, where.host, 'password').catch(() => []);
+      if (!chain.with || !found.some((f) => f.id === chain.with?.id)) return undefined;
+    }
+    return `${chain.name} shows ${account}, the account “${chain.fromTitle}” signs in with: click “${entry.label}” [ref=${entry.ref}] to carry on, no password needed. If it asks for the password instead, browser_type with an empty text on the box fills it.`;
+  }
+  const buttons = signInButtons(snapshot);
+  if (!buttons.length) return undefined;
+  if (await passwords.isLocked?.()) return undefined;
+  const found = await candidates(passwords, where.host, 'password').catch(() => []);
+  const other = signInItemOf(found);
+  if (!other) return undefined;
+  const item = signInItem(other);
+  const { button, choices } = await agentButtons(tab, item, snapshot);
+  const login =
+    item.signIn.via === 'provider' && other.item
+      ? await providerLogin(passwords, other.item).catch(() => undefined)
+      : undefined;
+  return `Passwords: ${signInSteps(item, {
+    ...(button && { button }),
+    ...(choices && { choices }),
+    ...(login && { with: login }),
+  })}`;
+}
+
+/** Start a provider's sign-in for an item, if one of its buttons was just clicked (`browser_click`). */
+export async function chainFromClick(
+  passwords: PasswordFiller | undefined,
+  tab: Tab,
+  words: string,
+): Promise<string | undefined> {
+  if (!passwords) return undefined;
+  const kind = buttonKind(words);
+  if (kind?.kind !== 'provider') return undefined;
+  const where = fillHost(tab.page.url(), undefined);
+  if ('blocked' in where) return undefined;
+  const found = await candidates(passwords, where.host, 'password').catch(() => []);
+  const other = signInItemOf(found);
+  if (other?.signIn.via !== 'provider') return undefined;
+  const item = signInItem(other);
+  // Saved without saying whose account: the button pressed says it.
+  const open = unnamed(item.signIn);
+  if (open && !kind.provider) return undefined;
+  const wanted = other.signIn.provider;
+  if (!open && (kind.provider ? wanted !== kind.provider : wanted !== 'other')) return undefined;
+  const login = await beginChain(passwords, tab, where.host, item, other.item, kind.provider);
+  const name = kind.provider ? SIGN_IN_PROVIDERS[kind.provider].name : viaName(item.signIn);
+  return login
+    ? `(That’s “${item.title}”’s sign-in with ${name}. On ${name}’s page, browser_type with an empty text on the email and password boxes fills them from “${login.title}”${login.account ? ` (${login.account})` : ''} after the user agrees; if ${name} already shows ${login.account ?? 'the account'}, just click it.)`
+    : `(That’s “${item.title}”’s sign-in with ${name}. On ${name}’s page, browser_type with an empty text fills its boxes if the user keeps that login in Passwords; otherwise call browser_handoff.)`;
 }
 
 /** The ones to offer first: the closest match, all of them if it's a tie. */
@@ -512,8 +713,8 @@ export type AgentFill =
   | { kind: 'filled'; label: string; text: string }
   /** Nothing went in, and the agent should hear why. */
   | { kind: 'said'; label: string; text: string }
-  /** Nothing Conch can fill: the person types it (with a reason for them). */
-  | { kind: 'handoff'; reason?: string }
+  /** Nothing Conch can fill: the person types it (with a reason for them, and what the agent hears after). */
+  | { kind: 'handoff'; reason?: string; note?: string }
   /** Not a box Passwords fills: type as usual. */
   | { kind: 'type' };
 
@@ -563,6 +764,8 @@ export async function agentFill(
       };
     check();
     const found = await candidates(passwords, at.host, role);
+    // On a provider's page, in the sign-in a site started (ADR 0133): that site's account.
+    const chain = CARD_ROLES.has(role) ? undefined : chainHere(tab, at.host, found);
     if (!found.length && !options.item) {
       if (!CARD_ROLES.has(role)) {
         const fake = await passwords.lookalike?.(at.host).catch(() => undefined);
@@ -574,6 +777,24 @@ export async function agentFill(
           };
       }
       if (role === 'new-password') return await newPassword(deps, tab, target, at, undefined);
+      if (chain)
+        return {
+          kind: 'handoff',
+          reason: `Sign in to ${chain.name} for ${chain.fromTitle} yourself, then hand the browser back.`,
+          note: `Nothing is saved in Passwords for ${chain.name}’s sign-in, so the user signed in to ${chain.name} themselves (you never see it).`,
+        };
+      if (role === 'totp') {
+        // A site that sends its code by email: say where the code is.
+        const linked = signInItemOf(await candidates(passwords, at.host, 'password'));
+        if (linked?.signIn.via === 'link') {
+          const to = linked.signIn.account ?? linked.account;
+          return {
+            kind: 'handoff',
+            reason: `Type the code ${linked.title} sent ${to ? `to ${to}` : 'you by email'} into “${options.element}”, then hand the browser back.`,
+            note: `“${linked.title}” sends its code by email, so the user typed it themselves (you never see it).`,
+          };
+        }
+      }
       if (role === 'username')
         return {
           kind: 'said',
@@ -586,6 +807,18 @@ export async function agentFill(
           reason: `Type the code from your authenticator app or text message into “${options.element}”, then hand the browser back.`,
         }),
       };
+    }
+    // The item saved here signs in some other way (ADR 0133): say how, and go that way.
+    let after = '';
+    if (!chain && (role === 'username' || role === 'password')) {
+      const pool = options.item ? found.filter((f) => f.id === options.item) : found;
+      const other = signInItemOf(pool);
+      if (other) {
+        const item = signInItem(other);
+        const way = await otherWay(deps, tab, at, item, other.item, role);
+        if (way) return way;
+        after = signInSteps(item, { filledUsername: true });
+      }
     }
     if (role === 'new-password') {
       const grant = signInFor(tab, at.host);
@@ -601,7 +834,8 @@ export async function agentFill(
     let chosen =
       options.item ??
       (grant && found.some((f) => f.id === grant.itemId) ? grant.itemId : undefined) ??
-      (typed ? found.find((f) => f.account?.toLowerCase() === typed)?.id : undefined);
+      (typed ? found.find((f) => f.account?.toLowerCase() === typed)?.id : undefined) ??
+      chainedItem(chain, found);
     const choices = chosen ? [] : closest(found);
     if (!chosen && choices.length === 1) chosen = choices[0]?.id;
     const first = chosen ?? choices[0]?.id;
@@ -652,6 +886,7 @@ export async function agentFill(
         host: at.host,
         role,
         policy,
+        ...(chain && { chain }),
         ...(accounts && { accounts }),
         choose: (id) => {
           if (!accounts?.some((a) => a.id === id)) throw new Error('Not one of the choices.');
@@ -696,14 +931,54 @@ export async function agentFill(
     if (!CARD_ROLES.has(role)) rememberSignIn(tab, chosen, at.host);
     const what = done.includes(role) ? filledWords(role) : filledWords(done[0] ?? role);
     const also = done.filter((r) => r !== role).map(filledWords);
+    const through = chain
+      ? ` This is “${chain.fromTitle}”’s sign-in with ${chain.name}: carry on through ${chain.name}’s pages, and it sends you back to ${chain.fromTitle}.`
+      : '';
     return {
       kind: 'filled',
       label: `Filled ${what} from Passwords`,
-      text: `Conch filled ${what}${also.length ? ` (and ${also.join(', ')})` : ''} from the user’s saved item “${policy.title}” (you never see it). Carry on.`,
+      text: `Conch filled ${what}${also.length ? ` (and ${also.join(', ')})` : ''} from the user’s saved item “${policy.title}” (you never see it). Carry on.${through}${after ? ` ${after}` : ''}`,
     };
   } finally {
     await unmark(at.frame);
   }
+}
+
+/**
+ * A box on a site whose item signs in some other way (ADR 0133): instead of a
+ * password, what to press and what happens next. A passkey Conch can't use
+ * goes to the person, said plainly. Undefined: fill the box as usual (the
+ * email for a company sign-in or an emailed link).
+ */
+async function otherWay(
+  deps: AgentFillDeps,
+  tab: Tab,
+  at: Around,
+  item: SignInItem,
+  listed: Matched | undefined,
+  role: FieldRole,
+): Promise<AgentFill | undefined> {
+  const { signIn } = item;
+  if ((signIn.via === 'sso' || signIn.via === 'link') && role === 'username') return undefined;
+  if (signIn.via === 'passkey' && signIn.usable === false)
+    return { kind: 'handoff', reason: passkeyHandoffReason(item), note: passkeyHandedNote(item) };
+  const { button, choices } = await agentButtons(tab, item);
+  const login = await beginChain(deps.passwords, tab, at.host, item, listed);
+  const label =
+    signIn.via === 'passkey'
+      ? `${item.title} signs in with a passkey`
+      : signIn.via === 'link'
+        ? `${item.title} signs in with an emailed link`
+        : `${item.title} signs in with ${viaName(signIn)}`;
+  return {
+    kind: 'said',
+    label,
+    text: signInSteps(item, {
+      ...(button && { button }),
+      ...(choices && { choices }),
+      ...(login && { with: login }),
+    }),
+  };
 }
 
 /** A strong password for a sign-up or a change: asked every time, saved, then typed in. */
@@ -779,13 +1054,20 @@ async function askFill(
     policy?: FillPolicy;
     accounts?: BrowserFillAccount[];
     choose?: (id: string) => void;
+    /** A provider's sign-in for one of the person's sites (ADR 0133): the card says which. */
+    chain?: Chain;
   },
 ): Promise<PermissionDecision> {
-  const { role, policy, accounts } = request;
+  const { role, policy, accounts, chain } = request;
   const kind = kindOf(role);
   const title = policy?.title ?? '';
+  const through =
+    chain && (kind === 'sign-in' || kind === 'code')
+      ? `Sign in to “${chain.fromTitle}” with ${chain.name}${!accounts && policy?.account ? ` as ${policy.account}` : ''}`
+      : undefined;
   const action =
-    kind === 'new-password'
+    through ??
+    (kind === 'new-password'
       ? policy
         ? `Make a new password for “${title}”`
         : `Make a strong password for ${request.host}`
@@ -799,7 +1081,7 @@ async function askFill(
             ? 'Sign in'
             : policy?.account
               ? `Sign in as ${policy.account}`
-              : `Sign in with “${title}”`;
+              : `Sign in with “${title}”`);
   const picture = await deps.picture(target);
   const untrusted = deps.untrusted?.();
   return deps.ask({
@@ -817,6 +1099,7 @@ async function askFill(
       ...(picture.shot && { shot: picture.shot }),
       ...(accounts && { accounts }),
       ...(policy?.match === 'related' && { savedFor: policy.site }),
+      ...(through && chain && { for: chain.fromTitle }),
     },
     ...(untrusted && { taint: `${untrusted} So I’m checking before I fill it.` }),
     ...(accounts && request.choose && { choose: request.choose }),
@@ -858,6 +1141,67 @@ async function focusedBox(page: Page): Promise<Locator | undefined> {
   return undefined;
 }
 
+/** What the live view says about an item that signs in some other way (names only). */
+async function signInOfferOf(
+  passwords: PasswordFiller,
+  item: SignInItem,
+  listed: Matched | undefined,
+  buttons: readonly PageButton[],
+): Promise<BrowserSignInOffer> {
+  const open = unnamed(item.signIn);
+  const button = open ? undefined : buttonFor(buttons, item.signIn)?.label;
+  const choices = open ? providerChoices(buttons).map((b) => b.label.slice(0, 120)) : [];
+  const { signIn } = item;
+  const login =
+    signIn.via === 'provider' && listed
+      ? await providerLogin(passwords, listed).catch(() => undefined)
+      : undefined;
+  const account = signIn.account ?? item.subtitle;
+  const known = signIn.provider && signIn.provider !== 'other' ? signIn.provider : undefined;
+  return {
+    via: signIn.via,
+    ...(signIn.via === 'provider' && known && { provider: known }),
+    name: (signIn.via === 'passkey' || signIn.via === 'link' ? item.title : viaName(signIn)).slice(
+      0,
+      80,
+    ),
+    ...(account && { account: account.slice(0, 200) }),
+    ...(button && { button: button.slice(0, 120) }),
+    ...(choices.length && { buttons: choices }),
+    ...(login && { with: login }),
+    ...(signIn.via === 'passkey' && { usable: signIn.usable !== false }),
+    ...(signIn.via === 'passkey' &&
+      signIn.usable === false && { keptIn: keptIn(item.source).slice(0, 40) }),
+  };
+}
+
+/**
+ * Not in a box: if the page's item signs in some other way (ADR 0133) and
+ * the page shows a way to sign in, what the live view offers: "Product Hunt
+ * signs in with Google", with the page's own button to press.
+ */
+async function signInOffer(
+  passwords: PasswordFiller,
+  tab: Tab,
+): Promise<BrowserFillOffer | undefined> {
+  const where = fillHost(tab.page.url(), undefined);
+  if ('blocked' in where) return undefined;
+  // The page's own sign-in buttons first: most pages have none, and then nothing is asked of Passwords.
+  const buttons = await pageButtons(tab.page).catch(() => []);
+  if (!buttons.length) return undefined;
+  if (await passwords.isLocked?.()) return undefined;
+  const found = await candidates(passwords, where.host, 'password').catch(() => []);
+  const other = signInItemOf(found);
+  if (!other) return undefined;
+  const item = signInItem(other);
+  return {
+    field: 'sign-in',
+    site: where.host.replace(/^www\./, ''),
+    items: [{ id: item.id, title: item.title, ...(other.account && { account: other.account }) }],
+    signIn: await signInOfferOf(passwords, item, other.item, buttons),
+  };
+}
+
 function offerField(role: FieldRole): BrowserFillOffer['field'] {
   if (CARD_ROLES.has(role)) return 'card';
   if (role === 'totp') return 'code';
@@ -875,7 +1219,7 @@ export async function offerFor(
   if (!passwords) return undefined;
   await markSecrets(tab.page);
   const box = await focusedBox(tab.page);
-  if (!box) return undefined;
+  if (!box) return signInOffer(passwords, tab);
   const secret = await box.getAttribute(SECRET_ATTR, { timeout: 1_000 }).catch(() => null);
   const at = await around(tab.page, box);
   if (!at) return undefined;
@@ -895,7 +1239,13 @@ export async function offerFor(
     const field = offerField(role);
     if (await passwords.isLocked?.()) return { field, site, items: [], locked: true };
     const found = await candidates(passwords, at.host, role);
-    const items = found.slice(0, 8).map(({ id, title, account, source }) => ({
+    // On a provider's page in a site's sign-in (ADR 0133): that site's account first.
+    const chain = CARD_ROLES.has(role) ? undefined : chainHere(tab, at.host, found);
+    const first = chainedItem(chain, found);
+    const ordered = first
+      ? [...found.filter((f) => f.id === first), ...found.filter((f) => f.id !== first)]
+      : found;
+    const items = ordered.slice(0, 8).map(({ id, title, account, source }) => ({
       id,
       title,
       ...(account && { account }),
@@ -906,10 +1256,101 @@ export async function offerFor(
       if (fake) return { field, site, items: [], lookalike: fake };
       if (role !== 'new-password') return undefined;
     }
-    return { field, site, items: role === 'new-password' ? [] : items };
+    // The site's own item signs in some other way: say so, with its button.
+    const other = !chain && (role === 'username' || role === 'password') && signInItemOf(found);
+    if (other) {
+      const item = signInItem(other);
+      const buttons = await pageButtons(tab.page).catch(() => []);
+      const signIn = await signInOfferOf(passwords, item, other.item, buttons);
+      // The email for a company sign-in or a link is still the box's to fill.
+      const fills =
+        role === 'username' && (item.signIn.via === 'sso' || item.signIn.via === 'link');
+      return fills
+        ? { field, site, items, signIn }
+        : { field: 'sign-in', site, items: items.filter((i) => i.id === item.id), signIn };
+    }
+    return {
+      field,
+      site,
+      items: role === 'new-password' ? [] : items,
+      ...(chain && first && { for: chain.fromTitle.slice(0, 200) }),
+    };
   } finally {
     await unmark(at.frame);
   }
+}
+
+/**
+ * You pressed "Continue with Google" (or the passkey, or the company sign-in)
+ * on the live view's offer (ADR 0133). Everything is found again here: the
+ * item saved for this page, how it signs in, and the page's own button for
+ * it. A provider's sign-in is remembered, so Google's pages offer the right
+ * account; a passkey Conch holds is put in for this site only.
+ */
+async function personSignIn(
+  passwords: PasswordFiller,
+  tab: Tab,
+  itemId: string | undefined,
+  chosen: string | undefined,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const where = fillHost(tab.page.url(), undefined);
+  if ('blocked' in where)
+    return { ok: false, message: 'This page isn’t secure, so Conch won’t sign in here.' };
+  const found = await candidates(passwords, where.host, 'password').catch(() => []);
+  const other = signInItemOf(found.filter((f) => f.id === itemId));
+  if (!itemId || !other) return { ok: false, message: 'That item isn’t saved for this site.' };
+  const item = signInItem(other);
+  const { signIn } = item;
+  const buttons = await pageButtons(tab.page).catch(() => []);
+  // Saved without saying whose account: the provider button the person chose, by its words.
+  const button = unnamed(signIn)
+    ? providerChoices(buttons).find((b) => b.label === chosen)
+    : buttonFor(buttons, signIn);
+  if (signIn.via === 'passkey') {
+    if (signIn.usable === false)
+      return {
+        ok: false,
+        message: `This passkey is kept in ${keptIn(item.source)}, which Conch’s browser can’t use.`,
+      };
+    const saved = (await passwords.passkeysFor?.(where.host).catch(() => [])) ?? [];
+    const pick = saved.find((p) => p.itemId === item.id);
+    if (!pick || !passwords.passkeyCredential)
+      return { ok: false, message: 'There’s no passkey saved for this site.' };
+    const credential = await passwords
+      .passkeyCredential(pick.itemId, pick.passkeyId, where.host)
+      .catch((e: Error) => e);
+    if (credential instanceof Error) return { ok: false, message: credential.message };
+    await armSignIn(tab.page, credential, (signCount) => {
+      void passwords
+        .passkeyUsed?.(pick.itemId, credential.credentialId, signCount)
+        .catch(() => undefined);
+    });
+    tab.touched = true;
+    if (button && !(await pressButton(button)))
+      return { ok: false, message: 'Your passkey is ready. Press the site’s passkey button.' };
+    return { ok: true };
+  }
+  if (signIn.via === 'link')
+    return {
+      ok: false,
+      message: 'Enter your email on the page: the site sends you a link or a code.',
+    };
+  if (!button)
+    return {
+      ok: false,
+      message:
+        signIn.via === 'provider'
+          ? unnamed(signIn)
+            ? 'Press the page’s button for the account you sign in with.'
+            : `Press the page’s “Continue with ${viaName(signIn)}” button.`
+          : 'Press the page’s single sign-on button, or enter your work email.',
+    };
+  if (signIn.via === 'provider')
+    await beginChain(passwords, tab, where.host, item, other.item, button.provider);
+  tab.touched = true;
+  if (!(await pressButton(button)))
+    return { ok: false, message: `Couldn’t press “${button.label}”. Press it on the page.` };
+  return { ok: true };
 }
 
 /**
@@ -920,12 +1361,13 @@ export async function offerFor(
 export async function personFill(
   passwords: PasswordFiller | undefined,
   tab: Tab,
-  request: { item?: string; generate?: boolean },
+  request: { item?: string; generate?: boolean; signIn?: boolean; button?: string },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!passwords) return { ok: false, message: 'Passwords isn’t available.' };
   if (tab.control !== 'user') return { ok: false, message: 'Take over first, then choose it.' };
   if (await passwords.isLocked?.())
     return { ok: false, message: 'Passwords is locked. Unlock it in Passwords first.' };
+  if (request.signIn) return personSignIn(passwords, tab, request.item, request.button);
   await markSecrets(tab.page);
   const box = await focusedBox(tab.page);
   if (!box) return { ok: false, message: 'Click the box to fill first.' };
