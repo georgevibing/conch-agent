@@ -2,6 +2,27 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.11](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-13)
+
+
+### Features
+
+* every assistant knows a Sign in with Google login has no password; a phone journey proves the page ([8d732a6](https://github.com/georgevibing/conch-agent/commit/8d732a6e8d67e8d3685c27a14e826a19fb5894e9))
+* **nacre:** Passwords says how an account signs in, and an item's page says it in fewer words ([e0e57f8](https://github.com/georgevibing/conch-agent/commit/e0e57f872efe9dd65f62c0ee2672f9021534a6a8))
+* **nacre:** the live view's bar says "Product Hunt signs in with Google" ([72ee306](https://github.com/georgevibing/conch-agent/commit/72ee3060f5f037dd4259f95294d3112c00e4d0fc))
+* **protocol:** an item can say how it signs in (Sign in with Google, a passkey, SSO, a link) ([4b8ad3d](https://github.com/georgevibing/conch-agent/commit/4b8ad3d164e87607456a0b69a40dee177801058a))
+* **protocol:** the browser's offers and cards say how an account signs in ([f73fbe6](https://github.com/georgevibing/conch-agent/commit/f73fbe6e5e8e52080801b114e89db1b54b4e99bb))
+* **server:** Passwords knows how an account signs in (Sign in with Google, a passkey, SSO, a link) ([1f42c1e](https://github.com/georgevibing/conch-agent/commit/1f42c1e3a03db088e5207340de767bbd464c491b))
+* **server:** passwords_find says how a login signs in ([587a05e](https://github.com/georgevibing/conch-agent/commit/587a05edb6d13072c6ceaf498bd36efc728fa067))
+* **server:** the browser signs in with Google, a passkey, SSO or a link (ADR 0133) ([43e53c8](https://github.com/georgevibing/conch-agent/commit/43e53c834db421514447cd0d263688a2ef720f0a))
+* **web:** press "Continue with Google" from the live view's bar ([1b23d26](https://github.com/georgevibing/conch-agent/commit/1b23d2656b216db7f65aab912bf8b60b4827e469))
+
+
+### Bug Fixes
+
+* **server:** a 1Password "Sign in with" item shows no empty password, and says how it signs in ([6d0d611](https://github.com/georgevibing/conch-agent/commit/6d0d611fa92191e9c9b19e16b554caef5114e826))
+* **web:** a Passwords item that signs in with Google says so, with no empty password ([ad732b8](https://github.com/georgevibing/conch-agent/commit/ad732b85829dd896111b75183c506347acc44ef7))
+
 ## [0.1.0-alpha.10](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-12)
 
 ### New
