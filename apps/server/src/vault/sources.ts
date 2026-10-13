@@ -31,7 +31,7 @@ import { isConcealed, siteOf } from '@conch/protocol';
 import { agentEnv, findExecutable, run, type RunResult } from '../lib/proc';
 import { parseCsv } from './importers';
 import { type BitwardenFido2, fromBitwarden, isEs256Key, type PasskeyInput } from './passkeys';
-import { signInFrom, withSignIn } from './signin';
+import { providerOf, providerOfSites, signInFrom, signInFromText, withSignIn } from './signin';
 import { parseTotp, totpNow } from './totp';
 
 export interface ExternalField {
@@ -234,6 +234,27 @@ interface OpField {
   purpose?: string;
   label?: string;
   value?: string;
+  /** Only on a field with a value (op 2.x). */
+  entropy?: number;
+}
+
+interface OpItem {
+  title?: string;
+  category?: string;
+  tags?: string[];
+  fields?: OpField[];
+}
+
+/** 1Password's "Sign in with" field, as `op` labels it. */
+const OP_SIGN_IN_WITH = /^sign[\s-]?in[\s-]?with$/i;
+
+/**
+ * A field 1Password keeps empty: no `value` at all, which `op --format json`
+ * leaves out even with `--reveal` (and a password then has no `entropy`
+ * either). One with something in it always has its value in JSON.
+ */
+function opEmpty(f: OpField): boolean {
+  return (f.value === undefined || f.value === '') && f.entropy === undefined;
 }
 
 const OP_ID = /^[a-z0-9]{1,64}$/;
@@ -628,39 +649,120 @@ export class OnePasswordSource implements PasswordSource {
     return items;
   }
 
-  async fields(ref: string, signal?: AbortSignal) {
+  /** One item as `op item get --format json` gives it (with `--reveal`: every value). */
+  async #get(ref: string, reveal: boolean, signal?: AbortSignal): Promise<OpItem> {
     const { vault, item } = this.#split(ref);
     const token = await this.#scoped(vault);
     const result = await this.#op(
-      ['item', 'get', item, '--vault', vault, '--format', 'json'],
+      ['item', 'get', item, '--vault', vault, '--format', 'json', ...(reveal ? ['--reveal'] : [])],
       signal,
       undefined,
       token,
     );
     if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, token));
-    const parsed = JSON.parse(result.stdout) as { fields?: OpField[] };
+    try {
+      return JSON.parse(result.stdout) as OpItem;
+    } catch {
+      throw new SourceError('1Password answered with something Conch couldn’t read.');
+    }
+  }
+
+  /**
+   * An item's fields and how it signs in. A field 1Password keeps empty has no
+   * `value` (and a password no `entropy`): it isn't a field here. That's the
+   * Login template's empty "password" on a "Sign in with" item or a passkey-only
+   * one, which used to show as a password that did nothing.
+   */
+  #read(ref: string, raw: OpItem): { read: ExternalRead; values: Map<string, string> } {
     let notes = '';
     const fields: ExternalField[] = [];
-    for (const f of parsed.fields ?? []) {
+    const values = new Map<string, string>();
+    for (const f of raw.fields ?? []) {
       if (f.purpose === 'NOTES') {
         notes = f.value ?? '';
         continue;
       }
-      if (!f.id || (!f.value && f.type !== 'CONCEALED' && f.type !== 'OTP')) continue;
+      if (!f.id || opEmpty(f)) continue;
+      // "sign in with" (type UNKNOWN in op 2.34) says how it signs in, not something to show.
+      if (OP_SIGN_IN_WITH.test(f.label ?? '')) continue;
       const kind = OP_KINDS[f.type ?? ''] ?? 'text';
       const concealed = kind === 'secret' || kind === 'totp' || kind === 'secretText';
+      const id = f.id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'field';
+      if (f.value) values.set(id, f.value);
       fields.push({
-        id: f.id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'field',
+        id,
         label: f.label || (f.purpose === 'USERNAME' ? 'Username' : 'Field'),
         kind,
         ...(f.purpose === 'USERNAME' && { role: 'username' as const }),
         ...(f.purpose === 'PASSWORD' && { role: 'password' as const }),
         ...(kind === 'totp' && { role: 'totp' as const }),
-        // The value of a concealed field never leaves this function.
+        // The value of a concealed field never leaves this class but for one use.
         ...(!concealed && { value: f.value ?? '' }),
       });
     }
-    return { fields, notes };
+    const listed = this.#list?.items.find((i) => i.ref === ref);
+    const signIn = this.#signIn(raw, fields, notes);
+    // What the list couldn't say, it knows from now on (no prompt for it again).
+    if (listed && signIn) listed.signIn = signIn;
+    return { read: { fields, notes, ...(signIn && { signIn }) }, values };
+  }
+
+  /**
+   * How a 1Password login signs in. Its own "Sign in with" (support.1password.com/
+   * sign-in-with-provider) is a field `op` shows as `{label: "sign in with",
+   * type: "UNKNOWN"}`, with no provider in it: the provider comes from the item
+   * it points at when `op` gives one, else from the item's own words, else it's
+   * "another account". Without that field, a login with no password says it in
+   * its words, or nothing. Passkeys aren't in `op`'s output at all.
+   */
+  #signIn(raw: OpItem, fields: ExternalField[], notes: string): VaultSignIn | undefined {
+    if (raw.category && raw.category !== 'LOGIN') return undefined;
+    const texts = [
+      raw.title,
+      notes,
+      ...(raw.tags ?? []),
+      ...fields.filter((f) => f.value).map((f) => `${f.label}: ${f.value}`),
+    ];
+    const password = fields.some((f) => f.role === 'password');
+    const marker = (raw.fields ?? []).find((f) => OP_SIGN_IN_WITH.test(f.label ?? ''));
+    if (!marker) return signInFrom({ password, texts });
+    const linked = this.#linked(marker.value);
+    const said = signInFromText(texts);
+    if (linked) return linked;
+    if (said?.via === 'provider' || said?.via === 'sso') return said;
+    const who = texts
+      .map((t) => /[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/.exec(t ?? '')?.[0])
+      .find(Boolean);
+    return { via: 'provider', provider: 'other', ...(who && { account: who.slice(0, 200) }) };
+  }
+
+  /** The provider's own item a "sign in with" field points at, if `op` says which. */
+  #linked(value: string | undefined): VaultSignIn | undefined {
+    const v = (value ?? '').trim();
+    if (!v) return undefined;
+    const named = providerOf(v);
+    if (named) return { via: 'provider', provider: named };
+    const id = /([a-z0-9]{26})/.exec(v)?.[1];
+    const item = id && this.#list?.items.find((i) => i.ref.endsWith(`_${id}`));
+    if (!item) return undefined;
+    const provider = providerOfSites(item.urls);
+    if (!provider) return undefined;
+    return { via: 'provider', provider, ...(item.subtitle && { account: item.subtitle }) };
+  }
+
+  async fields(ref: string, signal?: AbortSignal): Promise<ExternalRead> {
+    return this.#read(ref, await this.#get(ref, false, signal)).read;
+  }
+
+  /** Every value in one read, for Copy into Conch: one approval, not one per field. */
+  async full(ref: string, signal?: AbortSignal): Promise<FullItem> {
+    const { read, values } = this.#read(ref, await this.#get(ref, true, signal));
+    const fields: FullItem['fields'] = [];
+    for (const f of read.fields) {
+      const value = f.value ?? values.get(f.id);
+      if (value) fields.push({ ...f, value });
+    }
+    return { fields, notes: read.notes, ...(read.signIn && { signIn: read.signIn }) };
   }
 
   async value(ref: string, fieldId: string, signal?: AbortSignal): Promise<string> {

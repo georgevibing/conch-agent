@@ -17,6 +17,7 @@
 import {
   SIGN_IN_PROVIDERS,
   signInName,
+  siteOf,
   type VaultItemSummary,
   type VaultSignIn,
   type VaultSignInProvider,
@@ -48,6 +49,17 @@ export function providerOf(name: string): Known | undefined {
   const n = name.trim().replace(/\s+/g, ' ');
   for (const [id, words] of Object.entries(WORDS) as [Known, RegExp][])
     if (words.test(n)) return id;
+  return undefined;
+}
+
+/** Whose sign-in an item's own sites are (accounts.google.com is Google's), never a look-alike. */
+export function providerOfSites(urls: readonly string[]): Known | undefined {
+  const hosts = urls.map((u) => siteOf(u)).filter((h): h is string => Boolean(h));
+  for (const [id, { domains }] of Object.entries(SIGN_IN_PROVIDERS) as [
+    Known,
+    { domains: string[] },
+  ][])
+    if (domains.some((d) => bestMatch(hosts, d))) return id;
   return undefined;
 }
 

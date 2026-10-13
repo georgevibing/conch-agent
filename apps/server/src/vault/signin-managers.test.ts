@@ -19,6 +19,7 @@ import {
   type Exec,
   KeePassXcSource,
   KeeperSource,
+  OnePasswordSource,
   keepassPasskey,
   ProtonPassSource,
 } from './sources';
@@ -74,6 +75,182 @@ function es256() {
 }
 
 const KEY = es256();
+
+describe('1Password', () => {
+  const VAULT = 'vlt1';
+  const GOOGLE = 'googleitem0000000000000001';
+  // `op item list` (no fields), then `op item get --format json` as op 2.34 writes it: an empty
+  // field has no `value` (and a password no `entropy`), even with --reveal; "Sign in with" is
+  // `{label: "sign in with", type: "UNKNOWN"}` (1Password/shell-plugins#600).
+  const items: Record<string, Record<string, unknown>> = {
+    hunt00000000000000000000001: {
+      title: 'Product Hunt',
+      category: 'LOGIN',
+      fields: [
+        { id: 'username', type: 'STRING', purpose: 'USERNAME', label: 'username' },
+        {
+          id: 'password',
+          type: 'CONCEALED',
+          purpose: 'PASSWORD',
+          label: 'password',
+          reference: 'op://Personal/Product Hunt/password',
+          password_details: { strength: 'TERRIBLE' },
+        },
+        { id: 'notesPlain', type: 'STRING', purpose: 'NOTES', label: 'notesPlain' },
+        { id: 'signin', type: 'UNKNOWN', label: 'sign in with' },
+      ],
+    },
+    figma000000000000000000001: {
+      title: 'Figma',
+      category: 'LOGIN',
+      fields: [
+        {
+          id: 'username',
+          type: 'STRING',
+          purpose: 'USERNAME',
+          label: 'username',
+          value: 'ada@gmail.com',
+        },
+        { id: 'password', type: 'CONCEALED', purpose: 'PASSWORD', label: 'password' },
+        { id: 'signin', type: 'UNKNOWN', label: 'sign in with', value: GOOGLE },
+      ],
+    },
+    webauthn00000000000000001: {
+      title: 'webauthn.io',
+      category: 'LOGIN',
+      // A passkey-only login: the passkey isn't in op's output at all.
+      fields: [
+        { id: 'username', type: 'STRING', purpose: 'USERNAME', label: 'username', value: 'ada' },
+        {
+          id: 'password',
+          type: 'CONCEALED',
+          purpose: 'PASSWORD',
+          label: 'password',
+          password_details: { strength: 'TERRIBLE' },
+        },
+      ],
+    },
+    [GOOGLE]: {
+      title: 'Google',
+      category: 'LOGIN',
+      fields: [
+        {
+          id: 'username',
+          type: 'STRING',
+          purpose: 'USERNAME',
+          label: 'username',
+          value: 'ada@gmail.com',
+        },
+        {
+          id: 'password',
+          type: 'CONCEALED',
+          purpose: 'PASSWORD',
+          label: 'password',
+          value: 'op-google-password',
+          entropy: 120,
+          password_details: { entropy: 120, strength: 'FANTASTIC' },
+        },
+      ],
+    },
+  };
+  const list = Object.entries(items).map(([id, i]) => ({
+    id,
+    title: i.title,
+    category: 'LOGIN',
+    vault: { id: VAULT, name: 'Personal' },
+    urls: [
+      {
+        href:
+          id === GOOGLE
+            ? 'https://accounts.google.com'
+            : `https://${String(i.title).toLowerCase().replace(/\s/g, '')}.com`,
+      },
+    ],
+    additional_information: id === GOOGLE || id.startsWith('figma') ? 'ada@gmail.com' : '',
+  }));
+  const op = (calls: Call[]) =>
+    exec(calls, {
+      op: (args) => {
+        if (args[0] === 'account') return '[{"url":"my.1password.com"}]';
+        if (args.slice(0, 2).join(' ') === 'item list') return JSON.stringify(list);
+        if (args.slice(0, 2).join(' ') === 'item get') return JSON.stringify(items[args[2] ?? '']);
+        return undefined as unknown as string;
+      },
+    });
+
+  it('drops the empty template password, and reads "Sign in with" and who it points at', async () => {
+    const calls: Call[] = [];
+    const source = new OnePasswordSource(op(calls));
+    const listed = await source.list();
+    const ref = (title: string) => listed.find((i) => i.title === title)?.ref ?? '';
+    const hunt = await source.fields(ref('Product Hunt'));
+    expect(hunt.fields).toEqual([]);
+    // 1Password doesn't say whose here: "another account", until its words or its link do.
+    expect(hunt.signIn).toEqual({ via: 'provider', provider: 'other' });
+    const figma = await source.fields(ref('Figma'));
+    expect(figma.fields.map((f) => f.role)).toEqual(['username']);
+    expect(figma.signIn).toEqual({ via: 'provider', provider: 'google', account: 'ada@gmail.com' });
+    // A passkey-only login: no password to show, and nothing to say how it signs in.
+    const passkey = await source.fields(ref('webauthn.io'));
+    expect(passkey.fields.map((f) => f.role)).toEqual(['username']);
+    expect(passkey.signIn).toBeUndefined();
+    // A real password stays a password, its value not in what's shown.
+    const google = await source.fields(ref('Google'));
+    expect(google.fields.map((f) => [f.role, f.value])).toEqual([
+      ['username', 'ada@gmail.com'],
+      ['password', undefined],
+    ]);
+    // From now on the list says how they sign in, without asking 1Password again.
+    expect((await source.list()).find((i) => i.title === 'Figma')?.signIn?.provider).toBe('google');
+    noSecrets(calls, JSON.stringify([hunt, figma, google]), ['op-google-password']);
+  });
+
+  it('keeps a password whose value op left out but whose strength it measured', async () => {
+    const source = new OnePasswordSource(
+      exec([], {
+        op: (args) =>
+          args[1] === 'list'
+            ? JSON.stringify([list[3]])
+            : JSON.stringify({
+                title: 'Google',
+                category: 'LOGIN',
+                fields: [{ id: 'password', type: 'CONCEALED', purpose: 'PASSWORD', entropy: 120 }],
+              }),
+      }),
+    );
+    const [google] = await source.list();
+    expect((await source.fields(google?.ref ?? '')).fields.map((f) => f.role)).toEqual([
+      'password',
+    ]);
+  });
+
+  it('copies a "Sign in with" item into Conch as that, in one read', async () => {
+    const calls: Call[] = [];
+    const { service } = await vault(op(calls));
+    await service.setSource('1password', { enabled: true });
+    const listed = (await service.list({ looking: true })).items;
+    const figma = listed.find((i) => i.title === 'Figma');
+    const detail = await service.detail(figma?.id ?? '');
+    expect(detail.fields.map((f) => f.label)).toEqual(['username']);
+    expect(detail.signInItem).toBe(listed.find((i) => i.title === 'Google')?.id);
+    const job = await service.transfer('1password', { skipDuplicates: true, keepSynced: false });
+    await service.transfers.finished(job.jobId);
+    expect(service.transferJob(job.jobId)).toMatchObject({ state: 'done', failed: [] });
+    const own = (await service.list()).items.filter((i) => i.source === 'conch');
+    expect(own.find((i) => i.title === 'Figma')?.signIn).toEqual({
+      via: 'provider',
+      provider: 'google',
+      account: 'ada@gmail.com',
+    });
+    expect(own.find((i) => i.title === 'Product Hunt')?.signIn).toEqual({
+      via: 'provider',
+      provider: 'other',
+    });
+    // One `op item get --reveal` an item, never one per field.
+    const reveals = calls.filter((c) => c.args.includes('--reveal'));
+    expect(reveals).toHaveLength(Object.keys(items).length);
+  });
+});
 
 describe('Bitwarden', () => {
   // `bw list items` decrypts every item, passkeys' private keys included (list.command.ts).
