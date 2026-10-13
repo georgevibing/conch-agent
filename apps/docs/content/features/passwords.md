@@ -16,6 +16,12 @@ Open **Passwords** in the sidebar:
 
 **Make a strong password**, in the password field, writes one for you.
 
+### Accounts without a password
+
+Some accounts sign in with another one, such as **Sign in with Google**, or with a passkey, your company's single sign-on, or a link sent by email. Their page says so, for example _Signs in with Google · ada@gmail.com_, with **Open** for the Google login it uses. A passkey kept in another manager, which Conch can't use, says where it is.
+
+To set it for one of Conch's own, press **Edit** and choose under **Signs in with**. The password field goes away.
+
 ## The managers you already use
 
 <!-- conch:password-managers -->
@@ -60,7 +66,8 @@ The other way, right-click one of Conch's and choose **Copy to 1Password** or **
 
 The search box finds an item by name, account, site or tag. Press <kbd>/</kbd> to go to it. <kbd>↓</kbd> and <kbd>↑</kbd> walk the results, and <kbd>Enter</kbd> opens the first.
 
-- A mark on each tile shows where it lives. An account in two places says **Also in** on its page.
+- A mark on each tile shows where it lives. An item's page says where in one line, such as _Stored in 1Password_, with **Copy into Conch**. An account in two places shows **Also in** there.
+- Search by how an item signs in ("google", "passkey", "sso"), or choose **Sign in with Google** and the like in the filter.
 - The row under the search shows **All**, **Conch** or one manager. The filter narrows to one kind, one tag, **Favourites** or **One-time codes**.
 - Drag the line between list and item to resize it; double-click to reset.
 
