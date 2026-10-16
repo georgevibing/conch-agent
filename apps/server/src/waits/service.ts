@@ -18,7 +18,13 @@
  */
 import { join } from 'node:path';
 
-import { waitHeadline, type TaintSource, type WaitNote, type WaitState } from '@conch/protocol';
+import {
+  waitHeadline,
+  type ConversationSummary,
+  type TaintSource,
+  type WaitNote,
+  type WaitState,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
@@ -31,12 +37,17 @@ import type { ProcessPeek } from '../processes/service';
 
 import { isRepo, readCiUrl, repoOfRemote, type CiTarget, type GitHubClient } from './github';
 import { nextGap, span } from './pace';
+import { isYours, offersTogether } from '../together/service';
 import {
+  chatWatcher,
   ciWatcher,
   processWatcher,
+  taskWatcher,
   timeWatcher,
   urlWatcher,
+  type ChatLook,
   type Reading,
+  type TaskLook,
   type Watcher,
 } from './watchers';
 
@@ -54,6 +65,9 @@ const WaitSpec = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('url'), url: z.string().url(), contains: z.string().optional() }),
   z.object({ kind: z.literal('time'), at: z.number() }),
+  // Another of your chats, a task this chat started (ADR 0134).
+  z.object({ kind: z.literal('chat'), chat: z.string(), title: z.string() }),
+  z.object({ kind: z.literal('task'), task: z.string(), title: z.string() }),
 ]);
 type WaitSpec = z.infer<typeof WaitSpec>;
 
@@ -83,6 +97,8 @@ const DEADLINE: Record<WaitNote['kind'], { default: number; max: number }> = {
   ci: { default: 60, max: 360 },
   url: { default: 60, max: 1440 },
   time: { default: 1, max: 1440 },
+  chat: { default: 60, max: 1440 },
+  task: { default: 120, max: 1440 },
 };
 
 export interface WaitServiceDeps {
@@ -101,6 +117,22 @@ export interface WaitServiceDeps {
     /** Start the assistant's next turn in this chat with these words, now or once it's free. */
     wake(id: string, prompt: string): Promise<unknown>;
     taint?(id: string, sources: readonly TaintSource[]): Promise<void>;
+  };
+  /**
+   * Your other chats and this chat's tasks (ADR 0134): where one is, and a
+   * call back when it may have changed. Without it, neither can be waited for.
+   */
+  others?: {
+    chat(conversationId: string): Promise<
+      | (ChatLook & {
+          origin?: ConversationSummary['origin'];
+          taint: readonly TaintSource[];
+        })
+      | undefined
+    >;
+    task(taskId: string): Promise<(TaskLook & { parentConversationId?: string }) | undefined>;
+    /** Calls back when that chat or task may have changed; returns how to stop. */
+    onChange(id: string, listener: () => void): () => void;
   };
   /** Tell the person it ended (a notification, their chat app), when they asked. */
   tell?: (told: {
@@ -126,8 +158,8 @@ interface Active {
   lastPoke: number;
   /** Saved for a restart: only a wait that let go of its turn. */
   saved?: Saved;
-  /** When it ends: what the assistant reads. */
-  ended: Promise<{ state: WaitState; text: string }>;
+  /** When it ends: what the assistant reads, and whose words it brings in. */
+  ended: Promise<Ended>;
   checks: number;
 }
 
@@ -185,7 +217,9 @@ export class WaitService {
                   ? 'the time'
                   : s.spec.kind === 'ci'
                     ? `CI ${s.spec.target.label}`
-                    : 'the page',
+                    : s.spec.kind === 'chat' || s.spec.kind === 'task'
+                      ? `“${s.spec.title.slice(0, 80)}”`
+                      : 'the page',
               state: 'failed',
               status: 'Couldn’t pick this up again after Conch restarted',
               startedAt: s.startedAt,
@@ -272,7 +306,8 @@ export class WaitService {
         name: 'wait_for',
         effect: 'read',
         alwaysLoad: true,
-        searchHint: 'wait until ci passes finishes monitor watch poll sleep later remind',
+        searchHint:
+          'wait until ci passes finishes monitor watch poll sleep later remind other chat task done',
         description: [
           'Wait for something until it changes, without polling: Conch watches it itself and calls you back with what changed. Use this instead of `sleep`, `gh run watch`, or checking a command again and again.',
           'Kinds:',
@@ -280,10 +315,12 @@ export class WaitService {
           '- `process`: a command you started with process_start (`process_id`): until it exits, or prints a line matching `pattern` (a regular expression, e.g. "ready|listening").',
           '- `url`: a public web page, until it changes, or until it `contains` some text.',
           '- `time`: until `minutes` from now, or `until` (an ISO time).',
-          'In a chat with the person, a wait for ci, url or a time more than two minutes away returns at once: say in one short line what you are waiting for, then end your turn. The chat stays free, and your next turn starts by itself with the outcome. Otherwise the call returns when it changes. `timeout_minutes` is how long to wait at most. Set `tell_me` when the person asked to be told ("let me know when CI is green").',
+          '- `chat`: another of the person’s chats (`chat`, an id from list_chats), until it stops working: its reply ends, or it needs the person. You hear how it ended and the end of its last reply.',
+          '- `task`: a task started in this chat (`task_id`, from start_background_task or task_status), until it finishes. You hear its result.',
+          'In a chat with the person, a wait for ci, url, chat, task or a time more than two minutes away returns at once: say in one short line what you are waiting for, then end your turn. The chat stays free, and your next turn starts by itself with the outcome. Otherwise the call returns when it changes. `timeout_minutes` is how long to wait at most. Set `tell_me` when the person asked to be told ("let me know when CI is green").',
         ].join('\n'),
         input: {
-          kind: z.enum(['ci', 'process', 'url', 'time']),
+          kind: z.enum(['ci', 'process', 'url', 'time', 'chat', 'task']),
           url: z.string().max(2000).optional(),
           repo: z.string().max(201).optional(),
           ref: z.string().max(200).optional(),
@@ -293,6 +330,8 @@ export class WaitService {
           contains: z.string().min(1).max(200).optional(),
           minutes: z.number().min(0).max(1440).optional(),
           until: z.string().max(40).optional(),
+          chat: z.string().min(1).max(128).optional(),
+          task_id: z.string().min(1).max(128).optional(),
           timeout_minutes: z.number().min(1).max(1440).optional(),
           tell_me: z.boolean().default(false),
         },
@@ -300,6 +339,8 @@ export class WaitService {
           process_id: ['id', 'processId'],
           timeout_minutes: ['timeout'],
           ref: ['pr', 'branch', 'sha'],
+          chat: ['chat_id', 'conversation', 'conversation_id'],
+          task_id: ['task', 'taskId'],
         },
         run: async (args) => this.#waitFor(ctx, args as unknown as WaitArgs),
       },
@@ -341,7 +382,10 @@ export class WaitService {
         .look(ctx.signal)
         .catch((error: Error) => ({ settled: false, status: '', blip: error.message }) as Reading);
       if (first.fatal) throw new Error(first.fatal);
-      if (first.settled) return first.summary ?? first.status;
+      if (first.settled) {
+        if (first.taint) ctx.taint?.(first.taint);
+        return first.summary ?? first.status;
+      }
       const waitId = newId('wait');
       const saved: Saved = {
         waitId,
@@ -388,6 +432,7 @@ export class WaitService {
     try {
       const ended = await a.ended;
       if (built.taint && ended.state === 'done') ctx.taint?.(built.taint);
+      if (ended.taint) ctx.taint?.(ended.taint);
       return ended.text;
     } finally {
       ctx.signal.removeEventListener('abort', onAbort);
@@ -469,6 +514,35 @@ export class WaitService {
           taint: { kind: 'web', label: url.hostname.slice(0, 120) },
         };
       }
+      case 'chat': {
+        const others = this.deps.others;
+        if (!others || !offersTogether(ctx))
+          throw new Error('Waiting for another chat isn’t available here.');
+        const id = args.chat?.trim();
+        if (!id) throw new Error('Say which chat: `chat`, an id from list_chats.');
+        if (id === ctx.conversationId)
+          throw new Error('That’s this chat. Give the id of another one, from list_chats.');
+        const chat = await others.chat(id).catch(() => undefined);
+        // Someone else's chat looks like no chat at all.
+        if (!chat || !isYours(chat))
+          throw new Error(`No chat “${id}” of the person’s. Use a chat id from list_chats.`);
+        const spec: WaitSpec = { kind: 'chat', chat: id, title: chat.title.slice(0, 200) };
+        return { watcher: this.#chatWatcher(spec), spec };
+      }
+      case 'task': {
+        const others = this.deps.others;
+        if (!others) throw new Error('Waiting for a task isn’t available here.');
+        const id = args.task_id?.trim();
+        if (!id)
+          throw new Error('Say which task: `task_id`, from start_background_task or task_status.');
+        const task = await others.task(id).catch(() => undefined);
+        if (!task || task.parentConversationId !== ctx.conversationId)
+          throw new Error(
+            `No task “${id}” was started in this chat. Use an id from task_status; to wait for another chat, use kind chat.`,
+          );
+        const spec: WaitSpec = { kind: 'task', task: id, title: task.title.slice(0, 200) };
+        return { watcher: this.#taskWatcher(spec), spec };
+      }
       case 'ci': {
         const target = await this.#ciTarget(ctx, args);
         const client = await this.deps.github(ctx.conversationId);
@@ -532,10 +606,38 @@ export class WaitService {
     return { repo, sha, label: branch && branch !== 'HEAD' ? branch : sha.slice(0, 7) };
   }
 
+  #chatWatcher(spec: Extract<WaitSpec, { kind: 'chat' }>): Watcher {
+    const others = this.deps.others;
+    if (!others) throw new Error('Waiting for another chat isn’t available here.');
+    return chatWatcher({
+      id: spec.chat,
+      title: spec.title,
+      look: async (id) => {
+        const chat = await others.chat(id).catch(() => undefined);
+        // Gone, or no longer one of yours (someone else's words came in): nothing to say about it.
+        return chat && isYours(chat) ? chat : undefined;
+      },
+      onChange: (id, listener) => others.onChange(id, listener),
+    });
+  }
+
+  #taskWatcher(spec: Extract<WaitSpec, { kind: 'task' }>): Watcher {
+    const others = this.deps.others;
+    if (!others) throw new Error('Waiting for a task isn’t available here.');
+    return taskWatcher({
+      id: spec.task,
+      title: spec.title,
+      look: (id) => others.task(id),
+      onChange: (id, listener) => others.onChange(id, listener),
+    });
+  }
+
   async #rebuild(s: Saved): Promise<Watcher> {
     const now = this.deps.now ?? Date.now;
     const spec = s.spec;
     if (spec.kind === 'time') return timeWatcher({ at: spec.at, now });
+    if (spec.kind === 'chat') return this.#chatWatcher(spec);
+    if (spec.kind === 'task') return this.#taskWatcher(spec);
     if (spec.kind === 'url')
       return urlWatcher({
         url: new URL(spec.url),
@@ -589,7 +691,7 @@ export class WaitService {
       lastPoke: 0,
       checks: options.first ? 1 : 0,
       ...(options.saved && { saved: options.saved }),
-      ended: Promise.resolve({ state: 'watching' as WaitState, text: '' }),
+      ended: Promise.resolve<Ended>({ state: 'watching', text: '' }),
     };
     const emit = (next: WaitNote) => {
       a.note = next;
@@ -627,11 +729,7 @@ export class WaitService {
   }
   readonly #after = new Set<Promise<unknown>>();
 
-  async #watch(
-    a: Active,
-    emit: (note: WaitNote) => void,
-    first?: Reading,
-  ): Promise<{ state: WaitState; text: string }> {
+  async #watch(a: Active, emit: (note: WaitNote) => void, first?: Reading): Promise<Ended> {
     const { watcher } = a;
     const fp = (r: { status: string; parts?: unknown }) =>
       JSON.stringify([r.status, r.parts ?? null]);
@@ -640,7 +738,7 @@ export class WaitService {
       : '';
     let gap: number | undefined;
     const off = watcher.nudge?.(() => a.poke?.());
-    const end = (state: WaitState, status: string, text: string, r?: Reading) => {
+    const end = (state: WaitState, status: string, text: string, r?: Reading): Ended => {
       const now = this.#now;
       const final: WaitNote = {
         ...a.note,
@@ -653,7 +751,7 @@ export class WaitService {
       };
       delete final.nextCheckAt;
       if (a.stopped !== 'closing' && a.stopped !== 'gone') emit(final);
-      return { state, text };
+      return { state, text, ...(r?.taint && { taint: r.taint }) };
     };
     // The row shows at once.
     emit(a.note);
@@ -769,9 +867,12 @@ export class WaitService {
     });
   }
 
-  async #wake(a: Active, ended: { state: WaitState; text: string }) {
+  async #wake(a: Active, ended: Ended) {
     await this.#tell(a, ended);
     if (!ended.text || this.#closed) return;
+    // What it brings back is someone else's words: the chat is wary before it reads them.
+    if (ended.taint)
+      await this.deps.chat.taint?.(a.conversationId, [ended.taint]).catch(() => undefined);
     const headline = waitHeadline({ ...a.note, state: ended.state });
     const prompt = [
       `[Conch] A wait you started has ended: ${headline}.`,
@@ -806,9 +907,18 @@ export class WaitService {
   }
 }
 
+/** How a wait ended: what the assistant reads, and whose words it brings in. */
+interface Ended {
+  state: WaitState;
+  text: string;
+  taint?: TaintSource;
+}
+
 /** What `wait_for` was asked, after its schema. */
 interface WaitArgs {
-  kind: 'ci' | 'process' | 'url' | 'time';
+  kind: 'ci' | 'process' | 'url' | 'time' | 'chat' | 'task';
+  chat?: string;
+  task_id?: string;
   url?: string;
   repo?: string;
   ref?: string;

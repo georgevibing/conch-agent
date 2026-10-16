@@ -73,6 +73,8 @@ A task asks before it acts, as its chat would, and holds nothing else up. Its ca
 
 Conch tells you in the app, and on your devices when notifications are on. A batch is reported once, when the last is over ("3 tasks done · 1 didn't finish"). A tap opens the chat. Asking for your OK notifies under **It needs you**: a notification can deny, but allowing opens Conch. Finished tasks are under **A task finishes**, in **Settings → Notifications → Topics** ([On your phone](../start/phone.md)).
 
+Ask your assistant to carry on once a task is done ("when the build's done, deploy it") and it waits without checking again and again. The chat stays yours meanwhile, a row says what it waits for, and the next step starts by itself when the task finishes.
+
 The chevron opens **Details**: the whole result, what was confirmed and each step. Repeats show once (**×6**), and similar steps fold into one line, like **Read pager.ts and 3 more**.
 
 | It says                 | What it means                                                                                                                              |

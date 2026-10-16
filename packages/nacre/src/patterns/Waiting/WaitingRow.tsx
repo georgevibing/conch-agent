@@ -11,7 +11,7 @@ import { formatElapsed } from '../ThinkingIndicator/ThinkingIndicator';
 import styles from './WaitingRow.module.css';
 
 /** What a wait watches. */
-export type WaitingKind = 'process' | 'ci' | 'url' | 'time';
+export type WaitingKind = 'process' | 'ci' | 'url' | 'time' | 'chat' | 'task';
 /** Where it is: watching, or how it ended. */
 export type WaitingState = 'watching' | 'done' | 'timed-out' | 'stopped' | 'failed';
 /** One part of what's watched (a CI job): a dot that fills in. */
@@ -53,6 +53,8 @@ const FAMILY: Record<WaitingKind, StoryFamily> = {
   process: 'run',
   url: 'research',
   time: 'plan',
+  chat: 'remember',
+  task: 'delegate',
 };
 
 const PART_WORD: Record<WaitingPartState, string> = {

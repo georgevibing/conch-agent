@@ -44,3 +44,34 @@ test('a chat knows another is editing in its folder, and opens it from the row',
   await composer(page).focus();
   await page.keyboard.press('Escape');
 });
+
+test('a chat waits for another to finish, and carries on by itself when it does', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await composer(page).fill('Keep editing the notes');
+  await composer(page).press('Enter');
+  await expect(page).toHaveURL(/\/c\//);
+  const busy = page.url();
+  await expect(page.getByText(/notes\.md/).first()).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await expect(page.getByText('What’s on your mind?')).toBeVisible();
+  await composer(page).fill('Wait for my other chat, then carry on');
+  await composer(page).press('Enter');
+  await expect(page.getByText(/I’ll carry on when “.+” is done\./)).toBeVisible({
+    timeout: 20_000,
+  });
+  const waiting = page.url();
+  // One calm row, and the chat is free meanwhile.
+  await expect(page.getByText(/^Waiting for “.+”$/)).toBeVisible();
+  await expect(composer(page)).toHaveAttribute('placeholder', /you can keep chatting$/);
+
+  // The other chat stops: this one hears at once, without anyone asking.
+  await page.goto(busy);
+  await composer(page).focus();
+  await page.keyboard.press('Escape');
+  await page.goto(waiting);
+  await expect(page.getByText(/carrying on from here/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Was stopped', { exact: true })).toBeVisible();
+});

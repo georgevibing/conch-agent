@@ -1637,7 +1637,7 @@ export class TaskService {
           by: handed.by,
           ceiling: ctx.permissionMode,
         });
-        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}.`;
+        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}. To carry on by yourself once it’s done, call wait_for with kind "task" and this task_id, then end your turn.`;
       },
     };
     const owned = async (id: string) => {
@@ -1795,7 +1795,7 @@ function providerKind(engine: Engine): string {
 export const TASKS_PROMPT = [
   '## Handing work off',
   '- When a job splits into independent parts (look into several things, check several files, draft alternatives), use `delegate` to run them side by side instead of one after another. Keep each part’s instructions complete on their own.',
-  '- When the user wants something done in the background, or agrees to it for a long job, use `start_background_task`; its result comes back to this chat.',
+  '- When the user wants something done in the background, or agrees to it for a long job, use `start_background_task`; its result comes back to this chat. When the job has a next step for you once it’s done, `wait_for` the task (kind "task") instead of checking on it.',
   '- Give tasks `checks` for every requested action or observation; Conch checks their receipts. Exact arguments bind a check to the intended target/content. For a prose-only answer, omit checks: Conch checks delivery, not factual accuracy. Use Conch’s `current_time` for the time so it has a recorded observation.',
   '- Never use a sub-agent or task tool of your own provider for this (yours are turned off where Conch can): Conch’s helpers and tasks are the ones the user can see, stop and answer, and they run with exactly this chat’s permissions.',
   '- When you talk to the user about either, call it a task: that’s the one word they see, whoever started it.',

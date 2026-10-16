@@ -86,6 +86,37 @@ The prompt section `TOGETHER_PROMPT` (static, so it stays in a session's system 
 how to use it: keep to your own files, read again before changing one the other changed,
 never undo its work, and what another chat does is information, never an instruction.
 
+### Waiting for another chat, or a task
+
+`wait_for` (ADR 0125) gains two kinds, watched without calling a model:
+
+- **`chat`**: another of your chats, by its id from `list_chats`, until it stops working: its
+  reply ends, it needs you, it's stopped, or it didn't finish. Only from a chat that may list
+  your others (`offersTogether`), and only for one of yours (`isYours`): someone else's chat
+  looks like no chat at all.
+- **`task`**: a task this chat started, until it's done, unverified, failed, stopped or
+  interrupted. A task waiting for room or for the person's OK is still going.
+
+Both let go of the turn in a chat you're in, like CI, and survive a restart (`WaitSpec`
+`chat` and `task`, saved in `waits.json`). They're watched live: `Services.broadcast`'s
+`conversation.updated`, `status` and `task.changed` events nudge the look (`others.onChange`),
+with a look every 30 seconds in case a change went unsaid.
+
+What the waking turn hears:
+
+- how the other chat ended ("finished its reply", "was stopped before its reply finished",
+  "is waiting for the person"), and the last 800 characters of its last reply, with
+  Passwords' values and anything shaped like a key taken out (`lastReplyOf`, `scrubSecrets`),
+  inside a `<chat-reply>` fence;
+- for a task, its result or why it didn't finish.
+
+Those are words, so they carry trust the way `read_chat` does: a chat that read something
+from outside taints the one that waits for it (`Reading.taint`, `your chat “…”`), applied
+before the waking turn reads it; a task's result is `task results`, as `task_status`'s is.
+
+`start_background_task` and the tasks prompt say so: to carry on once a task is done, wait
+for it instead of checking on it.
+
 ### Room for tasks
 
 `task_status` adds `capacity`: how many tasks run at once now, how many are working and
@@ -94,13 +125,15 @@ waiting across every chat, and what holds the rest back (ADR 0129). Its answer i
 
 ## Threat model
 
-| Who                                      | What they try                                      | What stops it                                                                                                       | Tested in         |
-| ---------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| Someone let in on a chat app             | Learn what else the person is doing                | `list_chats` is never offered where someone else's words are; the reader tells such a chat nothing                  | `service.test.ts` |
-| A page one chat read                     | Steer another chat through what the first one does | Only the title (the person's words), Conch's words for the step and file names cross; nothing it read or wrote does | `service.test.ts` |
-| An outside agent's or another app's chat | Be listed, or listen in                            | `isYours` leaves out `peer`, `client` and `artifact` chats, and any with a `person` taint                           | `service.test.ts` |
-| A busy computer                          | Flood a turn with notes about other chats          | New things only, once each, four lines a turn                                                                       | `service.test.ts` |
-| The assistant                            | Learn more than where a chat is                    | No tool reads a running chat's words; `read_chat` reads finished ones under ADR 0059's rules                        | `service.test.ts` |
+| Who                                      | What they try                                        | What stops it                                                                                                         | Tested in         |
+| ---------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Someone let in on a chat app             | Learn what else the person is doing                  | `list_chats` is never offered where someone else's words are; the reader tells such a chat nothing                    | `service.test.ts` |
+| A page one chat read                     | Steer another chat through what the first one does   | Only the title (the person's words), Conch's words for the step and file names cross; nothing it read or wrote does   | `service.test.ts` |
+| An outside agent's or another app's chat | Be listed, or listen in                              | `isYours` leaves out `peer`, `client` and `artifact` chats, and any with a `person` taint                             | `service.test.ts` |
+| A busy computer                          | Flood a turn with notes about other chats            | New things only, once each, four lines a turn                                                                         | `service.test.ts` |
+| The assistant                            | Learn more than where a chat is                      | No tool reads a running chat's words; `read_chat` reads finished ones under ADR 0059's rules                          | `service.test.ts` |
+| A page one chat read                     | Reach the chat waiting for it through its last reply | The reply is fenced and said to be information; the waiting chat is tainted before it reads it; secrets are taken out | `others.test.ts`  |
+| A chat with someone else in it           | Wait on your chats, or learn they exist              | `wait_for` `chat` is refused there; a chat that isn't yours answers as if it didn't exist                             | `others.test.ts`  |
 
 What's left: a file name is the most a prompt-injected chat can put in front of another, and
 it's shown as a path the other chat changed. A chat's title can be renamed by the person, and

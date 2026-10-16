@@ -8,7 +8,7 @@
 import { z } from 'zod';
 
 /** What can be waited for. */
-export const WaitKind = z.enum(['process', 'ci', 'url', 'time']);
+export const WaitKind = z.enum(['process', 'ci', 'url', 'time', 'chat', 'task']);
 export type WaitKind = z.infer<typeof WaitKind>;
 
 /**

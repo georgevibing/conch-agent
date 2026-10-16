@@ -861,7 +861,7 @@ export class MockEngine implements Engine {
       }
 
       // A chat that keeps working on a file (ADR 0134): long enough for another chat to notice.
-      if (/\bkeep editing\b/i.test(said)) {
+      if (/^\s*keep editing\b/i.test(said)) {
         const toolUseId = newId('tool');
         yield { type: 'tool-start', toolUseId, name: 'Edit', input: { file_path: 'notes.md' } };
         await sleep(240_000, input.signal);
@@ -870,7 +870,7 @@ export class MockEngine implements Engine {
         return;
       }
       // What your other chats are doing (ADR 0134), and what Conch said by itself.
-      if (/\bwhat are my other chats doing\b/i.test(said)) {
+      if (/^\s*what are my other chats doing\b/i.test(said)) {
         const found = readOtherChatsFound(yield* hostTool('list_chats', {}));
         const busy = found?.chats.filter((c) => c.state === 'working') ?? [];
         const heard = /working in this folder right now/.test(input.systemAppend);
@@ -883,6 +883,23 @@ export class MockEngine implements Engine {
           ]
             .filter(Boolean)
             .join(' '),
+        );
+        return;
+      }
+
+      // Waiting for another chat to finish (ADR 0134): the busy one from list_chats.
+      if (/^\s*wait for my other chat\b/i.test(said)) {
+        const found = readOtherChatsFound(yield* hostTool('list_chats', { which: 'working' }));
+        const busy = found?.chats[0];
+        if (!busy) {
+          yield* speak('None of your other chats is working, so there’s nothing to wait for.');
+          return;
+        }
+        const out = yield* hostTool('wait_for', { kind: 'chat', chat: busy.chat });
+        yield* speak(
+          /End your turn now/.test(out)
+            ? `I’ll carry on when “${busy.title}” is done. Keep chatting meanwhile.`
+            : out,
         );
         return;
       }
@@ -1213,7 +1230,12 @@ export class MockEngine implements Engine {
         return;
       }
       if (/\[Conch\] A wait you started has ended/.test(said)) {
-        yield* speak('The wait is over, so I’m carrying on from here.');
+        const chat = /“([^”]+)” \(chat [^)]+\) finished its reply/.exec(said)?.[1];
+        yield* speak(
+          chat
+            ? `“${chat}” is done, so I’m carrying on from here.`
+            : 'The wait is over, so I’m carrying on from here.',
+        );
         return;
       }
       // More than this computer has room for at once (ADR 0129): three heavy builds, the

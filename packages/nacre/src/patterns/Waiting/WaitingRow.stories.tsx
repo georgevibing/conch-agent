@@ -20,7 +20,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Something Conch waits for on the assistant’s behalf (ADR 0125): CI, a command, a page, a time. One calm row: what it waits for, how it stands now (a CI run’s jobs as small dots that fill in as they finish, read from GitHub’s cheap status API), how long it’s been and when Conch looks next, with Check now and Stop waiting. No model is called while it waits, and the chat stays free when it “wakes” the chat. Once over, it says how it went in words, and the assistant carries on from there.',
+          'Something Conch waits for on the assistant’s behalf (ADR 0125): CI, a command, a page, a time, another of your chats or a task (ADR 0134). One calm row: what it waits for, how it stands now (a CI run’s jobs as small dots that fill in as they finish, read from GitHub’s cheap status API), how long it’s been and when Conch looks next, with Check now and Stop waiting. No model is called while it waits, and the chat stays free when it “wakes” the chat. Once over, it says how it went in words, and the assistant carries on from there.',
       },
     },
   },
@@ -115,6 +115,48 @@ export const ATime: S = {
     url: undefined,
     nextCheckAt: at + 25 * 60_000,
     startedAt: at - 5 * 60_000,
+  },
+};
+
+/** Another of your chats (ADR 0134): watched live, so there's no next look to show. */
+export const AnotherChat: S = {
+  args: {
+    kind: 'chat',
+    title: '“Fix the login redirect”',
+    status: 'Working',
+    parts: undefined,
+    url: undefined,
+    nextCheckAt: undefined,
+    startedAt: at - 3 * 60_000,
+  },
+};
+
+/** The other chat's reply ended: this one carries on by itself. */
+export const AnotherChatDone: S = {
+  args: {
+    kind: 'chat',
+    title: '“Fix the login redirect”',
+    state: 'done',
+    tone: 'good',
+    status: 'Finished its reply',
+    parts: undefined,
+    url: undefined,
+    nextCheckAt: undefined,
+    startedAt: at - 6 * 60_000,
+    endedAt: at,
+  },
+};
+
+/** A task this chat started, waiting for room first. */
+export const ATask: S = {
+  args: {
+    kind: 'task',
+    title: '“Build the docs”',
+    status: 'Waiting for room',
+    parts: undefined,
+    url: undefined,
+    nextCheckAt: undefined,
+    startedAt: at - 40_000,
   },
 };
 

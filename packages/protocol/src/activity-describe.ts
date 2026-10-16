@@ -1187,9 +1187,20 @@ const CONCH: Record<string, (input: Input) => Draft> = {
             ? 'a page to change'
             : kind === 'time'
               ? 'the time'
-              : 'something';
+              : kind === 'chat'
+                ? 'another chat'
+                : kind === 'task'
+                  ? 'a task'
+                  : 'something';
     return {
-      family: kind === 'ci' ? 'verify' : 'run',
+      family:
+        kind === 'ci'
+          ? 'verify'
+          : kind === 'task'
+            ? 'delegate'
+            : kind === 'chat'
+              ? 'remember'
+              : 'run',
       words: words(`Waiting for ${what}`, `Waited for ${what}`, `Couldn’t wait for ${what}`),
       finish: (output) => {
         const line = output.split('\n')[0]?.trim() ?? '';

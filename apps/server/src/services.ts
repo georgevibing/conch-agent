@@ -244,8 +244,14 @@ import { PROVIDER_COPY } from './providers/catalog';
 import { perReply } from './usage/prices';
 import { switchSection, switchTools, type SwitchDeps } from './switching/tools';
 import { RoutineSpend } from './routines/spend';
-import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
-import { TOGETHER_PROMPT, TogetherService } from './together/service';
+import {
+  PAST_CHATS_PROMPT,
+  pastChatTools,
+  scrubSecrets,
+  withOthers,
+  type ChatFacts,
+} from './search/past';
+import { chatStateOf, lastReplyOf, TOGETHER_PROMPT, TogetherService } from './together/service';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { WhenRoutines } from './routines/triggers';
@@ -1213,6 +1219,49 @@ export class Services {
         note: (id, event) => this.conversations.note(id, event),
         wake: (id, prompt) => this.conversations.wake(id, prompt),
         taint: (id, sources) => this.conversations.addTaint(id, sources),
+      },
+      // Waiting for another of your chats, or a task this chat started (ADR 0134).
+      others: {
+        chat: async (id) => {
+          const found = await this.conversations.detail(id).catch(() => undefined);
+          if (!found) return undefined;
+          const taint = heldTaints(found.events);
+          const reply = lastReplyOf(found.events);
+          const redact = this.vault.redactor();
+          const ended = found.events.findLast((e) => e.type === 'turn.completed');
+          return {
+            title: found.conversation.title,
+            state: chatStateOf(found.conversation.status),
+            ...(found.conversation.origin && { origin: found.conversation.origin }),
+            taint,
+            ...(reply && { lastReply: scrubSecrets(redact ? redact(reply) : reply) }),
+            ...(taint.length > 0 && { untrusted: true }),
+            ...(ended?.type === 'turn.completed' &&
+              ended.outcome === 'interrupted' && { interrupted: true }),
+          };
+        },
+        task: async (id) => {
+          const task = await this.tasks.get(id).catch(() => undefined);
+          if (!task) return undefined;
+          const result = task.summary ?? task.error;
+          return {
+            title: task.title,
+            status: task.status,
+            ...(task.parentConversationId && { parentConversationId: task.parentConversationId }),
+            ...(result && { result: result.slice(0, 2_000) }),
+          };
+        },
+        onChange: (id, listener) =>
+          this.broadcast.on((event) => {
+            if (
+              (event.type === 'conversation.updated' && event.conversation.id === id) ||
+              (event.type === 'task.changed' && event.task.id === id) ||
+              (event.type === 'conversation.event' &&
+                event.event.conversationId === id &&
+                event.event.type === 'status')
+            )
+              listener();
+          }),
       },
       tell: async (told) => {
         await this.push

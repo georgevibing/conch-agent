@@ -1865,6 +1865,20 @@ const TOOLS: Case[] = [
     { family: 'run', done: 'Waited for a command', outcome: '`pnpm test` finished after 3 min' },
   ],
   [
+    'wait_for another chat',
+    'wait_for',
+    { kind: 'chat', chat: 'c_1' },
+    undefined,
+    { family: 'remember', doing: 'Waiting for another chat', done: 'Waited for another chat' },
+  ],
+  [
+    'wait_for a task',
+    'wait_for',
+    { kind: 'task', task_id: 't_1' },
+    undefined,
+    { family: 'delegate', doing: 'Waiting for a task', done: 'Waited for a task' },
+  ],
+  [
     'process_read once the tests are done',
     'mcp__conch__process_read',
     { id: 'x' },

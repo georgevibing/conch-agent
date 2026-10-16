@@ -27,6 +27,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import {
   TOGETHER_TOOLS,
   type ActivityFamily,
+  type ConversationEvent,
   type ConversationSummary,
   type OtherChat,
   type OtherChatsFound,
@@ -377,6 +378,35 @@ function arrived(chats: readonly LiveChat[], first: boolean): string {
   return first
     ? `[Conch: another of the person’s chats ${verb} working in this folder right now: ${who}. Keep to your own files where you can, and don’t undo its changes; list_chats tells you more.]`
     : `[Conch: another of the person’s chats has started working in this folder: ${who}. Keep to your own files where you can, and don’t undo its changes.]`;
+}
+
+/** How much of another chat's last reply a wait brings back (ADR 0134): its end, where the outcome is. */
+export const LAST_REPLY_CHARS = 800;
+
+/**
+ * The end of a chat's last reply, as its words were written: what another chat
+ * waiting for it hears. Undefined when it hasn't replied.
+ */
+export function lastReplyOf(events: readonly ConversationEvent[]): string | undefined {
+  const done = events.findLast((e) => e.type === 'assistant.done');
+  if (done?.type !== 'assistant.done') return undefined;
+  const text = events
+    .flatMap((e) =>
+      e.type === 'assistant.delta' && e.messageId === done.messageId && e.kind === 'text'
+        ? [e.delta]
+        : [],
+    )
+    .join('')
+    .trim();
+  if (!text) return undefined;
+  return text.length <= LAST_REPLY_CHARS
+    ? text
+    : `…${text.slice(-(LAST_REPLY_CHARS - 1)).trimStart()}`;
+}
+
+/** Where a chat is, from its status as saved: what a wait or a list says. */
+export function chatStateOf(status: ConversationSummary['status']): OtherChatState {
+  return stateOf(status, false);
 }
 
 /** What the assistant is told about your other chats, when it can ask (`offersTogether`). */

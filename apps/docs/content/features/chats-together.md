@@ -26,6 +26,12 @@ When another chat is changing files in the folder a chat works in, Conch tells i
 
 Your assistant then keeps to its own files, reads a file again before changing one the other chat changed, and never undoes the other chat's work.
 
+## Wait for another chat
+
+Say "when the login fix is done, write the release notes". Your assistant waits for that chat without checking again and again. A row says **Waiting for “Fix the login”**, and the chat is yours meanwhile.
+
+When the other chat's reply ends, needs you, or is stopped, this one carries on by itself. It hears how the other ended and the end of its last reply. The same works for a [task](tasks.md) it started.
+
 ## What stays private
 
 - **Only your chats.** A chat you started, its tasks, a routine's run, your own chat from a [chat app](../channels/index.md). Never one with someone else in it, an [outside agent](agents.md#outside-agents)'s or another app's.
