@@ -1661,14 +1661,9 @@ export class TaskService {
           const tasks = args.id
             ? [await owned(String(args.id))]
             : all.tasks.filter((t) => t.parentConversationId === ctx.conversationId).slice(0, 50);
-          // Room for more, across every chat (ADR 0129, ADR 0134): whether starting another helps.
-          const capacity = all.capacity ?? {
-            atOnce: all.concurrent,
-            working: all.tasks.filter((t) => RUNNING.includes(t.status)).length,
-            waiting: all.tasks.filter((t) => t.status === 'queued').length,
-          };
           return JSON.stringify({
-            capacity,
+            // Room for more, across every chat (ADR 0129, ADR 0134): whether starting another helps.
+            capacity: all.capacity,
             tasks: tasks.map((t) => {
               const assessment = assessTask(t);
               const operations = t.operations ?? [];

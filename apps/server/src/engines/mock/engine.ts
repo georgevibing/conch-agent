@@ -873,7 +873,7 @@ export class MockEngine implements Engine {
       if (/^\s*what are my other chats doing\b/i.test(said)) {
         const found = readOtherChatsFound(yield* hostTool('list_chats', {}));
         const busy = found?.chats.filter((c) => c.state === 'working') ?? [];
-        const heard = /working in this folder right now/.test(input.systemAppend);
+        const heard = /changing files in this folder right now/.test(input.systemAppend);
         yield* speak(
           [
             heard ? 'Conch told me another chat is working in this folder.' : '',

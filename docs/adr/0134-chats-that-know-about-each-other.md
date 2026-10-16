@@ -45,7 +45,7 @@ For each of your other chats it says (`OtherChat`, protocol `together.ts`):
 
 - its state, as the chat list has it: `working`, `needs-you`, `idle`, `stopped`;
 - while working, what it's doing in Conch's own words, from the family of the step running
-  (`describeTool(...).family` → "editing files", "running a command");
+  (`describeTool(...).family` → "editing files", "running a command"), and for how long;
 - when its reply began, and when it was last active;
 - `sameFolder`, or its folder as a person reads it;
 - the files its running reply has changed (`files.changed` since the turn began);
@@ -53,8 +53,10 @@ For each of your other chats it says (`OtherChat`, protocol `together.ts`):
 - where it came from ("a task from this chat", "a routine", "Telegram");
 - `untrusted` when it read something from outside.
 
-Busy chats come first, then the ones active in the last three days, twelve at most.
-Archived chats are left out unless they're working. The chat shows a `chats.listed` event:
+Busy chats come first, then the ones that need you and the ones active in the last three
+days, twelve at most (`which: "working"` gives only the busy ones). Archived chats are left out
+unless they're working. The row shows the file a busy chat in the same folder is changing
+("Changing auth.ts +2"), and counts every busy chat of yours, even past the list's end. The chat shows a `chats.listed` event:
 Nacre `OtherChatsLook`, "Checked on your other chats · 1 working · 1 needs you", each chat a
 row that opens it.
 
@@ -67,20 +69,28 @@ reply running, so it's cheap enough for every step.
 
 `TogetherService.reader(id)` is asked as each turn starts (with the other notes in front of
 the message, ADR 0085) and at each step after (`resourceFeedback`, beside the resource
-notes). It speaks when:
+notes). Two turns work in the same place when they run on the same computer (a chat's place,
+ADR 0106, is part of its turn) and in the same folder: the same one, or one inside the other,
+with links followed and case folded where the disk ignores it. Inside Conch's own folder,
+where each task's worktree is, only the same folder counts. It speaks when:
 
-- another of your chats is working in the same folder (the same, or one inside the other)
-  and is changing files there, or running a step that does (`edit`, `run`, `verify`,
-  `ship`): "another of the person's chats is working in this folder right now: “Fix login”
-  (chat c_1), changing src/auth.ts. Keep to your own files…";
-- a new one starts doing so while this reply runs;
-- this reply and another have both changed the same file: "read it again before changing it
-  further".
+- another of your chats is changing files there (it has changed some, or its step edits or
+  commits): "another of the person's chats is changing files in this folder right now:
+  “Fix login” (chat c_1), changing src/auth.ts. Keep to your own files…";
+- another runs commands there (tests, a build), said once and softly: "is running commands
+  in this folder. If yours would clash, wait for it or say so";
+- this reply and another have both changed the same file, compared by full path, however
+  many files either changed: "read it again before changing it further".
 
 Each chat and each shared file is said once per turn, four lines a turn at most. A chat
-that only reads or talks, or works in another folder (a task in its own worktree), is not
-mentioned. A chat with someone else in it is told nothing, and nothing about a chat that
-isn't yours reaches anyone.
+that only reads or talks, or works somewhere else, is not mentioned. A chat with someone else
+in it is told nothing, and nothing about a chat that isn't yours reaches anyone, not even in
+the count of chats working. A task or a routine's run hears the same lines, without being
+pointed at `list_chats`, which it doesn't have.
+
+Another chat's title and file names are words a model chose. Inside Conch's line they're
+plain words: brackets, quotes and angle brackets are taken out, so none can close Conch's
+line and open one that looks like Conch's own.
 
 The prompt section `TOGETHER_PROMPT` (static, so it stays in a session's system text) says
 how to use it: keep to your own files, read again before changing one the other changed,

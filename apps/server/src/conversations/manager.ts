@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import type {
   Agent,
@@ -676,7 +677,7 @@ interface Live {
    * The turn running now, for your other chats to know about (ADR 0134): its
    * folder, when it began, and where its events start. Gone when it ends.
    */
-  turn?: { cwd: string; since: number; fromSeq: number };
+  turn?: { cwd: string; since: number; fromSeq: number; place?: WorkPlaceId };
 }
 
 /** A chat as your other chats may know it (ADR 0134): never its words, only where it is. */
@@ -693,8 +694,11 @@ export interface LiveChat {
   turn?: {
     cwd: string;
     since: number;
+    /** Where its commands run (ADR 0106), when not on this computer: the same path there is another folder. */
+    place?: WorkPlaceId;
     /** The family of the step running now (`edit`, `run`…), from Conch's own reading of it. */
     doing?: ActivityFamily;
+    /** Every file this reply changed, as full paths. */
     changing: string[];
   };
 }
@@ -1277,17 +1281,19 @@ export class ConversationManager {
       let doing: ActivityFamily | undefined;
       const changing = new Set<string>();
       if (turn) {
+        // From the end back to where the turn began: only this turn's events, whatever came before.
         const finished = new Set<string>();
-        for (const event of live.events) {
-          if (event.seq < turn.fromSeq) continue;
+        let step: { name: string; input: unknown } | undefined;
+        for (let i = live.events.length - 1; i >= 0; i--) {
+          const event = live.events[i];
+          if (!event || event.seq < turn.fromSeq) break;
           if (event.type === 'tool.finished') finished.add(event.toolUseId);
+          else if (event.type === 'tool.started' && !step && !finished.has(event.toolUseId))
+            step = event;
           else if (event.type === 'files.changed')
-            for (const file of event.files) changing.add(file.path);
+            for (const file of event.files) changing.add(wherePath(file.path, turn.cwd));
         }
-        const step = live.events.findLast(
-          (e) => e.seq >= turn.fromSeq && e.type === 'tool.started' && !finished.has(e.toolUseId),
-        );
-        if (step?.type === 'tool.started') {
+        if (step) {
           try {
             doing = describeTool(step.name, step.input).family;
           } catch {
@@ -1307,8 +1313,9 @@ export class ConversationManager {
           turn: {
             cwd: turn.cwd,
             since: turn.since,
+            ...(turn.place && { place: turn.place }),
             ...(doing && { doing }),
-            changing: [...changing].slice(-8),
+            changing: [...changing],
           },
         }),
       };
@@ -4377,6 +4384,8 @@ export class ConversationManager {
         engine.places && !guest
           ? this.deps.places?.(live.record.options?.place ?? settings.preferences.place)
           : undefined;
+      // Somewhere else, the same folder name is another folder (ADR 0134).
+      if (place && live.turn) live.turn = { ...live.turn, place: place.id };
       // The session keeps the system text it started with; what changed, and the memories
       // this message brought up, go in front of the person's words (ADR 0085).
       const sections = guest ? undefined : await this.deps.context?.(engine, conversationId);
@@ -5698,6 +5707,12 @@ function summary(record: ConversationRecord): ConversationSummary {
     ...(spend && { spend }),
     ...(agentId && { agentId }),
   };
+}
+
+/** A changed file's full path, from the way a person reads it (`src/a.ts`, `~/notes.md`). */
+function wherePath(shown: string, cwd: string): string {
+  if (shown === '~' || shown.startsWith('~/')) return join(homedir(), shown.slice(2));
+  return resolve(cwd, shown);
 }
 
 function withoutUndefined(record: ConversationRecord): ConversationRecord {

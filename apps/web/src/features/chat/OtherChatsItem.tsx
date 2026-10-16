@@ -18,12 +18,14 @@ export function OtherChatsItem({ item }: { item: Listed }) {
     state: chat.state,
     words: otherChatWords(chat),
     ...(chat.sameFolder && { sameFolder: true }),
+    ...(chat.changing?.length && { changing: chat.changing }),
     ...(chat.from && { from: chat.from }),
   }));
   return (
     <OtherChatsLook
       data-anchor={item.id}
       chats={chats}
+      {...(item.working !== undefined && { working: item.working })}
       onOpen={(chat) => void navigate(`/c/${encodeURIComponent(chat.id)}`)}
     />
   );

@@ -13,7 +13,7 @@ Say "what are my other chats doing?" or "is the deploy chat done?". The chat sho
 
 Your assistant sees, for each of your other chats:
 
-- whether it's working, needs you, is done for now, or didn't finish;
+- whether it's working (and for how long), needs you, is done for now, or didn't finish;
 - what it's doing: editing files, running a command, using the browser;
 - whether it works in the same folder, and the files it has changed so far;
 - its [tasks](tasks.md) still going.
@@ -22,7 +22,9 @@ It looks by itself before changing files another chat may be working on.
 
 ## Two chats, one folder
 
-When another chat is changing files in the folder a chat works in, Conch tells it as its reply starts. A reply already running hears it at its next step. If both change the same file, Conch says that too.
+When another chat is changing files in the folder a chat works in, Conch tells it as its reply starts. A reply already running hears it at its next step. If both change the same file, Conch says that too. A chat running tests or a build there gets a quieter word, once.
+
+A task in its own copy of the folder, or a chat working on [another computer](where-work-runs.md), isn't in the same folder.
 
 Your assistant then keeps to its own files, reads a file again before changing one the other chat changed, and never undoes the other chat's work.
 

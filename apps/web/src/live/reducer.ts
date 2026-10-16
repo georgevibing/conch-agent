@@ -251,6 +251,8 @@ export type TranscriptItem =
       kind: 'listed';
       id: string;
       chats: OtherChatSeen[];
+      /** How many were working, all told. */
+      working?: number;
       at: number;
     }
   | {
@@ -975,7 +977,16 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'chats.listed':
       return {
         ...base,
-        items: [...items, { kind: 'listed', id: event.listId, chats: event.chats, at: event.at }],
+        items: [
+          ...items,
+          {
+            kind: 'listed',
+            id: event.listId,
+            chats: event.chats,
+            ...(event.working !== undefined && { working: event.working }),
+            at: event.at,
+          },
+        ],
       };
     case 'memory.decided': {
       const decided = event.kept ? ('kept' as const) : ('undone' as const);

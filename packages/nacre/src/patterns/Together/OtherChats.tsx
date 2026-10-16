@@ -18,6 +18,8 @@ export interface OtherChatView {
   words: string;
   /** It works in the same folder as the chat that looked. */
   sameFolder?: boolean;
+  /** The last few files it changed there, newest last: the one fact that matters most. */
+  changing?: readonly string[];
   /** Where it came from, when not a chat you started: “a task”, “Telegram”. */
   from?: string;
 }
@@ -49,16 +51,21 @@ export function OtherChatsList({ chats, onOpen, className, ...props }: OtherChat
   return (
     <ul aria-label="Your other chats" className={cx(styles.list, className)} {...props}>
       {chats.map((chat) => {
-        const meta = [chat.words, chat.sameFolder ? 'Same folder' : undefined, chat.from].filter(
-          Boolean,
-        );
+        const meta = [
+          chat.changing?.length ? changingWords(chat.changing) : chat.words,
+          chat.sameFolder ? 'Same folder' : undefined,
+          chat.from,
+        ].filter(Boolean);
         return (
           <li key={chat.id}>
             <button type="button" className={styles.row} onClick={() => onOpen?.(chat)}>
               <OtherChatMark state={chat.state} />
               <span className={styles.title}>
                 {chat.title}
-                <span className="nc-visually-hidden">, {STATE_WORDS[chat.state]}</span>
+                {/* The words after it say the rest; only “working” needs saying first. */}
+                {chat.state === 'working' && (
+                  <span className="nc-visually-hidden">, {STATE_WORDS.working}</span>
+                )}
               </span>
               <span className={styles.meta}>{meta.join(META_SEP)}</span>
             </button>
@@ -69,17 +76,29 @@ export function OtherChatsList({ chats, onOpen, className, ...props }: OtherChat
   );
 }
 
+/** “Changing auth.ts”, “Changing auth.ts +2”: the newest file, and how many more. */
+export function changingWords(files: readonly string[]): string {
+  const last = files.at(-1) ?? '';
+  const name = last.split('/').at(-1) || last;
+  return files.length > 1 ? `Changing ${name} +${files.length - 1}` : `Changing ${name}`;
+}
+
 export interface OtherChatsLookProps extends Omit<ComponentProps<'div'>, 'children'> {
   chats: OtherChatView[];
+  /** How many were working, all told, when that's more than the list shows. */
+  working?: number;
   onOpen?: (chat: OtherChatView) => void;
   defaultOpen?: boolean;
 }
 
 /** “2 working · 1 needs you”, or “Nothing else going on”. */
-export function otherChatsSummary(chats: readonly Pick<OtherChatView, 'state'>[]): string {
-  if (!chats.length) return 'Nothing else going on';
+export function otherChatsSummary(
+  chats: readonly Pick<OtherChatView, 'state'>[],
+  allWorking?: number,
+): string {
   const count = (state: OtherChatState) => chats.filter((c) => c.state === state).length;
-  const working = count('working');
+  const working = Math.max(count('working'), allWorking ?? 0);
+  if (!chats.length && !working) return 'Nothing else going on';
   const needs = count('needs-you');
   const parts = [
     working ? `${working} working` : undefined,
@@ -95,12 +114,18 @@ export function otherChatsSummary(chats: readonly Pick<OtherChatView, 'state'>[]
  * says how many are busy. Opened, each chat is a row with its state, and
  * pressing it opens that chat.
  */
-export function OtherChatsLook({ chats, onOpen, defaultOpen, ...props }: OtherChatsLookProps) {
+export function OtherChatsLook({
+  chats,
+  working,
+  onOpen,
+  defaultOpen,
+  ...props
+}: OtherChatsLookProps) {
   return (
     <ToolCall
       name="Checked on your other chats"
       icon={chats.some((c) => c.state === 'working') ? Layers : MessageSquareText}
-      summary={otherChatsSummary(chats)}
+      summary={otherChatsSummary(chats, working)}
       status="success"
       defaultOpen={defaultOpen}
       {...props}

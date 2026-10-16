@@ -23,8 +23,8 @@ describe('OtherChatsLook', () => {
     const rows = within(list).getAllByRole('button');
     expect(rows.map((b) => b.textContent)).toEqual([
       `Fix login, workingEditing files${META_SEP}Same folder`,
-      'Release notes, needs youNeeds you',
-      `Lisbon, done for nowDone for now${META_SEP}Telegram`,
+      'Release notesNeeds you',
+      `LisbonDone for now${META_SEP}Telegram`,
     ]);
     await expectAccessible(container);
   });
@@ -46,6 +46,32 @@ describe('OtherChatsLook', () => {
     expect(screen.getByText('Nothing else going on')).toBeInTheDocument();
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it('says the file a busy chat is changing, and counts all the busy ones', async () => {
+    const user = userEvent.setup();
+    renderNacre(
+      <OtherChatsLook
+        working={3}
+        chats={[
+          { ...chats[0]!, changing: ['src/a.ts', 'src/auth/login.ts'] },
+          {
+            id: 'c4',
+            title: 'One file',
+            state: 'working',
+            words: 'Editing files',
+            changing: ['x.md'],
+          },
+        ]}
+      />,
+    );
+    const row = screen.getByRole('button', { name: /Checked on your other chats/ });
+    expect(row.textContent).toContain('3 working');
+    await user.click(row);
+    expect(screen.getByRole('button', { name: /Fix login/ }).textContent).toContain(
+      `Changing login.ts +1${META_SEP}Same folder`,
+    );
+    expect(screen.getByRole('button', { name: /One file/ }).textContent).toContain('Changing x.md');
   });
 
   it('counts in words', () => {

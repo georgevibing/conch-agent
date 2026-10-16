@@ -1283,6 +1283,7 @@ export class Services {
       tasks: async () => (await this.tasks.list()).tasks,
       browsing: (id) => Boolean(this.browser.tabIfOpen(id)),
       workspace: () => this.settings.workspace(),
+      apart: config.CONCH_HOME,
     });
     this.conversations = new ConversationManager({
       judged: (verdict, risk) => this.telemetry.auto(verdict, risk),

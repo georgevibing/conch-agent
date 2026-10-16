@@ -22,6 +22,7 @@
  *   read a page doesn't make this one wary.
  * - **Small.** A fixed number of chats, each a few short fields.
  */
+import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import {
@@ -66,6 +67,11 @@ export interface TogetherDeps {
   browsing?: (conversationId: string) => boolean;
   /** Where a chat's turn works when nothing says otherwise: the work folder. */
   workspace: () => Promise<string>;
+  /**
+   * Conch's own folder (`CONCH_HOME`): each task's worktree inside it is a
+   * folder of its own, whatever holds it, so only the same one counts there.
+   */
+  apart?: string;
 }
 
 /** Someone else's words are in it: a chat app's other people, a message forwarded in. */
@@ -120,15 +126,27 @@ const DOING: Record<ActivityFamily, string> = {
   other: 'working',
 };
 
-/** Steps that touch the work folder: another chat doing these there is worth knowing. */
-const TOUCHES: ReadonlySet<ActivityFamily> = new Set(['edit', 'run', 'verify', 'ship']);
+/** Steps that change the work folder: another chat doing these there is worth a warning. */
+const CHANGES: ReadonlySet<ActivityFamily> = new Set(['edit', 'ship']);
+/** Steps that run things there (tests, a build): worth a word, once. */
+const RUNS: ReadonlySet<ActivityFamily> = new Set(['run', 'verify']);
 
 const iso = (at: number) => new Date(at).toISOString();
 
 const clip = (text: string, max: number) =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
-const titled = (title: string) => clip(title.replace(/\s+/g, ' ').trim() || 'Untitled', 120);
+/**
+ * Words another chat chose (a title, a file's name) as plain words inside Conch's
+ * own line: no brackets or quotes, so none can close the line and open one of its own.
+ */
+const plain = (text: string) =>
+  text
+    .replace(/[[\]“”"<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const titled = (title: string) => clip(plain(title) || 'Untitled', 120);
 
 function stateOf(status: ConversationSummary['status'], working: boolean): OtherChatState {
   if (status === 'awaiting-permission') return 'needs-you';
@@ -154,21 +172,57 @@ function from(
   }
 }
 
-/** One folder is the other, or holds it: work in one can touch the other. */
-export function sameFolder(a: string, b: string): boolean {
-  const x = resolve(a);
-  const y = resolve(b);
+/** Folders as the disk knows them: links followed, and one case where the disk has one. */
+const real = new Map<string, string>();
+function canonical(path: string): string {
+  const resolved = resolve(path);
+  let found = real.get(resolved);
+  if (found === undefined) {
+    try {
+      found = realpathSync.native(resolved);
+    } catch {
+      found = resolved;
+    }
+    if (process.platform === 'darwin' || process.platform === 'win32') found = found.toLowerCase();
+    if (real.size > 256) real.clear();
+    real.set(resolved, found);
+  }
+  return found;
+}
+
+const inside = (outer: string, inner: string) => {
+  const path = relative(outer, inner);
+  return path !== '' && !path.startsWith('..') && !isAbsolute(path);
+};
+
+/**
+ * One folder is the other, or holds it: work in one can touch the other. In
+ * `apart` (Conch's own folder, where each task's worktree is) only the same
+ * folder counts, so a worktree is never "in" the folder that holds Conch.
+ */
+export function sameFolder(a: string, b: string, apart?: string): boolean {
+  const x = canonical(a);
+  const y = canonical(b);
   if (x === y) return true;
-  const inside = (outer: string, inner: string) => {
-    const path = relative(outer, inner);
-    return path !== '' && !path.startsWith('..') && !isAbsolute(path);
-  };
+  if (apart) {
+    const home = canonical(apart);
+    if (x === home || y === home || inside(home, x) || inside(home, y)) return false;
+  }
   return inside(x, y) || inside(y, x);
+}
+
+/** Two turns work in the same place: the same computer (ADR 0106), and the same folder there. */
+function sameWork(
+  a: { cwd: string; place?: string },
+  b: { cwd: string; place?: string },
+  apart?: string,
+): boolean {
+  return a.place === b.place && sameFolder(a.cwd, b.cwd, apart);
 }
 
 /** Up to a few names, and how many more: “a.ts, b.ts and 3 more”. */
 function some(names: readonly string[], most = NAMED): string {
-  const shown = names.slice(0, most);
+  const shown = names.slice(0, most).map((name) => clip(plain(name), 120));
   const rest = names.length - shown.length;
   const list =
     shown.length <= 1
@@ -193,48 +247,66 @@ export class TogetherService {
   reader(conversationId: string): { take(): string | undefined } | undefined {
     const self = this.deps.live().find((c) => c.id === conversationId);
     if (self && !isYours(self)) return undefined;
+    // A task or a routine's run hears it too, but has no list_chats to ask more with.
+    const asks = !self?.origin || self.origin.kind === 'channel';
     /** Chats already told about this turn, and the files already said to be changed by both. */
-    const told = new Set<string>();
+    const told = new Map<string, 'changing' | 'running'>();
     const shared = new Set<string>();
-    let said = 0;
+    let lines = 0;
     return {
       take: () => {
-        if (said >= NOTES_PER_TURN) return undefined;
+        if (lines >= NOTES_PER_TURN) return undefined;
         const working = this.deps.live({ working: true });
         const me = working.find((c) => c.id === conversationId);
         if (!me?.turn || !isYours(me)) return undefined;
         const mine = me.turn;
         const near = working.filter(
-          (c) =>
+          (c): c is LiveChat & { turn: NonNullable<LiveChat['turn']> } =>
             c.id !== conversationId &&
-            c.turn &&
+            c.turn !== undefined &&
             isYours(c) &&
-            sameFolder(c.turn.cwd, mine.cwd) &&
-            // Changing files there, or about to: reading or chatting is nobody's worry.
-            (c.turn.changing.length > 0 || (c.turn.doing && TOUCHES.has(c.turn.doing))),
+            sameWork(c.turn, mine, this.deps.apart),
         );
-        const lines: string[] = [];
-        const fresh = near.filter((c) => !told.has(c.id));
-        if (fresh.length) {
-          const first = told.size === 0;
-          for (const c of fresh) told.add(c.id);
-          lines.push(arrived(fresh, first));
+        const said: string[] = [];
+        // Changing files there: worth a warning. Running tests or a build there: a word, once.
+        const changing = near.filter(
+          (c) =>
+            (c.turn.changing.length > 0 || (c.turn.doing && CHANGES.has(c.turn.doing))) &&
+            told.get(c.id) !== 'changing',
+        );
+        const running = near.filter(
+          (c) =>
+            !changing.includes(c) &&
+            c.turn.changing.length === 0 &&
+            c.turn.doing &&
+            RUNS.has(c.turn.doing) &&
+            !told.has(c.id),
+        );
+        if (changing.length) {
+          said.push(arrived(changing, told.size === 0, mine.cwd, asks));
+          for (const c of changing) told.set(c.id, 'changing');
+        }
+        if (running.length) {
+          said.push(runners(running));
+          for (const c of running) told.set(c.id, 'running');
         }
         // Both have changed the same file in the replies running now.
         const mineChanged = new Set(mine.changing);
         for (const c of near) {
-          const both = (c.turn?.changing ?? []).filter(
+          const both = c.turn.changing.filter(
             (file) => mineChanged.has(file) && !shared.has(`${c.id}:${file}`),
           );
           if (!both.length) continue;
           for (const file of both) shared.add(`${c.id}:${file}`);
-          lines.push(
-            `[Conch: you and ${named(c)} have both changed ${some(both)} in the replies you’re each writing now. Read ${both.length === 1 ? 'it' : 'them'} again before changing ${both.length === 1 ? 'it' : 'them'} further, so neither of you undoes the other’s work.]`,
+          const them = both.length === 1 ? 'it' : 'them';
+          said.push(
+            `[Conch: you and ${named(c)} have both changed ${some(both.map((f) => shownPath(f, mine.cwd)))} in the replies you’re each writing now. Read ${them} again before changing ${them} further, so neither of you undoes the other’s work.]`,
           );
         }
-        if (!lines.length) return undefined;
-        said += 1;
-        return lines.join('\n');
+        const kept = said.slice(0, NOTES_PER_TURN - lines);
+        if (!kept.length) return undefined;
+        lines += kept.length;
+        return kept.join('\n');
       },
     };
   }
@@ -249,9 +321,9 @@ export class TogetherService {
       name: TOGETHER_TOOLS.list,
       effect: 'read',
       description: [
-        'See what the person’s other chats with you are doing right now: which are working, which need them, and which are done for now; the folder each works in; the files a running reply has changed; whether it has a browser page open; its background tasks.',
+        'See what the person’s other chats with you are doing right now: which are working (and for how long), which need them, and which are done for now; the folder each works in; the files a running reply has changed; whether it has a browser page open; its background tasks.',
         'Use it before changing files another chat may be working on, when the person asks what else is going on (“what are my other chats doing?”, “is the deploy chat done?”), or when Conch tells you another chat is working in this folder.',
-        '`which`: "working" for only the chats busy now; "all" (the default) adds the ones active in the last few days. To find something said in an earlier chat, use search_chats instead.',
+        '`which`: "working" for only the chats busy now; "all" (the default) adds the ones that need the person and the ones active in the last few days. To find something said in an earlier chat, use search_chats instead.',
       ].join(' '),
       input: {
         which: z.enum(['working', 'all']).optional(),
@@ -265,12 +337,14 @@ export class TogetherService {
         ctx.append({
           type: 'chats.listed',
           listId: newId('list'),
+          working: found.working,
           chats: found.chats.map((c) => ({
             id: c.chat,
             title: c.title,
             state: c.state,
             ...(c.doing && { doing: c.doing }),
             ...(c.sameFolder && { sameFolder: true }),
+            ...(c.sameFolder && c.changing?.length && { changing: c.changing.slice(-3) }),
             ...(c.from && { from: c.from }),
           })),
         });
@@ -288,6 +362,7 @@ export class TogetherService {
       ctx.workspace ? ctx.workspace() : this.deps.workspace(),
     ]);
     const held = new Map(this.deps.live().map((c) => [c.id, c]));
+    const myPlace = held.get(here)?.turn?.place;
     // Each chat's tasks still going, by the chat they were sent from.
     const going = new Map<string, { working: number; waiting: number }>();
     for (const t of tasks) {
@@ -304,16 +379,15 @@ export class TogetherService {
       .filter((s) => s.id !== here)
       .map((s) => {
         const live = held.get(s.id);
-        const working = Boolean(live?.turn);
-        const state = stateOf(live?.status ?? s.status, working);
+        const state = stateOf(live?.status ?? s.status, Boolean(live?.turn));
         return { summary: s, live, state };
       })
       .filter(({ summary, state }) =>
-        state === 'working' || state === 'needs-you'
+        state === 'working'
           ? true
           : which === 'all' &&
-            summary.archivedAt === undefined &&
-            now - summary.updatedAt < RECENT_MS,
+            (state === 'needs-you' ||
+              (summary.archivedAt === undefined && now - summary.updatedAt < RECENT_MS)),
       )
       .sort(
         (a, b) =>
@@ -321,27 +395,44 @@ export class TogetherService {
           (b.live?.turn?.since ?? b.summary.updatedAt) -
             (a.live?.turn?.since ?? a.summary.updatedAt),
       );
-    const chats: OtherChat[] = [];
-    for (const { summary, live, state } of candidates) {
-      if (chats.length >= limit) break;
-      const taint = live?.taint ?? (await this.deps.taintOf(summary.id).catch(() => undefined));
+    // Whose they are, read together for the few that may be shown (and every busy one, to count).
+    const looked = candidates.filter((c, i) => i < limit * 2 || c.state === 'working');
+    const taints = await Promise.all(
+      looked.map(
+        async (c) =>
+          c.live?.taint ?? (await this.deps.taintOf(c.summary.id).catch(() => undefined)),
+      ),
+    );
+    const yours = looked.flatMap((c, i) => {
+      const taint = taints[i];
       // Gone since it was listed, or not one of yours to tell about.
-      if (!taint || !isYours({ origin: summary.origin, taint })) continue;
+      return taint && isYours({ origin: c.summary.origin, taint }) ? [{ ...c, taint }] : [];
+    });
+    const chats: OtherChat[] = [];
+    for (const { summary, live, state, taint } of yours.slice(0, limit)) {
       const turn = live?.turn;
-      const cwd = turn?.cwd;
+      const same = turn
+        ? sameWork(turn, { cwd: workspace, place: myPlace }, this.deps.apart)
+        : false;
       const tasksGoing = going.get(summary.id);
       const place = from(summary.origin, (id) => parents.get(id), here);
       chats.push({
         chat: summary.id,
-        title: clip(summary.title.replace(/\s+/g, ' ').trim() || 'Untitled', 200),
+        title: clip(plain(summary.title) || 'Untitled', 200),
         state,
         ...(state === 'working' && { doing: turn?.doing ? DOING[turn.doing] : 'working' }),
-        ...(turn && { since: iso(turn.since) }),
+        ...(turn && { since: iso(turn.since), for: span(now - turn.since) }),
         lastActive: iso(Math.max(summary.updatedAt, live?.updatedAt ?? 0)),
-        ...(cwd && sameFolder(cwd, workspace) && { sameFolder: true }),
-        ...(cwd && !sameFolder(cwd, workspace) && { folder: clip(shownPath(cwd, workspace), 200) }),
+        ...(same && { sameFolder: true }),
+        ...(turn &&
+          !same && {
+            folder: clip(
+              `${shownPath(turn.cwd, workspace)}${turn.place ? ' (elsewhere)' : ''}`,
+              200,
+            ),
+          }),
         ...(turn?.changing.length && {
-          changing: turn.changing.slice(-8).map((p) => clip(p, 200)),
+          changing: turn.changing.slice(-8).map((p) => clip(shownPath(p, workspace), 200)),
         }),
         ...(this.deps.browsing?.(summary.id) && { browser: true }),
         ...(tasksGoing && { tasks: tasksGoing }),
@@ -349,13 +440,13 @@ export class TogetherService {
         ...(taint.length > 0 && { untrusted: true }),
       });
     }
-    const working = candidates.filter((c) => c.state === 'working').length;
+    const working = yours.filter((c) => c.state === 'working').length;
     const note = !chats.length
       ? which === 'working'
         ? 'None of the person’s other chats is working right now.'
         : 'The person has no other chats active in the last few days. To find an older one, use search_chats.'
       : chats.some((c) => c.sameFolder && c.state === 'working' && c.changing?.length)
-        ? 'A chat marked sameFolder is working in this folder now: keep to your own files, and don’t undo the changes it made.'
+        ? 'A chat marked sameFolder is changing files in this folder now: keep to your own files, and don’t undo the changes it made.'
         : undefined;
     return { chats, working, ...(note && { note }) };
   }
@@ -365,19 +456,40 @@ function rank(state: OtherChatState): number {
   return state === 'working' ? 0 : state === 'needs-you' ? 1 : state === 'stopped' ? 2 : 3;
 }
 
+/** "40 s", "4 min", "1 h 5 min": how long, for words. */
+function span(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+}
+
 /** The line about chats that started changing files in this folder. */
-function arrived(chats: readonly LiveChat[], first: boolean): string {
+function arrived(
+  chats: readonly (LiveChat & { turn: NonNullable<LiveChat['turn']> })[],
+  first: boolean,
+  cwd: string,
+  asks: boolean,
+): string {
   const each = chats.slice(0, NAMED).map((c) => {
-    const files = c.turn?.changing ?? [];
-    const doing = c.turn?.doing ? DOING[c.turn.doing] : 'working';
-    return `${named(c)}, ${files.length ? `changing ${some(files)}` : doing}`;
+    const files = c.turn.changing.map((f) => shownPath(f, cwd));
+    return `${named(c)}, ${files.length ? `changing ${some(files)}` : DOING[c.turn.doing ?? 'edit']}`;
   });
   const more = chats.length > NAMED ? ` and ${chats.length - NAMED} more` : '';
   const who = `${each.join('; ')}${more}`;
-  const verb = chats.length === 1 ? 'is' : 'are';
+  const one = chats.length === 1;
+  const keep = `Keep to your own files where you can, and don’t undo ${one ? 'its' : 'their'} changes`;
   return first
-    ? `[Conch: another of the person’s chats ${verb} working in this folder right now: ${who}. Keep to your own files where you can, and don’t undo its changes; list_chats tells you more.]`
-    : `[Conch: another of the person’s chats has started working in this folder: ${who}. Keep to your own files where you can, and don’t undo its changes.]`;
+    ? `[Conch: ${one ? 'another of the person’s chats is' : 'other chats of the person’s are'} changing files in this folder right now: ${who}. ${keep}${asks ? '; list_chats tells you more' : ''}.]`
+    : `[Conch: ${one ? 'another of the person’s chats has' : 'other chats of the person’s have'} started changing files in this folder: ${who}. ${keep}.]`;
+}
+
+/** The line about chats running tests or a build in this folder: said once, softly. */
+function runners(chats: readonly LiveChat[]): string {
+  const who = `${chats.slice(0, NAMED).map(named).join(', ')}${chats.length > NAMED ? ` and ${chats.length - NAMED} more` : ''}`;
+  return `[Conch: ${who} ${chats.length === 1 ? 'is' : 'are'} running commands in this folder (tests or a build, say). If yours would clash, wait for ${chats.length === 1 ? 'it' : 'them'} or say so.]`;
 }
 
 /** How much of another chat's last reply a wait brings back (ADR 0134): its end, where the outcome is. */

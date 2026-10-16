@@ -34,6 +34,8 @@ export const OtherChat = z.object({
   doing: z.string().max(80).optional(),
   /** When its current reply began, ISO 8601, while working. */
   since: z.string().max(40).optional(),
+  /** How long it has been at it, in words (“4 min”), while working. */
+  for: z.string().max(40).optional(),
   /** When it last changed, ISO 8601. */
   lastActive: z.string().max(40),
   /** It works in the same folder as this chat. */
@@ -74,6 +76,8 @@ export const OtherChatSeen = z.object({
   state: OtherChatState,
   doing: z.string().max(80).optional(),
   sameFolder: z.boolean().optional(),
+  /** The last few files it changed here, when it works in the same folder. */
+  changing: z.array(z.string().max(200)).max(3).optional(),
   from: z.string().max(80).optional(),
 });
 export type OtherChatSeen = z.infer<typeof OtherChatSeen>;
@@ -83,6 +87,8 @@ export const OtherChatsListed = z.object({
   /** Its place in the transcript (`data-anchor`). */
   listId: z.string().max(64),
   chats: z.array(OtherChatSeen).max(20),
+  /** How many of your other chats were working, all told: more than the list when it was cut short. */
+  working: z.number().int().nonnegative().optional(),
 });
 export type OtherChatsListed = z.infer<typeof OtherChatsListed>;
 
