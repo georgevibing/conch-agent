@@ -2,6 +2,18 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.12](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.11...v0.1.0-alpha.12) (2026-10-16)
+
+### New
+
+- A chat can wait for another chat, or a task it started, and carry on by itself when it's done
+- Your chats know what your other chats are doing
+- Your chats can message each other, and stop each other, as far as you let them
+
+### Fixed
+
+- The note at the top of a chat keeps its width again
+
 ## [0.1.0-alpha.11](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-13)
 
 ### New
