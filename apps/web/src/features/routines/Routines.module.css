@@ -245,6 +245,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--nc-space-1) var(--nc-space-2);
+    /* A container's size can't come from its words: it takes the column's, up to its limit. */
+    inline-size: 100%;
     max-inline-size: 48rem;
     margin: var(--nc-space-3) auto 0;
     padding: var(--nc-space-2) var(--nc-space-3);

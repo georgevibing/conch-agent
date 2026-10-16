@@ -91,11 +91,15 @@ test('connect a pretend chat app with Conch, and a hello comes through it', asyn
   await expect(card.getByText('Parley is connected')).toBeVisible();
 
   // Ada writes to the bot on Parley; on its page in Conch, she says it's her.
-  const { channels } = (await (await request.get('/api/channels')).json()) as {
-    channels: { id: string; kind: string }[];
-  };
-  const channel = channels.find((c) => c.kind === 'app');
-  expect(channel).toBeTruthy();
+  // The card says so as the channel is saved: wait for the list to have it, rather than race it.
+  const appChannel = async () =>
+    (
+      (await (await request.get('/api/channels')).json()) as {
+        channels: { id: string; kind: string }[];
+      }
+    ).channels.find((c) => c.kind === 'app');
+  await expect.poll(async () => Boolean(await appChannel()), { timeout: 15_000 }).toBe(true);
+  const channel = await appChannel();
   await request.post(`${PRETEND}/__control/say`, {
     data: { from: { id: 'ada', name: 'Ada' }, text: 'hi' },
   });
