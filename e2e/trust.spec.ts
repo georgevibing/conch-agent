@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
 
-import { openConch } from './app';
+import { askFirst, autoAgain, openConch } from './app';
 
 /**
  * Skill trust, end to end (ADR 0031): Ada signs a skill with `pnpm conch
@@ -34,6 +34,10 @@ async function onAdasComputer(adaHome: string, ...args: string[]) {
 
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Sam' } } });
+});
+
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
 });
 
 test('a signed skill: what it can do, trusting who made it, held to it, and changed after', async ({
@@ -78,7 +82,8 @@ test('a signed skill: what it can do, trusting who made it, held to it, and chan
     'Ada Lovelace',
   );
 
-  // In use, it's held to its list: a command it didn't ask for asks first, with why.
+  // Ask first enforces the skill's list; Auto assesses the command itself (ADR 0135).
+  await askFirst(request);
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('/weekly-review run the tests');

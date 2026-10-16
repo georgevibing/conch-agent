@@ -76,6 +76,10 @@ test('the chat offers a skill people share, and carries on once it’s added', a
   await dialog.getByRole('button', { name: 'Add and carry on' }).click();
   await expect(page.getByText(/Added\s*Meeting notes\s*·\s*carrying on/)).toBeVisible();
   await expect(page.getByText('Here are your notes, tidied with', { exact: false })).toBeVisible();
-  // Held to what it says it needs, like any skill.
-  await expect(page.getByText('Held to Meeting notes’s list', { exact: false })).toBeVisible();
+  // Auto uses the skill without a misleading hold banner or extra approval (ADR 0135).
+  await expect(
+    page.getByRole('note').filter({ hasText: 'Using the Meeting notes skill' }),
+  ).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Skills this chat is held to' })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);
 });
