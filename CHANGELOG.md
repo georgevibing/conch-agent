@@ -2,6 +2,25 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.12](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.11...v0.1.0-alpha.12) (2026-10-16)
+
+
+### Features
+
+* a chat can wait for another chat, or a task it started, and carry on by itself when it's done ([2235ea2](https://github.com/georgevibing/conch-agent/commit/2235ea2f180f0b4f6de85ce6e74523acaf8869d6))
+* your chats can message each other, and stop each other, as far as you let them ([3bb9155](https://github.com/georgevibing/conch-agent/commit/3bb9155c753ce89715c2699b465ca8fb728f622d))
+* your chats know what your other chats are doing, and two working in one folder keep out of each other's way ([9b90418](https://github.com/georgevibing/conch-agent/commit/9b90418372898041122fa7809a6c1cf8e2cf5d6b))
+
+
+### Bug Fixes
+
+* a message from another chat is never more trusted than the chat that sent it ([c854a23](https://github.com/georgevibing/conch-agent/commit/c854a2321310bc70937c5fa358470f7a37f3f32e))
+* chats that know about each other say only what's true, and never more than they should ([bbe9b98](https://github.com/georgevibing/conch-agent/commit/bbe9b98b2162ced4147f7737b4c91369afdd264b))
+* every card's button goes on its own line under the words on a phone ([0a5fcb3](https://github.com/georgevibing/conch-agent/commit/0a5fcb3ae806b338acbd376220f3248a969d1466))
+* waiting for another chat ends only when it's really done, and its words can't speak as Conch ([33ceef3](https://github.com/georgevibing/conch-agent/commit/33ceef3144c0ce08754fbea4c0b5e23a1631e2a8))
+* **web:** the note at the top of a chat keeps its width again ([2ae852b](https://github.com/georgevibing/conch-agent/commit/2ae852bb782b4ab07609a8b130c3a3e157d762f7))
+* when another provider carries a chat on, the picker and the header show it; the line wraps as a card on a phone ([7b4c5bd](https://github.com/georgevibing/conch-agent/commit/7b4c5bdfa00b4a3961004ef660b42fdadfeddd01))
+
 ## [0.1.0-alpha.11](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-13)
 
 ### New
