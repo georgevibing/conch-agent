@@ -173,6 +173,7 @@ describe('a task’s tools', () => {
       'delete_routine',
       'search_chats',
       'read_chat',
+      'list_chats',
       'ask',
       'offer',
     ])

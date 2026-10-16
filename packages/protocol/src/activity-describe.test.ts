@@ -1978,6 +1978,17 @@ const TOOLS: Case[] = [
   ],
   ['read_chat', 'read_chat', { chat: 'x' }, undefined, { done: 'Read a past chat' }],
   [
+    'list_chats',
+    'mcp__conch__list_chats',
+    {},
+    undefined,
+    {
+      family: 'remember',
+      doing: 'Checking on your other chats',
+      done: 'Checked on your other chats',
+    },
+  ],
+  [
     'update_plan',
     'update_plan',
     { steps: [{ status: 'done' }, { status: 'active' }] },

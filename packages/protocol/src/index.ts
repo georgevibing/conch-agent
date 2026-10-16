@@ -49,6 +49,7 @@ import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
 import { MAX_PROFILE_FACTS, ProfileAvatar, ProfileFact } from './profile';
 import { PastChatsLooked } from './past-chats';
+import { OtherChatsListed } from './together';
 import { LearnedItem } from './quiet-learning';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
@@ -133,6 +134,7 @@ export * from './safety';
 export * from './search';
 export * from './fuzzy';
 export * from './past-chats';
+export * from './together';
 export * from './setup';
 export * from './skills';
 export * from './skill-market';
@@ -862,6 +864,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   }),
   /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
   z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),
+  /** The assistant looked at what your other chats are doing (ADR 0134). */
+  z.object({ ...logged, type: z.literal('chats.listed'), ...OtherChatsListed.shape }),
   /**
    * The assistant created, changed or deleted files (ADR 0030): what, and the
    * change set that puts them back. `toolUseId` when one tool call did it;
@@ -1165,6 +1169,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     message: z.string(),
     /** The model the chat had with `from`, so Switch back can return to it. */
     fromModel: z.string().max(200).optional(),
+    /** The model `to` answers with, when routing chose one (unset: its own default). */
+    model: z.string().max(200).optional(),
     /** At a limit, the chat moved to `to` for good (`preferences.limitReturn` off). */
     stayed: z.boolean().optional(),
   }),

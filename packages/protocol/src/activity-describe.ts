@@ -11,6 +11,7 @@ import type { ActivityChip, ActivityEffect, ActivityFamily, ToolLabel } from './
 import { APP_TOOL_WORDS, type AppToolName } from './app-tools';
 import type { ToolApproval, ToolStatus } from './index';
 import { PAST_CHATS_TOOLS } from './past-chats';
+import { TOGETHER_TOOLS } from './together';
 import {
   exitCode,
   failureLine,
@@ -1246,6 +1247,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     };
   },
   [PAST_CHATS_TOOLS.read]: () => ({ family: 'remember', words: say('read', 'a past chat') }),
+  [TOGETHER_TOOLS.list]: () => ({ family: 'remember', words: say('check', 'on your other chats') }),
   update_plan: (input) => todoDraft(input.steps ?? input.plan, ['done', 'completed']),
   exit_plan_mode: () => ({
     family: 'plan',

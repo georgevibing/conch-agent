@@ -68,6 +68,7 @@ export * from './Updates';
 export * from './Activity';
 export * from './Archive';
 export * from './PastChats';
+export * from './Together';
 export * from './AlwaysOn';
 export * from './Backups';
 export * from './PathPicker';

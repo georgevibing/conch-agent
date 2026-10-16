@@ -1651,19 +1651,25 @@ export class TaskService {
         name: 'task_status',
         effect: 'read',
         description:
-          'List background tasks and helpers started in this chat, or read one by id. Returns progress, status, errors and the result. With id, includes up to 50 recent operations; operations_offset pages through earlier evidence. Cannot read tasks belonging to another chat.',
+          'List background tasks and helpers started in this chat, or read one by id. Returns progress, status, errors and the result, and `capacity`: how many tasks this computer runs at once now, how many are working and waiting across all chats, and what holds the rest back. With id, includes up to 50 recent operations; operations_offset pages through earlier evidence. Cannot read tasks belonging to another chat.',
         input: {
           id: z.string().min(1).max(128).optional(),
           operations_offset: z.number().int().nonnegative().optional(),
         },
         run: async (args) => {
+          const all = await this.list();
           const tasks = args.id
             ? [await owned(String(args.id))]
-            : (await this.list()).tasks
-                .filter((t) => t.parentConversationId === ctx.conversationId)
-                .slice(0, 50);
-          return JSON.stringify(
-            tasks.map((t) => {
+            : all.tasks.filter((t) => t.parentConversationId === ctx.conversationId).slice(0, 50);
+          // Room for more, across every chat (ADR 0129, ADR 0134): whether starting another helps.
+          const capacity = all.capacity ?? {
+            atOnce: all.concurrent,
+            working: all.tasks.filter((t) => RUNNING.includes(t.status)).length,
+            waiting: all.tasks.filter((t) => t.status === 'queued').length,
+          };
+          return JSON.stringify({
+            capacity,
+            tasks: tasks.map((t) => {
               const assessment = assessTask(t);
               const operations = t.operations ?? [];
               const offset =
@@ -1707,7 +1713,7 @@ export class TaskService {
                   : {}),
               };
             }),
-          );
+          });
         },
       },
       {

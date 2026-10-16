@@ -48,6 +48,7 @@ import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
 import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
+import { OtherChatsItem } from './OtherChatsItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldMemoryItem } from './MemoryStep';
 import { useMemoryHeadlines } from '../memory/headlines';
@@ -452,7 +453,13 @@ function saidIn(reply: Reply): string | undefined {
 function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
-  if (item.kind === 'browser' || item.kind === 'artifact' || item.kind === 'looked') return item.at;
+  if (
+    item.kind === 'browser' ||
+    item.kind === 'artifact' ||
+    item.kind === 'looked' ||
+    item.kind === 'listed'
+  )
+    return item.at;
   if (item.kind === 'memory') return item.at;
   return undefined;
 }
@@ -587,6 +594,7 @@ export const Transcript = memo(function Transcript({
     ((last?.kind === 'tool' && last.status !== 'running' && last.status !== 'pending') ||
       last?.kind === 'memory' ||
       last?.kind === 'looked' ||
+      last?.kind === 'listed' ||
       last?.kind === 'files' ||
       (last?.kind === 'script' && last.run.state !== 'running') ||
       last?.kind === 'taint' ||
@@ -913,6 +921,7 @@ export const Transcript = memo(function Transcript({
         <LearnedChatLine items={block.item.items} decided={block.item.decided} />
       )}
       {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
+      {block.item?.kind === 'listed' && <OtherChatsItem item={block.item} />}
       {block.item?.kind === 'skill' && (
         <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />
       )}
@@ -1132,6 +1141,7 @@ function familyAfter(item: TranscriptItem | undefined): ToolFamily {
     case 'files':
       return 'edit';
     case 'looked':
+    case 'listed':
       return 'search';
     default:
       return 'other';

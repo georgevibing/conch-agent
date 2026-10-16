@@ -1,0 +1,111 @@
+@layer nacre.components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    container-type: inline-size;
+  }
+
+  .row {
+    appearance: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--nc-space-2);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  @media (hover: hover) {
+    .row:hover {
+      background-color: var(--nc-wash-1);
+    }
+
+    .row:hover .title {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
+  .title {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .meta {
+    padding-inline-start: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  /* The chat list's own marks, so a state reads the same wherever it's shown. */
+  .mark {
+    --tg-dot: 0.5rem;
+    display: grid;
+    place-items: center;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .mark::before {
+    content: '';
+    inline-size: var(--tg-dot);
+    block-size: var(--tg-dot);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-border-strong);
+  }
+
+  .mark[data-state='working']::before {
+    display: none;
+  }
+
+  /* Needs you: amber, as in the chat list. */
+  .mark[data-state='needs-you']::before {
+    background: light-dark(
+      oklch(0.74 0.16 var(--nc-warning-h)),
+      oklch(0.8 0.15 var(--nc-warning-h))
+    );
+  }
+
+  /* Didn't finish: a hollow ring, apart from the filled dots without colour. */
+  .mark[data-state='stopped']::before {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px
+      light-dark(oklch(0.6 0.2 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  /* Narrow: the words go under the title, so the title keeps its room. */
+  @container (max-width: 26rem) {
+    .row {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .meta {
+      grid-column: 2;
+      padding-inline-start: 0;
+    }
+  }
+}

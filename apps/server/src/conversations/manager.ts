@@ -28,6 +28,7 @@ import type {
   Usage,
   ContextFill,
   ChatChange,
+  ActivityFamily,
   MailEdit,
   ModelRef,
   ReplySuggestion,
@@ -43,6 +44,7 @@ import {
   approvalOf,
   chatGoal,
   contextStart,
+  describeTool,
   honouredMode,
   skillHolds,
   undoableClear,
@@ -670,6 +672,31 @@ interface Live {
    * ends well, the model switched to answers next, with these words.
    */
   carry?: { engine: EngineId; model?: string; prompt: string };
+  /**
+   * The turn running now, for your other chats to know about (ADR 0134): its
+   * folder, when it began, and where its events start. Gone when it ends.
+   */
+  turn?: { cwd: string; since: number; fromSeq: number };
+}
+
+/** A chat as your other chats may know it (ADR 0134): never its words, only where it is. */
+export interface LiveChat {
+  id: string;
+  title: string;
+  status: ConversationStatus;
+  origin?: ConversationRecord['origin'];
+  updatedAt: number;
+  archivedAt?: number;
+  /** What it has read from outside, and whose words are in it (ADR 0028). */
+  taint: readonly TaintSource[];
+  /** While a reply runs: its folder, when it began, what it's doing and the files it has changed. */
+  turn?: {
+    cwd: string;
+    since: number;
+    /** The family of the step running now (`edit`, `run`…), from Conch's own reading of it. */
+    doing?: ActivityFamily;
+    changing: string[];
+  };
 }
 
 /**
@@ -1140,6 +1167,11 @@ export class ConversationManager {
       attachments?: AttachmentStore;
       /** Stop managed command trees when the person stops or deletes this chat. */
       stopProcesses?: (conversationId: string) => void;
+      /**
+       * What your other chats are up to that this turn should know (ADR 0134):
+       * one reader per turn, asked as it starts and at each step after.
+       */
+      elsewhere?: (conversationId: string) => { take(): string | undefined } | undefined;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
@@ -1228,6 +1260,59 @@ export class ConversationManager {
           live.record.status === 'awaiting-permission',
       )
       .map((live) => ({ id: live.record.id, title: live.record.title.slice(0, 200) }));
+  }
+
+  /**
+   * Every chat Conch holds now, as your other chats may know it (ADR 0134):
+   * where it is, and while a reply runs, its folder, what it's doing and the
+   * files it has changed. Never what anyone said. Chats not held are as the
+   * chat list has them (`list`). `working`: only those with a reply running,
+   * cheap enough to ask at every step.
+   */
+  chats({ working = false }: { working?: boolean } = {}): LiveChat[] {
+    const held = [...this.#live.values()];
+    return (working ? held.filter((live) => live.abort) : held).map((live) => {
+      const { record } = live;
+      const turn = live.abort ? live.turn : undefined;
+      let doing: ActivityFamily | undefined;
+      const changing = new Set<string>();
+      if (turn) {
+        const finished = new Set<string>();
+        for (const event of live.events) {
+          if (event.seq < turn.fromSeq) continue;
+          if (event.type === 'tool.finished') finished.add(event.toolUseId);
+          else if (event.type === 'files.changed')
+            for (const file of event.files) changing.add(file.path);
+        }
+        const step = live.events.findLast(
+          (e) => e.seq >= turn.fromSeq && e.type === 'tool.started' && !finished.has(e.toolUseId),
+        );
+        if (step?.type === 'tool.started') {
+          try {
+            doing = describeTool(step.name, step.input).family;
+          } catch {
+            doing = 'other';
+          }
+        }
+      }
+      return {
+        id: record.id,
+        title: record.title.slice(0, 200),
+        status: live.permissions.size > 0 ? 'awaiting-permission' : record.status,
+        taint: this.#tainted(live),
+        ...(record.origin && { origin: record.origin }),
+        updatedAt: record.updatedAt,
+        ...(record.archivedAt !== undefined && { archivedAt: record.archivedAt }),
+        ...(turn && {
+          turn: {
+            cwd: turn.cwd,
+            since: turn.since,
+            ...(doing && { doing }),
+            changing: [...changing].slice(-8),
+          },
+        }),
+      };
+    });
   }
 
   /**
@@ -2244,6 +2329,7 @@ export class ConversationManager {
   /** The chat is free: whatever waited for it goes now. */
   #free(live: Live) {
     live.abort = undefined;
+    live.turn = undefined;
     const waiting = live.waiters ?? [];
     live.waiters = undefined;
     for (const go of waiting) go();
@@ -3643,6 +3729,9 @@ export class ConversationManager {
 
     let closeBridge: (() => Promise<void>) | undefined;
     const workspace = extras?.cwd ?? (await this.deps.settings.workspace());
+    // Your other chats may know where this one works, and what it changes (ADR 0134).
+    live.turn = { cwd: workspace, since: Date.now(), fromSeq: live.seq };
+    const elsewhere = this.deps.elsewhere?.(conversationId);
     // What this turn changes is kept, so it can be undone (ADR 0030).
     const tracker = this.deps.undo?.tracker({
       conversationId,
@@ -4329,6 +4418,8 @@ export class ConversationManager {
             ),
             live.room,
             resources === ROOM_NOTE ? undefined : resources,
+            // Another chat working in this folder, say (ADR 0134).
+            elsewhere?.take(),
           ];
       const lead = (update: string | undefined, recalled: readonly Memory[]) =>
         contextNote([update, memoryNote(recalled), ...now]);
@@ -4372,7 +4463,10 @@ export class ConversationManager {
         tools: pace.tools,
         budget: pace.budget,
         wrapTool: extras?.wrapTool,
-        resourceFeedback: feedback ? () => feedback.take() : undefined,
+        resourceFeedback:
+          feedback || elsewhere
+            ? () => [feedback?.take(), elsewhere?.take()].filter(Boolean).join('\n\n') || undefined
+            : undefined,
         options: resolved,
         onModeChange: (listener) => modeListeners.push(listener),
         mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
@@ -5113,6 +5207,7 @@ export class ConversationManager {
           reason: routed.reason,
           message: routed.message,
           ...(fromModel && { fromModel }),
+          ...(route.model && { model: route.model }),
           ...(routed.stayed && { stayed: true }),
         },
         tail,

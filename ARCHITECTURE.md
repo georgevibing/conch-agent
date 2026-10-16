@@ -919,6 +919,14 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   brings back from a tainted chat taints the chat asking; Passwords' redactor and
   `scrubSecrets` run over every word; each look is a `chats.looked` event. See
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
+- **Chats that know about each other.** `together/service.ts` (`TogetherService`) reads
+  `ConversationManager.chats()`, a snapshot of every chat Conch holds: its status, and for
+  a running reply its folder, its step's family and the files it changed. `list_chats`
+  tells the assistant what your other chats are doing (`chats.listed` events), for the
+  chats `search_chats` is offered in. `reader(id)` is asked as a turn starts and at each
+  step (`resourceFeedback`): another chat changing files in the same folder, or the same
+  file, is said once per turn. Never their words, never to or about a chat with someone
+  else in it. See [ADR 0134 — Chats that know about each other](./docs/adr/0134-chats-that-know-about-each-other.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
   `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `standing-orders.json` + `checkin.json` (derived `checkin/state.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `past-chats/index.json` + `<id>.jsonl` (past chats from other apps, ADR 0111), `search.db`,

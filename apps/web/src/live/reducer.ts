@@ -13,6 +13,7 @@ import type {
   ConchAppOffer,
   ConchAppShareCard,
   PastChatSeen,
+  OtherChatSeen,
   TaintSource,
   VaultPermission,
   VaultRequest,
@@ -246,6 +247,13 @@ export type TranscriptItem =
       at: number;
     }
   | {
+      /** It checked on your other chats (ADR 0134): how each was, with a link to each. */
+      kind: 'listed';
+      id: string;
+      chats: OtherChatSeen[];
+      at: number;
+    }
+  | {
       /** Something the assistant made (ADR 0034): a card that opens it beside the chat. */
       kind: 'artifact';
       id: string;
@@ -472,6 +480,8 @@ export type TranscriptItem =
       to: EngineId;
       reason: 'offline' | 'limit';
       message: string;
+      /** The model `to` answers with, when routing chose one. */
+      model?: string;
       /** At a limit, the chat moved to `to` for good (ADR 0126). */
       stayed?: boolean;
       /** Switched back: this chat waits for `from` at this limit, until then (ADR 0126). */
@@ -962,6 +972,11 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'chats.listed':
+      return {
+        ...base,
+        items: [...items, { kind: 'listed', id: event.listId, chats: event.chats, at: event.at }],
+      };
     case 'memory.decided': {
       const decided = event.kept ? ('kept' as const) : ('undone' as const);
       let found = false;
@@ -1222,6 +1237,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             to: event.to,
             reason: event.reason,
             message: event.message,
+            ...(event.model && { model: event.model }),
             ...(event.stayed && { stayed: true }),
           },
         ],

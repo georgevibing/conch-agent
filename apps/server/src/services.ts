@@ -245,6 +245,7 @@ import { perReply } from './usage/prices';
 import { switchSection, switchTools, type SwitchDeps } from './switching/tools';
 import { RoutineSpend } from './routines/spend';
 import { PAST_CHATS_PROMPT, pastChatTools, withOthers, type ChatFacts } from './search/past';
+import { TOGETHER_PROMPT, TogetherService } from './together/service';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { WhenRoutines } from './routines/triggers';
@@ -458,6 +459,8 @@ export class Services {
   readonly tasks: TaskService;
   /** Waiting for CI, a command, a page or a time without calling a model (ADR 0125). */
   readonly waits: WaitService;
+  /** Your chats knowing about each other (ADR 0134). */
+  readonly together: TogetherService;
   /** Other apps using Conch through its MCP door (ADR 0073). */
   readonly mcp: McpService;
   readonly mcpPairing: McpPairing;
@@ -1223,6 +1226,15 @@ export class Services {
         await this.channels.tellOwner(`**${told.title}**\n${told.body}`).catch(() => undefined);
       },
     });
+    // Your chats knowing about each other (ADR 0134): what each is doing, never what it said.
+    this.together = new TogetherService({
+      live: (options) => this.conversations.chats(options),
+      list: () => this.conversations.list(),
+      taintOf: (id) => this.conversations.taintOf(id),
+      tasks: async () => (await this.tasks.list()).tasks,
+      browsing: (id) => Boolean(this.browser.tabIfOpen(id)),
+      workspace: () => this.settings.workspace(),
+    });
     this.conversations = new ConversationManager({
       judged: (verdict, risk) => this.telemetry.auto(verdict, risk),
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
@@ -1331,6 +1343,8 @@ export class Services {
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
               // Skills people share, to offer (ADR 0074): never to nobody.
               ...(ctx.unattended || !this.market ? [] : marketTools(this.market, ctx)),
+              // What your other chats are doing now, never in a chat with someone else in it (ADR 0134).
+              ...this.together.tools(ctx),
               // Your earlier chats, never in a chat with someone else in it (ADR 0059).
               ...pastChatTools(
                 {
@@ -1342,48 +1356,55 @@ export class Services {
               ),
             ],
       // In a fixed order, empty where a section has nothing: each is compared on its own (ADR 0085).
-      context: async (engine, conversationId) => [
-        engine.hostTools === false ? '' : await this.routines.promptSection(),
-        // What the person asked for every chat, in their words; never a permission (ADR 0107).
-        await this.standingOrders
-          .promptSection({ tools: engine.hostTools !== false })
-          .catch(() => ''),
-        await this.skills.promptSection(engine).catch(() => ''),
-        await this.browser.promptSection(engine).catch(() => ''),
-        // Your apps (ADR 0110): only where the tool is, in a chat someone is watching.
-        engine.hostTools === false ||
-        (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
-          .origin
-          ? ''
-          : computerPrompt(this.computerUse),
-        await this.integrations.promptSection(),
-        // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
-        engine.hostTools === false
-          ? ''
-          : await this.offers.section(engine, conversationId).catch(() => ''),
-        engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
-        // Making apps (ADR 0061): only where the maker's tools are, and someone can press the card.
-        engine.hostTools === false
-          ? ''
-          : await appsPrompt(this.conchApps, conversationId, {
-              tools: !(await this.conversations.detail(conversationId).catch(() => undefined))
-                ?.conversation.origin,
-            }).catch(() => ''),
-        engine.hostTools === false ? '' : this.vault.promptSection(),
-        this.artifacts.promptSection(engine.hostTools !== false),
-        await this.artifacts.editedSection(conversationId).catch(() => ''),
-        engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
-        // Only where someone is there to answer (not a routine, a task or a chat app).
-        engine.hostTools === false ||
-        (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
-          .origin
-          ? ''
-          : QUESTIONS_PROMPT,
-        engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
-        // Which models this chat can move to (ADR 0132): only where `switch_model` is. Last, so
-        // the parts before it keep their places in a session's instructions (ADR 0085).
-        engine.hostTools === false ? '' : await this.#switchPrompt(conversationId).catch(() => ''),
-      ],
+      context: async (engine, conversationId) => {
+        const past = engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId);
+        return [
+          engine.hostTools === false ? '' : await this.routines.promptSection(),
+          // What the person asked for every chat, in their words; never a permission (ADR 0107).
+          await this.standingOrders
+            .promptSection({ tools: engine.hostTools !== false })
+            .catch(() => ''),
+          await this.skills.promptSection(engine).catch(() => ''),
+          await this.browser.promptSection(engine).catch(() => ''),
+          // Your apps (ADR 0110): only where the tool is, in a chat someone is watching.
+          engine.hostTools === false ||
+          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+            .origin
+            ? ''
+            : computerPrompt(this.computerUse),
+          await this.integrations.promptSection(),
+          // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
+          engine.hostTools === false
+            ? ''
+            : await this.offers.section(engine, conversationId).catch(() => ''),
+          engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
+          // Making apps (ADR 0061): only where the maker's tools are, and someone can press the card.
+          engine.hostTools === false
+            ? ''
+            : await appsPrompt(this.conchApps, conversationId, {
+                tools: !(await this.conversations.detail(conversationId).catch(() => undefined))
+                  ?.conversation.origin,
+              }).catch(() => ''),
+          engine.hostTools === false ? '' : this.vault.promptSection(),
+          this.artifacts.promptSection(engine.hostTools !== false),
+          await this.artifacts.editedSection(conversationId).catch(() => ''),
+          engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
+          // Only where someone is there to answer (not a routine, a task or a chat app).
+          engine.hostTools === false ||
+          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+            .origin
+            ? ''
+            : QUESTIONS_PROMPT,
+          past,
+          // Your other chats, for the same chats as your earlier ones (ADR 0134).
+          past && TOGETHER_PROMPT,
+          // Which models this chat can move to (ADR 0132): only where `switch_model` is. Last, so
+          // the parts before it keep their places in a session's instructions (ADR 0085).
+          engine.hostTools === false
+            ? ''
+            : await this.#switchPrompt(conversationId).catch(() => ''),
+        ];
+      },
       expand: (text) => this.skills.expand(text),
       // A chat-only model and a message that needs an app: offer one that can (ADR 0050).
       appsNeeded: (input) =>
@@ -1405,6 +1426,8 @@ export class Services {
       offers: this.offers,
       attachments: this.attachments,
       stopProcesses: (id) => this.processes.stopAll(id),
+      // Another chat changing files in this one's folder (ADR 0134).
+      elsewhere: (id) => this.together.reader(id),
       recovery: {
         allowed: () => this.recovery.allowsWork,
         allowedPlanned: () => this.recovery.allowsPlanned,

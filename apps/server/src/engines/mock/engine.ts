@@ -14,7 +14,12 @@ import { splitContextNote } from '../../conversations/instructions';
 import { stripNearby } from '../../learning/near';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
-import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protocol';
+import {
+  readOtherChatsFound,
+  readPastChatRead,
+  readPastChatsFound,
+  severityFor,
+} from '@conch/protocol';
 
 import { sniff } from '../../attachments/sniff';
 import { Emitter } from '../../lib/emitter';
@@ -852,6 +857,33 @@ export class MockEngine implements Engine {
             summary: out.slice(0, 120),
           } as never);
         yield* speak(out);
+        return;
+      }
+
+      // A chat that keeps working on a file (ADR 0134): long enough for another chat to notice.
+      if (/\bkeep editing\b/i.test(said)) {
+        const toolUseId = newId('tool');
+        yield { type: 'tool-start', toolUseId, name: 'Edit', input: { file_path: 'notes.md' } };
+        await sleep(240_000, input.signal);
+        yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+        yield* speak('Done editing.');
+        return;
+      }
+      // What your other chats are doing (ADR 0134), and what Conch said by itself.
+      if (/\bwhat are my other chats doing\b/i.test(said)) {
+        const found = readOtherChatsFound(yield* hostTool('list_chats', {}));
+        const busy = found?.chats.filter((c) => c.state === 'working') ?? [];
+        const heard = /working in this folder right now/.test(input.systemAppend);
+        yield* speak(
+          [
+            heard ? 'Conch told me another chat is working in this folder.' : '',
+            busy.length
+              ? `Working now: ${busy.map((c) => `“${c.title}” (${c.doing ?? 'working'})`).join(', ')}.`
+              : 'Nothing else is working right now.',
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
         return;
       }
 

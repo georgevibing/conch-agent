@@ -298,6 +298,18 @@ export function entriesOf(
         });
         break;
       }
+      // Checking on your other chats (ADR 0134): what they were doing, never what they said.
+      case 'chats.listed':
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'memory',
+          title: 'Checked on your other chats',
+          status: 'done',
+          anchor: e.listId,
+        });
+        break;
       case 'memory.forgotten':
         out.push({
           ...base,

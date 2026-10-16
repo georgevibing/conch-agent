@@ -1,0 +1,33 @@
+---
+title: Chats that work together
+description: Your chats know what the others are doing, so two working in the same folder don't undo each other's work.
+order: 12.8
+nav: Working together
+---
+
+Several chats can work at once. Each one knows what the others are up to.
+
+## Ask what's going on
+
+Say "what are my other chats doing?" or "is the deploy chat done?". The chat shows **Checked on your other chats** and how many are busy. Open it to see each chat, and press one to go there.
+
+Your assistant sees, for each of your other chats:
+
+- whether it's working, needs you, is done for now, or didn't finish;
+- what it's doing: editing files, running a command, using the browser;
+- whether it works in the same folder, and the files it has changed so far;
+- its [tasks](tasks.md) still going.
+
+It looks by itself before changing files another chat may be working on.
+
+## Two chats, one folder
+
+When another chat is changing files in the folder a chat works in, Conch tells it as its reply starts. A reply already running hears it at its next step. If both change the same file, Conch says that too.
+
+Your assistant then keeps to its own files, reads a file again before changing one the other chat changed, and never undoes the other chat's work.
+
+## What stays private
+
+- **Only your chats.** A chat you started, its tasks, a routine's run, your own chat from a [chat app](../channels/index.md). Never one with someone else in it, an [outside agent](agents.md#outside-agents)'s or another app's.
+- **A chat with someone else in it isn't told.** Someone you let in on a chat app can't learn what else you're doing.
+- **Where a chat is, never what was said in it.** To find something said, your assistant looks through your [earlier chats](memory.md#your-earlier-chats).

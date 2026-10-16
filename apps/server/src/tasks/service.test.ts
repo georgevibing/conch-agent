@@ -1534,18 +1534,20 @@ describe('task controls in the originating chat', () => {
     }));
     const read = vi.spyOn(tasks, 'get');
     read.mockResolvedValueOnce({ ...owned, operations: evidence });
-    const recent = JSON.parse(String(await statusTool?.run({ id: owned.id }))) as {
-      operationCount: number;
-      operationsOffset: number;
-      operations: { id: string }[];
-    }[];
+    const recent = (
+      JSON.parse(String(await statusTool?.run({ id: owned.id }))) as {
+        tasks: { operationCount: number; operationsOffset: number; operations: { id: string }[] }[];
+      }
+    ).tasks;
     expect(recent[0]).toMatchObject({ operationCount: 75, operationsOffset: 25 });
     expect(recent[0]?.operations).toHaveLength(50);
     expect(recent[0]?.operations[0]?.id).toBe('op-25');
     read.mockResolvedValueOnce({ ...owned, operations: evidence });
-    const first = JSON.parse(
-      String(await statusTool?.run({ id: owned.id, operations_offset: 0 })),
-    ) as { nextOperationsOffset: number; operations: { id: string }[] }[];
+    const first = (
+      JSON.parse(String(await statusTool?.run({ id: owned.id, operations_offset: 0 }))) as {
+        tasks: { nextOperationsOffset: number; operations: { id: string }[] }[];
+      }
+    ).tasks;
     expect(first[0]?.nextOperationsOffset).toBe(50);
     expect(first[0]?.operations[0]?.id).toBe('op-0');
     read.mockRestore();
@@ -2254,7 +2256,10 @@ describe('how many run at once, and why the rest wait (ADR 0129)', () => {
     const out = JSON.parse(
       String(await statusTool?.run({ id: second.id } as never, undefined as never)),
     );
-    expect(out[0].waiting).toBe(`Starts when “${first.title}” finishes · likely in about 4 min`);
+    expect(out.tasks[0].waiting).toBe(
+      `Starts when “${first.title}” finishes · likely in about 4 min`,
+    );
+    expect(out.capacity).toMatchObject({ atOnce: 1, working: 1, waiting: 1 });
     await tasks.stop(first.id);
   });
 });

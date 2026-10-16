@@ -25,11 +25,17 @@ describe('looking back through your chats', () => {
         action: 'read',
         chats: [{ id: 'c2', title: 'Wedding planning', lines: [] }],
       }),
+      ev({
+        type: 'chats.listed',
+        listId: 'list_1',
+        chats: [{ id: 'c3', title: 'Fix login', state: 'working' }],
+      }),
     ];
     const entries = entriesOf({ id: 'c1', title: 'Plans' }, events);
     expect(entries.map((e) => [e.kind, e.title, e.anchor])).toEqual([
       ['memory', 'Looked through your chats for “venue”', 'look_1'],
       ['memory', 'Read your chat “Wedding planning”', 'look_2'],
+      ['memory', 'Checked on your other chats', 'list_1'],
     ]);
   });
 });
