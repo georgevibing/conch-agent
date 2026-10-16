@@ -14,6 +14,7 @@ import type {
   ConchAppShareCard,
   PastChatSeen,
   OtherChatSeen,
+  ChatMessageNote,
   TaintSource,
   VaultPermission,
   VaultRequest,
@@ -291,6 +292,13 @@ export type TranscriptItem =
       id: string;
       group?: string;
       tasks: TaskNote[];
+    }
+  | {
+      /** A message between two of your chats (ADR 0134): one card, kept current. */
+      kind: 'chat-message';
+      id: string;
+      message: ChatMessageNote;
+      at: number;
     }
   | {
       /** Something Conch waits for on the assistant's behalf (ADR 0125): one row, kept current. */
@@ -1614,6 +1622,26 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         tasks: known
           ? card.tasks.map((t) => (t.taskId === event.taskId ? note : t))
           : [...card.tasks, note],
+      };
+      return { ...base, items: next };
+    }
+    case 'chat.message': {
+      // One card per message, where it first appeared, kept current (read, held, passed on).
+      const { type: _type, conversationId: _c, seq: _s, at: _at, ...message } = event;
+      const id = `chat-message-${event.messageId}`;
+      const at = items.findIndex((i) => i.kind === 'chat-message' && i.id === id);
+      if (at < 0)
+        return {
+          ...base,
+          items: [...items, { kind: 'chat-message', id, message, at: event.at }],
+        };
+      const next = items.slice();
+      const was = next[at];
+      next[at] = {
+        kind: 'chat-message',
+        id,
+        message,
+        at: was?.kind === 'chat-message' ? was.at : event.at,
       };
       return { ...base, items: next };
     }

@@ -54,7 +54,7 @@ describe('OtherChatsLook', () => {
       <OtherChatsLook
         working={3}
         chats={[
-          { ...chats[0]!, changing: ['src/a.ts', 'src/auth/login.ts'] },
+          { ...(chats[0] as OtherChatView), changing: ['src/a.ts', 'src/auth/login.ts'] },
           {
             id: 'c4',
             title: 'One file',

@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 import { AppColor, AppGlyph } from './conch-apps';
+import { ChatInbound } from './together';
 
 // ── Folders ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export const ChatChange = z
     /** Into a folder, or back out of every folder (`null`). */
     folder: FolderId.nullable().optional(),
     archived: z.boolean().optional(),
+    /** Whether it takes messages from your other chats (ADR 0134). */
+    inbound: ChatInbound.optional(),
   })
   .strict();
 export type ChatChange = z.infer<typeof ChatChange>;

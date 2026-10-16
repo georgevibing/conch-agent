@@ -298,6 +298,28 @@ export function entriesOf(
         });
         break;
       }
+      // A message between your chats (ADR 0134): once, where it was sent or came.
+      case 'chat.message': {
+        if (out.some((entry) => entry.anchor === `chat-message-${e.messageId}`)) break;
+        const name = `“${e.chat.title.slice(0, 120)}”`;
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind: 'memory',
+          title:
+            e.kind === 'stop'
+              ? e.direction === 'out'
+                ? `Stopped your chat ${name}`
+                : `Stopped by your chat ${name}`
+              : e.direction === 'out'
+                ? `Messaged your chat ${name}`
+                : `A message from your chat ${name}`,
+          status: 'done',
+          anchor: `chat-message-${e.messageId}`,
+        });
+        break;
+      }
       // Checking on your other chats (ADR 0134): what they were doing, never what they said.
       case 'chats.listed':
         out.push({

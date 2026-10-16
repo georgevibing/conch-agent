@@ -1992,6 +1992,27 @@ const TOOLS: Case[] = [
   ],
   ['read_chat', 'read_chat', { chat: 'x' }, undefined, { done: 'Read a past chat' }],
   [
+    'message_chat',
+    'mcp__conch__message_chat',
+    { chat: 'c_1', text: 'Hold off on the push' },
+    undefined,
+    { family: 'delegate', doing: 'Messaging another chat', done: 'Messaged another chat' },
+  ],
+  [
+    'message_chat that starts a reply',
+    'message_chat',
+    { chat: 'c_1', text: 'Carry on', start_reply: true },
+    undefined,
+    { done: 'Asked another chat to carry on' },
+  ],
+  [
+    'stop_chat',
+    'stop_chat',
+    { chat: 'c_1', reason: 'It would clash' },
+    undefined,
+    { family: 'delegate', done: 'Stopped another chat' },
+  ],
+  [
     'list_chats',
     'mcp__conch__list_chats',
     {},

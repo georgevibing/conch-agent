@@ -181,7 +181,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 - **They talk to each other.** "@Researcher find options, @Writer draft it." Agents
   take turns in one chat and stop before they loop or run up a bill.
 - **Chats that know about each other.** Ask what your other chats are doing. Two
-  working in one folder are told, and keep out of each other's way.
+  working in one folder keep out of each other's way, one waits for another to finish,
+  and they send each other messages, as far as you let them.
   [Working together](./apps/docs/content/features/chats-together.md)
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part. As many run at once as there is room for, and one that waits

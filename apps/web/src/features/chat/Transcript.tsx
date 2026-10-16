@@ -48,6 +48,7 @@ import { OfferAlsoTryItem, OfferItem } from '../offers/OfferItem';
 import { NeedsAppsItem } from './NeedsApps';
 import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
+import { ChatMessageItem } from '../together/ChatMessageItem';
 import { OtherChatsItem } from './OtherChatsItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldMemoryItem } from './MemoryStep';
@@ -457,7 +458,8 @@ function timeOf(item: TranscriptItem): number | undefined {
     item.kind === 'browser' ||
     item.kind === 'artifact' ||
     item.kind === 'looked' ||
-    item.kind === 'listed'
+    item.kind === 'listed' ||
+    item.kind === 'chat-message'
   )
     return item.at;
   if (item.kind === 'memory') return item.at;
@@ -595,6 +597,7 @@ export const Transcript = memo(function Transcript({
       last?.kind === 'memory' ||
       last?.kind === 'looked' ||
       last?.kind === 'listed' ||
+      last?.kind === 'chat-message' ||
       last?.kind === 'files' ||
       (last?.kind === 'script' && last.run.state !== 'running') ||
       last?.kind === 'taint' ||
@@ -948,6 +951,9 @@ export const Transcript = memo(function Transcript({
       {block.item?.kind === 'task' && <TaskChatCard tasks={block.item.tasks} />}
       {block.item?.kind === 'wait' && (
         <WaitItem wait={block.item.wait} conversationId={conversationId} />
+      )}
+      {block.item?.kind === 'chat-message' && (
+        <ChatMessageItem item={block.item} conversationId={conversationId} />
       )}
       {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
       {block.item?.kind === 'held' && (

@@ -1308,6 +1308,39 @@ export class Services {
       browsing: (id) => Boolean(this.browser.tabIfOpen(id)),
       workspace: () => this.settings.workspace(),
       apart: config.CONCH_HOME,
+      // Messages between your chats: as information, never a power (ADR 0134).
+      messages: {
+        chat: async (id) => {
+          const peek = await this.conversations.peek(id);
+          if (!peek) return undefined;
+          const live = this.conversations.chats({ working: true }).find((c) => c.id === id);
+          return {
+            title: peek.summary.title,
+            ...(peek.summary.origin && { origin: peek.summary.origin }),
+            taint: live?.taint ?? (await this.conversations.taintOf(id).catch(() => [])),
+            ...(peek.summary.inbound && { inbound: peek.summary.inbound }),
+            working: peek.working || peek.summary.status === 'running',
+          };
+        },
+        taskParent: async (taskId) =>
+          (await this.tasks.get(taskId).catch(() => undefined))?.parentConversationId,
+        note: (id, message) => this.conversations.note(id, { type: 'chat.message', ...message }),
+        wake: (id, prompt) => this.conversations.wake(id, prompt),
+        taint: (id, sources) => this.conversations.addTaint(id, sources),
+        interrupt: (id) => this.conversations.interrupt(id),
+      },
+    });
+    // A chat that's free again reads what asked to start its reply; one that's gone takes its own.
+    this.broadcast.on((event) => {
+      const messages = this.together.messages;
+      if (!messages) return;
+      if (
+        event.type === 'conversation.event' &&
+        event.event.type === 'status' &&
+        event.event.status !== 'running'
+      )
+        void messages.idle(event.event.conversationId).catch(() => undefined);
+      else if (event.type === 'conversation.deleted') messages.forget(event.conversationId);
     });
     this.conversations = new ConversationManager({
       judged: (verdict, risk) => this.telemetry.auto(verdict, risk),

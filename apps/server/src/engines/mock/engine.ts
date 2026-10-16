@@ -887,6 +887,41 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // Messages between your chats (ADR 0134): one to the other chat, a stop, and reading them.
+      const tell = /^\s*tell my other chat:\s*(.+?)\s*$/is.exec(said)?.[1];
+      if (tell) {
+        const found = readOtherChatsFound(yield* hostTool('list_chats', {}));
+        const other = found?.chats[0];
+        if (!other) {
+          yield* speak('You have no other chat to tell.');
+          return;
+        }
+        yield* speak(yield* hostTool('message_chat', { chat: other.chat, text: tell }));
+        return;
+      }
+      if (/^\s*stop my other chat\b/i.test(said)) {
+        const found = readOtherChatsFound(yield* hostTool('list_chats', { which: 'working' }));
+        const other = found?.chats[0];
+        yield* speak(
+          other
+            ? yield* hostTool('stop_chat', { chat: other.chat, reason: 'You asked me to stop it.' })
+            : 'None of your other chats is working.',
+        );
+        return;
+      }
+      const sent =
+        /a message from another of the person’s chats, “([^”]*)”[\s\S]*?<chat-message>\n([\s\S]*?)\n<\/chat-message>/.exec(
+          `${said}\n${input.systemAppend}`,
+        );
+      if (sent && (/^\s*any messages\b/i.test(said) || said.startsWith('[Conch: a message'))) {
+        yield* speak(`“${sent[1]}” says: ${sent[2]}`);
+        return;
+      }
+      if (/^\s*any messages\b/i.test(said)) {
+        yield* speak('No messages from your other chats.');
+        return;
+      }
+
       // Waiting for another chat to finish (ADR 0134): the busy one from list_chats.
       if (/^\s*wait for my other chat\b/i.test(said)) {
         const found = readOtherChatsFound(yield* hostTool('list_chats', { which: 'working' }));

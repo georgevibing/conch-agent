@@ -9,3 +9,10 @@ export {
   type OtherChatsListProps,
   type OtherChatsLookProps,
 } from './OtherChats';
+export {
+  ChatMessageCard,
+  chatMessageStateWords,
+  type ChatInboundChoice,
+  type ChatMessageCardProps,
+  type ChatMessageState,
+} from './ChatMessage';

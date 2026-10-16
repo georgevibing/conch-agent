@@ -1486,11 +1486,15 @@ export class ConversationManager {
       next.pinned = change.pinOrder ?? before.pinned ?? Date.now();
     if (next.archivedAt && change.pinned !== true) next.pinned = undefined;
     if (change.folder !== undefined) next.folderId = change.folder ?? undefined;
+    // Messages from your other chats (ADR 0134): taking them is the default, so it isn't kept.
+    if (change.inbound !== undefined)
+      next.inbound = change.inbound === 'accept' ? undefined : change.inbound;
     next = withoutUndefined(next);
     if (
       next.archivedAt === before.archivedAt &&
       next.pinned === before.pinned &&
-      next.folderId === before.folderId
+      next.folderId === before.folderId &&
+      next.inbound === before.inbound
     )
       return;
     await this.#saveRecord(next);
@@ -1524,6 +1528,7 @@ export class ConversationManager {
           pinned: next.pinned,
           folderId: next.folderId,
           seenAt: next.seenAt,
+          inbound: next.inbound,
         }
       : next;
     const clean = withoutUndefined(record);
@@ -2390,7 +2395,13 @@ export class ConversationManager {
       ConversationEventInput,
       {
         type:
-          'artifact' | 'task' | 'wait' | 'memory.decided' | 'learning.noted' | 'learning.decided';
+          | 'artifact'
+          | 'task'
+          | 'wait'
+          | 'memory.decided'
+          | 'learning.noted'
+          | 'learning.decided'
+          | 'chat.message';
       }
     >,
   ): Promise<void> {
@@ -5710,6 +5721,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     seenAt,
     spend,
     agentId,
+    inbound,
   } = record;
   return {
     id,
@@ -5727,6 +5739,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     ...(seenAt !== undefined && { seenAt }),
     ...(spend && { spend }),
     ...(agentId && { agentId }),
+    ...(inbound && inbound !== 'accept' && { inbound }),
   };
 }
 

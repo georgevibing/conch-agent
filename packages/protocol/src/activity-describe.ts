@@ -1252,6 +1252,21 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   },
   [PAST_CHATS_TOOLS.read]: () => ({ family: 'remember', words: say('read', 'a past chat') }),
   [TOGETHER_TOOLS.list]: () => ({ family: 'remember', words: say('check', 'on your other chats') }),
+  [TOGETHER_TOOLS.message]: (input) => {
+    const wakes = input.start_reply === true;
+    return {
+      family: 'delegate',
+      words: words(
+        wakes ? 'Asking another chat to carry on' : 'Messaging another chat',
+        wakes ? 'Asked another chat to carry on' : 'Messaged another chat',
+        'Couldn’t message another chat',
+      ),
+    };
+  },
+  [TOGETHER_TOOLS.stop]: () => ({
+    family: 'delegate',
+    words: words('Stopping another chat', 'Stopped another chat', 'Couldn’t stop another chat'),
+  }),
   update_plan: (input) => todoDraft(input.steps ?? input.plan, ['done', 'completed']),
   exit_plan_mode: () => ({
     family: 'plan',

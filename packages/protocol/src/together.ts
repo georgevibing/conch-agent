@@ -7,11 +7,20 @@
  * the start of a turn and at the next step of one already running. The model
  * reads compact JSON in the shapes here; the chat gets a `chats.listed` event
  * (`OtherChatsListed`), drawn as one line with a link to each chat.
+ *
+ * `message_chat` sends one of your chats a note from another: read at its next
+ * step, or starting its next reply when asked to. `stop_chat` stops one, with
+ * your OK where it matters. Each side shows a `chat.message` card. A chat says
+ * whether it takes messages (`ChatInbound`): let in, held for you, or turned away.
  */
 import { z } from 'zod';
 
 /** The tools' names, as the agent knows them (`mcp__conch__…` on engines that bridge). */
-export const TOGETHER_TOOLS = { list: 'list_chats' } as const;
+export const TOGETHER_TOOLS = {
+  list: 'list_chats',
+  message: 'message_chat',
+  stop: 'stop_chat',
+} as const;
 
 /**
  * Where another chat is, as its row in the chat list says it.
@@ -120,3 +129,57 @@ export function otherChatWords(chat: Pick<OtherChatSeen, 'state' | 'doing'>): st
 function capital(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+// ── Messages between your chats ────────────────────────────────────────────
+
+/**
+ * Whether a chat takes messages from your other chats: `accept` (the default),
+ * `hold` (each waits on its card until you pass it on), `refuse`.
+ */
+export const ChatInbound = z.enum(['accept', 'hold', 'refuse']);
+export type ChatInbound = z.infer<typeof ChatInbound>;
+
+/** What each setting is called where you choose it. */
+export const CHAT_INBOUND_WORDS: Record<ChatInbound, { label: string; detail: string }> = {
+  accept: { label: 'Let them in', detail: 'Your other chats can message this one.' },
+  hold: { label: 'Hold them for me', detail: 'Each waits here until you pass it on.' },
+  refuse: { label: 'Turn them away', detail: 'Your other chats can’t message this one.' },
+};
+
+/**
+ * Where a message between two chats is.
+ *
+ * - `waiting`: on its way; read at the other chat's next step or reply.
+ * - `read`: the other chat's assistant has it.
+ * - `held`: waiting for you to pass it on (the chat holds messages).
+ * - `refused`: the other chat turns messages away, or a limit was reached.
+ * - `dismissed`: you dismissed it while it was held.
+ */
+export const ChatMessageState = z.enum(['waiting', 'read', 'held', 'refused', 'dismissed']);
+export type ChatMessageState = z.infer<typeof ChatMessageState>;
+
+/** The most a message between chats may say. */
+export const CHAT_MESSAGE_MAX = 4_000;
+
+/** A message between two of your chats, as each one's card shows it. */
+export const ChatMessageNote = z.object({
+  /** The same on both cards: what updates them. */
+  messageId: z.string().min(1).max(64),
+  /** `out`: this chat sent it; `in`: it came here. */
+  direction: z.enum(['out', 'in']),
+  /** `message`: words; `stop`: the sender stopped this chat's reply. */
+  kind: z.enum(['message', 'stop']),
+  /** The other chat: where it went, or where it's from. */
+  chat: z.object({ id: z.string().max(128), title: z.string().max(200) }),
+  text: z.string().max(CHAT_MESSAGE_MAX),
+  state: ChatMessageState,
+  /** It starts a reply there when it arrives, rather than waiting for the next one. */
+  wakes: z.boolean().optional(),
+  /** Why it was turned away, in a few words, when it was. */
+  why: z.string().max(200).optional(),
+});
+export type ChatMessageNote = z.infer<typeof ChatMessageNote>;
+
+/** Pass a held message on, or dismiss it, from its card. */
+export const ChatMessageActionBody = z.object({ action: z.enum(['pass', 'dismiss']) });
+export type ChatMessageActionBody = z.infer<typeof ChatMessageActionBody>;

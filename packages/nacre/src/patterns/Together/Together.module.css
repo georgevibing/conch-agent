@@ -109,3 +109,150 @@
     }
   }
 }
+
+@layer nacre.components {
+  /* A message between two of your chats: a quiet card, words first. */
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border: 1px solid var(--nc-border-subtle);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    font-size: var(--nc-text-sm);
+    min-inline-size: 0;
+    container-type: inline-size;
+  }
+
+  /* Come here: another chat's words, set a step apart from the person's. */
+  .message[data-direction='in'] {
+    border-inline-start: 3px solid var(--nc-accent-6);
+  }
+
+  .messageHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .messageIcon {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .messageWho {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .messageAside {
+    color: var(--nc-text-subtle);
+  }
+
+  /* On a phone the chat's name keeps the room; the label says the rest to a screen reader. */
+  @container (max-width: 26rem) {
+    .messageAside {
+      display: none;
+    }
+  }
+
+  .chatLink {
+    appearance: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-text);
+    font: inherit;
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  .chatLink:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  @media (hover: hover) {
+    .chatLink:hover {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
+  .messageState {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .messageState[data-state='held'] {
+    color: light-dark(oklch(0.52 0.13 var(--nc-warning-h)), oklch(0.8 0.13 var(--nc-warning-h)));
+  }
+
+  .messageState[data-state='refused'] {
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.75 0.15 var(--nc-danger-h)));
+  }
+
+  .messageText {
+    margin: 0;
+    color: var(--nc-text);
+    line-height: var(--nc-leading-snug);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+
+  .messageText[data-open] {
+    display: block;
+  }
+
+  .message[data-state='dismissed'] .messageText {
+    color: var(--nc-text-subtle);
+  }
+
+  .more {
+    appearance: none;
+    align-self: flex-start;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .more:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .why {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .messageActions {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+}
