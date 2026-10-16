@@ -154,13 +154,21 @@ Two tools (`together/messages.ts`, `ChatMessages`), for the chats that may list 
 
 - **`message_chat`** (`chat`, `text`, `start_reply`). A chat that's working reads it at its
   next step (with the other notes, through `resourceFeedback`); one that isn't, when its next
-  reply starts. `start_reply` starts that reply now with the message (`ConversationManager.wake`),
+  reply starts. A message from a chat that read something from outside waits for the next
+  reply's start, never a step: there it's taken in before the reply's trust is settled
+  (`reader().start()`, awaited before `reach`), so the whole reply is as careful as it must be. `start_reply` starts that reply now with the message (`ConversationManager.wake`),
   or, if the chat is busy and its reply ends before a step read it, the next one
   (`ChatMessages.idle`, on the chat's `status` event).
 - **`stop_chat`** (`chat`, `reason`). Stops another chat's reply (`interrupt`); it hears why at
   its next reply, and its card says so now. It asks you first in Ask mode, or once the chat
   asking has read something from outside (`ctx.untrusted`); in Auto, with nothing read, the
-  person's request goes ahead (ADR 0128). Never in plan mode.
+  person's request goes ahead (ADR 0128). Never in plan mode. This isn't a command, so it isn't
+  judged by `risk.ts`: stopping a chat puts nothing at risk but that chat's reply, which carries
+  on with a press, and the two cases that ask are the ones where the request may not be the
+  person's.
+
+Neither tool works in plan mode, and both declare `effect: 'write'`, so a turn picked up after
+a restart doesn't send or stop twice.
 
 Who receives: your own chats (no origin, or your own chat from a chat app), and this chat's
 own tasks. Never a routine's run, another chat's task (message that chat, which can steer
@@ -176,21 +184,35 @@ What the other assistant reads: Conch's frame first, then the words, fenced in
 
 It never reaches `#yourWords` (it isn't a `user.message`), so it can't lift a question Auto
 would ask about the person's own words (ADR 0128). What the sending chat had read from
-outside is added to the receiving chat before it reads the message (`addTaint`, carried).
+outside is added to the receiving chat before it reads the message (`addTaint`, carried); if
+that can't be written down, the message doesn't go. A reply a message starts runs with
+nobody watching it (`wake(…, { unwatched: true })`, `Live.unwatched`): Full trust there is
+not the person's, so it asks as in any unattended run. Passwords' values and anything shaped
+like a key are taken out of the message as it's sent (`clean`). The hint to answer with
+`message_chat` is only for a chat that has it, not a task.
+
+Before a message is read, or starts a reply, the chat is checked again: still yours, and still
+taking messages. If someone else's words came into it meanwhile, or it turned messages away,
+the message is marked not delivered, with why.
 
 Each side has a `chat.message` card (protocol `ChatMessageNote`, one per `messageId`, kept
 current: `waiting`, `read`, `held`, `refused`, `dismissed`): Nacre `ChatMessageCard`, "To
 “Fix the login”" or "From “Release notes” · another chat, not you", the other chat's name
-a link to it. Activity lists each once.
+a link to it. Each chat's Activity lists it once (so the pair shows on both sides).
 
 **Each chat says whether it takes them** (`ConversationSummary.inbound`, `ChatChange.inbound`;
-unset is `accept`), from **⋯** on a card that came to it: **Let them in**, **Hold them for
+unset is `accept`), from the chat's own menu in the list (**Messages from other chats**) or
+**⋯** on a card that came to it: **Let them in**, **Hold them for
 me** (each waits on its card for **Pass it on** or **Dismiss**,
 `POST /api/conversations/:id/messages/:messageId`, a person's press only), **Turn them away**.
 
-**Bounds** (`MESSAGE_LIMITS`), fixed rather than settings. A reply begins a chain of its own,
-or joins the chain of the message that started it (`begin`, `#waking`), so a chain carries
-its count through every reply it starts. In one chain:
+**Bounds** (`MESSAGE_LIMITS`), fixed rather than settings. A reply the person's own message
+started begins a chain of its own. Any other reply (one a message started, a wait ending, a
+round's turn) joins the chain that led to it: the message's, else the one the chat was already
+in (`begin(id, { person })`, told by the manager from whether a `user.message` came since the
+last `turn.completed`). So a chain carries its count through every reply it leads to, however
+it got there: waiting for another chat and messaging it again stays in one chain. In one
+chain:
 
 - 8 messages, all told;
 - 4 replies started;
@@ -201,7 +223,8 @@ A message of yours starts a new chain. A count per pair alone would let three ch
 (OpenClaw's issue #37842); the chain's total bounds loops of any length.
 
 What's held in memory: what waits for each chat, and the chains. A restart forgets a message
-not yet read (its card stays as it was), never one already read.
+not yet read (its card stays as it was, and Pass it on says it isn't waiting any more), never
+one already read. A chat that's deleted tells the chats that wrote to it.
 
 ### Room for tasks
 

@@ -82,7 +82,7 @@ describe('ChatMessageCard', () => {
   it('says where it is in words, for each side', () => {
     expect(chatMessageStateWords('waiting', 'out')).toBe('Not read yet');
     expect(chatMessageStateWords('waiting', 'out', true)).toBe('Starts its next reply');
-    expect(chatMessageStateWords('waiting', 'in')).toBe('Read at the next step');
+    expect(chatMessageStateWords('waiting', 'in')).toBe('Not read yet');
     expect(chatMessageStateWords('held', 'out')).toBe('Held for the person');
     expect(chatMessageStateWords('refused', 'out')).toBe('Not delivered');
   });

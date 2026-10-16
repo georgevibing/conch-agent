@@ -76,7 +76,7 @@ test('a chat waits for another to finish, and carries on by itself when it does'
   await expect(page.getByText('Was stopped', { exact: true })).toBeVisible();
 });
 
-test('a chat sends another a message, which it reads as another chat’s words at its next reply', async ({
+test('a chat sends another a message, which it reads as another chat’s words at its next step', async ({
   page,
 }) => {
   await page.goto('/');
@@ -98,22 +98,20 @@ test('a chat sends another a message, which it reads as another chat’s words a
   const sender = page.url();
   const sent = page.getByRole('article', { name: /^Message to “.+”$/ });
   await expect(sent).toContainText('hold off on the push');
-  await expect(sent).toContainText('Not read yet');
+  // Read at the other chat's next step: soon, while it keeps working.
+  await expect(sent).toContainText('Read', { timeout: 15_000 });
 
   // Over there: marked as another chat's words, never the person's.
   await page.goto(busy);
   const came = page.getByRole('article', { name: /^Message from “.+”, another of your chats$/ });
   await expect(came).toContainText('hold off on the push');
-  await composer(page).focus();
-  await page.keyboard.press('Escape');
-  await composer(page).fill('Any messages?');
-  await composer(page).press('Enter');
+  // Read at its next step, while it keeps working.
   await expect(
     page.getByText(/^“.+” says: hold off on the push, I’m changing package\.json$/),
-  ).toBeVisible({
-    timeout: 20_000,
-  });
+  ).toBeVisible({ timeout: 20_000 });
   await expect(came).toContainText('Read');
+  await composer(page).focus();
+  await page.keyboard.press('Escape');
   await page.goto(sender);
   await expect(sent).toContainText('Read');
 });
@@ -155,7 +153,7 @@ test('a chat that holds messages waits for your press, and another can be stoppe
     .filter({ hasText: 'second note' });
   await expect(held).toContainText('Held for you');
   await held.getByRole('button', { name: 'Pass it on' }).click();
-  await expect(held).toContainText('Read at the next step');
+  await expect(held).toContainText(/Not read yet|Read/);
 
   // Stopped from the other chat: Auto, nothing read from outside, so no question.
   await page.goto(sender);

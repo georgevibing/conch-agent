@@ -578,6 +578,50 @@ async function until(
 }
 
 describe('chats that know about each other, end to end', () => {
+  it('a reply another chat started runs with nobody watching: Full trust there doesn’t open the box', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-together-unwatched-'));
+    const settings = new SettingsStore(home);
+    await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
+    class Trusting extends Scripted {
+      override async capabilities(): Promise<Capabilities> {
+        return {
+          ...(await super.capabilities()),
+          permissionModes: ['default', 'bypassPermissions'],
+        };
+      }
+    }
+    const engine = new Trusting(async function* () {
+      yield { type: 'text', messageId: 'm', delta: 'ok' };
+      yield { type: 'message-done', messageId: 'm' };
+      yield { type: 'done', outcome: 'success' };
+    });
+    const manager = new ConversationManager({
+      store: new ConversationStore(join(home, 'conversations')),
+      settings,
+      memory: new MemoryStore(join(home, 'memory')),
+      engine: () => engine,
+      context: async () => '',
+      tools: () => [],
+    });
+    const chat = await manager.send({ clientMessageId: 'u1', text: 'Hi' });
+    await until(manager, chat.id, (events) => events.some((e) => e.type === 'turn.completed'));
+    await manager.configure(chat.id, { permissionMode: 'bypassPermissions' });
+    await manager.addTaint(chat.id, [{ kind: 'web', label: 'example.com' }]);
+    const turns = () =>
+      manager
+        .detail(chat.id)
+        .then((d) => d.events.filter((e) => e.type === 'turn.completed').length);
+    // Woken as the person's own (a wait): Full trust is theirs.
+    await manager.wake(chat.id, 'Carry on');
+    await until(manager, chat.id, () => engine.turns.length === 2);
+    await vi.waitFor(async () => expect(await turns()).toBe(2));
+    // Woken by another chat's message: nobody is watching it.
+    await manager.wake(chat.id, 'A message', { unwatched: true });
+    await until(manager, chat.id, () => engine.turns.length === 3);
+    expect(engine.turns[1]?.reach).toBe('open');
+    expect(engine.turns[2]?.reach).not.toBe('open');
+  });
+
   it('a chat Conch stopped under is still working until it carries on (peek)', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-together-peek-'));
     const settings = new SettingsStore(home);

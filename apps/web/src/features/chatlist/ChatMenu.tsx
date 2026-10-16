@@ -1,8 +1,15 @@
-import type { ChatFolder, ConversationSummary } from '@conch/protocol';
+import {
+  CHAT_INBOUND_WORDS,
+  ChatInbound,
+  type ChatFolder,
+  type ConversationSummary,
+} from '@conch/protocol';
 import { type ContextMenu, type DropdownMenu, FolderMark } from '@conch/nacre';
 import {
   Archive,
   ArrowDown,
+  Check,
+  MessagesSquare,
   ArrowUp,
   CircleOff,
   FolderInput,
@@ -33,6 +40,8 @@ export interface ChatMenuActions {
   select(): void;
   archive(): void;
   quiet(quiet: boolean): void;
+  /** Whether it takes messages from your other chats (ADR 0134). */
+  inbound(choice: ChatInbound): void;
   remove(): void;
 }
 
@@ -106,6 +115,20 @@ export function ChatMenuItems({
       <M.Item icon={quiet ? <Sparkles /> : <CircleOff />} onSelect={() => actions.quiet(!quiet)}>
         {quiet ? 'Learn from this chat again' : 'Don’t learn from this chat'}
       </M.Item>
+      <M.Sub>
+        <M.SubTrigger icon={<MessagesSquare />}>Messages from other chats</M.SubTrigger>
+        <M.SubContent>
+          {ChatInbound.options.map((choice) => (
+            <M.Item
+              key={choice}
+              icon={(chat.inbound ?? 'accept') === choice ? <Check /> : <span aria-hidden />}
+              onSelect={() => actions.inbound(choice)}
+            >
+              {CHAT_INBOUND_WORDS[choice].label}
+            </M.Item>
+          ))}
+        </M.SubContent>
+      </M.Sub>
       <M.Separator />
       <M.Item icon={<Trash2 />} tone="danger" onSelect={actions.remove}>
         Delete

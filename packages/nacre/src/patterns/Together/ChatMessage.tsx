@@ -49,13 +49,7 @@ export function chatMessageStateWords(
 ): string {
   switch (state) {
     case 'waiting':
-      return direction === 'out'
-        ? wakes
-          ? 'Starts its next reply'
-          : 'Not read yet'
-        : wakes
-          ? 'Starts the next reply'
-          : 'Read at the next step';
+      return wakes ? (direction === 'out' ? 'Starts its next reply' : 'Starts the next reply') : 'Not read yet';
     case 'read':
       return 'Read';
     case 'held':

@@ -40,7 +40,7 @@ Say "tell the deploy chat to hold off, I'm changing package.json". Your assistan
 
 Both chats show the message on a card: **To** where it was sent, with whether it's been read, and **From** where it came. Press the other chat's name to go there.
 
-A message is the other chat's assistant writing, never you. It can't give permission for anything or answer a question for you. If the chat that sent it read a page or an email, the one that gets it is as careful.
+A message is the other chat's assistant writing, never you. It can't give permission for anything or answer a question for you. If the chat that sent it read a page or an email, the one that gets it is as careful. A reply a message starts runs as if you weren't watching: in **Full trust**, it still asks. Passwords and keys are taken out of what's sent.
 
 ### Stop another chat
 
@@ -48,7 +48,7 @@ Say "stop the other chat". Your assistant stops its reply and says why on its ca
 
 ### Choose what a chat lets in
 
-On a message that came to a chat, press **⋯**:
+In the chat's menu in the list, choose **Messages from other chats**, or press **⋯** on a message that came to it:
 
 - **Let them in**: your other chats can message it. This is the default.
 - **Hold them for me**: each message waits on its card until you press **Pass it on** or **Dismiss**.

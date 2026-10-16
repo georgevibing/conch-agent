@@ -1,4 +1,9 @@
-import { isUnread, type ChatFolder, type ConversationSummary } from '@conch/protocol';
+import {
+  CHAT_INBOUND_WORDS,
+  isUnread,
+  type ChatFolder,
+  type ConversationSummary,
+} from '@conch/protocol';
 import {
   ChatRow,
   ContextMenu,
@@ -177,6 +182,11 @@ export function ChatRowItem({
     select: selection.startSelecting,
     archive: () => void archive(chat),
     quiet: (q) => void setQuiet(chat.id, q),
+    inbound: (choice) =>
+      void api
+        .changeConversation(chat.id, { inbound: choice })
+        .then(() => toast(CHAT_INBOUND_WORDS[choice].detail))
+        .catch((e: Error) => toast.error(e.message)),
     remove: () => setConfirm(true),
   };
 

@@ -1314,10 +1314,14 @@ export class Services {
           const peek = await this.conversations.peek(id);
           if (!peek) return undefined;
           const live = this.conversations.chats({ working: true }).find((c) => c.id === id);
+          const taint =
+            live?.taint ?? (await this.conversations.taintOf(id).catch(() => undefined));
+          // Can't tell whose words are in it: as if it weren't there.
+          if (!taint) return undefined;
           return {
             title: peek.summary.title,
             ...(peek.summary.origin && { origin: peek.summary.origin }),
-            taint: live?.taint ?? (await this.conversations.taintOf(id).catch(() => [])),
+            taint,
             ...(peek.summary.inbound && { inbound: peek.summary.inbound }),
             working: peek.working || peek.summary.status === 'running',
           };
@@ -1325,9 +1329,13 @@ export class Services {
         taskParent: async (taskId) =>
           (await this.tasks.get(taskId).catch(() => undefined))?.parentConversationId,
         note: (id, message) => this.conversations.note(id, { type: 'chat.message', ...message }),
-        wake: (id, prompt) => this.conversations.wake(id, prompt),
+        wake: (id, prompt, options) => this.conversations.wake(id, prompt, options),
         taint: (id, sources) => this.conversations.addTaint(id, sources),
         interrupt: (id) => this.conversations.interrupt(id),
+        clean: (text) => {
+          const redact = this.vault.redactor();
+          return scrubSecrets(redact ? redact(text) : text);
+        },
       },
     });
     // A chat that's free again reads what asked to start its reply; one that's gone takes its own.
@@ -1534,7 +1542,7 @@ export class Services {
       attachments: this.attachments,
       stopProcesses: (id) => this.processes.stopAll(id),
       // Another chat changing files in this one's folder (ADR 0134).
-      elsewhere: (id) => this.together.reader(id),
+      elsewhere: (id, turn) => this.together.reader(id, turn),
       recovery: {
         allowed: () => this.recovery.allowsWork,
         allowedPlanned: () => this.recovery.allowsPlanned,

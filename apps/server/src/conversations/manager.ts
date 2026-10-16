@@ -678,6 +678,11 @@ interface Live {
    * folder, when it began, and where its events start. Gone when it ends.
    */
   turn?: { cwd: string; since: number; fromSeq: number; place?: WorkPlaceId };
+  /**
+   * The next turn starts with nobody watching it, though the chat is the
+   * person's (a message from another chat started it, ADR 0134): Full trust asks.
+   */
+  unwatched?: boolean;
 }
 
 /** A chat as your other chats may know it (ADR 0134): never its words, only where it is. */
@@ -1175,7 +1180,16 @@ export class ConversationManager {
        * What your other chats are up to that this turn should know (ADR 0134):
        * one reader per turn, asked as it starts and at each step after.
        */
-      elsewhere?: (conversationId: string) => { take(): string | undefined } | undefined;
+      elsewhere?: (
+        conversationId: string,
+        turn: { person: boolean },
+      ) =>
+        | {
+            /** What it hears as it starts: anything it brings in is in the chat before it's read. */
+            start?(): Promise<string | undefined>;
+            take(): string | undefined;
+          }
+        | undefined;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
@@ -3230,7 +3244,8 @@ export class ConversationManager {
     const modes = await honouredModes(engine);
     resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
     /** Someone is in this chat to answer: not a routine's run, not a message from a chat app. */
-    const watched = !extras && !live.record.origin;
+    const watched = !extras && !live.record.origin && !live.unwatched;
+    live.unwatched = undefined;
     /** Full trust here is a person's: this chat's, or the one a task came from (ADR 0033). */
     const personTrusts = watched || Boolean(extras?.attended);
     // A mode picked mid-turn holds from the next step, not the next message
@@ -3770,7 +3785,12 @@ export class ConversationManager {
     const workspace = extras?.cwd ?? (await this.deps.settings.workspace());
     // Your other chats may know where this one works, and what it changes (ADR 0134).
     live.turn = { cwd: workspace, since: Date.now(), fromSeq: live.seq };
-    const elsewhere = this.deps.elsewhere?.(conversationId);
+    // A message of the person's started this turn, or something else did (a wait, another chat).
+    const personAt = live.events.findLastIndex((e) => e.type === 'user.message');
+    const endedAt = live.events.findLastIndex((e) => e.type === 'turn.completed');
+    const elsewhere = this.deps.elsewhere?.(conversationId, { person: personAt > endedAt });
+    // Read before the turn's trust is settled: what it brings in is in the chat first.
+    const opening = elsewhere?.start ? await elsewhere.start().catch(() => undefined) : undefined;
     // What this turn changes is kept, so it can be undone (ADR 0030).
     const tracker = this.deps.undo?.tracker({
       conversationId,
@@ -4459,8 +4479,8 @@ export class ConversationManager {
             ),
             live.room,
             resources === ROOM_NOTE ? undefined : resources,
-            // Another chat working in this folder, say (ADR 0134).
-            elsewhere?.take(),
+            // Another chat working in this folder, say, or a message from one (ADR 0134).
+            elsewhere?.start ? opening : elsewhere?.take(),
           ];
       const lead = (update: string | undefined, recalled: readonly Memory[]) =>
         contextNote([update, memoryNote(recalled), ...now]);
@@ -5083,17 +5103,22 @@ export class ConversationManager {
    * moment the running turn ends. Never a message of yours; the waiting row
    * says why it carried on.
    */
-  async wake(id: string, prompt: string): Promise<'started' | 'queued'> {
+  async wake(
+    id: string,
+    prompt: string,
+    options: { unwatched?: boolean } = {},
+  ): Promise<'started' | 'queued'> {
     const live = await this.#get(id);
     const go = async () => {
       this.#claim(live);
+      if (options.unwatched) live.unwatched = true;
       this.#setStatus(live, 'running');
       await this.#persist(live);
       void this.#answer(live, this.deps.engine(live.record.options.engine), prompt, []);
     };
     // A message on its way in goes first: then this, now or once its reply ends.
     if (live.starting) {
-      live.starting.push(() => void this.wake(id, prompt).catch(() => undefined));
+      live.starting.push(() => void this.wake(id, prompt, options).catch(() => undefined));
       return 'queued';
     }
     if (!live.abort) {

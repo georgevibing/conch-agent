@@ -862,10 +862,28 @@ export class MockEngine implements Engine {
 
       // A chat that keeps working on a file (ADR 0134): long enough for another chat to notice.
       if (/^\s*keep editing\b/i.test(said)) {
-        const toolUseId = newId('tool');
-        yield { type: 'tool-start', toolUseId, name: 'Edit', input: { file_path: 'notes.md' } };
-        await sleep(240_000, input.signal);
-        yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+        // At each step it hears what Conch says, as every provider does (`resourceFeedback`):
+        // a message from another chat is answered, and the editing goes on.
+        const until = Date.now() + 240_000;
+        while (Date.now() < until) {
+          const toolUseId = newId('tool');
+          yield { type: 'tool-start', toolUseId, name: 'Edit', input: { file_path: 'notes.md' } };
+          let heard: RegExpExecArray | null = null;
+          while (!heard && Date.now() < until) {
+            await sleep(300, input.signal);
+            const note = input.resourceFeedback?.();
+            heard = note
+              ? /a message from another of the person’s chats, “([^”]*)”[\s\S]*?<chat-message>\n([\s\S]*?)\n<\/chat-message>/.exec(
+                  note,
+                )
+              : null;
+          }
+          yield { type: 'tool-end', toolUseId, status: 'success', output: 'ok' };
+          if (!heard) break;
+          const id = newId('msg');
+          yield { type: 'text', messageId: id, delta: `“${heard[1]}” says: ${heard[2]}` };
+          yield { type: 'message-done', messageId: id };
+        }
         yield* speak('Done editing.');
         return;
       }

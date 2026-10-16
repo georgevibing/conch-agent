@@ -124,7 +124,7 @@ const DOING: Record<ActivityFamily, string> = {
   connect: 'using your apps',
   make: 'making something',
   plan: 'planning',
-  delegate: 'handing work to tasks',
+  delegate: 'handing work off',
   remember: 'looking through what it knows',
   other: 'working',
 };
@@ -252,11 +252,14 @@ export class TogetherService {
    * the turn starts, then at each step: each time, only what's new. Undefined
    * for a chat that isn't yours to tell (someone else is in it, an outside agent).
    */
-  reader(conversationId: string): { take(): string | undefined } | undefined {
+  reader(
+    conversationId: string,
+    turn: { person: boolean } = { person: true },
+  ): { start(): Promise<string | undefined>; take(): string | undefined } | undefined {
     const self = this.deps.live().find((c) => c.id === conversationId);
     if (self && !isYours(self)) return undefined;
-    // This reply joins the chain of messages that started it, or starts its own.
-    this.messages?.begin(conversationId);
+    // This reply joins the chain of messages that led to it, or starts its own.
+    this.messages?.begin(conversationId, turn);
     // A task or a routine's run hears it too, but has no list_chats to ask more with.
     const asks = !self?.origin || self.origin.kind === 'channel';
     /** Chats already told about this turn, and the files already said to be changed by both. */
@@ -317,10 +320,12 @@ export class TogetherService {
       lines += kept.length;
       return kept.join('\n');
     };
+    const both = (...parts: (string | undefined)[]) =>
+      parts.filter(Boolean).join('\n\n') || undefined;
     return {
       // What other chats are doing here, then what they sent: messages are never held back by the cap.
-      take: () =>
-        [notes(), this.messages?.take(conversationId)].filter(Boolean).join('\n\n') || undefined,
+      start: async () => both(notes(), await this.messages?.open(conversationId)),
+      take: () => both(notes(), this.messages?.take(conversationId)),
     };
   }
 
