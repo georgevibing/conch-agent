@@ -18,6 +18,21 @@
   margin-inline-start: auto;
 }
 
+/* Narrow (a phone): the button goes under the words, its word where they start. */
+.banner {
+  container-type: inline-size;
+}
+
+@container (inline-size < 30rem) {
+  .banner > span {
+    flex-basis: calc(100% - 0.875rem - var(--nc-space-2));
+  }
+
+  .banner button {
+    margin-inline-start: calc(0.875rem + var(--nc-space-2) - var(--btn-px));
+  }
+}
+
 /* Apps that use Conch: a section of Settings → Access, under its Advanced. */
 .place {
   display: flex;
@@ -39,6 +54,19 @@
 
 .head > button {
   flex-shrink: 0;
+}
+
+/* Narrow (a phone): Pair an app goes under the words, where they start. */
+.head {
+  flex-wrap: wrap;
+  row-gap: var(--nc-space-3);
+  container-type: inline-size;
+}
+
+@container (inline-size < 30rem) {
+  .head > :first-child {
+    flex-basis: 100%;
+  }
 }
 
 /*

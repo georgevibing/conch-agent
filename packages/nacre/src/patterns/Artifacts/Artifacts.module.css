@@ -675,6 +675,30 @@
     min-inline-size: 0;
   }
 
+  /* Narrow (a phone), with Reads from: the buttons go under the words, its
+     word where they start, so what happened keeps its line. */
+  .live {
+    --ld-dot: 0.5rem;
+
+    flex-wrap: wrap;
+    row-gap: 0;
+    container-type: inline-size;
+  }
+
+  .live[data-state='failed'] {
+    --ld-dot: 1rem;
+  }
+
+  @container (inline-size < 30rem) {
+    .live:has(> button:not(.liveRefresh)) > .liveText {
+      flex-basis: calc(100% - var(--ld-dot) - var(--nc-space-2));
+    }
+
+    .liveText + button {
+      margin-inline-start: calc(var(--ld-dot) + var(--nc-space-2) - var(--btn-px));
+    }
+  }
+
   .liveRefresh[data-spinning] svg {
     animation: nc-live-spin 900ms linear infinite;
   }
@@ -845,6 +869,31 @@
   .liveRowMeta {
     color: var(--nc-text-muted);
     font-size: var(--nc-text-xs);
+  }
+
+  /* A narrow list (a phone): Take back (and the badge before it) go under
+     the words, where they start, so the site keeps its name. */
+  .liveList {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .liveRow {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1-5);
+    }
+
+    .liveRowText {
+      flex-basis: calc(100% - 1rem - var(--nc-space-3));
+    }
+
+    .liveRowText + * {
+      margin-inline-start: calc(1rem + var(--nc-space-3));
+    }
+
+    .liveRowText + button {
+      margin-inline-start: calc(1rem + var(--nc-space-3) - var(--btn-px));
+    }
   }
 
   .liveRowLink {

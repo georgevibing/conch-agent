@@ -24,6 +24,27 @@
     opacity: 0.6;
   }
 
+  /* A narrow list (a phone): Remove goes under the words, its word where they
+     start, so they keep their room. */
+  .list {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1);
+    }
+
+    .row > .body {
+      flex-basis: calc(100% - 2rem - var(--nc-space-3));
+    }
+
+    .row > .body ~ button {
+      margin-inline-start: calc(2rem + var(--nc-space-3) - var(--btn-px));
+    }
+  }
+
   .body {
     display: flex;
     flex: 1;

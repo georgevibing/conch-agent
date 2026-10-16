@@ -41,6 +41,7 @@ const meta = {
   title: 'Patterns/Voice/VoiceLibrary',
   component: VoiceLibrary,
   parameters: {
+    layout: 'padded',
     docs: {
       description: {
         component:
@@ -58,6 +59,7 @@ const meta = {
     onRemove: () => undefined,
     'aria-label': 'Natural voices',
   },
+  decorators: [(Story) => <div style={{ maxInlineSize: 520 }}>{Story()}</div>],
 } satisfies Meta<typeof VoiceLibrary>;
 
 export default meta;

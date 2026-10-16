@@ -167,7 +167,7 @@
     container-type: inline-size;
   }
 
-  @container (max-width: 30rem) {
+  @container (inline-size < 30rem) {
     .check {
       flex-wrap: wrap;
       row-gap: var(--nc-space-2);
@@ -334,6 +334,33 @@
     flex-shrink: 0;
     align-items: center;
     gap: var(--nc-space-1);
+  }
+
+  /* A narrow list (a phone): with a button that has a word (Sign out), the
+     buttons go under the words, that word first, where they start. Only
+     icons stay at the end. */
+  .devices {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .device:has(.deviceSignOut) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1);
+    }
+
+    .device:has(.deviceSignOut) > .deviceBody {
+      flex-basis: calc(100% - 2rem - var(--nc-space-3));
+    }
+
+    .device:has(.deviceSignOut) > .deviceActions {
+      margin-inline-start: calc(2rem + var(--nc-space-3));
+    }
+
+    .deviceSignOut {
+      order: -1;
+      margin-inline-start: calc(var(--btn-px) * -1);
+    }
   }
 
   /* Remembered, not signed in: quieter, but still there to remove. */

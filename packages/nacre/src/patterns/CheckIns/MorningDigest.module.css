@@ -125,6 +125,32 @@
     transition: color var(--nc-duration-base) var(--nc-ease-out);
   }
 
+  /* A narrow note (a phone): Undo goes under the words, its word where they
+     start, so they keep the line. */
+  .items {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .item {
+      flex-wrap: wrap;
+      row-gap: 0;
+    }
+
+    .item > .words {
+      flex-basis: calc(100% - 0.875rem - var(--nc-space-2-5));
+    }
+
+    .item > .words ~ button {
+      margin-inline-start: calc(0.875rem + var(--nc-space-2-5) - var(--btn-px));
+    }
+
+    .item > .undoneTag {
+      margin-inline-start: calc(0.875rem + var(--nc-space-2-5));
+      padding-inline: 0;
+    }
+  }
+
   .item[data-kind='merged'] .icon,
   .item[data-kind='tidied'] .icon {
     color: var(--nc-text-subtle);

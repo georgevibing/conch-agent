@@ -10,6 +10,7 @@ const meta = {
   component: ComputerUseAccess,
   args: { screen: 'granted', control: 'missing', grantTo: 'Conch', here: true, onOpen: fn() },
   parameters: {
+    layout: 'padded',
     docs: {
       description: {
         component:
@@ -17,6 +18,7 @@ const meta = {
       },
     },
   },
+  decorators: [(Story) => <div style={{ maxInlineSize: 520 }}>{Story()}</div>],
 } satisfies Meta<typeof ComputerUseAccess>;
 
 export default meta;

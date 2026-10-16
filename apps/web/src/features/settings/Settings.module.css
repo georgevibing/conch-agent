@@ -188,6 +188,23 @@
     flex-shrink: 0;
   }
 
+  /* A narrow section (a phone): a button beside the title goes under the
+     words instead, where they start. "Saved" is a word, not a button: it stays. */
+  .section {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .sectionHead:has(> .sectionStatus button) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-3);
+    }
+
+    .sectionHead:has(> .sectionStatus button) > :first-child {
+      flex-basis: 100%;
+    }
+  }
+
   .saved {
     flex-shrink: 0;
     padding-block-start: var(--nc-space-1);
@@ -323,5 +340,26 @@
 
   .commandText {
     min-inline-size: 0;
+  }
+
+  /* A narrow list (a phone): the button goes under the words, where they
+     start (past the row's mark, `--row-mark`), so they keep their room. */
+  .commandList {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .commandRow {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .commandText {
+      flex-basis: 100%;
+    }
+
+    .commandRow > button {
+      margin-inline-start: calc(var(--row-mark, 0px) + var(--nc-space-3));
+    }
   }
 }

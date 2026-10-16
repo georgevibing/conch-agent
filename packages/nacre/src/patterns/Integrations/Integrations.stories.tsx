@@ -466,8 +466,9 @@ export const ToolWithALongDescription: Story = {
 };
 
 export const IssueInChat: Story = {
+  parameters: { layout: 'padded' },
   render: () => (
-    <Stack gap={3}>
+    <Stack gap={3} style={{ maxInlineSize: '34rem' }}>
       <IntegrationIssueCard
         name="Notion"
         brand="notion"

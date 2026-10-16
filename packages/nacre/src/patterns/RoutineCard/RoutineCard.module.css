@@ -386,6 +386,29 @@
     align-self: center;
   }
 
+  /* A narrow card (a phone): Open goes under the words, where they start, so
+     it doesn't squeeze them. The one rule for a card's button (NACRE.md § One card). */
+  .proposal {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .proposalBody {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .proposalBody > .text {
+      flex-basis: calc(100% - 2rem - var(--nc-space-3));
+    }
+
+    /* A ghost button has no edge to line up, so its word does. */
+    .inlineOpen {
+      align-self: flex-start;
+      margin-inline-start: calc(2rem + var(--nc-space-3) - var(--btn-px));
+    }
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;

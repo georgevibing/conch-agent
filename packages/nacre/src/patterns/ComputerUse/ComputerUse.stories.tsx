@@ -16,6 +16,7 @@ const meta = {
     onStop: fn(),
   },
   parameters: {
+    layout: 'padded',
     docs: {
       description: {
         component:

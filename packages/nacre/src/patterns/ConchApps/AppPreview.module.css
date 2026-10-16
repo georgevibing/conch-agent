@@ -262,6 +262,27 @@
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
   }
 
+  /* A narrow list (a phone): the button (or what it says instead) goes under
+     the words, where they start, so it doesn't squeeze them. */
+  .collection {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .rowHead {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .rowText {
+      flex-basis: calc(100% - 2.5rem - var(--nc-space-3));
+    }
+
+    .rowText ~ * {
+      margin-inline-start: calc(2.5rem + var(--nc-space-3));
+    }
+  }
+
   @media (max-width: 30rem) {
     .rowDetails {
       padding-inline-start: 0;

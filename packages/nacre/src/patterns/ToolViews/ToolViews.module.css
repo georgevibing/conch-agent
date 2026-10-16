@@ -420,6 +420,31 @@
     transition-duration: 0s;
   }
 
+  /* Touch, and narrow (a phone): Reply goes under the email, its word where
+     the words start, so the subject keeps the line. */
+  .mail .rows {
+    container-type: inline-size;
+  }
+
+  @media (hover: none) {
+    @container (inline-size < 30rem) {
+      .mail[data-replies] .mailRow {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      /* Its icon sits in the unread dot's column, so its word starts with the sender's. */
+      .reply {
+        justify-self: start;
+        margin-inline: calc(
+            var(--tv-pad) + 0.4375rem + var(--nc-space-1-5) - var(--nc-space-2) - 0.8125rem -
+              var(--nc-space-1)
+          )
+          0;
+        margin-block-end: var(--nc-space-1);
+      }
+    }
+  }
+
   /*
    * Quiet: on touch it's always there, in a column of its own; with a pointer
    * it waits for the row, then floats over the row's end as a small chip.

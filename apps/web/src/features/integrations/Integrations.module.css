@@ -119,6 +119,27 @@
     min-inline-size: 0;
   }
 
+  /* A narrow list (a phone): the button (and the badge after it) go under the
+     words, where they start, so a long line about the server keeps its room. */
+  .externalList {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .externalRow:has(> button) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1-5);
+    }
+
+    .externalRow:has(> button) > .externalName {
+      flex-basis: calc(100% - 1.75rem - var(--nc-space-3));
+    }
+
+    .externalRow > .externalName + button {
+      margin-inline-start: calc(1.75rem + var(--nc-space-3) - var(--btn-px));
+    }
+  }
+
   /* One folded group per provider under "From your providers". */
   .providerGroup {
     border-block-start: 1px solid var(--nc-border-subtle);
@@ -387,13 +408,21 @@
     list-style: none;
   }
 
-  /* A section's heading with its one action beside it, wrapping under it when narrow. */
+  /* A section's heading with its one action beside it; narrow (a phone), the
+     action goes under the words, where they start. */
   .sectionHead {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--nc-space-3);
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .sectionHead > :first-child {
+      flex-basis: 100%;
+    }
   }
 
   /* A choice's name with its badge (“Simplest”). */

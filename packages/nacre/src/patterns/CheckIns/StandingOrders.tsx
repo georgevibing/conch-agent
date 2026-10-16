@@ -181,6 +181,7 @@ function Row({
             <Button
               size="sm"
               variant="soft"
+              className={styles.keep}
               leadingIcon={<Check />}
               loading={busy}
               onClick={onKeep}

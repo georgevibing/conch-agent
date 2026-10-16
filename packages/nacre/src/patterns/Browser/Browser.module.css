@@ -1432,6 +1432,27 @@
     min-inline-size: 0;
   }
 
+  /* A narrow card (a phone): Repair goes under the words, where they start,
+     so it doesn't squeeze them. */
+  .status {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .statusHead {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-3);
+    }
+
+    .statusText {
+      flex-basis: calc(100% - 2.5rem - var(--nc-space-4));
+    }
+
+    .statusText ~ * {
+      margin-inline-start: calc(2.5rem + var(--nc-space-4));
+    }
+  }
+
   .statusTitle {
     margin: 0;
     color: var(--nc-text);

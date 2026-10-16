@@ -263,6 +263,23 @@
     block-size: 1rem;
   }
 
+  /* Narrow (a phone): Retry goes under the words, its word where they start. */
+  .error:has(> button) {
+    flex-wrap: wrap;
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .error > span {
+      flex-basis: calc(100% - 1rem - var(--nc-space-2));
+      padding-block: var(--nc-space-1);
+    }
+
+    .error > button {
+      margin-inline-start: calc(1rem + var(--nc-space-2) - var(--btn-px));
+    }
+  }
+
   /* ── What belongs to the reply ────────────────────────────────────────
      No box of its own: each part is a step of the message's own column, so
      a part that folds away to nothing leaves no gap behind. A part sits

@@ -155,7 +155,7 @@
   }
 
   /* On a phone, the button goes under the words instead of squeezing them. */
-  @container (max-width: 26rem) {
+  @container (inline-size < 30rem) {
     .head {
       flex-wrap: wrap;
       row-gap: var(--nc-space-3);

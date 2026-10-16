@@ -193,6 +193,37 @@
     padding-inline-start: calc(0.875rem + var(--nc-space-2-5));
   }
 
+  /* A narrow card (a phone): Undo goes under the words, its word where they
+     start, so they keep their line. */
+  .list {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .row:has(> button) {
+      flex-wrap: wrap;
+      row-gap: 0;
+    }
+
+    .row:has(> button) > .itemText {
+      flex-basis: calc(100% - 0.875rem - var(--nc-space-2-5));
+      padding-block-end: var(--nc-space-0-5);
+    }
+
+    .row > .itemText ~ button {
+      margin-inline-start: calc(0.875rem + var(--nc-space-2-5) - var(--btn-px));
+      margin-block-end: var(--nc-space-1);
+    }
+
+    .row[data-sub] > .itemText {
+      flex-basis: 100%;
+    }
+
+    .row[data-sub] > .itemText ~ button {
+      margin-inline-start: calc(var(--btn-px) * -1);
+    }
+  }
+
   .rowIcon {
     flex-shrink: 0;
     align-self: flex-start;

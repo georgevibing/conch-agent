@@ -193,7 +193,9 @@
     padding-inline-start: var(--ao-indent);
   }
 
-  @container (max-width: 26rem) {
+  /* A phone: what's under the title takes the card's width, its buttons too,
+     so they still start where the words above them do. */
+  @container (inline-size < 30rem) {
     .status,
     .actions {
       padding-inline-start: 0;

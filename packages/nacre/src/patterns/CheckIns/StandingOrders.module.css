@@ -97,6 +97,27 @@
     flex-shrink: 0;
   }
 
+  /* A narrow list (a phone): with Keep it, the buttons go under the words,
+     where they start. Only icons stay at the end. */
+  .rows {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .row:has(.keep) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .row:has(.keep) > .words {
+      flex-basis: calc(100% - 4.5rem - var(--nc-space-2-5));
+    }
+
+    .row:has(.keep) > .actions {
+      margin-inline-start: calc(4.5rem + var(--nc-space-2-5));
+    }
+  }
+
   .edit {
     display: flex;
     flex-wrap: wrap;

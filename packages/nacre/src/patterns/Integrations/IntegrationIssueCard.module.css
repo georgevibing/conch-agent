@@ -55,6 +55,24 @@
     text-wrap: pretty;
   }
 
+  /* A narrow card (a phone): the button goes under the words, where they
+     start, so it doesn't squeeze them. */
+  .card {
+    flex-wrap: wrap;
+    row-gap: var(--nc-space-2-5);
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .text {
+      flex-basis: calc(100% - 1.75rem - var(--nc-space-3));
+    }
+
+    .text ~ * {
+      margin-inline-start: calc(1.75rem + var(--nc-space-3));
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .card {
       animation: none;

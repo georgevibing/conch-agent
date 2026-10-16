@@ -1,4 +1,5 @@
 import { Button, IntegrationLogo, SkillIcon, Stack, Text } from '@conch/nacre';
+import type { CSSProperties } from 'react';
 
 import { useIntegrations } from '../integrations/queries';
 import { useProviders } from '../providers/queries';
@@ -54,7 +55,11 @@ export function MutedSuggestions({
                 ? (skill?.title ?? titleCase(skillId))
                 : (entry?.name ?? titleCase(id));
             return (
-              <li key={id} className={styles.commandRow}>
+              <li
+                key={id}
+                className={styles.commandRow}
+                style={{ '--row-mark': skillId ? '2.5rem' : '1.75rem' } as CSSProperties}
+              >
                 <Stack direction="row" gap={3} align="center" className={styles.commandText}>
                   {skillId ? (
                     <SkillIcon name={skill?.name ?? skillId} title={name} size="md" />

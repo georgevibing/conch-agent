@@ -68,6 +68,7 @@ function AbilityRow({ ability }: { ability: AppAbility }) {
       className={styles.row}
       data-on={shownOn || undefined}
       data-attention={attention || undefined}
+      data-setup={setup ? '' : undefined}
       aria-busy={busy || undefined}
     >
       {icon && (

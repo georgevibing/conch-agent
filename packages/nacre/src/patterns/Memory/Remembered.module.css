@@ -43,6 +43,24 @@
       color var(--nc-duration-fast) var(--nc-ease-out);
   }
 
+  /* Narrow (a phone): Undo goes under the memory, its word where the words
+     start, so the memory keeps the line. */
+  .note {
+    flex-wrap: wrap;
+    row-gap: var(--nc-space-0-5);
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .text {
+      flex-basis: 100%;
+    }
+
+    .undo {
+      margin-inline: calc(-1 * var(--nc-space-1-5)) 0;
+    }
+  }
+
   .undo:disabled {
     cursor: progress;
     color: var(--nc-text-subtle);

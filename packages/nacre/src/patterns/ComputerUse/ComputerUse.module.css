@@ -113,6 +113,27 @@
     opacity: 0.75;
   }
 
+  /* A narrow card (a phone): Stop goes under the words, where they start, so
+     it doesn't squeeze them. */
+  .live {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .liveBody {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-3);
+    }
+
+    .liveWords {
+      flex-basis: calc(100% - 1rem - var(--nc-space-3));
+    }
+
+    .liveWords ~ * {
+      margin-inline-start: calc(1rem + var(--nc-space-3));
+    }
+  }
+
   @keyframes cu-turn {
     to {
       --cu-turn: 360deg;
@@ -187,6 +208,26 @@
   .rowDetail {
     font-size: var(--nc-text-sm);
     color: var(--nc-text-muted);
+  }
+
+  /* A narrow list (a phone): the button goes under the words, where they start. */
+  .access {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .row:has(> button) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .row:has(> button) > .rowWords {
+      flex-basis: calc(100% - 2rem - var(--nc-space-3));
+    }
+
+    .rowWords ~ button {
+      margin-inline-start: calc(2rem + var(--nc-space-3));
+    }
   }
 
   .rowOn {

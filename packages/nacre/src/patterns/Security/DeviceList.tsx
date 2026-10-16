@@ -110,6 +110,7 @@ export function DeviceList({
                 <Button
                   size="sm"
                   variant="ghost"
+                  className={styles.deviceSignOut}
                   tone={device.current ? 'neutral' : 'danger'}
                   onClick={() => onSignOut(device)}
                   aria-label={`${device.current ? currentActionLabel : 'Sign out'} ${device.name}`}

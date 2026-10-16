@@ -183,6 +183,27 @@
     gap: var(--nc-space-1);
   }
 
+  /* A narrow list (a phone): with a button that has a word (Get it, Use),
+     the buttons go under the words, that word first. Only icons stay at the end. */
+  .library {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .libraryRow:has(.libraryWord) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
+    }
+
+    .libraryRow:has(.libraryWord) > .libraryText {
+      flex-basis: 100%;
+    }
+
+    .libraryWord {
+      order: -1;
+    }
+  }
+
   /* ── ListeningIndicator ─────────────────────────────────────────────── */
 
   .listening {

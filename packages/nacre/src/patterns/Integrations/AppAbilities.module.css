@@ -93,13 +93,28 @@
     gap: var(--nc-space-2);
   }
 
-  @media (max-width: 420px) {
-    .row {
+  /* A narrow list (a phone): a button goes under the words, where they
+     start, so it doesn't squeeze them. A switch is small and stays at the end. */
+  .root {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .row[data-setup] {
       flex-wrap: wrap;
+      row-gap: var(--nc-space-2);
     }
 
-    .control {
-      margin-inline-start: auto;
+    .row[data-setup] > .about {
+      flex-basis: 100%;
+    }
+
+    .row[data-setup] > .icon + .about {
+      flex-basis: calc(100% - 2rem - var(--nc-space-3));
+    }
+
+    .row[data-setup] > .icon ~ .control {
+      margin-inline-start: calc(2rem + var(--nc-space-3));
     }
   }
 }

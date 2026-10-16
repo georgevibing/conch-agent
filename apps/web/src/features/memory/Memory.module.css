@@ -46,3 +46,21 @@
   flex: 1;
   min-inline-size: 0;
 }
+
+/* A narrow card (a phone): Open memories goes under the words, where they
+   start, so they keep their room. */
+.door {
+  flex-wrap: wrap;
+  row-gap: var(--nc-space-2);
+  container-type: inline-size;
+}
+
+@container (inline-size < 30rem) {
+  .doorText {
+    flex-basis: calc(100% - 1.1rem - var(--nc-space-3));
+  }
+
+  .door > button {
+    margin-inline-start: calc(1.1rem + var(--nc-space-3));
+  }
+}

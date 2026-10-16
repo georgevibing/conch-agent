@@ -1495,6 +1495,7 @@ export function VaultSignInRow({
       role="group"
       aria-labelledby={labelId}
       data-via={signIn.via}
+      data-action={action ? '' : undefined}
       className={cx(styles.field, styles.signIn, className)}
       {...props}
     >

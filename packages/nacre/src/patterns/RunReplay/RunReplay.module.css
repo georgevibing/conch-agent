@@ -236,6 +236,27 @@
     gap: var(--nc-space-3);
   }
 
+  /* A narrow card (a phone): Show in chat goes under the words, its word
+     where they start. */
+  .now {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .nowHead {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1);
+    }
+
+    .nowHead > .nowText {
+      flex-basis: calc(100% - 1.75rem - var(--nc-space-3));
+    }
+
+    .nowText ~ button {
+      margin-inline-start: calc(1.75rem + var(--nc-space-3) - var(--btn-px));
+    }
+  }
+
   .glyph {
     --mark: var(--nc-text-muted);
 

@@ -112,11 +112,28 @@
   }
 
   /* ── Detail ──────────────────────────────────────────────────────── */
+  /* Icon, words, then the switch and its buttons; on a phone (a header narrower
+     than 30rem) those go under the words, where they start. */
   .detailHeader {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--nc-space-4);
+    container-type: inline-size;
+  }
+
+  .detailHeader > .detailIcon {
+    flex: none;
+  }
+
+  @container (inline-size < 30rem) {
+    .detailTitle {
+      flex-basis: calc(100% - 3rem - var(--nc-space-4));
+    }
+
+    .detailActions {
+      margin-inline-start: calc(3rem + var(--nc-space-4));
+    }
   }
 
   .detailIcon {
@@ -132,6 +149,7 @@
 
   /* A long word (an id, a timezone) breaks rather than pushing the page wider. */
   .detailTitle {
+    flex: 1;
     min-inline-size: 0;
     overflow-wrap: anywhere;
   }
@@ -218,8 +236,11 @@
 
   /* A note at the top of a chat (a routine's run, a chat app, the archive): the
      sentence takes the room, and when that's short (a phone) the link or button
-     moves to a line of its own instead of squeezing it. */
+     moves to a line of its own, where the words start, instead of squeezing it. */
   .runBanner {
+    --rb-mark: 0.875rem;
+
+    container-type: inline-size;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -235,8 +256,13 @@
     color: var(--nc-text-muted);
   }
 
+  /* A chat app's logo is a little bigger than an icon. */
+  .runBanner:has(> span:first-child) {
+    --rb-mark: 1.25rem;
+  }
+
   .runBanner > span {
-    flex: 1 1 20rem;
+    flex: 1;
     min-inline-size: 0;
   }
 
@@ -244,6 +270,21 @@
     flex-shrink: 0;
     margin-inline-start: auto;
     white-space: nowrap;
+  }
+
+  @container (inline-size < 30rem) {
+    .runBanner > span {
+      flex-basis: calc(100% - var(--rb-mark) - var(--nc-space-2));
+    }
+
+    .runBanner > :is(a, button) {
+      margin-inline-start: calc(var(--rb-mark) + var(--nc-space-2));
+    }
+
+    /* A ghost button has no edge to line up, so its word does. */
+    .runBanner > button {
+      margin-inline-start: calc(var(--rb-mark) + var(--nc-space-2) - var(--btn-px));
+    }
   }
 
   .runBanner a {
@@ -285,14 +326,6 @@
   }
 
   @media (max-width: 820px) {
-    .detailHeader {
-      grid-template-columns: auto minmax(0, 1fr);
-    }
-
-    .detailActions {
-      grid-column: 1 / -1;
-    }
-
     .detailGrid {
       grid-template-columns: minmax(0, 1fr);
     }

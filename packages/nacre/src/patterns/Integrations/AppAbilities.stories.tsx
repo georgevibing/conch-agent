@@ -11,6 +11,7 @@ const meta = {
   title: 'Patterns/Integrations/AppAbilities',
   component: AppAbilities,
   parameters: {
+    layout: 'padded',
     docs: {
       description: {
         component:

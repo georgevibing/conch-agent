@@ -424,6 +424,18 @@ row between the words and their card.
 - **One card.** Every card in a reply takes its shape from the `--nc-chat-card-*`
   tokens: radius, surface, ring with glaze and a soft shadow, padding, the
   1.75rem mark beside a small semibold title, and one width.
+- **A card's button.** Wide, a button may sit at the end of the words it acts
+  on (Open, Reconnect, Undo). On a card narrower than 30rem (a phone, a side
+  panel) it goes on a line of its own under them, starting where the words
+  start: past the mark, and for a ghost button its word, not its padding
+  (`margin-inline-start: calc(mark + gap - var(--btn-px))`). It's one rule
+  for every card and every row of a list: the card (or the list) is the
+  container (`container-type: inline-size`) and the row asks
+  `@container (inline-size < 30rem)`, the same 30rem everywhere. Icon-only
+  buttons and switches stay at the end, they're small; with a worded button
+  they follow it, the word first. A single short line (a header, a bar, a
+  note's Undo) keeps its button beside it, and so do tiles in a grid, whose
+  words stay on one line.
 - **Folding.** A card done with folds away. One that can open again becomes a
   row like a tool's (`--nc-chat-row-*`). One that only says what happened
   becomes a line (`--nc-chat-note-*`). One that's dismissed closes the gap it

@@ -81,6 +81,17 @@
     font-size: var(--nc-text-sm);
   }
 
+  /* Narrow (a phone): the fix goes under what's wrong, where the words start. */
+  .problem {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .problem > span {
+      flex-basis: 100%;
+    }
+  }
+
   .controls {
     display: flex;
     flex-wrap: wrap;

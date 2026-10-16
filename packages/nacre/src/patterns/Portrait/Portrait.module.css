@@ -132,6 +132,22 @@
     flex: 1;
   }
 
+  /* Narrow (a phone): Keep all goes under the words, where they start. */
+  .suggestBar {
+    flex-wrap: wrap;
+    row-gap: var(--nc-space-2);
+  }
+
+  @container (inline-size < 30rem) {
+    .suggestBar > span {
+      flex-basis: calc(100% - 1rem - var(--nc-space-2));
+    }
+
+    .suggestBar > button {
+      margin-inline-start: calc(1rem + var(--nc-space-2));
+    }
+  }
+
   /* ── The parts of your life: a row each, like lines on an index card ── */
   .strands {
     display: flex;

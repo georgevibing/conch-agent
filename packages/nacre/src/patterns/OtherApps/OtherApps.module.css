@@ -76,7 +76,7 @@
     container-type: inline-size;
   }
 
-  @container (max-width: 30rem) {
+  @container (inline-size < 30rem) {
     .row > .actions {
       flex-basis: 100%;
       padding-inline-start: calc(2.5rem + var(--nc-space-3));

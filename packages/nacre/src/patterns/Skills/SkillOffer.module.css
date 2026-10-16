@@ -81,7 +81,7 @@
   }
 
   /* Room for both: the words, then the buttons at the end, centred on them. */
-  @container (min-inline-size: 28rem) {
+  @container (inline-size >= 30rem) {
     .body {
       flex-direction: row;
       align-items: center;

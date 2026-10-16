@@ -194,6 +194,28 @@
     margin-inline-end: calc(var(--nc-space-1-5) * -1);
   }
 
+  /* A narrow card (a phone): Edit goes under the words, its word where they
+     start, so the From line keeps its room. */
+  .card {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .head:has(> .editButton) {
+      flex-wrap: wrap;
+      row-gap: var(--nc-space-1-5);
+    }
+
+    .head:has(> .editButton) > .headText {
+      flex-basis: calc(100% - var(--ml-text-start));
+    }
+
+    .editButton {
+      margin-block-start: 0;
+      margin-inline: calc(var(--ml-text-start) - var(--btn-px)) 0;
+    }
+  }
+
   /* ── The stamp ──────────────────────────────────────────────────────── */
   .stamp {
     position: relative;

@@ -90,6 +90,7 @@ export function VoiceLibrary({
                 <Button
                   size="sm"
                   variant="surface"
+                  className={styles.libraryWord}
                   leadingIcon={<Download />}
                   onClick={() => onDownload(voice.id)}
                   aria-label={`Get ${voice.name}, ${mb(voice.bytes)}`}
@@ -122,6 +123,7 @@ export function VoiceLibrary({
                     <Button
                       size="sm"
                       variant="surface"
+                      className={styles.libraryWord}
                       onClick={() => onChoose(voice.id)}
                       aria-label={`Use ${voice.name}`}
                     >

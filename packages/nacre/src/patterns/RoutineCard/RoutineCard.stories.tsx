@@ -282,3 +282,25 @@ export const PhoneLongOutcome: Story = {
     </ul>
   ),
 };
+
+/**
+ * On a phone (a card narrower than 30rem): Open goes under the words, lined
+ * up with them, instead of squeezing the schedule into two lines. Wider, it
+ * sits at the right.
+ */
+export const PhoneSettled: Story = {
+  args: {
+    variant: 'proposal',
+    title: 'Flip the pancakes',
+    scheduleText: 'Once, Thu, Oct 15, 10:51 PM',
+    status: 'paused',
+    cost: { text: 'Runs on your ChatGPT Prolite plan', billing: 'plan' },
+    onOpen: () => {},
+  },
+  render: (args) => (
+    <Stack gap={3} style={{ maxInlineSize: 358 }}>
+      <RoutineCard {...args} />
+      <RoutineCard {...args} status="active" />
+    </Stack>
+  ),
+};

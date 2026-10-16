@@ -148,7 +148,7 @@
 
   .detailTitle {
     display: flex;
-    flex: 1 1 16rem;
+    flex: 1;
     flex-direction: column;
     gap: var(--nc-space-1);
     min-inline-size: 0;
@@ -159,6 +159,22 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--nc-space-2);
+  }
+
+  /* A phone (a header narrower than 30rem): the button and the switch go
+     under the words, where they start. */
+  .detailHeader {
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .detailTitle {
+      flex-basis: calc(100% - 3.5rem - var(--nc-space-4));
+    }
+
+    .detailActions {
+      margin-inline-start: calc(3.5rem + var(--nc-space-4));
+    }
   }
 
   .avatar {
@@ -188,6 +204,24 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--nc-space-4);
+  }
+
+  /* A setting with a worded button (Turn on, Forget): narrow (a phone), its
+     controls go under the words, where they start. A switch alone stays at the end. */
+  .setting:has(button:not([role='switch'])) {
+    flex-wrap: wrap;
+    row-gap: var(--nc-space-2);
+    container-type: inline-size;
+  }
+
+  @container (inline-size < 30rem) {
+    .setting:has(button:not([role='switch'])) > :first-child {
+      flex-basis: 100%;
+    }
+
+    .setting > :last-child > [data-variant='ghost']:first-child {
+      margin-inline-start: calc(var(--btn-px) * -1);
+    }
   }
 
   @media (max-width: 820px) {

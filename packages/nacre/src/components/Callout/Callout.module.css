@@ -124,7 +124,7 @@
     row-gap: var(--nc-space-2-5);
   }
 
-  @container (inline-size < 28rem) {
+  @container (inline-size < 30rem) {
     .action {
       flex: 0 1 100%;
       flex-wrap: wrap;
@@ -134,6 +134,11 @@
 
     .icon ~ .action {
       margin-inline-start: calc(1rem + var(--nc-space-3));
+    }
+
+    /* A ghost button has no edge to line up, so its word does. */
+    .action > [data-variant='ghost']:first-child {
+      margin-inline-start: calc(var(--btn-px) * -1);
     }
   }
 }
