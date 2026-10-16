@@ -568,14 +568,15 @@ threat model. Hold every change to the bar of a thorough professional security r
 7. **The agent can't raise its own privileges.** Anything that grants trust,
    enables automation, or persists permissions needs a human action in the UI.
    Checks that must hold in every permission mode (protected paths, tools
-   turned off, the guard after reading) go in `TurnInput.guard` — Claude
+   turned off, guest restrictions) go in `TurnInput.guard` — Claude
    Code's PreToolUse hook — never only in `canUseTool`, which the SDK skips
    when a mode allows by itself (ADR 0028). A new tool that brings outside
    content in taints the chat (`conversations/taint.ts` `taintFrom`); one that
    can send things out or change the computer is a sink (`sinkReason`).
-   A chat is held to what each skill in it says it needs the same way, in
-   every later turn (`skills/permissions.ts` `needs`/`allows`, ADR 0031,
-   ADR 0047): a new tool that can do harm needs a capability in `needs()`,
+   Ask first and Read only keep a chat held to its skills in later turns
+   (`skills/permissions.ts` `needs`/`allows`, ADR 0031, ADR 0047). Auto assesses
+   actual actions; Full trust skips action approvals (ADR 0135).
+   A new tool that can do harm needs a capability in `needs()`,
    and nothing but a person's action ends a hold. Trusting a skill publisher is a
    lasting power: sudo mode, and the key comes from a signature that held.
 8. **What the assistant makes is sealed.** A page it wrote runs only in

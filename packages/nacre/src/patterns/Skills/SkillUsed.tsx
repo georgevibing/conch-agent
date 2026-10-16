@@ -40,11 +40,9 @@ export function SkillUsed({
       <SkillIcon name={name} title={title} size="sm" />
       {by === 'carried' ? (
         <span>
-          {carriedFrom === 'helper' ? 'A task used the ' : 'Held to the '}
+          {carriedFrom === 'helper' ? 'A task used the ' : 'Using the '}
           {named} skill
-          {carriedFrom === 'helper'
-            ? ', so this chat is held to it too'
-            : ', like the chat it came from'}
+          {carriedFrom === 'helper' ? ', shared with this chat' : ', like the chat it came from'}
         </span>
       ) : (
         <span>

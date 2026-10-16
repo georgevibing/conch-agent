@@ -561,14 +561,13 @@ describe('the behaviour guard, end to end (ADR 0117)', () => {
     expect(outcomes).toEqual(['declined']);
   });
 
-  it('Full trust asks once at the 50th delete in a turn', async () => {
+  it('Full trust does not add an approval at the 50th delete in a turn', async () => {
     const steps = Array.from({ length: 50 }, (_, i) =>
       guarded('mcp__notion__delete_page', { id: `page${i}` }),
     );
     const { asked, outcomes } = await run('bypassPermissions', steps);
-    expect(asked).toHaveLength(1);
-    expect(asked[0]?.taint).toContain('delete 50 things in a row');
-    expect(outcomes.filter((o) => o === 'ran')).toHaveLength(49);
+    expect(asked).toHaveLength(0);
+    expect(outcomes.filter((o) => o === 'ran')).toHaveLength(50);
   });
 
   it('an ordinary diary day in Auto never asks, after the app’s own answers too', async () => {

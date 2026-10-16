@@ -59,7 +59,7 @@ export const Playground: Story = {};
 /** Open, as it is when you look at what it found. */
 export const Open: Story = { args: { defaultOpen: true } };
 
-/** Nothing else is going on: nothing to open. */
+/** An empty background check stays silent, including in older chats. */
 export const NothingElse: Story = { args: { chats: [] } };
 
 /** Some chats, none of them busy. */

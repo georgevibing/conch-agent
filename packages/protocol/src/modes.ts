@@ -21,7 +21,7 @@ export interface ModeWords {
  * From the least the assistant may do alone to the most (ADR 0119: four
  * modes, Auto by default). Read only changes nothing; Ask first asks before
  * any change; Auto gets on with the work and stops only for something
- * serious; Full trust never stops, but for the few checks no mode lifts.
+ * serious; Full trust skips action approvals; sign-in and Password access remain personal.
  */
 export const MODE_WORDS: readonly ModeWords[] = [
   {
@@ -48,7 +48,7 @@ export const MODE_WORDS: readonly ModeWords[] = [
   {
     value: 'bypassPermissions',
     label: 'Full trust',
-    description: 'Never asks. Runs anything.',
+    description: 'Acts without approval. Use with care.',
     hint: 'never asks before acting',
     tone: 'danger',
   },

@@ -22,7 +22,7 @@ Each row says **On** once macOS allows it. Running from a terminal? The rows nam
 
 ## What it asks, and what it never touches
 
-- **Each app asks once per chat.** **Always** skips that app's question from then on, as does **Full trust**, unless the chat read something from the web or an email. Undo **Always** under **Use your apps**.
+- **Each app asks once per chat.** **Always** skips that app's question from then on, as does **Full trust**, including after reading a page or email. Undo **Always** under **Use your apps**.
 - **Never touched, and covered over in what it sees:** password managers, System Settings and security prompts, terminals, banking, payment and crypto apps, and Conch itself. It asks you to do those parts.
 - **Read only** lets it look but not click or type.
 - **Only while you're there.** Routines, background tasks and chats from your chat apps can't use it.

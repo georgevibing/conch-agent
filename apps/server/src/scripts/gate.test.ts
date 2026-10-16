@@ -352,7 +352,7 @@ describe('a script is never a way around a question', () => {
     expect(unread.fetched).toEqual([leak]);
   });
 
-  it('counts a script’s calls toward the patterns across steps: a loop can’t hide a run of deletes', async () => {
+  it('Full trust applies to every call in a script and records the whole batch', async () => {
     const { manager, engine, deleted } = await setup('bypassPermissions');
     engine.script.push(
       runs(
@@ -365,16 +365,13 @@ describe('a script is never a way around a question', () => {
       ),
     );
     const convo = await manager.send({ clientMessageId: 'u1', text: 'clear them' });
-    const question = asking(await until(manager, convo.id, (e) => Boolean(asking(e))));
-    // Full trust lets deletes go, but not fifty in a row, script or not.
-    expect(question).toMatchObject({ script: { step: 50, title: 'Clear out old notes' } });
-    if (question?.type !== 'permission.requested') throw new Error('no question');
-    expect(question.taint).toMatch(/delete 50 things in a row/);
-    expect(deleted).toHaveLength(49);
-    await manager.respond(convo.id, question.permissionId, 'deny');
     const events = await until(manager, convo.id, ended);
-    expect(scriptAnswer(events)).toContain('stopped at 50: Declined');
-    expect(deleted).toHaveLength(49);
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(scriptAnswer(events)).toContain('deleted all');
+    expect(deleted).toHaveLength(60);
+    expect(events.filter((e) => e.type === 'script.call' && e.status === 'success')).toHaveLength(
+      60,
+    );
   });
 
   it('keeps every change a script makes, so one Undo puts the whole run back', async () => {

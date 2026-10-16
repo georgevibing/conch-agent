@@ -311,11 +311,13 @@ describe('list_chats', () => {
 
   it('says so when nothing else is going on', async () => {
     const service = world([{ summary: summary('here') }]);
-    expect(readOtherChatsFound(await list(service, context().ctx, { which: 'working' }))).toEqual({
+    const { ctx, appended } = context();
+    expect(readOtherChatsFound(await list(service, ctx, { which: 'working' }))).toEqual({
       chats: [],
       working: 0,
       note: 'None of the person’s other chats is working right now.',
     });
+    expect(appended).toEqual([]);
     expect(readOtherChatsFound(await list(service, context().ctx))?.note).toContain(
       'use search_chats',
     );
@@ -578,7 +580,7 @@ async function until(
 }
 
 describe('chats that know about each other, end to end', () => {
-  it('a reply another chat started runs with nobody watching: Full trust there doesn’t open the box', async () => {
+  it('a reply another chat started keeps the receiving chat’s selected Full trust', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-together-unwatched-'));
     const settings = new SettingsStore(home);
     await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
@@ -619,7 +621,7 @@ describe('chats that know about each other, end to end', () => {
     await manager.wake(chat.id, 'A message', { unwatched: true });
     await until(manager, chat.id, () => engine.turns.length === 3);
     expect(engine.turns[1]?.reach).toBe('open');
-    expect(engine.turns[2]?.reach).not.toBe('open');
+    expect(engine.turns[2]?.reach).toBe('open');
   });
 
   it('a chat Conch stopped under is still working until it carries on (peek)', async () => {

@@ -889,7 +889,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {/* Using your computer's apps (ADR 0110): what it's doing, and Stop. */}
       <ComputerUseNowCard conversationId={conversationId} running={running} />
       {/* What this chat is held to (ADR 0047): quiet, and one press to stop. */}
-      {conversationId && (
+      {conversationId && ['default', 'plan'].includes(turn.options.permissionMode) && (
         <ChatHolds conversationId={conversationId} holds={view.holds ?? []} running={busy} />
       )}
       {/* What this chat is for (`/goal`): quiet, one press to change or clear. */}

@@ -20,7 +20,7 @@ Codex uses Conch's file tools, commands, memory, browser, skills, routines and a
 - **Ask first:** reads go ahead. File changes and commands ask.
 - **Read only:** file reads only.
 - **Auto:** everything goes ahead, except [something serious](../reference/modes.md#auto).
-- **Full trust:** nothing asks but [the few things no mode lifts](../reference/modes.md#full-trust).
+- **Full trust:** actions go ahead without approval. Sign-in and Password access [still need you](../reference/modes.md#full-trust).
 
 ## Sealed commands
 

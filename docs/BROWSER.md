@@ -147,7 +147,7 @@ the same provider first, then your other providers. There's nothing to set up.
 
 ## What it asks you, and why
 
-Conch keeps the questions few, and makes each one count:
+Outside Full trust, Conch asks about the steps that need approval:
 
 - **A new site.** The first time it wants to click or type somewhere, it asks:
   _"Let Conch use booking.com?"_ Choose **Allow in this chat**, or **Always for
@@ -159,8 +159,8 @@ Conch keeps the questions few, and makes each one count:
   folder.
 
 In **Read only** mode it reads but never clicks, types or fills. In **Full trust** mode it
-skips the "new site" question, but never the "anything significant" one, and never
-fills a password you didn't allow.
+skips action approvals, including significant actions, uploads and downloads.
+Sign-in and access to a saved credential still need you.
 
 ## Where it runs
 
@@ -171,7 +171,7 @@ Settings → Browser → Advanced → **Where it runs**:
   `chrome://inspect/#remote-debugging` and turn on **Allow remote debugging** (Chrome 144 or
   newer), then press **Use my Chrome**; Chrome asks you to allow it. The assistant only uses tabs
   it opens there, each marked _Conch is using this tab_, never reads your other tabs, and asks
-  before acting on each site in every chat — even in **Full trust**. The panel says **In your
+  before acting on each site unless you chose **Full trust**. The panel says **In your
   Chrome**. Use it only when you need your sign-ins: a page it reads there could try to trick
   it, with your real accounts.
 - **Browserbase** or **Steel**: a browser in the cloud, with your API key. Pages it opens are

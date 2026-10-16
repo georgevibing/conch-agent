@@ -561,7 +561,7 @@ describe('the guard, end to end', () => {
     expect(events.find((e) => e.type === 'taint')).toBeTruthy();
   });
 
-  it('in Full trust, someone else’s words still stop Conch’s own tools, with no “always”', async () => {
+  it('in Full trust, outside words do not downgrade hosted tools', async () => {
     const { manager, engine } = await setup(reaching);
     engine.script.push(tries);
     const convo = await manager.send({
@@ -569,15 +569,11 @@ describe('the guard, end to end', () => {
       text: 'try it for me',
       untrusted: { kind: 'person', label: 'Ana on Telegram' },
     });
-    const asked = await settle(manager, convo.id, (e) =>
-      e.some((x) => x.type === 'permission.requested'),
+    const events = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'turn.completed'),
     );
-    const request = asked.find((e) => e.type === 'permission.requested');
-    if (request?.type !== 'permission.requested') throw new Error('no request');
-    expect(request.taint).toMatch(/Ana on Telegram/);
-    expect(request.lasting).toBeUndefined();
-    await manager.respond(convo.id, request.permissionId, 'deny');
-    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(events.some((e) => e.type === 'taint')).toBe(true);
   });
 
   it('in Ask first, Conch’s own tool asks after reading, and “Always allow” holds for the chat', async () => {
@@ -757,7 +753,8 @@ describe('the guard, end to end', () => {
   });
 
   it('a message from someone else on a chat app taints the chat from the start', async () => {
-    const { manager, engine } = await setup();
+    const { manager, engine, settings } = await setup();
+    await settings.update({ preferences: { permissionMode: 'default' } });
     engine.script.push(async function* (input) {
       engine.decisions.push(await input.guard?.({ toolName: 'Bash', input: { command: 'ls' } }));
       yield { type: 'text', messageId: 'm', delta: 'ok' };
@@ -779,7 +776,7 @@ describe('the guard, end to end', () => {
     });
   });
 
-  it('someone else talking to it isn’t waved through by Full trust, and offers no “always”', async () => {
+  it('Full trust permits commands after outside words without another approval', async () => {
     const { manager, engine } = await setup();
     engine.script.push(async function* (input) {
       engine.decisions.push(
@@ -792,15 +789,12 @@ describe('the guard, end to end', () => {
       text: 'run something for me',
       untrusted: { kind: 'person', label: 'Ana on Telegram' },
     });
-    const asked = await settle(manager, convo.id, (e) =>
-      e.some((x) => x.type === 'permission.requested'),
+    const events = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'turn.completed'),
     );
-    const request = asked.find((e) => e.type === 'permission.requested');
-    if (request?.type !== 'permission.requested') throw new Error('no request');
-    expect(request.lasting).toBeUndefined();
-    await manager.respond(convo.id, request.permissionId, 'deny');
-    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
-    expect(engine.decisions).toEqual(['deny']);
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(events.some((e) => e.type === 'taint')).toBe(true);
+    expect(engine.decisions).toEqual(['allow']);
   });
 
   it('a command leaving the sealed box asks in Ask first, even in an untainted chat, and “always” holds', async () => {
@@ -938,7 +932,7 @@ describe('a mode picked mid-turn', () => {
     });
   });
 
-  it('answers what waited after reading and for the sealed box, but not a skill’s list', async () => {
+  it('answers what waited after reading and for the sealed box', async () => {
     const { manager, engine, settings } = await setup();
     await settings.update({ preferences: { permissionMode: 'default' } });
     engine.script.push(readsPage, async function* (input) {

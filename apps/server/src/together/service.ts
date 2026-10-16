@@ -341,6 +341,7 @@ export class TogetherService {
       description: [
         'See what the person’s other chats with you are doing right now: which are working (and for how long), which need them, and which are done for now; the folder each works in; the files a running reply has changed; whether it has a browser page open; its background tasks.',
         'Use it before changing files another chat may be working on, when the person asks what else is going on (“what are my other chats doing?”, “is the deploy chat done?”), or when Conch tells you another chat is working in this folder.',
+        'Keep routine checks quiet when nothing needs attention. Report only meaningful activity or conflicts, unless the person asked for a status report.',
         '`which`: "working" for only the chats busy now; "all" (the default) adds the ones that need the person and the ones active in the last few days. To find something said in an earlier chat, use search_chats instead.',
       ].join(' '),
       input: {
@@ -352,20 +353,21 @@ export class TogetherService {
         const refused = notHere(ctx);
         if (refused) return refused;
         const found = await this.#list(ctx, which ?? 'all', limit ?? DEFAULT_CHATS);
-        ctx.append({
-          type: 'chats.listed',
-          listId: newId('list'),
-          working: found.working,
-          chats: found.chats.map((c) => ({
-            id: c.chat,
-            title: c.title,
-            state: c.state,
-            ...(c.doing && { doing: c.doing }),
-            ...(c.sameFolder && { sameFolder: true }),
-            ...(c.sameFolder && c.changing?.length && { changing: c.changing.slice(-3) }),
-            ...(c.from && { from: c.from }),
-          })),
-        });
+        if (found.chats.length || found.working)
+          ctx.append({
+            type: 'chats.listed',
+            listId: newId('list'),
+            working: found.working,
+            chats: found.chats.map((c) => ({
+              id: c.chat,
+              title: c.title,
+              state: c.state,
+              ...(c.doing && { doing: c.doing }),
+              ...(c.sameFolder && { sameFolder: true }),
+              ...(c.sameFolder && c.changing?.length && { changing: c.changing.slice(-3) }),
+              ...(c.from && { from: c.from }),
+            })),
+          });
         return JSON.stringify(found);
       },
     };

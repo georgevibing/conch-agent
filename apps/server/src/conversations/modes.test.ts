@@ -187,15 +187,12 @@ describe('Full trust (ADR 0100)', () => {
     }
   });
 
-  it('keeps the one circuit breaker: a whole folder or disk', async () => {
+  it('honours explicit Full trust for destructive commands too', async () => {
     const { asked } = await run('bypassPermissions', [
       CRITICAL,
       bash('diskutil eraseDisk APFS X disk2'),
     ]);
-    expect(asked.map((a) => a.taint)).toEqual([
-      expect.stringContaining('delete a whole folder'),
-      expect.stringContaining('erase a disk'),
-    ]);
+    expect(asked).toEqual([]);
   });
 });
 

@@ -196,6 +196,8 @@ interface PendingPermission {
    * on, it's asking only because of the mode.
    */
   remember: boolean;
+  /** Requires personal interaction, even in Full trust (Password access or leaving a plan). */
+  mandatory?: boolean;
   /** The person set this tool to Ask in Apps: switching to Auto doesn't answer it (ADR 0100). */
   explicit?: boolean;
   /**
@@ -3258,9 +3260,11 @@ export class ConversationManager {
       for (const listener of modeListeners) listener(mode);
       for (const [permissionId, pending] of live.permissions)
         if (
-          pending.remember &&
-          ((trustAllows(mode, pending.toolName) && (!pending.waive || personTrusts)) ||
-            (autoAllows(mode, pending.toolName, pending.explicit) && !pending.waive))
+          (trustAllows(mode, pending.toolName) && !pending.mandatory) ||
+          (!pending.mandatory &&
+            pending.remember &&
+            autoAllows(mode, pending.toolName, pending.explicit) &&
+            !pending.waive)
         )
           void this.#resolvePermission(live, permissionId, 'allow');
     };
@@ -3280,6 +3284,15 @@ export class ConversationManager {
       },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
+      if (signal.aborted) return 'deny';
+      // A person's selected mode is the authority for approval prompts.
+      // Credential access and plan transitions still need the person themselves.
+      if (
+        trustAllows(resolved.permissionMode, request.toolName) &&
+        !request.vault &&
+        request.browser?.kind !== 'fill'
+      )
+        return 'allow';
       const permissionId = newId('perm');
       // A class of step (ADR 0128): lifted in another chat before, or the third question this
       // turn, Always allow is offered for every chat, and the button says so.
@@ -3311,6 +3324,10 @@ export class ConversationManager {
           toolName: request.toolName,
           ...(request.toolUseId && { toolUseId: request.toolUseId }),
           remember: request.remember,
+          mandatory:
+            Boolean(request.vault) ||
+            request.browser?.kind === 'fill' ||
+            request.toolName === 'ExitPlanMode',
           ...(request.waive && { waive: request.waive }),
           ...(everywhere && { everywhere: true }),
           ...(request.explicit && { explicit: true }),
@@ -3366,8 +3383,8 @@ export class ConversationManager {
       return askedFromScript(step, answer);
     };
 
-    /** Full trust is yours to give (ADR 0028): a chat you're in doesn't stop to check. */
-    const trusting = () => personTrusts && resolved.permissionMode === 'bypassPermissions';
+    /** The selected mode owns action approvals, including inherited task modes (ADR 0135). */
+    const trusting = () => resolved.permissionMode === 'bypassPermissions';
     /** What a skill's list said this turn: "always" can't lift those (ADR 0031). */
     const limitsSaid = new Set<string>();
     /**
@@ -3833,7 +3850,7 @@ export class ConversationManager {
       hold.permissions ??
       (await this.deps.skillPermissions?.(hold.skillId).catch(() => undefined))?.permissions;
     const skillLimit = async (need: SkillNeed | undefined): Promise<string | undefined> => {
-      if (!need) return undefined;
+      if (!need || trusting() || resolved.permissionMode === 'auto') return undefined;
       for (const hold of skillHolds(live.events)) {
         const permissions = await listOf(hold);
         if (!permissions || allows(permissions, need)) continue;
@@ -3846,6 +3863,7 @@ export class ConversationManager {
 
     // Engines that can't ask (Codex) run tighter while held to a skill that doesn't say it may run any command.
     const skillTightens = async () => {
+      if (trusting() || resolved.permissionMode === 'auto') return false;
       for (const hold of skillHolds(live.events)) {
         const permissions = await listOf(hold);
         if (
@@ -4007,7 +4025,7 @@ export class ConversationManager {
       if (own?.type === 'tool.started') patterns.delete(own.toolUseId);
       if (!pattern) return undefined;
       if (pattern.level === 'stop') return { text: stopWords(pattern), effect: 'not-executed' };
-      if (trusting() && !pattern.trust) return undefined;
+      if (trusting()) return undefined;
       const answer = await askUser(
         {
           toolName: toolName.replace(/^mcp__conch__/, ''),
@@ -4031,11 +4049,11 @@ export class ConversationManager {
       toolUseId?: string;
       input: Record<string, unknown>;
     }): Promise<{ reason: string; waive?: string; sources?: TaintSource[] } | undefined> => {
-      // One that runs by itself (a routine, a chat app) still checks, and so
-      // does one where someone else is talking to the assistant.
+      // Full trust skips action approvals; hard denials run before this gate.
       const trusted = trusting();
+      if (trusted) return undefined;
       const mode = resolved.permissionMode;
-      // The circuit breaker (ADR 0100): a whole folder or disk gone asks in every mode.
+      // Auto and Ask first check before deleting a whole folder or disk.
       const critical = breaksCircuit(request.toolName, request.input, { workspace });
       if (critical) return { reason: riskWords(critical) };
       // A pattern worth a question (ADR 0117): in every mode below Full trust, and in Full

@@ -28,7 +28,7 @@ A script can do only what your assistant could do step by step. Each step is che
 - A step that needs your OK waits, with its question under the line: "Step 48 of the script". Your answer counts for that step only.
 - If you say no, that step doesn't happen. The script carries on, or stops and your assistant tells you.
 - Once the chat has read something from outside, steps that could send it somewhere still ask.
-- Many of the same thing in a row, like 50 deletes, asks first even in **Full trust**.
+- Many of the same thing in a row, like 50 deletes, asks first in Auto. Full trust skips these approvals; hard service limits still apply.
 
 Waiting for you doesn't count against its time.
 

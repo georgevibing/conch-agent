@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
+import type {
+  Capabilities,
+  ConversationEvent,
+  EngineStatus,
+  PermissionMode,
+} from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { Engine, EngineEvent, GuardDecision, TurnInput } from '../engines/types';
@@ -38,7 +43,7 @@ class Scripted implements Engine {
       label: 'Scripted',
       models: [],
       commands: [],
-      permissionModes: ['default', 'bypassPermissions'],
+      permissionModes: ['default', 'auto', 'bypassPermissions'],
     };
   }
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
@@ -49,7 +54,7 @@ class Scripted implements Engine {
   }
 }
 
-async function setup() {
+async function setup(mode: PermissionMode = 'default') {
   const home = await mkdtemp(join(tmpdir(), 'conch-skill-limits-'));
   const workspace = join(home, 'work');
   await mkdir(workspace, { recursive: true });
@@ -65,12 +70,12 @@ async function setup() {
   await skill('plain', '');
   const engine = new Scripted();
   const settings = new SettingsStore(home);
-  // Full trust: nothing would ask by itself.
+  // Ask first preserves explicit skill scopes.
   await settings.update({
     preferences: {
       engine: 'mock',
       autoTitle: false,
-      permissionMode: 'bypassPermissions',
+      permissionMode: mode,
       workspace,
     },
   });
@@ -114,7 +119,7 @@ const tries = (engine: Scripted, calls: { toolName: string; input: Record<string
   };
 
 describe('a skill in use is held to what it says it needs', () => {
-  it('in Full trust: what it said goes through; anything else asks, saying why', async () => {
+  it('in Ask first: what it said goes through; anything else asks, saying why', async () => {
     const { manager, engine, workspace } = await setup();
     engine.script.push(
       tries(engine, [
@@ -140,8 +145,7 @@ describe('a skill in use is held to what it says it needs', () => {
     expect(engine.guarded[1]).toBeUndefined();
     expect(engine.guarded[2]).toEqual({
       decision: 'ask',
-      reason:
-        'The “Weekly” skill is in use, and it doesn’t say it needs to run this command. So I’m checking first.',
+      reason: expect.stringContaining('read your keys or saved sign-ins'),
     });
     expect(engine.guarded[3]).toMatchObject({
       decision: 'ask',
@@ -170,7 +174,7 @@ describe('a skill in use is held to what it says it needs', () => {
     expect(asked).toMatchObject({
       toolName: 'Bash',
       // With a reason, the card offers no "always" (as after reading something untrusted).
-      taint: expect.stringMatching(/The “Weekly” skill is in use/),
+      taint: expect.stringMatching(/publish a package/),
     });
     if (asked?.type !== 'permission.requested') throw new Error('no request');
     await manager.respond(convo.id, asked.permissionId, 'deny');
@@ -193,7 +197,7 @@ describe('a skill in use is held to what it says it needs', () => {
   });
 
   it('without a skill, and on the next turn, Full trust stays out of the way', async () => {
-    const { manager, engine } = await setup();
+    const { manager, engine } = await setup('bypassPermissions');
     const command = tries(engine, [{ toolName: 'Bash', input: { command: 'npm test' } }]);
     engine.script.push(command, command);
     const convo = await manager.send({ clientMessageId: 'u1', text: 'run the tests' });
@@ -379,5 +383,41 @@ describe('the assistant can’t sign or trust skills from its own shell (ADR 004
     );
     // Only looking is fine.
     expect(engine.guarded[3]).toBeUndefined();
+  });
+});
+
+describe('the selected mode takes precedence over skill lists', () => {
+  for (const mode of ['auto', 'bypassPermissions'] as const) {
+    it(`${mode}: a plain skill never makes routine commands ask, including later turns`, async () => {
+      const { manager, engine } = await setup(mode);
+      const commands = tries(engine, [
+        { toolName: 'Bash', input: { command: 'ls' } },
+        { toolName: 'Bash', input: { command: 'git status' } },
+      ]);
+      engine.script.push(commands, commands);
+      const id = await turn(manager, '/plain inspect the project');
+      await turn(manager, 'continue', id);
+      expect(engine.guarded).toEqual([undefined, undefined, undefined, undefined]);
+      expect(engine.tainted).toEqual([false, false]);
+      await manager.configure(id, { permissionMode: 'default' });
+      engine.script.push(commands);
+      await turn(manager, 'inspect again', id);
+      expect(engine.guarded.slice(4)).toEqual([
+        expect.objectContaining({ decision: 'ask' }),
+        expect.objectContaining({ decision: 'ask' }),
+      ]);
+    });
+  }
+});
+
+it('Auto still checks risky commands when a plain skill is loaded', async () => {
+  const { manager, engine } = await setup('auto');
+  engine.script.push(
+    tries(engine, [{ toolName: 'Bash', input: { command: 'git push --force origin main' } }]),
+  );
+  await turn(manager, '/plain inspect the project');
+  expect(engine.guarded[0]).toMatchObject({
+    decision: 'ask',
+    reason: expect.stringContaining('force-push'),
   });
 });

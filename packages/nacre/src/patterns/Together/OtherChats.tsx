@@ -121,6 +121,7 @@ export function OtherChatsLook({
   defaultOpen,
   ...props
 }: OtherChatsLookProps) {
+  if (!chats.length && !working) return null;
   return (
     <ToolCall
       name="Checked on your other chats"

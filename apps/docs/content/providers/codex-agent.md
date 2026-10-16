@@ -25,7 +25,7 @@ In every mode:
 
 - Passwords and Conch's keys are out of reach.
 - After the chat reads something from outside, anything that could send it out asks again.
-- A skill in use holds the chat to its list.
+- Skills keep their permission lists in Ask first and Read only. Auto and Full trust follow the mode you chose.
 - **Undo** puts back the files it changed.
 
 ## Where it can work

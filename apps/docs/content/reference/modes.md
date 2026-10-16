@@ -110,19 +110,17 @@ Conch counts what each chat does in your apps and asks at:
 - a payment of 1,000 or more, or every fifth in a day;
 - the very same change made again and again.
 
-One message to 500 people or more, or a chat's 500th message in a day, stops in every mode, with a suggestion to use a mailing service. In Full trust, a message to 100 people or more, every 100th message in a day, every 50th delete in one go and the payments above still ask.
+One message to 500 people or more, or a chat's 500th message in a day, stops in every mode, with a suggestion to use a mailing service. Full trust skips action approvals, including the counts above. Hard limits still stop a step instead of asking.
 
 **Always allow** holds for that tool for the rest of the chat, even after a restart. To never be asked, set the tool to **Allow** in **Apps**.
 
 ## Full trust
 
-**Full trust** never stops to ask, with every provider, except:
+**Full trust** acts without approval, including commands, app changes, sending, spending and deleting. Reading a page or loading a skill never downgrades it. Switching to Full trust also releases a waiting action approval.
 
-- deleting a whole folder like your home, the work folder or a disk;
-- someone else's words in the chat, a routine or a chat app that read something, and a skill's list;
-- the counts above, and paying or deleting on a website.
+Choose it only when you accept those consequences. A page or file could mislead the assistant, and a command can destroy data.
 
-Passwords and Conch's own keys stay out of reach, the assistant can't change who may use Conch, and a tool you turned **Off** stays off.
+Signing in, unlocking Passwords and approving access to a saved credential still need you. Tools turned **Off**, protected Conch files and hard service limits remain unavailable; Full trust does not turn them on. The assistant cannot grant itself permissions.
 
 ## In every mode
 
@@ -131,7 +129,7 @@ Passwords and Conch's own keys stay out of reach, the assistant can't change who
   - before the chat has read something from outside, it goes ahead;
   - after that, with you in the chat and only pages or files read, it asks only for what Auto would stop anyway;
   - after that, with someone else's words in the chat or nobody there (a routine, a chat app), it asks.
-- Paying or deleting in [the browser](../features/browser.md) asks.
+- Paying or deleting in [the browser](../features/browser.md) asks unless you chose Full trust.
 - A [task](../features/tasks.md) never has more than its chat.
 
 A question nobody answers is a no. After 30 minutes (an hour for a routine), the step doesn't happen and its line says **No answer in 30 minutes, so it didn't**. Say "go ahead" to be asked again, or [answer from your phone](../start/phone.md#answer-from-the-notification).

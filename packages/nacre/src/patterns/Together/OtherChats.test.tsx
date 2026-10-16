@@ -41,9 +41,10 @@ describe('OtherChatsLook', () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'c2' }));
   });
 
-  it('says when nothing else is going on, with nothing to open', async () => {
+  it('keeps empty checks out of the transcript', async () => {
     const { container } = renderNacre(<OtherChatsLook chats={[]} />);
-    expect(screen.getByText('Nothing else going on')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing else going on')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-nacre-root]')).toBeEmptyDOMElement();
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
     await expectAccessible(container);
   });

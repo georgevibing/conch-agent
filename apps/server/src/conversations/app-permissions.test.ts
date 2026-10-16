@@ -298,16 +298,16 @@ describe.each(['native', 'bridge'] as const)('app permissions over %s', (transpo
     expect(call).not.toHaveBeenCalled();
   });
 
-  it('Full trust still checks an app write after someone else’s words', async () => {
+  it('Full trust honours the selected mode after someone else’s words', async () => {
     const { manager, call } = await setup({ transport });
     const convo = await manager.send({
       clientMessageId: 'u1',
       text: 'create an issue',
       untrusted: { kind: 'person', label: 'someone else' },
     });
-    await answer(manager, convo.id);
-    await eventsUntil(manager, convo.id, 'turn.completed');
-    expect(call).not.toHaveBeenCalled();
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.filter((e) => e.type === 'permission.requested')).toEqual([]);
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -378,7 +378,7 @@ describe('apps hosted by Conch', () => {
   });
 
   it.each([{ once: true }, { taint: 'Someone else’s words need checking.' }])(
-    'Full trust preserves mandatory app confirmation: %j',
+    'Full trust releases action confirmations, including after reading: %j',
     async (host) => {
       const { manager, call } = await setup({ host, mode: 'default' });
       const convo = await manager.send({
@@ -388,13 +388,10 @@ describe('apps hosted by Conch', () => {
       });
       await eventsUntil(manager, convo.id, 'permission.requested');
       await manager.configure(convo.id, { permissionMode: 'bypassPermissions' });
-      expect(call).not.toHaveBeenCalled();
-      await answer(manager, convo.id);
       await eventsUntil(manager, convo.id, 'turn.completed');
       await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'again' });
-      await answer(manager, convo.id, 2);
       await eventsUntil(manager, convo.id, 'turn.completed', 2);
-      expect(call).not.toHaveBeenCalled();
+      expect(call).toHaveBeenCalledTimes(2);
     },
   );
 });
@@ -701,4 +698,49 @@ describe('an email the person changes before allowing it', () => {
     expect(no.decision).toBe('deny');
     expect(no.call).not.toHaveBeenCalled();
   });
+});
+
+describe('Full trust separates actions from personal credential access', () => {
+  const browser = {
+    site: 'shop.example',
+    url: 'https://shop.example',
+    title: 'Shop',
+    action: 'Continue',
+  };
+  for (const kind of ['site', 'high-stakes', 'upload', 'download'] as const) {
+    it(`does not ask for a browser ${kind} action`, async () => {
+      const { manager, call } = await setup({ host: { browser: { ...browser, kind } } });
+      const convo = await manager.send({ clientMessageId: 'u1', text: 'continue' });
+      const events = await eventsUntil(manager, convo.id, 'turn.completed');
+      expect(events.filter((e) => e.type === 'permission.requested')).toEqual([]);
+      expect(call).toHaveBeenCalledTimes(1);
+    });
+  }
+  const personal: Partial<AskRequest>[] = [
+    { browser: { ...browser, kind: 'fill' } },
+    {
+      vault: {
+        action: 'read',
+        itemTitle: 'Example',
+        itemType: 'login',
+        fieldLabel: 'Password',
+        sensitive: true,
+      },
+    },
+  ];
+  for (const host of personal) {
+    it(`keeps ${host.vault ? 'Password access' : 'sign-in'} personal, including a mode switch`, async () => {
+      const { manager, call } = await setup({ host, mode: 'default' });
+      const convo = await manager.send({ clientMessageId: 'u1', text: 'continue' });
+      await eventsUntil(manager, convo.id, 'permission.requested');
+      await manager.configure(convo.id, { permissionMode: 'bypassPermissions' });
+      expect(call).not.toHaveBeenCalled();
+      await answer(manager, convo.id);
+      await eventsUntil(manager, convo.id, 'turn.completed');
+      await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'continue' });
+      await answer(manager, convo.id, 2);
+      await eventsUntil(manager, convo.id, 'turn.completed', 2);
+      expect(call).not.toHaveBeenCalled();
+    });
+  }
 });

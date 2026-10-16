@@ -9,7 +9,7 @@ Several chats can work at once. Each one knows what the others are up to.
 
 ## Ask what's going on
 
-Say "what are my other chats doing?" or "is the deploy chat done?". The chat shows **Checked on your other chats** and how many are busy. Open it to see each chat, and press one to go there.
+Say "what are my other chats doing?" or "is the deploy chat done?". When there are results, the chat shows **Checked on your other chats** and how many are busy. Empty background checks stay silent. Open it to see each chat, and press one to go there.
 
 Your assistant sees, for each of your other chats:
 
@@ -40,7 +40,7 @@ Say "tell the deploy chat to hold off, I'm changing package.json". Your assistan
 
 Both chats show the message on a card: **To** where it was sent, with whether it's been read, and **From** where it came. Press the other chat's name to go there.
 
-A message is the other chat's assistant writing, never you. It can't give permission for anything or answer a question for you. If the chat that sent it read a page or an email, the one that gets it is as careful. A reply a message starts runs as if you weren't watching: in **Full trust**, it still asks. Passwords and keys are taken out of what's sent.
+A message is the other chat's assistant writing, never you. It can't give permission for anything or answer a question for you. If the chat that sent it read a page or an email, the one that gets it is as careful. A reply a message starts keeps the receiving chat's selected mode. Another chat cannot raise that mode. Passwords and keys are taken out of what's sent.
 
 ### Stop another chat
 

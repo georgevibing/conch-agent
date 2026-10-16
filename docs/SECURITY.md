@@ -451,8 +451,8 @@ Please don't open a public issue. Report it privately through
 A web page, an email or a message from someone else can contain instructions
 aimed at your assistant. Conch can't tell a hostile page from a friendly one, so
 it doesn't try: once a chat has read something from outside, anything that could
-send your things somewhere or change this computer **asks you first**, and the
-question says why. Reading on is free. **Always allow** on that question lets
+send your things somewhere or change this computer is checked against your selected
+mode. Ask first shows a question; Auto evaluates the risk; Full trust continues. Reading on is free. **Always allow** on that question lets
 that kind of step through for the rest of the chat, as it does anywhere else,
 your apps and an app being made included. A message or a draft for other
 people shows you its words each time.
@@ -469,11 +469,11 @@ assistant act, and a web page it reads could trick it (the mode picker says so).
 It overrides ordinary app and tool **Ask** settings, including **Ask before changes**,
 and the previews of Gmail drafts and Slack messages, with every provider. Those saved
 settings apply again when you leave Full trust. Tools turned **Off** and protected
-paths still hold, and deleting a whole folder like your home or the work folder
-still asks. The chat still notes what it read. Some things hold even then: a routine running
-by itself, or a chat where someone else is talking to the assistant (a chat
-app), still asks, and so does a step a skill's list doesn't cover
-([ADR 0100](./adr/0100-permission-modes-every-provider.md) lists them all).
+paths still hold. Sign-in and access to saved credentials still need you. Other action
+approvals, including destructive commands and browser actions, do not interrupt Full trust.
+Loading a skill or reading outside content never downgrades the selected mode. The chat
+still records what it read. Tasks and channel turns keep their existing permission ceilings
+([ADR 0135](./adr/0135-modes-without-surprise-approvals.md)).
 
 **Auto** gets on with routine work without asking, outside the sealed box too (git
 status, fetch and pull, installs from the lockfile, builds, tests), and stops only
@@ -541,8 +541,9 @@ too. Conch never shows a protection that isn't there.
 
 Every skill is read through before it's used (above), and says what it can do:
 "This skill can: run commands (only `git`), change files in your work folder".
-Once its instructions are in a chat, anything else it tries **asks you first**,
-in every mode, with the skill's name in the question. That holds in every later
+In **Ask first** and **Read only**, anything outside its list **asks you first**,
+with the skill's name in the question. **Auto** evaluates the actual action by risk;
+**Full trust** skips action approvals. That holds in every later
 turn too, in helpers and background tasks started from the chat, and after a
 restart, because the instructions are still there: a summary or a long chat
 doesn't let a skill out of its list. A line above the message box says "Held to

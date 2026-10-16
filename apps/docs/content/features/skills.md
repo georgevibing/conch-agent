@@ -61,7 +61,7 @@ Conch saves a skill as a `SKILL.md`, the format Claude Code, Codex, OpenClaw and
 A skill runs with your powers, so:
 
 - **It's read first.** Conch says plainly what could hurt you, like running a download or reaching for saved passwords. A worrying skill stays off until you've looked.
-- **It's held to what it says.** Its page lists what it can do, like "run commands (only `git`), change files in your work folder". Once it's in a chat, anything else asks first, in every [mode](../reference/modes.md), for the rest of that chat and its tasks. A line above the message box says **Held to Quick setup's list**.
+- **It's held to what it says.** Its page lists what it can do, like "run commands (only `git`), change files in your work folder". In **Ask first** and **Read only**, anything outside that list asks for the rest of the chat and its tasks. **Auto** judges each action by its risk; **Full trust** skips action approvals. Loading a skill never silently changes your selected mode.
 - **A change turns it off.** If another app's skill changes after you turned it on, it's off until you look again.
 - **A signature says who made it.** Press **Trust this publisher…** on a signed skill once. Their skills then say **Verified**, and their signed updates stay on. A skill changed after signing can't be turned on.
 
@@ -69,7 +69,7 @@ To sign your own, see `conch skills sign` in the [command line reference](../ref
 
 ## Stop holding a chat to a skill
 
-A chat stays held to a skill's list after it's used. When you're done:
+In Ask first and Read only, the skill's list stays active after use. Auto and Full trust suspend these restrictions without deleting the list. When you're done:
 
 1. Press **Stop holding** on the line above the message box, or find **Stop holding this chat to …** in <kbd>mod+k</kbd>.
 2. Read what changes, and press **Stop holding**.
