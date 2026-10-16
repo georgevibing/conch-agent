@@ -63,7 +63,8 @@ export function ChatProvider({
   const client = useQueryClient();
   const turn = useTurnOptions(conversationId);
   const { data: list } = useProviders();
-  const engine = turn.options.engine;
+  // Who answers now: another provider carrying the chat on at its own one's limit shows its limits.
+  const engine = turn.answering.engine;
   const provider = list?.providers.find((p) => p.id === engine);
   const { data: usage } = useUsage(engine, Boolean(provider?.ready));
   const open = useUi((s) => s.usageOpen);

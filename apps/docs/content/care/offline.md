@@ -50,6 +50,8 @@ Codex and Codex CLI share a ChatGPT sign-in, so they're one choice. With two acc
 - **A provider by name**: only that one carries on, while it has room.
 - **Back to (your provider) once it resets**: on from the start. Off, a chat stays with whoever carried it on.
 
+While it carries on, the model picker shows who's answering, and the provider at the top of the chat shows that provider's limits. Your own choice stays as it was, so the chat comes back by itself once the limit resets.
+
 In the chat, the line offers:
 
 - **Switch back**: the chat returns to your usual provider and model, and waits for the reset.

@@ -9,6 +9,7 @@ import { useUi } from '../../app/ui';
 import { ChatProvider } from '../engine/ChatProvider';
 import { useTurnOptions } from '../models/useTurnOptions';
 import { useLive } from '../../live/LiveProvider';
+import { emptyView, type TranscriptItem } from '../../live/reducer';
 import { useLiveStore } from '../../live/store';
 import {
   appState,
@@ -24,7 +25,7 @@ import { UsageComposerNotice } from './UsageComposerNotice';
 afterEach(() => {
   vi.unstubAllGlobals();
   useUi.setState({ usageOpen: false, draftOptions: {} });
-  useLiveStore.setState({ pending: {}, startedWith: undefined });
+  useLiveStore.setState({ pending: {}, views: {}, startedWith: undefined });
 });
 
 const HOUR = 3_600_000;
@@ -346,6 +347,60 @@ describe('the chat’s provider in the header', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Connect a provider' }));
     expect(openSettings).toHaveBeenCalledWith('providers');
     useUi.setState({ openSettings: before });
+  });
+
+  it('follows another provider carrying the chat on at a limit, and comes back with Switch back', async () => {
+    const chat = {
+      id: 'c1',
+      title: 'Pancakes',
+      preview: 'Pancakes',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      status: 'idle' as const,
+      options: { engine: 'claude-code' as const, model: 'sonnet' },
+    };
+    routes({
+      'GET /api/conversations': () => [chat],
+      'GET /api/usage': () => plan(30, 'codex-cli', 'ChatGPT Plus'),
+    });
+    const routed = {
+      kind: 'routed' as const,
+      id: 'routed-1',
+      from: 'claude-code' as const,
+      to: 'codex-cli' as const,
+      reason: 'limit' as const,
+      message: 'Claude Code reached its limit until 17:00. Codex is answering.',
+    };
+    const view = useLiveStore.getState().views.c1;
+    const at = (items: TranscriptItem[]) =>
+      useLiveStore.setState((s) => ({
+        views: { ...s.views, c1: { ...(view ?? emptyView), loaded: true, items } },
+      }));
+    function Probe() {
+      const turn = useTurnOptions('c1');
+      return (
+        <p>
+          {`answers ${turn.answering.engine ?? ''} ${turn.answering.model?.id ?? ''}, sends ${turn.options.engine ?? ''}`}
+        </p>
+      );
+    }
+    at([routed]);
+    renderApp(
+      <>
+        <ChatProvider conversationId="c1" />
+        <Probe />
+      </>,
+    );
+    expect(await screen.findByRole('button', { name: /^Codex\. Usage/ })).toBeInTheDocument();
+    expect(
+      screen.getByText('answers codex-cli gpt-6.1-sol, sends claude-code'),
+    ).toBeInTheDocument();
+    // Switch back: the chat's own provider again, and its limits.
+    act(() => at([{ ...routed, back: { until: Date.now() + HOUR } }]));
+    await waitFor(() =>
+      expect(screen.getByText('answers claude-code sonnet, sends claude-code')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^Claude Code\. Usage/ })).toBeInTheDocument();
   });
 });
 

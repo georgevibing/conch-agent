@@ -9,11 +9,13 @@ import type {
 } from '@conch/protocol';
 import { DEFAULT_MODE, EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
 import { toast } from '@conch/nacre';
+import { useMemo } from 'react';
 
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useLive } from '../../live/LiveProvider';
 import { NEW, useLiveStore } from '../../live/store';
+import { carriedBy } from './carried';
 
 export interface ResolvedTurnOptions {
   /** The provider that answers. */
@@ -129,6 +131,26 @@ export function useTurnOptions(conversationId?: string) {
     permissionMode: honouredMode(resolved.permissionMode, modes),
   };
 
+  // Another provider carrying the chat on for this one (offline, at its limit):
+  // what the chat shows as answering, while what it sends stays its own choice.
+  const items = useLiveStore((s) => (conversationId ? s.views[conversationId]?.items : undefined));
+  const carried = useMemo(() => (items ? carriedBy(items) : undefined), [items]);
+  const carrier =
+    carried && carried.from === effective.engine
+      ? providers.find((p) => p.engine === carried.engine)
+      : undefined;
+  const answering =
+    carried && carrier
+      ? {
+          engine: carried.engine,
+          model: findModel(
+            carrier,
+            carried.model ?? (carried.engine === defaultEngine ? defaults.model : undefined),
+          ),
+          from: carried.from,
+        }
+      : { engine: effective.engine, model, from: undefined };
+
   const set = (patch: TurnOptions) => {
     if (conversationId) live.configure(conversationId, patch);
     else setDraft({ ...draft, ...patch });
@@ -172,6 +194,12 @@ export function useTurnOptions(conversationId?: string) {
     loading: models.isLoading,
     model,
     options: effective,
+    /**
+     * Who answers now, for showing (the picker, the header's limits): the
+     * chat's own choice, or another provider carrying it on for that one
+     * (`from`, ADR 0126). Never sent: the chat stays its own provider's.
+     */
+    answering,
     defaults,
     set,
     choose,

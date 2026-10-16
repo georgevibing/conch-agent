@@ -81,6 +81,18 @@ export const Routed: Story = {
   ),
 };
 
+/** On a phone the line wraps: a rounded card, the icon on the first line, the actions kept together. */
+export const RoutedOnAPhone: Story = {
+  decorators: [
+    (Story) => (
+      <div style={{ display: 'grid', gap: 16, maxInlineSize: '22rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
+  render: Routed.render,
+};
+
 /** The whole story, in a chat: offline, a message waits, the model on this computer answers. */
 export const InAConversation: Story = {
   parameters: { layout: 'fullscreen' },

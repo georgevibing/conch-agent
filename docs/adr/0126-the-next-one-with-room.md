@@ -83,6 +83,13 @@ on: its provider and model are that one's from then on.
 after a failure always does, since it replaces the failure card.) It carries `fromModel` and
 `stayed`.
 
+While another carries the chat on, the chat shows it as the one answering: the model picker
+selects it and the header's provider shows its limits (`turn.routed` carries the `model` routing
+chose; the web's `carriedBy` reads the latest line and the replies since, and
+`useTurnOptions().answering` says who answers). What's sent stays the chat's own choice, so it
+still comes back at the reset. It ends when the chat's own provider answers again, at Switch
+back, or at a switch someone asked for.
+
 **Switch back** on the latest such line (`POST /api/conversations/:id/limit-back`) gives the
 chat back to its own provider with the model it had, and logs `limit.back { engine, until }`.
 Until then (the reset Conch knew, else five hours) the route is asked with `wait`, so this chat

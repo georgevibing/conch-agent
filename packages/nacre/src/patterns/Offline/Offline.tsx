@@ -127,12 +127,18 @@ export function RoutedNote({
       <span className={styles.routedIcon} aria-hidden>
         <Icon />
       </span>
-      <span>{children}</span>
-      {all.map((a) => (
-        <button key={a.label} type="button" className={styles.routedLink} onClick={a.onClick}>
-          {a.label}
-        </button>
-      ))}
+      <span className={styles.routedBody}>
+        <span>{children}</span>
+        {all.length > 0 && (
+          <span className={styles.routedActions}>
+            {all.map((a) => (
+              <button key={a.label} type="button" className={styles.routedLink} onClick={a.onClick}>
+                {a.label}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
     </div>
   );
 }

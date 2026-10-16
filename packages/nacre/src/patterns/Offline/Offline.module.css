@@ -130,15 +130,22 @@
   }
 
   /* ── Routed (another provider answered) ─────────────────────────── */
+  /* One line, a pill; wrapped (a phone, a long sentence), a rounded card with
+     the icon on the first line and the words and their actions beside it. The
+     radius is half a single line's height, so both read as the same shape. */
   .routed {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
+    --rn-icon: 1.25rem;
+    --rn-pad: var(--nc-space-1);
+
+    display: inline-grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
     align-self: flex-start;
-    gap: var(--nc-space-1) var(--nc-space-2);
+    justify-self: start;
+    gap: var(--nc-space-2);
     max-inline-size: 100%;
-    padding: var(--nc-space-1) var(--nc-space-2-5) var(--nc-space-1) var(--nc-space-1);
-    border-radius: var(--nc-radius-full);
+    padding: var(--rn-pad) var(--nc-space-3) var(--rn-pad) var(--rn-pad);
+    border-radius: calc((var(--rn-icon) + 2 * var(--rn-pad)) / 2);
     background: var(--nc-wash-1);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
     font-size: var(--nc-text-xs);
@@ -146,12 +153,30 @@
     animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
   }
 
+  /* Each line as tall as the icon, so one line sits centred beside it. */
+  .routedBody {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--nc-space-2-5);
+    min-inline-size: 0;
+    line-height: var(--rn-icon);
+    text-wrap: pretty;
+  }
+
+  /* The actions keep together: on a line of their own when the words fill one. */
+  .routedActions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0 var(--nc-space-3);
+  }
+
   .routedIcon {
     display: grid;
     flex-shrink: 0;
     place-items: center;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
+    inline-size: var(--rn-icon);
+    block-size: var(--rn-icon);
     border-radius: var(--nc-radius-full);
     background: var(--nc-surface);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);

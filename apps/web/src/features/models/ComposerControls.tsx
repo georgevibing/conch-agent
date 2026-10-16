@@ -33,13 +33,16 @@ export function ComposerControls({
   const { catalog, capabilities, options, model } = turn;
   const { data: list } = useProviders();
   const place = usePlaceChoice(turn, open);
-  const listed = pickerProviders(
-    catalog?.providers ?? [],
-    catalog?.default,
-    modelKey,
-    options.engine,
-  );
-  const selected = options.engine ? modelKey(options.engine, model?.id ?? options.model) : '';
+  // Another provider carrying the chat on (at its own one's limit, offline) shows as chosen:
+  // it's who answers. Picking anything is a choice of the person's own.
+  const { answering } = turn;
+  const shown = answering.from ? answering.engine : options.engine;
+  const listed = pickerProviders(catalog?.providers ?? [], catalog?.default, modelKey, shown);
+  const selected = answering.from
+    ? modelKey(answering.engine, answering.model?.id ?? 'default')
+    : options.engine
+      ? modelKey(options.engine, model?.id ?? options.model)
+      : '';
   // The chat's own provider while it's away: shown as it is, with why, never swapped for another.
   const providers =
     turn.away && options.engine

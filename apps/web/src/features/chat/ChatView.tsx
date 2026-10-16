@@ -753,10 +753,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   );
 
   // Say so on a card when the chosen provider can't use it, before it's sent.
-  const provider = turn.catalog?.providers.find((p) => p.engine === turn.options.engine);
+  // Who answers it: another provider carrying the chat on reads it, not the one at its limit.
+  const provider = turn.catalog?.providers.find((p) => p.engine === turn.answering.engine);
   const can = provider?.attachments;
-  const sees =
-    provider?.models.find((m) => m.id === turn.options.model)?.images ?? can?.images ?? false;
+  const sees = turn.answering.model?.images ?? can?.images ?? false;
   const noteFor = (d: Draft): string | undefined => {
     if (!provider) return undefined;
     if (d.kind === 'image' && !sees && !can?.files)
@@ -874,7 +874,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     <div className={styles.composerWrap}>
       {/* Another connected provider can answer while the default one is away. */}
       <EngineIssue status={chosenReady ? undefined : engine} issue={engineIssue} />
-      <UsageComposerNotice engine={turn.options.engine} />
+      <UsageComposerNotice engine={turn.answering.engine} />
       <ComposerOffline />
       {view.notice && running && (
         // Only a retry is "still trying"; anything else is just a note.
