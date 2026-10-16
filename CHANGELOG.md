@@ -2,6 +2,12 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.13](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.12...v0.1.0-alpha.13) (2026-10-16)
+
+### Fixed
+
+- Honor permission modes and keep empty chat checks quiet
+
 ## [0.1.0-alpha.12](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.11...v0.1.0-alpha.12) (2026-10-16)
 
 ### New
