@@ -1,6 +1,7 @@
 import type { WaitNote } from '@conch/protocol';
 import { WaitingRow, toast } from '@conch/nacre';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import { waitsApi } from './api';
 
@@ -12,6 +13,8 @@ import { waitsApi } from './api';
 export function WaitItem({ wait, conversationId }: { wait: WaitNote; conversationId?: string }) {
   // Seen while it was still going: its end is news, and said once.
   const [live] = useState(() => wait.state === 'watching');
+  const navigate = useNavigate();
+  const other = wait.chat;
   const act = (action: 'check' | 'stop') => {
     if (!conversationId) return;
     waitsApi.act(conversationId, wait.waitId, action).catch((error: unknown) => {
@@ -33,6 +36,7 @@ export function WaitItem({ wait, conversationId }: { wait: WaitNote; conversatio
       wakes={Boolean(wait.wakes)}
       tell={Boolean(wait.tell)}
       {...(conversationId && { onCheck: () => act('check'), onStop: () => act('stop') })}
+      {...(other && { onOpen: () => void navigate(`/c/${encodeURIComponent(other)}`) })}
       arriving={live}
     />
   );

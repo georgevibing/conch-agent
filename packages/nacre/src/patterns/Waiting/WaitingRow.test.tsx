@@ -82,6 +82,29 @@ describe('WaitingRow', () => {
     await expectAccessible(container);
   });
 
+  it('opens the chat it waits for, from the keyboard too, while waiting and after', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const chat: WaitingRowProps = {
+      kind: 'chat',
+      title: '“Fix the login”',
+      state: 'watching',
+      status: 'Still editing files',
+      startedAt: now - 60_000,
+      wakes: true,
+    };
+    const { container, rerender } = renderNacre(<WaitingRow {...chat} onOpen={onOpen} />);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Open the chat' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    await expectAccessible(container);
+    rerender(
+      <WaitingRow {...chat} state="done" tone="good" status="Finished its reply" onOpen={onOpen} />,
+    );
+    expect(screen.getByRole('button', { name: 'Open the chat' })).toBeInTheDocument();
+  });
+
   it('a command is watched live, so there is no next look', () => {
     renderNacre(
       <WaitingRow

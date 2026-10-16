@@ -1323,6 +1323,27 @@ export class ConversationManager {
   }
 
   /**
+   * Where one chat is now, without reading its log (ADR 0134): its saved
+   * summary, and whether a reply is running in it or will carry on by itself
+   * (Conch stopped under it and picks it up again, or it waits for room).
+   */
+  async peek(id: string): Promise<{ summary: ConversationSummary; working: boolean } | undefined> {
+    if (this.#gone.has(id)) return undefined;
+    const live = this.#live.get(id);
+    const record = live?.record ?? (await this.deps.store.get(id).catch(() => undefined));
+    if (!record) return undefined;
+    const resuming =
+      Boolean(record.recoveryPending || record.recoveryQueued) ||
+      this.#recoveryQueue.includes(id) ||
+      this.deps.store.interrupted.includes(id) ||
+      this.#held.has(id);
+    return {
+      summary: summary(record),
+      working: Boolean(live?.abort) || Boolean(live?.starting) || resuming,
+    };
+  }
+
+  /**
    * Before Conch restarts on purpose (an update, a restart someone asked
    * for): every turn that's working stops at a safe point and says why, so
    * the next start carries it on (`recoverInterrupted`). New steps wait at

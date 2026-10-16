@@ -578,6 +578,34 @@ async function until(
 }
 
 describe('chats that know about each other, end to end', () => {
+  it('a chat Conch stopped under is still working until it carries on (peek)', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-together-peek-'));
+    const settings = new SettingsStore(home);
+    await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
+    const hang = new Scripted(async function* () {
+      yield { type: 'text', messageId: 'm', delta: 'Working…' };
+      await new Promise(() => undefined);
+    });
+    const open = () =>
+      new ConversationManager({
+        store: new ConversationStore(join(home, 'conversations')),
+        settings,
+        memory: new MemoryStore(join(home, 'memory')),
+        engine: () => hang,
+        context: async () => '',
+        tools: () => [],
+      });
+    const before = open();
+    const chat = await before.send({ clientMessageId: 'u1', text: 'Go' });
+    await until(before, chat.id, (events) => events.some((e) => e.type === 'assistant.delta'));
+    expect((await before.peek(chat.id))?.working).toBe(true);
+    // Conch stops under it: the next start finds it cut off, and it will carry on.
+    const after = open();
+    await after.list();
+    expect((await after.peek(chat.id))?.working).toBe(true);
+    expect(await after.peek('nope')).toBeUndefined();
+  });
+
   it('a stopped reply is no longer working anywhere', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-together-stop-'));
     const settings = new SettingsStore(home);

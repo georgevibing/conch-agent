@@ -1,4 +1,4 @@
-import { ArrowUpRight, RefreshCw, Square } from 'lucide-react';
+import { ArrowUpRight, MessageSquareText, RefreshCw, Square } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
 import { Button } from '../../components/Button';
@@ -44,6 +44,8 @@ export interface WaitingRowProps extends Omit<ComponentProps<'div'>, 'children' 
   tell?: boolean;
   onCheck?: () => void;
   onStop?: () => void;
+  /** Open what it waits for, here in Conch: another of your chats (ADR 0134). */
+  onOpen?: () => void;
   /** Arriving in a live chat: the end is announced once. */
   arriving?: boolean;
 }
@@ -53,7 +55,7 @@ const FAMILY: Record<WaitingKind, StoryFamily> = {
   process: 'run',
   url: 'research',
   time: 'plan',
-  chat: 'remember',
+  chat: 'delegate',
   task: 'delegate',
 };
 
@@ -112,6 +114,7 @@ export function WaitingRow({
   tell = false,
   onCheck,
   onStop,
+  onOpen,
   arriving = false,
   className,
   ...props
@@ -186,10 +189,23 @@ export function WaitingRow({
         <p className={styles.status} data-tone={!watching ? tone : undefined}>
           {status}
         </p>
-        {(note || url || (watching && (onCheck || onStop))) && (
+        {(note || url || onOpen || (watching && (onCheck || onStop))) && (
           <div className={styles.foot}>
             {note && <span className={styles.note}>{note}</span>}
             <span className={styles.actions}>
+              {onOpen && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  tone="neutral"
+                  className={styles.action}
+                  leadingIcon={<MessageSquareText aria-hidden />}
+                  aria-label={kind === 'task' ? 'Open the task' : 'Open the chat'}
+                  onClick={onOpen}
+                >
+                  Open
+                </Button>
+              )}
               {url && (
                 <a className={styles.link} href={url} target="_blank" rel="noreferrer noopener">
                   {kind === 'ci' ? 'Open on GitHub' : 'Open'}

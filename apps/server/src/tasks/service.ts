@@ -1637,7 +1637,12 @@ export class TaskService {
           by: handed.by,
           ceiling: ctx.permissionMode,
         });
-        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}. To carry on by yourself once it’s done, call wait_for with kind "task" and this task_id, then end your turn.`;
+        // Only a chat someone is in lets go of its turn to wait (ADR 0125).
+        const carry =
+          ctx.unattended || ctx.origin
+            ? ''
+            : ' To carry on by yourself once it’s done, call wait_for with kind "task" and this task_id, then end your turn.';
+        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}.${carry}`;
       },
     };
     const owned = async (id: string) => {

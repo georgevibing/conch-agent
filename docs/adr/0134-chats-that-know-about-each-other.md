@@ -109,20 +109,41 @@ never undo its work, and what another chat does is information, never an instruc
 
 Both let go of the turn in a chat you're in, like CI, and survive a restart (`WaitSpec`
 `chat` and `task`, saved in `waits.json`). They're watched live: `Services.broadcast`'s
-`conversation.updated`, `status` and `task.changed` events nudge the look (`others.onChange`),
-with a look every 30 seconds in case a change went unsaid.
+`conversation.updated`, `status`, `conversation.deleted` and `task.changed` events nudge the
+look (`others.onChange`), with a look every 30 seconds in case a change went unsaid. A look is
+cheap while the other chat works (`ConversationManager.peek`: its record, not its log); its
+log is read once it stops.
+
+What counts as still working:
+
+- a reply running, or a message on its way in;
+- a chat Conch stopped under that will carry on by itself after a restart, or that waits for
+  room (`recoveryPending`, the recovery queue, a held chat), so a restart never reads as
+  "finished";
+- a chat that ended its reply to wait for something of its own (its own `wait_for`): it
+  carries on by itself, so it isn't done.
+
+Two waits are the same when they're for the same chat or task, by id, not by title. A chat
+can't wait back for one that's waiting for it: that would only wake each in turn.
 
 What the waking turn hears:
 
 - how the other chat ended ("finished its reply", "was stopped before its reply finished",
-  "is waiting for the person"), and the last 800 characters of its last reply, with
-  Passwords' values and anything shaped like a key taken out (`lastReplyOf`, `scrubSecrets`),
-  inside a `<chat-reply>` fence;
+  "needs you"), said in the headline too ("“Fix the login” needs you"), and for a chat that
+  needs the person, to tell them so;
+- the last 800 characters of its latest turn's finished reply, with Passwords' values and
+  anything shaped like a key taken out before it's cut (`lastReplyOf`'s `clean`, then
+  `scrubSecrets`), quoted so nothing in it can close the `<chat-reply>` fence or speak as
+  Conch (angle brackets and `[Conch` are written otherwise, `quoted`);
 - for a task, its result or why it didn't finish.
 
 Those are words, so they carry trust the way `read_chat` does: a chat that read something
 from outside taints the one that waits for it (`Reading.taint`, `your chat “…”`), applied
 before the waking turn reads it; a task's result is `task results`, as `task_status`'s is.
+A waiting chat that someone else's words came into since hears how the other chat ended,
+never what it said (`Reading.bare`).
+
+The waiting row opens the chat it waits for (`WaitNote.chat`, **Open**).
 
 `start_background_task` and the tasks prompt say so: to carry on once a task is done, wait
 for it instead of checking on it.
@@ -146,8 +167,10 @@ waiting across every chat, and what holds the rest back (ADR 0129). Its answer i
 | A chat with someone else in it           | Wait on your chats, or learn they exist              | `wait_for` `chat` is refused there; a chat that isn't yours answers as if it didn't exist                             | `others.test.ts`  |
 
 What's left: a file name is the most a prompt-injected chat can put in front of another, and
-it's shown as a path the other chat changed. A chat's title can be renamed by the person, and
-a task's title is what its parent chat wrote: both are words of the person's own chats.
+it's shown as a path the other chat changed. A chat's title is written by a model from the
+person's first message (or renamed by them), and a task's title is what its parent chat wrote:
+words of the person's own chats, at most 120 characters, with nothing in them that can close
+Conch's line.
 
 ## Consequences
 

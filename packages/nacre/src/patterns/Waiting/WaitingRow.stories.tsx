@@ -123,7 +123,8 @@ export const AnotherChat: S = {
   args: {
     kind: 'chat',
     title: '“Fix the login redirect”',
-    status: 'Working',
+    status: 'Still editing files',
+    onOpen: () => undefined,
     parts: undefined,
     url: undefined,
     nextCheckAt: undefined,
@@ -139,6 +140,7 @@ export const AnotherChatDone: S = {
     state: 'done',
     tone: 'good',
     status: 'Finished its reply',
+    onOpen: () => undefined,
     parts: undefined,
     url: undefined,
     nextCheckAt: undefined,

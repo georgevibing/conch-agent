@@ -253,62 +253,61 @@ export class TogetherService {
     const told = new Map<string, 'changing' | 'running'>();
     const shared = new Set<string>();
     let lines = 0;
-    return {
-      take: () => {
-        if (lines >= NOTES_PER_TURN) return undefined;
-        const working = this.deps.live({ working: true });
-        const me = working.find((c) => c.id === conversationId);
-        if (!me?.turn || !isYours(me)) return undefined;
-        const mine = me.turn;
-        const near = working.filter(
-          (c): c is LiveChat & { turn: NonNullable<LiveChat['turn']> } =>
-            c.id !== conversationId &&
-            c.turn !== undefined &&
-            isYours(c) &&
-            sameWork(c.turn, mine, this.deps.apart),
+    const notes = () => {
+      if (lines >= NOTES_PER_TURN) return undefined;
+      const working = this.deps.live({ working: true });
+      const me = working.find((c) => c.id === conversationId);
+      if (!me?.turn || !isYours(me)) return undefined;
+      const mine = me.turn;
+      const near = working.filter(
+        (c): c is LiveChat & { turn: NonNullable<LiveChat['turn']> } =>
+          c.id !== conversationId &&
+          c.turn !== undefined &&
+          isYours(c) &&
+          sameWork(c.turn, mine, this.deps.apart),
+      );
+      const said: string[] = [];
+      // Changing files there: worth a warning. Running tests or a build there: a word, once.
+      const changing = near.filter(
+        (c) =>
+          (c.turn.changing.length > 0 || (c.turn.doing && CHANGES.has(c.turn.doing))) &&
+          told.get(c.id) !== 'changing',
+      );
+      const running = near.filter(
+        (c) =>
+          !changing.includes(c) &&
+          c.turn.changing.length === 0 &&
+          c.turn.doing &&
+          RUNS.has(c.turn.doing) &&
+          !told.has(c.id),
+      );
+      if (changing.length) {
+        said.push(arrived(changing, told.size === 0, mine.cwd, asks));
+        for (const c of changing) told.set(c.id, 'changing');
+      }
+      if (running.length) {
+        said.push(runners(running));
+        for (const c of running) told.set(c.id, 'running');
+      }
+      // Both have changed the same file in the replies running now.
+      const mineChanged = new Set(mine.changing);
+      for (const c of near) {
+        const both = c.turn.changing.filter(
+          (file) => mineChanged.has(file) && !shared.has(`${c.id}:${file}`),
         );
-        const said: string[] = [];
-        // Changing files there: worth a warning. Running tests or a build there: a word, once.
-        const changing = near.filter(
-          (c) =>
-            (c.turn.changing.length > 0 || (c.turn.doing && CHANGES.has(c.turn.doing))) &&
-            told.get(c.id) !== 'changing',
+        if (!both.length) continue;
+        for (const file of both) shared.add(`${c.id}:${file}`);
+        const them = both.length === 1 ? 'it' : 'them';
+        said.push(
+          `[Conch: you and ${named(c)} have both changed ${some(both.map((f) => shownPath(f, mine.cwd)))} in the replies you’re each writing now. Read ${them} again before changing ${them} further, so neither of you undoes the other’s work.]`,
         );
-        const running = near.filter(
-          (c) =>
-            !changing.includes(c) &&
-            c.turn.changing.length === 0 &&
-            c.turn.doing &&
-            RUNS.has(c.turn.doing) &&
-            !told.has(c.id),
-        );
-        if (changing.length) {
-          said.push(arrived(changing, told.size === 0, mine.cwd, asks));
-          for (const c of changing) told.set(c.id, 'changing');
-        }
-        if (running.length) {
-          said.push(runners(running));
-          for (const c of running) told.set(c.id, 'running');
-        }
-        // Both have changed the same file in the replies running now.
-        const mineChanged = new Set(mine.changing);
-        for (const c of near) {
-          const both = c.turn.changing.filter(
-            (file) => mineChanged.has(file) && !shared.has(`${c.id}:${file}`),
-          );
-          if (!both.length) continue;
-          for (const file of both) shared.add(`${c.id}:${file}`);
-          const them = both.length === 1 ? 'it' : 'them';
-          said.push(
-            `[Conch: you and ${named(c)} have both changed ${some(both.map((f) => shownPath(f, mine.cwd)))} in the replies you’re each writing now. Read ${them} again before changing ${them} further, so neither of you undoes the other’s work.]`,
-          );
-        }
-        const kept = said.slice(0, NOTES_PER_TURN - lines);
-        if (!kept.length) return undefined;
-        lines += kept.length;
-        return kept.join('\n');
-      },
+      }
+      const kept = said.slice(0, NOTES_PER_TURN - lines);
+      if (!kept.length) return undefined;
+      lines += kept.length;
+      return kept.join('\n');
     };
+    return { take: notes };
   }
 
   /** `list_chats`, bound to one chat's turn. None where it isn't for this chat (see `notHere`). */
@@ -495,25 +494,38 @@ function runners(chats: readonly LiveChat[]): string {
 /** How much of another chat's last reply a wait brings back (ADR 0134): its end, where the outcome is. */
 export const LAST_REPLY_CHARS = 800;
 
+/** What a running step is, in Conch's own few words (“editing files”). */
+export const doingWords = (family: ActivityFamily): string => DOING[family];
+
 /**
  * The end of a chat's last reply, as its words were written: what another chat
- * waiting for it hears. Undefined when it hasn't replied.
+ * waiting for it hears. Only a reply of its latest turn: one stopped before it
+ * said anything has nothing to quote. `clean` takes secrets out before it's cut,
+ * so no part of one is left at the cut. Undefined when there's nothing to say.
  */
-export function lastReplyOf(events: readonly ConversationEvent[]): string | undefined {
-  const done = events.findLast((e) => e.type === 'assistant.done');
+export function lastReplyOf(
+  events: readonly ConversationEvent[],
+  clean: (text: string) => string = (text) => text,
+): string | undefined {
+  const doneAt = events.findLastIndex((e) => e.type === 'assistant.done');
+  const done = events[doneAt];
   if (done?.type !== 'assistant.done') return undefined;
+  // A turn ended after this reply, and then another: the latest one said nothing.
+  const ends = events.flatMap((e, i) => (e.type === 'turn.completed' ? [i] : []));
+  const after = ends.find((i) => i > doneAt);
+  if (after !== undefined && after !== ends.at(-1)) return undefined;
   const text = events
     .flatMap((e) =>
       e.type === 'assistant.delta' && e.messageId === done.messageId && e.kind === 'text'
         ? [e.delta]
         : [],
     )
-    .join('')
-    .trim();
-  if (!text) return undefined;
-  return text.length <= LAST_REPLY_CHARS
-    ? text
-    : `…${text.slice(-(LAST_REPLY_CHARS - 1)).trimStart()}`;
+    .join('');
+  const kept = clean(text).trim();
+  if (!kept) return undefined;
+  return kept.length <= LAST_REPLY_CHARS
+    ? kept
+    : `…${kept.slice(-(LAST_REPLY_CHARS - 1)).trimStart()}`;
 }
 
 /** Where a chat is, from its status as saved: what a wait or a list says. */

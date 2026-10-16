@@ -63,6 +63,10 @@ export const WaitNote = z.object({
   wakes: z.boolean().optional(),
   /** You'll hear when it ends, on your phone and in your chat app. */
   tell: z.boolean().optional(),
+  /** How it ended, said after what it waited for: “finished its reply”, “didn’t finish”. */
+  ended: z.string().max(80).optional(),
+  /** Another of your chats it waits for, or that a task runs in (ADR 0134): its row opens it. */
+  chat: z.string().max(128).optional(),
 });
 export type WaitNote = z.infer<typeof WaitNote>;
 
@@ -71,12 +75,15 @@ export const WaitActionBody = z.object({ action: z.enum(['check', 'stop']) });
 export type WaitActionBody = z.infer<typeof WaitActionBody>;
 
 /** How a wait is going, said in the past or present tense, for a row and a notification. */
-export function waitHeadline(note: Pick<WaitNote, 'state' | 'title' | 'kind'>): string {
+export function waitHeadline(
+  note: Pick<WaitNote, 'state' | 'title' | 'kind'> & Pick<Partial<WaitNote>, 'ended'>,
+): string {
   const what = note.title;
   switch (note.state) {
     case 'watching':
       return note.kind === 'time' ? `Waiting until ${what}` : `Waiting for ${what}`;
     case 'done':
+      if (note.ended) return `${capital(what)} ${note.ended}`;
       return note.kind === 'time' ? `It’s ${what}` : `${capital(what)} is done`;
     case 'timed-out':
       return `Stopped waiting for ${what}: it took too long`;

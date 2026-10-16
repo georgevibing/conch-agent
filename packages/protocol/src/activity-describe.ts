@@ -1193,14 +1193,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
                   ? 'a task'
                   : 'something';
     return {
-      family:
-        kind === 'ci'
-          ? 'verify'
-          : kind === 'task'
-            ? 'delegate'
-            : kind === 'chat'
-              ? 'remember'
-              : 'run',
+      family: kind === 'ci' ? 'verify' : kind === 'task' || kind === 'chat' ? 'delegate' : 'run',
       words: words(`Waiting for ${what}`, `Waited for ${what}`, `Couldn’t wait for ${what}`),
       finish: (output) => {
         const line = output.split('\n')[0]?.trim() ?? '';

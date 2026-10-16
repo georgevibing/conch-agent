@@ -251,7 +251,13 @@ import {
   withOthers,
   type ChatFacts,
 } from './search/past';
-import { chatStateOf, lastReplyOf, TOGETHER_PROMPT, TogetherService } from './together/service';
+import {
+  chatStateOf,
+  doingWords,
+  lastReplyOf,
+  TOGETHER_PROMPT,
+  TogetherService,
+} from './together/service';
 import { SearchService } from './search/service';
 import { RoutineStore } from './routines/store';
 import { WhenRoutines } from './routines/triggers';
@@ -1223,18 +1229,35 @@ export class Services {
       // Waiting for another of your chats, or a task this chat started (ADR 0134).
       others: {
         chat: async (id) => {
+          // Cheap first: a chat still working (or about to carry on after a restart) needs no log.
+          const peek = await this.conversations.peek(id);
+          if (!peek) return undefined;
+          const { summary } = peek;
+          if (peek.working || summary.status === 'running') {
+            const live = this.conversations.chats({ working: true }).find((c) => c.id === id);
+            return {
+              title: summary.title,
+              state: 'working' as const,
+              ...(summary.origin && { origin: summary.origin }),
+              taint: live?.taint ?? (await this.conversations.taintOf(id).catch(() => [])),
+              ...(live?.turn?.doing && { doing: doingWords(live.turn.doing) }),
+            };
+          }
           const found = await this.conversations.detail(id).catch(() => undefined);
           if (!found) return undefined;
           const taint = heldTaints(found.events);
-          const reply = lastReplyOf(found.events);
           const redact = this.vault.redactor();
+          // Secrets out before the reply is cut, so no part of one is left at the cut.
+          const reply = lastReplyOf(found.events, (text) =>
+            scrubSecrets(redact ? redact(text) : text),
+          );
           const ended = found.events.findLast((e) => e.type === 'turn.completed');
           return {
             title: found.conversation.title,
             state: chatStateOf(found.conversation.status),
             ...(found.conversation.origin && { origin: found.conversation.origin }),
             taint,
-            ...(reply && { lastReply: scrubSecrets(redact ? redact(reply) : reply) }),
+            ...(reply && { lastReply: reply }),
             ...(taint.length > 0 && { untrusted: true }),
             ...(ended?.type === 'turn.completed' &&
               ended.outcome === 'interrupted' && { interrupted: true }),
@@ -1256,6 +1279,7 @@ export class Services {
             if (
               (event.type === 'conversation.updated' && event.conversation.id === id) ||
               (event.type === 'task.changed' && event.task.id === id) ||
+              (event.type === 'conversation.deleted' && event.conversationId === id) ||
               (event.type === 'conversation.event' &&
                 event.event.conversationId === id &&
                 event.event.type === 'status')

@@ -353,8 +353,18 @@ export class WaitService {
     if (this.#closed) throw new Error('Conch is closing. Wait again after it returns.');
     const mine = [...this.#active.values()].filter((a) => a.conversationId === ctx.conversationId);
     const built = await this.#build(ctx, args);
-    const same = mine.find(
-      (a) => a.note.title === built.watcher.title && a.note.kind === args.kind,
+    // The same thing: the same chat or task by its id, else the same words for it.
+    const target = (spec?: WaitSpec) =>
+      spec?.kind === 'chat'
+        ? `chat:${spec.chat}`
+        : spec?.kind === 'task'
+          ? `task:${spec.task}`
+          : undefined;
+    const key = target(built.spec);
+    const same = mine.find((a) =>
+      key
+        ? target(a.saved?.spec) === key
+        : a.note.title === built.watcher.title && a.note.kind === args.kind,
     );
     if (same)
       return `Already waiting for ${same.note.title} (${same.note.status}). ${same.note.wakes ? 'Your next turn starts by itself when it ends: end this turn now.' : 'Wait for that call to return.'}`;
@@ -526,6 +536,17 @@ export class WaitService {
         // Someone else's chat looks like no chat at all.
         if (!chat || !isYours(chat))
           throw new Error(`No chat “${id}” of the person’s. Use a chat id from list_chats.`);
+        // Waiting back for a chat that waits for this one would only wake each in turn.
+        const back = [...this.#active.values()].some(
+          (a) =>
+            a.conversationId === id &&
+            a.saved?.spec.kind === 'chat' &&
+            a.saved.spec.chat === ctx.conversationId,
+        );
+        if (back)
+          throw new Error(
+            'That chat is already waiting for this one: waiting back would only wake each of you in turn. Carry on, or wait for something concrete instead (its task, CI).',
+          );
         const spec: WaitSpec = { kind: 'chat', chat: id, title: chat.title.slice(0, 200) };
         return { watcher: this.#chatWatcher(spec), spec };
       }
@@ -615,7 +636,10 @@ export class WaitService {
       look: async (id) => {
         const chat = await others.chat(id).catch(() => undefined);
         // Gone, or no longer one of yours (someone else's words came in): nothing to say about it.
-        return chat && isYours(chat) ? chat : undefined;
+        if (!chat || !isYours(chat)) return undefined;
+        // It ended its reply to wait for something of its own: it isn't done yet.
+        const waiting = this.list(id).some((n) => n.state === 'watching' && n.wakes);
+        return waiting ? { ...chat, waiting } : chat;
       },
       onChange: (id, listener) => others.onChange(id, listener),
     });
@@ -679,6 +703,7 @@ export class WaitService {
       startedAt: options.startedAt,
       deadline: options.deadline,
       ...(watcher.url && { url: watcher.url }),
+      ...(watcher.opens && { chat: watcher.opens }),
       ...(options.saved && { wakes: true }),
       ...(options.tell && { tell: true }),
     };
@@ -747,11 +772,18 @@ export class WaitService {
         ...(r?.tone && { tone: r.tone }),
         ...(r?.parts && { parts: r.parts }),
         ...(r?.url && { url: r.url }),
+        ...(r?.ended && { ended: r.ended }),
         endedAt: now,
       };
       delete final.nextCheckAt;
       if (a.stopped !== 'closing' && a.stopped !== 'gone') emit(final);
-      return { state, text, ...(r?.taint && { taint: r.taint }) };
+      return {
+        state,
+        text,
+        ...(r?.taint && { taint: r.taint }),
+        ...(r?.bare && { bare: r.bare }),
+        ...(r?.next && { next: r.next }),
+      };
     };
     // The row shows at once.
     emit(a.note);
@@ -870,16 +902,24 @@ export class WaitService {
   async #wake(a: Active, ended: Ended) {
     await this.#tell(a, ended);
     if (!ended.text || this.#closed) return;
+    // Someone else's words came into this chat since it began waiting (ADR 0134): it hears
+    // how the other chat ended, never what that chat said.
+    let text = ended.text;
+    if (ended.bare && a.saved?.spec.kind === 'chat') {
+      const here = await this.deps.others?.chat(a.conversationId).catch(() => undefined);
+      if (here?.taint.some((t) => t.kind === 'person')) text = ended.bare;
+    }
     // What it brings back is someone else's words: the chat is wary before it reads them.
-    if (ended.taint)
+    if (ended.taint && text !== ended.bare)
       await this.deps.chat.taint?.(a.conversationId, [ended.taint]).catch(() => undefined);
     const headline = waitHeadline({ ...a.note, state: ended.state });
     const prompt = [
       `[Conch] A wait you started has ended: ${headline}.`,
-      ended.text,
-      ended.state === 'done'
-        ? 'Carry on with the job from here for the person. If you need to wait again, call wait_for again.'
-        : 'Decide what to do next for the person: carry on, wait again, or tell them.',
+      text,
+      ended.next ??
+        (ended.state === 'done'
+          ? 'Carry on with the job from here for the person. If you need to wait again, call wait_for again.'
+          : 'Decide what to do next for the person: carry on, wait again, or tell them.'),
     ].join('\n\n');
     await this.deps.chat.wake(a.conversationId, prompt).catch(() => undefined);
   }
@@ -912,6 +952,10 @@ interface Ended {
   state: WaitState;
   text: string;
   taint?: TaintSource;
+  /** The same without anyone's words: for a chat someone else has come into since. */
+  bare?: string;
+  /** What to do next, when it isn't simply carrying on. */
+  next?: string;
 }
 
 /** What `wait_for` was asked, after its schema. */

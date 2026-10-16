@@ -1869,7 +1869,7 @@ const TOOLS: Case[] = [
     'wait_for',
     { kind: 'chat', chat: 'c_1' },
     undefined,
-    { family: 'remember', doing: 'Waiting for another chat', done: 'Waited for another chat' },
+    { family: 'delegate', doing: 'Waiting for another chat', done: 'Waited for another chat' },
   ],
   [
     'wait_for a task',
