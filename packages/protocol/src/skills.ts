@@ -340,6 +340,8 @@ export const UpdateSkillBody = z
      * you've seen what it does (ADR 0028). Ignored for anything else.
      */
     acknowledged: z.string().max(128),
+    /** The version reviewed in a chat card; stale updates never overwrite new instructions. */
+    expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .partial();
 export type UpdateSkillBody = z.infer<typeof UpdateSkillBody>;

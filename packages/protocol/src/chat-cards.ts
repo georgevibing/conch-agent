@@ -262,6 +262,16 @@ export type ChatMessageItem = z.infer<typeof ChatMessageItem>;
  * Everything here came from outside, so it's drawn as plain text, never markup.
  */
 export const ToolView = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('skill-update'),
+    skillId: z.string().min(1).max(128),
+    title: z.string().min(1).max(200),
+    summary: z.string().min(1).max(400),
+    before: z.string().max(262_144),
+    instructions: z.string().trim().min(1).max(50_000),
+    expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
+    warnings: z.array(z.string().max(1000)).max(100),
+  }),
   z.object({ kind: z.literal('downloads'), items: z.array(Attachment).max(10) }),
   z.object({
     kind: z.literal('sources'),

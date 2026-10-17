@@ -37,6 +37,7 @@ const CAPS: Record<ToolView['kind'], number> = {
   fundamentals: 4,
   // No rows of its own: its coins are capped by the protocol.
   'crypto-market': 0,
+  'skill-update': 0,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */
