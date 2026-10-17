@@ -1,0 +1,14 @@
+@layer nacre.components {
+  .words {
+    margin: 0;
+    padding: var(--nc-space-3);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: calc(var(--nc-space-8) * 12);
+    overflow: auto;
+    font: inherit;
+    color: var(--nc-text);
+    background: var(--nc-surface-sunken);
+    border-radius: var(--nc-radius-md);
+  }
+}
