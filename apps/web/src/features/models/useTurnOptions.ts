@@ -11,6 +11,7 @@ import { DEFAULT_MODE, EngineId as EngineIdSchema, honouredMode } from '@conch/p
 import { toast } from '@conch/nacre';
 import { useMemo } from 'react';
 
+import { api } from '../../api/client';
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useLive } from '../../live/LiveProvider';
@@ -159,7 +160,18 @@ export function useTurnOptions(conversationId?: string) {
   /** Pick a model — of this provider or another one. */
   const choose = (key: string) => {
     const parsed = parseModelKey(key);
-    if (parsed) set({ engine: parsed.engine, model: parsed.model });
+    if (!parsed) return;
+    const pick = () => set({ engine: parsed.engine, model: parsed.model });
+    // Picking the provider another one is carrying the chat for is a deliberate way back to it
+    // (ADR 0126). Without ending the carry, the picker keeps showing the carrier's default.
+    if (conversationId && carried && parsed.engine === carried.from) {
+      api
+        .limitBack(conversationId, carried.from)
+        .catch(() => undefined)
+        .finally(pick);
+      return;
+    }
+    pick();
   };
 
   const makeDefault = (keys: (keyof ResolvedTurnOptions)[]) => {
