@@ -1288,7 +1288,7 @@ export class Services {
               listener();
           }),
       },
-      ...waitNotifications(this.channels),
+      ...waitNotifications(() => this.channels),
     });
     // Your chats knowing about each other (ADR 0134): what each is doing, never what it said.
     this.together = new TogetherService({

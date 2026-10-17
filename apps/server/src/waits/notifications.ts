@@ -3,12 +3,12 @@ import type { WaitServiceDeps } from './service';
 
 /** A wait's one requested app, independent of routine notification preferences. */
 export function waitNotifications(
-  channels: Pick<ChannelService, 'sendable' | 'messageOwner'>,
+  channels: () => Pick<ChannelService, 'sendable' | 'messageOwner'>,
 ): Pick<WaitServiceDeps, 'notificationTarget' | 'tell'> {
   return {
     notificationTarget: async (app) => {
       const wanted = app.trim().toLowerCase();
-      const choices = (await channels.sendable()).filter(
+      const choices = (await channels().sendable()).filter(
         (c) => c.id === app || c.kind.toLowerCase() === wanted || c.name.toLowerCase() === wanted,
       );
       if (choices.length !== 1)
@@ -22,7 +22,7 @@ export function waitNotifications(
       return { id: chosen.id, name: chosen.name };
     },
     tell: async ({ title, body, conversationId, notification }) => {
-      await channels.messageOwner(`**${title}**\n${body}`, {
+      await channels().messageOwner(`**${title}**\n${body}`, {
         channelId: notification.id,
         conversationId,
       });

@@ -9,7 +9,10 @@ it('sends only to the explicitly selected app, with no routine broadcast or fall
       app: 'Telegram',
     }),
   );
-  const route = waitNotifications({ sendable: async () => [telegram, email], messageOwner });
+  const route = waitNotifications(() => ({
+    sendable: async () => [telegram, email],
+    messageOwner,
+  }));
   const notification = await route.notificationTarget?.('Telegram');
   if (!notification) throw new Error('missing destination');
   await route.tell?.({
@@ -42,10 +45,10 @@ it('refuses a missing or ambiguous destination instead of guessing', async () =>
       app: 'Telegram',
     }),
   );
-  const route = waitNotifications({
+  const route = waitNotifications(() => ({
     sendable: async () => [telegram, { ...telegram, id: 'telegram-two' }, email],
     messageOwner,
-  });
+  }));
   await expect(route.notificationTarget?.('Telegram')).rejects.toThrow('More than one');
   await expect(route.notificationTarget?.('WhatsApp')).rejects.toThrow('not connected');
   await expect(route.notificationTarget?.('email-one')).resolves.toEqual({
@@ -53,4 +56,29 @@ it('refuses a missing or ambiguous destination instead of guessing', async () =>
     name: 'Email',
   });
   expect(messageOwner).not.toHaveBeenCalled();
+});
+
+it('resolves the channel service only after application initialization', async () => {
+  let ready = false;
+  const messageOwner = vi.fn(async () => ({ app: 'Telegram' }));
+  const channels = vi.fn(() => {
+    if (!ready) throw new Error('channels have not initialized');
+    return { sendable: async () => [telegram], messageOwner };
+  });
+  const route = waitNotifications(channels);
+  expect(channels).not.toHaveBeenCalled();
+  ready = true;
+  const notification = await route.notificationTarget?.('Telegram');
+  if (!notification) throw new Error('missing destination');
+  await route.tell?.({
+    title: 'Done',
+    body: 'Ready',
+    conversationId: 'c_one',
+    waitId: 'w_one',
+    notification,
+  });
+  expect(messageOwner).toHaveBeenCalledExactlyOnceWith('**Done**\nReady', {
+    channelId: telegram.id,
+    conversationId: 'c_one',
+  });
 });
