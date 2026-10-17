@@ -23,6 +23,7 @@ import { slugify } from './draft';
 import { withTitle } from './frontmatter';
 import { writeSkill } from './write';
 import { readPermissions } from './permissions';
+import { skillEditTools } from './edit-tools';
 import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
 import type { SkillTrust } from './trust';
 import { SHELF_DAYS, type SkillUsage } from './usage';
@@ -277,7 +278,7 @@ export class SkillService {
       '## Skills',
       'The user saved these skills: instructions for particular kinds of task.',
       tools
-        ? 'When a request clearly matches one, call use_skill with its name before you start, then follow what it returns. It lists any files the skill has; read one by passing its path as `file`.'
+        ? 'When a request clearly matches one, call use_skill with its name before you start, then follow what it returns. It lists any files the skill has; read one by passing its path as `file`. To change a skill, use inspect_skill then edit_skill; do not run its steps or edit its private files.'
         : 'When a request clearly matches one, read its SKILL.md at the location given before you start, then follow it. Paths in it are relative to that folder.',
       'Only use a skill when it fits the request, and don’t mention skills otherwise.',
       '<available_skills>',
@@ -295,6 +296,8 @@ export class SkillService {
   tools(ctx: {
     conversationId: string;
     append: (event: ConversationEventInput) => void;
+    unattended?: boolean;
+    origin?: { kind: string };
   }): HostTool[] {
     const shown = new Set<string>();
     const useSkill: HostTool<{ name: z.ZodString; file: z.ZodOptional<z.ZodString> }> = {
@@ -336,7 +339,7 @@ export class SkillService {
         }
       },
     };
-    return [useSkill as HostTool];
+    return [useSkill as HostTool, ...skillEditTools(this.deps.store, ctx)];
   }
 
   /**

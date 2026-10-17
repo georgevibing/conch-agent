@@ -84,6 +84,7 @@ export * from './components/StatTile';
 
 // Chat patterns
 export * from './patterns';
+export * from './patterns/SkillUpdate';
 export * from './patterns/Mail';
 export * from './patterns/Products';
 export * from './patterns/Recipe';

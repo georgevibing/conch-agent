@@ -144,6 +144,9 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 
 **In the chat**
 
+- **Update skills where you ask.** Review proposed instructions in chat and press
+  **Update skill** to save them. [Skills](./apps/docs/content/features/skills.md)
+
 - **Every model you have, one picker.** The plans you already pay for, with their own
   sign-in: Claude Code, Codex, GitHub Copilot, Gemini CLI, Grok. Keys from OpenRouter,
   Anthropic, OpenAI, Google, Mistral, DeepSeek and more. Ollama or LM Studio for a

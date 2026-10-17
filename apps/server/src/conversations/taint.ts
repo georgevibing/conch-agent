@@ -122,6 +122,8 @@ const hostOf = (value: unknown): string | undefined => {
 export function taintFrom(toolName: string, input: unknown, app?: string): TaintSource | undefined {
   // A script (ADR 0123) brings nothing in itself: each tool it calls marks the chat as it reads.
   if (isRunScript(toolName)) return undefined;
+  if (/^(?:mcp__conch__)?inspect_skill$/.test(toolName))
+    return { kind: 'app', label: 'skill instructions being edited' };
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (
     /^(?:mcp__conch__)?google_(?:mail_(?:search|read)|calendar_briefing|drive_(?:search|read))$/.test(

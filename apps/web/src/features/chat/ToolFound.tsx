@@ -23,6 +23,7 @@ import {
   META_SEP,
 } from '@conch/nacre';
 
+import { SkillUpdateInChat } from '../skills/SkillUpdateInChat';
 import { useUi } from '../../app/ui';
 import { useCardShare } from './cardShare';
 import { SentAttachments } from './AttachmentViewer';
@@ -75,6 +76,8 @@ export function useComposerInsert() {
 export function ToolFound({ view }: { view: ToolView }) {
   const insert = useComposerInsert();
   switch (view.kind) {
+    case 'skill-update':
+      return <SkillUpdateInChat view={view} />;
     case 'downloads':
       return <SentAttachments attachments={view.items} made />;
     case 'sources':

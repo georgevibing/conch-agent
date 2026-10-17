@@ -15,6 +15,18 @@ A skill is instructions for one kind of job, like your weekly review or a releas
 
 **Write the steps for me** needs a provider that can write, such as Claude Code. Without one, your words are the skill.
 
+## Update one from chat
+
+Ask your assistant to change a saved skill and describe the new steps. It reads
+the current instructions and offers an update in the chat. Review **Current
+instructions** and **Proposed instructions**, then press **Update skill**.
+**Not now** leaves the skill unchanged. This review works in Auto and Full trust.
+
+The update preserves when the skill is used and what it may do. If the skill
+changed while you were reviewing, ask for a fresh proposal. For a skill owned by
+another app, open it in **Skills** and choose **Make a copy to edit** first.
+Signed skills must be reviewed on the Skills page.
+
 ## Use one
 
 Each skill has one of three settings:

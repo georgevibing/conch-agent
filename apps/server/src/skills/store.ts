@@ -21,7 +21,7 @@ import { Mutex, safeJoin, writeFileAtomic, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { humanize, slugify } from './draft';
 import { permissionsValue, readPermissions } from './permissions';
-import { folderSignature, scanSkill } from './scan';
+import { folderSignature, scanSkill, skillHash } from './scan';
 import { checkSignature, SIG_FILE } from './signing';
 import type { SkillTrust } from './trust';
 import {
@@ -362,10 +362,22 @@ export class SkillStore {
       name?: string;
       mode?: 'auto' | 'manual' | 'off';
       acknowledged?: string;
+      expectedHash?: string;
     },
   ): Promise<LoadedSkill> {
     return this.#mutex.run(async () => {
+      if (patch.expectedHash) this.invalidate();
       let skill = await this.get(id);
+      if (patch.expectedHash && skill.signature && skill.signature.state !== 'unsigned')
+        throw new SkillError(
+          'read-only',
+          'This skill is signed. Open Skills to review it before changing its instructions.',
+        );
+      if (patch.expectedHash && patch.expectedHash !== (await skillHash(skill.path)))
+        throw new SkillError(
+          'invalid',
+          'This skill changed since the proposal. Ask for a fresh update.',
+        );
       if (!skill.editable) {
         // Only the mode of someone else's skill is ours to keep.
         const { acknowledged, ...rest } = patch;
