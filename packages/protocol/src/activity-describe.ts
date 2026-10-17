@@ -1084,6 +1084,8 @@ function serverTool(server: string | undefined, tool: string): Draft {
 // ---------------------------------------------------------------- Conch's own tools
 
 const CONCH: Record<string, (input: Input) => Draft> = {
+  inspect_skill: () => ({ family: 'explore', words: say('read', 'a skill for editing') }),
+  edit_skill: () => ({ family: 'make', words: say('propose', 'a skill update') }),
   web_search: searchWebDraft,
   web_fetch: fetchDraft,
   recipe: recipeDraft,
