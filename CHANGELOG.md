@@ -2,6 +2,17 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.14](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-17)
+
+### New
+
+- Review and apply skill updates from chat
+
+### Fixed
+
+- Ground Auto decisions in evidence and target wait notifications
+- Choosing the provider that is being carried ends the carry
+
 ## [0.1.0-alpha.13](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.12...v0.1.0-alpha.13) (2026-10-16)
 
 ### Fixed
