@@ -184,6 +184,7 @@ import { ComputerUseService } from './computer-use/service';
 import { computerPrompt, computerTools } from './computer-use/tools';
 import { KNOWN_NEEDS, findGh } from './setup/known';
 import { WaitService } from './waits/service';
+import { waitNotifications } from './waits/notifications';
 import { fetchClient, ghClient, realRun } from './waits/github';
 import { Setup } from './setup/needs';
 import { setToolsHome } from './setup/release';
@@ -1287,17 +1288,7 @@ export class Services {
               listener();
           }),
       },
-      tell: async (told) => {
-        await this.push
-          .notify('tasks', {
-            title: told.title,
-            body: told.body,
-            url: `/c/${told.conversationId}`,
-            tag: `wait-${told.waitId}`,
-          })
-          .catch(() => undefined);
-        await this.channels.tellOwner(`**${told.title}**\n${told.body}`).catch(() => undefined);
-      },
+      ...waitNotifications(this.channels),
     });
     // Your chats knowing about each other (ADR 0134): what each is doing, never what it said.
     this.together = new TogetherService({

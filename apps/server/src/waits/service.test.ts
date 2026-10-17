@@ -133,6 +133,7 @@ function setup(
       note: async (_id, event) => void notes.push(event.wait),
       wake: async (id, prompt) => void wakes.push({ id, prompt }),
     },
+    notificationTarget: async (app) => ({ id: 'chosen-channel', name: app }),
     tell: async (t) => void told.push(t.title),
     random: () => 0.5,
   });
@@ -415,7 +416,7 @@ describe('wait_for CI', () => {
     });
     const { turn, wakes, notes, told, service } = setup({ github: client });
     const t = turn();
-    const text = await t.call({ kind: 'ci', tell_me: true });
+    const text = await t.call({ kind: 'ci', tell_me: true, notify_app: 'Telegram' });
     expect(text).toMatch(/^Waiting for CI for conch fix-ci/);
     expect(text).toMatch(/End your turn now/);
     expect(wakes).toEqual([]);
@@ -649,4 +650,76 @@ describe('Repair', () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(service.list()).toEqual([]);
   });
+});
+
+describe('wait notification consent', () => {
+  it.each([false, true])(
+    'keeps a wait in its chat without a chosen app (tell_me=%s)',
+    async (tell_me) => {
+      vi.useFakeTimers();
+      const { client } = fakeGitHub({
+        '/repos/o/conch/commits/': [
+          { status: 200, json: { check_runs: [job('lint', 'queued')] } },
+          { status: 200, json: { check_runs: [job('lint', 'completed', 'success')] } },
+        ],
+      });
+      const { turn, wakes, told, service } = setup({ github: client });
+      await turn().call({ kind: 'ci', tell_me });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await service.settled();
+      expect(wakes).toHaveLength(1);
+      expect(told).toEqual([]);
+    },
+  );
+
+  it.each([undefined, { id: 'chosen-channel', name: 'Telegram' }])(
+    'resumes with only a saved explicit destination, never the legacy broadcast flag',
+    async (notification) => {
+      vi.useFakeTimers();
+      await writeFile(
+        join(home, 'waits.json'),
+        JSON.stringify({
+          waits: [
+            {
+              waitId: 'saved',
+              conversationId: 'chat',
+              spec: { kind: 'time', at: Date.now() + 1000 },
+              startedAt: Date.now(),
+              deadline: Date.now() + 60_000,
+              tell: true,
+              ...(notification && { notification }),
+            },
+          ],
+        }),
+      );
+      const { service, wakes, told } = setup();
+      expect(await service.start()).toBe(1);
+      await vi.advanceTimersByTimeAsync(2000);
+      await service.settled();
+      expect(wakes).toHaveLength(1);
+      expect(told).toHaveLength(notification ? 1 : 0);
+    },
+  );
+
+  it('does not notify a stopped wait even with a chosen app', async () => {
+    vi.useFakeTimers();
+    const { service, turn, notes, told, wakes } = setup();
+    await turn().call({ kind: 'time', minutes: 5, tell_me: true, notify_app: 'Telegram' });
+    service.stop('chat', notes[0]?.waitId ?? '');
+    await vi.advanceTimersByTimeAsync(1000);
+    await service.settled();
+    expect(told).toEqual([]);
+    expect(wakes).toEqual([]);
+  });
+});
+
+it('does not schedule external delivery in Read only or after a declined Ask first card', async () => {
+  const { turn, service, told } = setup();
+  const args = { kind: 'time', minutes: 5, tell_me: true, notify_app: 'Telegram' };
+  await expect(turn({ permissionMode: 'plan' }).call(args)).rejects.toThrow('Read only');
+  await expect(
+    turn({ permissionMode: 'default', ask: async () => 'deny' }).call(args),
+  ).rejects.toThrow('declined');
+  expect(service.list()).toEqual([]);
+  expect(told).toEqual([]);
 });

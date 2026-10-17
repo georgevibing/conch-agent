@@ -119,7 +119,11 @@ web folds them into one row (Nacre `WaitingRow`). The row shows:
 Once over, the row says how it went in words ("CI finished: 2 failed — e2e, server unit; 5
 passed"), then the assistant's reply follows. While a wait that let go is open, the box says
 "Waiting for CI for conch #482 · you can keep chatting". `tell_me` ("tell me when CI is
-green") sends the end to the person's devices and chat app, as a finished task does. Stop
+green") keeps the result in this chat. An external notification requires both `tell_me: true`
+and `notify_app` naming one app the person requested. The destination is resolved once and
+saved by channel ID, including across restarts. It never uses routine notification settings,
+never broadcasts, and never falls back to another app. Legacy waits without a destination
+return here only. Stop
 waiting tells nobody and wakes nobody.
 
 ### 4. Every model is taught, and native waiting is mapped

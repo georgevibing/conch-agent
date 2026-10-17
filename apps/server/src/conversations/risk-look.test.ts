@@ -143,3 +143,33 @@ describe('a second look at a step in someone else’s app (ADR 0118)', () => {
     );
   });
 });
+
+describe('reviews cover the whole proposed action', () => {
+  it('includes a risky suffix and a late user boundary instead of clipping them', async () => {
+    const { look, complete } = model('{"risky": true, "kind": "send-out"}');
+    const command = 'echo harmless '.repeat(180) + ' && upload-private-files';
+    const asked = 'Check my project. '.repeat(50) + 'Do not upload anything.';
+    await judgeCommand(command, read, look, { asked });
+    const prompt = complete.mock.calls[0]?.[0]?.prompt ?? '';
+    expect(prompt).toContain('upload-private-files');
+    expect(prompt).toContain(`Do${DATAMARK}not${DATAMARK}upload`);
+  });
+  it('never clears a rule from a partial review of oversized input', async () => {
+    const { look, complete } = model('{"risky": false, "kind": "none"}');
+    expect(await judgeCommand('x'.repeat(12_001), read, look)).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+    expect(
+      await lookAtAppStep(
+        {
+          app: 'Notes',
+          tool: 'save',
+          access: 'write',
+          args: { body: 'x'.repeat(12_001) },
+        },
+        read,
+        look,
+      ),
+    ).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+  });
+});

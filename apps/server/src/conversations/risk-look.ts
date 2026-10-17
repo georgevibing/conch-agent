@@ -106,7 +106,8 @@ export async function judgeCommand(
     asked?: string;
   } = {},
 ): Promise<CommandVerdict | undefined> {
-  if (!model) return undefined;
+  // A verdict about a prefix must never clear a risk elsewhere in the command.
+  if (!model || command.length > 12_000 || (options.asked?.length ?? 0) > 12_000) return undefined;
   try {
     const found = await model();
     if (!found) return undefined;
@@ -118,8 +119,8 @@ export async function judgeCommand(
     const prompt = [
       `The command, what the person asked and what the chat read are between the two ${fence} lines. Spaces in them are marked with ${DATAMARK}.`,
       fence,
-      `command: ${datamark(clip(command, 2_000))}`,
-      `the person asked: ${datamark(clip(options.asked || '(not known)', 600))}`,
+      `command: ${datamark(command)}`,
+      `the person asked: ${datamark(options.asked || '(not known)')}`,
       `the chat had read: ${datamark(clip(sources || 'something from outside', 400))}`,
       fence,
       'Is this command risky? JSON only.',
@@ -207,13 +208,14 @@ export async function lookAtAppStep(
     } catch {
       args = '(arguments that can’t be shown)';
     }
+    if (args.length > 12_000 || (step.asked?.length ?? 0) > 12_000) return undefined;
     const prompt = [
       `The step, what the person asked and what the chat read are between the two ${fence} lines. Spaces in them are marked with ${DATAMARK}.`,
       fence,
       `app: ${datamark(clip(step.app, 80))}`,
       `tool: ${datamark(clip(step.tool, 120))} (${step.access === 'read' ? 'looks something up' : 'changes things'})`,
-      `arguments: ${datamark(clip(args, 2_000))}`,
-      `the person asked: ${datamark(clip(step.asked || '(not known)', 600))}`,
+      `arguments: ${datamark(args)}`,
+      `the person asked: ${datamark(step.asked || '(not known)')}`,
       `the chat had read: ${datamark(clip(sources || 'something from outside', 400))}`,
       fence,
       'Is this step risky? JSON only.',

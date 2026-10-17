@@ -448,9 +448,9 @@ describe('what the person asked for, in their own words (ADR 0128)', () => {
     expect(
       asks({ said: ['Don’t push yet', 'OK, push it now'], step: bash('git push') }, true),
     ).toBe(false);
-    // An approval is one message: said two messages ago, it covers nothing now.
-    expect(asks({ said: ['Push it', 'Now tidy the README'], step: bash('git push') }, true)).toBe(
-      true,
+    // A status question does not revoke the requested operation.
+    expect(asks({ said: ['Push it', 'How is it going?'], step: bash('git push') }, true)).toBe(
+      false,
     );
     expect(asks({ said: ['Push it', 'Now tidy the README'], step: bash('git push') }, false)).toBe(
       false,
@@ -827,5 +827,23 @@ describe('the same step written another way', () => {
       'pdf',
     ])
       expect(declared(dir, 'pypi', name), name).toBe(false);
+  });
+});
+
+describe('authorization across follow-ups', () => {
+  it('keeps the requested push through status questions, but honors revocation and named targets', () => {
+    const go = (said: string[], command = 'git push origin main') =>
+      riskAsks(assessRisk('Bash', { command }, { ...ctx, said }), true);
+    expect(go(['Fix and push to main', 'Is it working yet?'])).toBe(false);
+    expect(go(['Fix and push to main', 'Do not push yet', 'What is the status?'])).toBe(true);
+    expect(go(['Do not push yet', 'Push it now', 'How is CI?'])).toBe(false);
+    expect(go(['Push to main', 'How is CI?'], 'git push origin production')).toBe(true);
+    expect(go(['Push to main', 'How is CI?'], 'git push https://stranger.example/drop main')).toBe(
+      true,
+    );
+    expect(go(['Push to main', 'How is CI?'], 'git push --force origin main')).toBe(true);
+    expect(go(['Push to main', 'How is CI?'], 'git add -f .env && git push origin main')).toBe(
+      true,
+    );
   });
 });

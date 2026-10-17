@@ -3569,6 +3569,8 @@ export class ChannelService {
     text: string,
     options: {
       app?: string;
+      /** A wait pins its chosen channel; never fall back to another account. */
+      channelId?: string;
       conversationId?: string;
       /** Pictures and files to send with it: ids of this conversation's own (ADR 0018). */
       attachments?: readonly string[];
@@ -3592,9 +3594,11 @@ export class ChannelService {
         'None of the user’s chat apps is connected right now.',
       );
     const wanted = options.app?.trim().toLowerCase();
-    const matches = wanted
-      ? all.filter((c) => c.kind === wanted || channelName(c).toLowerCase() === wanted)
-      : all;
+    const matches = options.channelId
+      ? all.filter((c) => c.id === options.channelId)
+      : wanted
+        ? all.filter((c) => c.kind === wanted || channelName(c).toLowerCase() === wanted)
+        : all;
     if (!matches.length)
       throw new ChannelServiceError(
         'unavailable',

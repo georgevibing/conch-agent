@@ -791,7 +791,7 @@ export const ASKED_PUSH = {
   notAsked: [
     ['Fix the CI failures'],
     ['Fix CI but don’t push yet, I want to look first'],
-    ['Push the fix to main', 'Thanks. Now tidy the README'],
+    ['Push the fix to main', 'Do not push any more changes'],
   ],
 };
 

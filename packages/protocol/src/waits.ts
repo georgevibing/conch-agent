@@ -61,7 +61,7 @@ export const WaitNote = z.object({
    * while Conch watches. Unset, the wait is part of a turn still running.
    */
   wakes: z.boolean().optional(),
-  /** You'll hear when it ends, on your phone and in your chat app. */
+  /** You'll hear when it ends in the one app you explicitly chose. */
   tell: z.boolean().optional(),
   /** How it ended, said after what it waited for: “finished its reply”, “didn’t finish”. */
   ended: z.string().max(80).optional(),

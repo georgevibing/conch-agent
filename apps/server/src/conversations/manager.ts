@@ -103,6 +103,7 @@ import {
 import { type CommandVerdict, judgeCommand, lookAtAppStep } from './risk-look';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
+import { knownRemotes } from './git-remotes';
 import {
   carriesData,
   describeTaint,
@@ -3415,10 +3416,11 @@ export class ConversationManager {
 
     /**
      * Whether the repository a command would throw changes away in has anything to lose
-     * (ADR 0128): looked up once per folder per turn, only for such a command, so `git reset
+     * (ADR 0128): looked up afresh for each proposed command, so `git reset
      * --hard` on a clean tree is nothing, before and after reading.
      */
-    const cleanTrees = new Map<string, Promise<boolean | undefined>>();
+    const remotesFor = (input: Record<string, unknown>) =>
+      knownRemotes(typeof input.command === 'string' ? input.command : '', workspace);
     const cleanFor = async (
       input: Record<string, unknown>,
     ): Promise<((dir?: string) => boolean | undefined) | undefined> => {
@@ -3429,12 +3431,8 @@ export class ConversationManager {
         dirs.add(resolve(workspace, (m[1] ?? '').replace(/^["']|["']$/g, '')));
       const known = new Map<string, boolean | undefined>();
       for (const dir of dirs) {
-        let look = cleanTrees.get(dir);
-        if (!look) {
-          look = treeClean(dir);
-          cleanTrees.set(dir, look);
-        }
-        known.set(dir, await look);
+        // Files may have changed since the preceding tool call.
+        known.set(dir, await treeClean(dir));
       }
       return (dir) =>
         known.get(dir ? resolve(workspace, dir.replace(/^["']|["']$/g, '')) : workspace);
@@ -3480,6 +3478,7 @@ export class ConversationManager {
             ...access,
             said: this.#yourWords(live),
             treeClean: await cleanFor(request.input),
+            sameRemote: await remotesFor(request.input),
           });
           if (riskAsks(risk, false)) {
             this.deps.judged?.('asked', risk?.kind);
@@ -3516,6 +3515,7 @@ export class ConversationManager {
           ...access,
           said: this.#yourWords(live),
           treeClean: await cleanFor(request.input),
+          sameRemote: await remotesFor(request.input),
         });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
         const unsealed = request.input.dangerouslyDisableSandbox === true;
@@ -4076,6 +4076,7 @@ export class ConversationManager {
           // modes below it ask before every change anyway.
           ...(mode === 'auto' && { said: this.#yourWords(live) }),
           treeClean: await cleanFor(request.input),
+          sameRemote: await remotesFor(request.input),
         });
         const allowed =
           risk?.kind === 'app-delete' &&
@@ -4144,6 +4145,7 @@ export class ConversationManager {
           // The person's own words: a push they asked for is the outcome (ADR 0117).
           said: this.#yourWords(live),
           treeClean: await cleanFor(request.input),
+          sameRemote: await remotesFor(request.input),
         });
         const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =
@@ -5585,7 +5587,10 @@ export class ConversationManager {
   #yourWords(live: Live): string[] {
     if (live.extras || live.record.origin?.kind === 'routine') return [];
     if (this.#tainted(live).some((source) => source.kind === 'person')) return [];
-    return live.events.flatMap((e) => (e.type === 'user.message' ? [e.text] : []));
+    const start = contextStart(live.events);
+    return live.events.flatMap((e) =>
+      e.type === 'user.message' && e.seq >= start ? [e.text] : [],
+    );
   }
 
   /** What untrusted things this chat has read, from its own log (so it survives a restart). */

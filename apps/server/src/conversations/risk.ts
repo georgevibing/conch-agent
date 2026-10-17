@@ -131,6 +131,8 @@ export interface RiskContext {
    * folder `git -C` names when it does; undefined when it can't be known.
    */
   treeClean?: (dir?: string) => boolean | undefined;
+  /** Fresh local evidence that a remote keeps the same destination. */
+  sameRemote?: (dir: string | undefined, remote: string, target: string) => boolean;
 }
 
 /**
@@ -215,9 +217,9 @@ function names(said: string, name: string | RegExp): boolean {
 
 /**
  * What the person's words say about this step (ADR 0128), the latest message that mentions it
- * deciding: said not to, and not since, it's `held`; asked for in the latest message, with every
- * name it needs, it's `asked`; otherwise neither. An older "push it" covers nothing now: an
- * approval is one message, a boundary lasts until a later message about the same act.
+ * deciding: said not to, and not since, it's `held`; asked for with every name it needs,
+ * it's `asked`. Follow-up questions do not revoke authorization. A later statement about
+ * the same act replaces it; clearing the chat drops both authorization and boundaries.
  */
 export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
   const verbs = risk.wish?.verbs ?? WISHES[risk.kind];
@@ -228,7 +230,7 @@ export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
     const message = said[i] ?? '';
     if (!asks.test(message)) continue;
     if (hold.test(message)) return { ...risk, held: true, asked: false };
-    if (i === said.length - 1 && (risk.wish?.names ?? []).every((name) => names(message, name)))
+    if ((risk.wish?.names ?? []).every((name) => names(message, name)))
       return { ...risk, asked: true };
     return risk;
   }
@@ -593,6 +595,7 @@ interface Places {
   /** The person's own words (`RiskContext.said`). */
   said?: readonly string[];
   treeClean?: RiskContext['treeClean'];
+  sameRemote?: RiskContext['sameRemote'];
 }
 
 const inside = (root: string, path: string) => {
@@ -763,6 +766,18 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
   // Where pushes go: a new or repointed remote is a new way out, before reading too, unless
   // the person named it (Claude Code asks the same way).
   if (sub === 'remote' && /^(?:add|set-url|rename)$/.test(args[0] ?? '')) {
+    // A plain replacement with exactly the destination we just read adds no new reach.
+    // Overrides, extra URLs and push-only changes still use the ordinary risk policy.
+    const prefix = words.slice(1, i);
+    const dir = prefix.length === 2 && prefix[0] === '-C' ? prefix[1] : undefined;
+    if (
+      args[0] === 'set-url' &&
+      rest.length === 3 &&
+      flags.length === 0 &&
+      (prefix.length === 0 || (prefix.length === 2 && prefix[0] === '-C')) &&
+      places.sameRemote?.(dir, args[1] ?? '', args[2] ?? '')
+    )
+      return undefined;
     const target = args.slice(1).map(hostOf).find(Boolean) ?? args[1];
     return severe(
       'egress',
@@ -1715,6 +1730,7 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     scratch: [tmpdir(), '/tmp', '/private/tmp', '/var/folders'].map((p) => resolve(p)),
     ...(context.said && { said: context.said }),
     ...(context.treeClean && { treeClean: context.treeClean }),
+    ...(context.sameRemote && { sameRemote: context.sameRemote }),
   };
   const risks: (Risk | undefined)[] = [];
   for (const script of scriptsOf(command)) {

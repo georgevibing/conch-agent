@@ -71,6 +71,9 @@ const WaitSpec = z.discriminatedUnion('kind', [
 ]);
 type WaitSpec = z.infer<typeof WaitSpec>;
 
+const Notification = z.object({ id: z.string().min(1).max(128), name: z.string().min(1).max(160) });
+type Notification = z.infer<typeof Notification>;
+
 const Saved = z.object({
   waitId: z.string(),
   conversationId: z.string(),
@@ -78,6 +81,7 @@ const Saved = z.object({
   startedAt: z.number(),
   deadline: z.number(),
   tell: z.boolean().optional(),
+  notification: Notification.optional(),
 });
 type Saved = z.infer<typeof Saved>;
 const SavedFile = z.object({ waits: z.array(Saved).default([]) });
@@ -134,12 +138,15 @@ export interface WaitServiceDeps {
     /** Calls back when that chat or task may have changed; returns how to stop. */
     onChange(id: string, listener: () => void): () => void;
   };
-  /** Tell the person it ended (a notification, their chat app), when they asked. */
+  /** Resolve the one app explicitly requested; refuse missing or ambiguous choices. */
+  notificationTarget?: (app: string) => Promise<Notification>;
+  /** Send to that pinned destination only, never the routine broadcast list. */
   tell?: (told: {
     title: string;
     body: string;
     conversationId: string;
     waitId: string;
+    notification: Notification;
   }) => Promise<void>;
   now?: () => number;
   random?: () => number;
@@ -158,6 +165,8 @@ interface Active {
   lastPoke: number;
   /** Saved for a restart: only a wait that let go of its turn. */
   saved?: Saved;
+  notification?: Notification;
+  notificationError?: string;
   /** When it ends: what the assistant reads, and whose words it brings in. */
   ended: Promise<Ended>;
   checks: number;
@@ -200,7 +209,7 @@ export class WaitService {
           deadline: s.deadline,
           startedAt: s.startedAt,
           waitId: s.waitId,
-          ...(s.tell && { tell: true }),
+          ...(s.notification && { tell: true, notification: s.notification }),
           saved: s,
         });
         resumed += 1;
@@ -317,7 +326,7 @@ export class WaitService {
           '- `time`: until `minutes` from now, or `until` (an ISO time).',
           '- `chat`: another of the person’s chats (`chat`, an id from list_chats), until it stops working: its reply ends, or it needs the person. You hear how it ended and the end of its last reply.',
           '- `task`: a task started in this chat (`task_id`, from start_background_task or task_status), until it finishes. You hear its result.',
-          'In a chat with the person, a wait for ci, url, chat, task or a time more than two minutes away returns at once: say in one short line what you are waiting for, then end your turn. The chat stays free, and your next turn starts by itself with the outcome. Otherwise the call returns when it changes. `timeout_minutes` is how long to wait at most. Set `tell_me` when the person asked to be told ("let me know when CI is green").',
+          'In a chat with the person, a wait for ci, url, chat, task or a time more than two minutes away returns at once: say in one short line what you are waiting for, then end your turn. The chat stays free, and your next turn starts by itself with the outcome. Otherwise the call returns when it changes. `timeout_minutes` is how long to wait at most. Results return to this chat by default, including "let me know when CI is green". Only when the person explicitly requests an external notification, set `tell_me: true` and `notify_app` to that one app. If they want an external notification but have not chosen an app, ask which one. Never select every connected channel.',
         ].join('\n'),
         input: {
           kind: z.enum(['ci', 'process', 'url', 'time', 'chat', 'task']),
@@ -334,6 +343,7 @@ export class WaitService {
           task_id: z.string().min(1).max(128).optional(),
           timeout_minutes: z.number().min(1).max(1440).optional(),
           tell_me: z.boolean().default(false),
+          notify_app: z.string().trim().min(1).max(160).optional(),
         },
         aliases: {
           process_id: ['id', 'processId'],
@@ -376,6 +386,31 @@ export class WaitService {
       throw new Error(
         'Conch is already waiting for as much as it should. Try again when one ends.',
       );
+    let notification: Notification | undefined;
+    if (args.notify_app) {
+      if (ctx.permissionMode === 'plan')
+        throw new Error(
+          'Read only cannot schedule an external notification. Keep the result in this chat.',
+        );
+      if (!args.tell_me)
+        throw new Error(
+          'Use tell_me with notify_app only for an external notification the person requested.',
+        );
+      if (!this.deps.notificationTarget || !this.deps.tell)
+        throw new Error(
+          'External wait notifications are unavailable. The result can return to this chat.',
+        );
+      notification = await this.deps.notificationTarget(args.notify_app);
+      if (ctx.permissionMode === 'default') {
+        const answer = await ctx.ask({
+          toolName: 'wait_for',
+          input: { notify_app: notification.name, title: built.watcher.title },
+          summary: `Notify you on ${notification.name} when ${built.watcher.title} ends`,
+        });
+        if (answer === 'deny') throw new Error('The user declined this notification.');
+      }
+      ctx.signal.throwIfAborted();
+    }
     const limits = DEADLINE[args.kind];
     const now = this.#now;
     const minutes = Math.min(limits.max, args.timeout_minutes ?? limits.default);
@@ -403,7 +438,7 @@ export class WaitService {
         spec: built.spec as WaitSpec,
         startedAt: now,
         deadline,
-        ...(args.tell_me && { tell: true }),
+        ...(notification && { tell: true, notification }),
       };
       const a = this.#begin({
         watcher: built.watcher,
@@ -411,7 +446,7 @@ export class WaitService {
         deadline,
         startedAt: now,
         waitId,
-        ...(args.tell_me && { tell: true }),
+        ...(notification && { tell: true, notification }),
         saved,
         first,
       });
@@ -434,7 +469,7 @@ export class WaitService {
       deadline,
       startedAt: now,
       waitId,
-      ...(args.tell_me && { tell: true }),
+      ...(notification && { tell: true, notification }),
       append: (note) => ctx.append({ type: 'wait', wait: note }),
     });
     const onAbort = () => this.stop(ctx.conversationId, waitId, 'turn');
@@ -443,7 +478,8 @@ export class WaitService {
       const ended = await a.ended;
       if (built.taint && ended.state === 'done') ctx.taint?.(built.taint);
       if (ended.taint) ctx.taint?.(ended.taint);
-      return ended.text;
+      await this.#tell(a, ended);
+      return [ended.text, a.notificationError].filter(Boolean).join('\n\n');
     } finally {
       ctx.signal.removeEventListener('abort', onAbort);
     }
@@ -687,6 +723,7 @@ export class WaitService {
     startedAt: number;
     deadline: number;
     tell?: boolean;
+    notification?: Notification;
     saved?: Saved;
     /** Inside the turn: its rows go into the turn. */
     append?: (note: WaitNote) => void;
@@ -716,6 +753,7 @@ export class WaitService {
       lastPoke: 0,
       checks: options.first ? 1 : 0,
       ...(options.saved && { saved: options.saved }),
+      ...(options.notification && { notification: options.notification }),
       ended: Promise.resolve<Ended>({ state: 'watching', text: '' }),
     };
     const emit = (next: WaitNote) => {
@@ -738,9 +776,7 @@ export class WaitService {
           if (ended.state !== 'stopped') await this.#wake(a, ended);
           await this.#save();
         })
-      : options.tell
-        ? a.ended.then((ended) => this.#tell(a, ended))
-        : undefined;
+      : undefined;
     if (after) {
       const kept = after.catch(() => undefined).finally(() => this.#after.delete(kept));
       this.#after.add(kept);
@@ -916,6 +952,13 @@ export class WaitService {
     const prompt = [
       `[Conch] A wait you started has ended: ${headline}.`,
       text,
+      ...(a.notificationError
+        ? [a.notificationError]
+        : a.notification
+          ? [
+              'The requested external notification has already been sent to the chosen app. Do not send it again.',
+            ]
+          : []),
       ended.next ??
         (ended.state === 'done'
           ? 'Carry on with the job from here for the person. If you need to wait again, call wait_for again.'
@@ -925,15 +968,19 @@ export class WaitService {
   }
 
   async #tell(a: Active, ended: { state: WaitState }) {
-    if (!a.note.tell || !this.deps.tell || ended.state === 'stopped') return;
+    if (!a.notification || !this.deps.tell || ended.state === 'stopped') return;
     await this.deps
       .tell({
         title: waitHeadline({ ...a.note, state: ended.state }),
         body: a.note.status,
         conversationId: a.conversationId,
         waitId: a.waitId,
+        notification: a.notification,
       })
-      .catch(() => undefined);
+      .catch(() => {
+        a.notificationError =
+          'The requested notification could not be delivered. Do not retry it automatically or send it to another app; report that the result is here in this chat.';
+      });
   }
 
   async #save() {
@@ -974,4 +1021,5 @@ interface WaitArgs {
   until?: string;
   timeout_minutes?: number;
   tell_me: boolean;
+  notify_app?: string;
 }
