@@ -4,20 +4,14 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.14](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-17)
 
+### New
 
-### Features
+- Review and apply skill updates from chat
 
-* **protocol:** a skill-update card and an expected hash for reviewed saves ([8498d10](https://github.com/georgevibing/conch-agent/commit/8498d10ef319fadb5080f30342c92cceb1d186c7))
-* **protocol:** describe inspect_skill and edit_skill in plain words ([31e80f9](https://github.com/georgevibing/conch-agent/commit/31e80f9dc8cdf551943d0b59fe88b5c1b34c436f))
-* **skills:** review and apply skill updates from chat ([2b53211](https://github.com/georgevibing/conch-agent/commit/2b53211a8d0e447bb2a6196176cca66b21faef1a))
-* **skills:** wire the skill-update review into the store, service, chat and docs ([59bff05](https://github.com/georgevibing/conch-agent/commit/59bff05485ea28b0aa418e99faa78484c0020529))
+### Fixed
 
-
-### Bug Fixes
-
-* **server:** ground Auto decisions in evidence and target wait notifications ([b1aafe3](https://github.com/georgevibing/conch-agent/commit/b1aafe368ec1fe203e4772faf89988b2ba315b80))
-* **waits:** resolve channels after service initialization ([ce1d09e](https://github.com/georgevibing/conch-agent/commit/ce1d09ef0275e9de8189a79153d5c762ce75446f))
-* **web:** choosing the provider that is being carried ends the carry ([98c57fd](https://github.com/georgevibing/conch-agent/commit/98c57fd193537f4952aff8d4f5564edc37a1cd37))
+- Ground Auto decisions in evidence and target wait notifications
+- Choosing the provider that is being carried ends the carry
 
 ## [0.1.0-alpha.13](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.12...v0.1.0-alpha.13) (2026-10-16)
 
