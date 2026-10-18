@@ -159,3 +159,11 @@ already follows (`risk-look.ts`), applied here to app steps:
 - Hines et al. (2024), spotlighting: delimiting and datamarking untrusted input for the look.
 - [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes): its auto
   mode's classifier, read again for what it blocks by default and what `default` mode asks.
+
+## 2026-10-18: requested Gmail sends after reading
+
+The new-recipient heuristic and the once-only mail gate were forcing approval before Auto could consider a requested PDF email. In Auto with an attending owner and no other-person taint, Gmail sends defer that heuristic to the trusted connector boundary, after account, recipients and attachment metadata are resolved. The existing fenced app-step reviewer then compares the full available user request with the exact send. Only an explicit non-risky verdict permits it. Missing, malformed or timed-out reviews keep the approval. Ask first, explicit app Ask, skill restrictions, bulk/rate stops, uncertain-write reconciliation and Full trust behavior are unchanged.
+
+Threat model: model-supplied sender metadata must not clear the preflight; only the connector overwrites accountEmail from its account record. A page can supply data but cannot authorize recipients, CC/BCC or unrelated attachments. Prior user instructions are retained for review instead of only the final two messages; oversized contexts fail closed. No permission or durable allowlist is saved by a favorable verdict. Both native preflight and direct Conch-tool paths use the shared manager.
+
+Source reviewed: [OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html), retrieved 2026-10-18: separate instructions from untrusted data, validate tool parameters, and retain defense in depth around external effects. Manager regression tests cover requested delivery, risky/unavailable/malformed verdicts, explicit Ask, Ask first and provider preflight.

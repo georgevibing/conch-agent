@@ -846,3 +846,92 @@ describe('what the person asked for, in Auto (ADR 0128)', () => {
     ]);
   });
 });
+
+describe('requested mail after reading uses Auto review at the resolved send boundary', () => {
+  const sending =
+    (explicit = false): ToolProvider =>
+    (ctx) => [
+      {
+        name: 'google_mail_send',
+        description: 'Fixture: resolved Gmail send',
+        input: {},
+        run: async (args) => {
+          const answer = await ctx.ask({
+            toolName: 'google_mail_send',
+            input: { ...args, accountEmail: 'owner@example.com' },
+            summary: 'Send the generated PDF to the account owner',
+            once: true,
+            ...(explicit && { explicit: true }),
+            ...(ctx.untrusted?.() && { taint: ctx.untrusted?.() }),
+          });
+          return answer === 'deny' ? 'declined' : 'sent';
+        },
+      },
+    ];
+  const mail = {
+    to: ['owner@example.com'],
+    subject: 'Your guide',
+    body: 'Attached is your guide.',
+    attachments: ['att_guide'],
+  };
+  it('reviews a requested PDF email to self with the resolved account, without a second user approval', async () => {
+    const { asked, outcomes, looks } = await run('auto', [tool('google_mail_send', mail)], {
+      tools: sending(),
+      read: web,
+      text: 'Create the PDF guide and email it to me.',
+      look: async () => ({ text: '{"risky":false,"kind":"none"}' }),
+    });
+    expect(asked).toEqual([]);
+    expect(outcomes).toEqual(['sent']);
+    expect(looks).toHaveBeenCalledTimes(1);
+    expect(looks?.mock.calls[0]?.[0]?.prompt).toContain('owner@example.com');
+    expect(looks?.mock.calls[0]?.[0]?.prompt).toMatch(/email.it.to.me/);
+  });
+  it.each(['risky', 'unavailable', 'malformed', 'explicit', 'ask-first'] as const)(
+    'keeps approval for %s mail',
+    async (caseName) => {
+      const { asked, outcomes } = await run(
+        caseName === 'ask-first' ? 'default' : 'auto',
+        [tool('google_mail_send', mail)],
+        {
+          tools: sending(caseName === 'explicit'),
+          read: web,
+          text: 'Email me the guide.',
+          ...(caseName !== 'unavailable' && {
+            look: async () => ({
+              text:
+                caseName === 'malformed'
+                  ? 'invalid'
+                  : JSON.stringify({
+                      risky: caseName === 'risky',
+                      kind: caseName === 'risky' ? 'send-out' : 'none',
+                    }),
+            }),
+          }),
+        },
+      );
+      expect(asked).toHaveLength(1);
+      expect(outcomes).toEqual(['declined']);
+    },
+  );
+  it('defers provider preflight to the resolved mail tool without trusting model-supplied account metadata', async () => {
+    const { asked, outcomes, looks } = await run(
+      'auto',
+      [
+        {
+          toolName: 'mcp__conch__google_mail_send',
+          input: { ...mail, accountEmail: 'invented@example.com' },
+          guardOnly: true,
+        },
+      ],
+      {
+        read: web,
+        text: 'Email me the guide.',
+        look: async () => ({ text: '{"risky":false,"kind":"none"}' }),
+      },
+    );
+    expect(asked).toEqual([]);
+    expect(outcomes).toEqual(['ran']);
+    expect(looks).not.toHaveBeenCalled();
+  });
+});

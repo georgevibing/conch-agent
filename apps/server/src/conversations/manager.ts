@@ -3441,6 +3441,14 @@ export class ConversationManager {
     const lifted = (cls: string) =>
       live.waived.has(cls) || settings.preferences.autoAllowed.includes(cls);
 
+    // Gmail resolves the sender, recipients and attachments inside its trusted tool.
+    // In Auto, its own send-boundary review supersedes the heuristic preflight.
+    const reviewMailAtSend = (name: string) =>
+      /^(?:mcp__conch__)?google_mail_send$/.test(name) &&
+      resolved.permissionMode === 'auto' &&
+      personTrusts &&
+      this.#tainted(live).every((source) => source.kind !== 'person');
+
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
       if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
       // The call asking, so its row can carry the answer; and what it read, as the tools see it.
@@ -3464,8 +3472,25 @@ export class ConversationManager {
       if (
         request.once &&
         (request.taint || this.#tainted(live).some((source) => source.kind === 'person'))
-      )
+      ) {
+        if (
+          reviewMailAtSend(request.toolName) &&
+          !request.explicit &&
+          !request.cost &&
+          ![...limitsSaid].some((limit) => request.taint?.includes(limit))
+        ) {
+          const verdict = await judgeStep(
+            { app: 'Gmail', tool: request.toolName, access: 'write' },
+            request.toolName,
+            request.input,
+            read,
+          );
+          if (verdict === null) return 'allow';
+          if (verdict)
+            return askUser({ ...request, taint: verdict, remember: false }, abort.signal);
+        }
         return askUser({ ...request, remember: false }, abort.signal);
+      }
       if (!request.taint) {
         const mode = resolved.permissionMode;
         // Full trust: an app's Ask, and the words going to other people, go ahead (ADR 0100).
@@ -3891,7 +3916,7 @@ export class ConversationManager {
         // Judged against what the person asked this turn, never against what was read.
         look = judgeCommand(command, read, this.deps.riskLook, {
           signal: abort.signal,
-          asked: this.#yourWords(live).slice(-2).join('\n'),
+          asked: this.#yourWords(live).join('\n'),
         });
         looked.set(command, look);
       }
@@ -4026,6 +4051,7 @@ export class ConversationManager {
       if (!pattern) return undefined;
       if (pattern.level === 'stop') return { text: stopWords(pattern), effect: 'not-executed' };
       if (trusting()) return undefined;
+      if (pattern.kind === 'new-recipient' && reviewMailAtSend(toolName)) return undefined;
       const answer = await askUser(
         {
           toolName: toolName.replace(/^mcp__conch__/, ''),
@@ -4059,7 +4085,11 @@ export class ConversationManager {
       // A pattern worth a question (ADR 0117): in every mode below Full trust, and in Full
       // trust too for the few no one's trust should reach without a look.
       const pattern = watchStep(request, false);
-      if (pattern?.level === 'ask' && (mode !== 'bypassPermissions' || pattern.trust))
+      if (
+        pattern?.level === 'ask' &&
+        (mode !== 'bypassPermissions' || pattern.trust) &&
+        !(pattern.kind === 'new-recipient' && reviewMailAtSend(request.toolName))
+      )
         return { reason: patternWords(pattern) };
       // Something serious asks in every mode but Full trust, whatever was allowed before
       // (an app's tool that deletes, unless you set that tool to Allow in Apps).

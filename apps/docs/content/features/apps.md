@@ -237,3 +237,7 @@ If a popup is blocked, press **Open Google sign-in**. A sign-in expires after te
 If Google doesn't confirm a change, Conch looks for it rather than repeating it, and says plainly when it can't tell.
 
 **Disconnect** keeps an account other Google apps still use; once none do, Conch revokes Google's access. If Google is offline, the entry stays so you can retry, or remove access in your Google account's third-party connections. **Repair everything** checks accounts and refreshes access when it safely can.
+
+## Requested email in Auto
+
+When you ask Conch to email you a generated file, Auto checks the resolved Gmail account, recipients and message against your request. Reading a web page along the way does not by itself require another approval. The same check runs with every provider. An unexplained recipient, an explicit Ask setting, a restricted workflow, or an unavailable risk check still asks before sending.
