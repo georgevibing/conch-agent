@@ -4,11 +4,10 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.15](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-18)
 
+### Fixed
 
-### Bug Fixes
-
-* **computer:** show machine RAM separately from OS memory budgets ([638ce19](https://github.com/georgevibing/conch-agent/commit/638ce1911ea81647d64c3a45a7cb2d434dc8be71))
-* **providers:** signed-out default no longer strands chats; Claude Code sign-in keeps its link ([bf8997f](https://github.com/georgevibing/conch-agent/commit/bf8997fdfb3df97f6d06a7943f141b1aa923a187))
+- Signed-out default no longer strands chats; Claude Code sign-in keeps its link
+- Show machine RAM separately from OS memory budgets
 
 ## [0.1.0-alpha.14](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-17)
 
