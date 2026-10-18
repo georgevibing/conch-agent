@@ -14,7 +14,7 @@ import { rowState, withAnswer } from './approval';
 import { explainStep } from './explain';
 import { headlineOf, liveOf, quietFollowers, standsAlone, stepViews, storyStatus } from './telling';
 import { ToolFound } from './ToolFound';
-import { mailMoment } from './MailItems';
+import { mailMoment, mailOf } from './MailItems';
 import { MemoryFound, turnedDown } from './MemorySteps';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
@@ -218,7 +218,25 @@ export function RunStories({
     stack = [];
   };
   for (const story of stories) {
-    stack.push(story);
+    const mailOnly =
+      story.steps.length > 0 &&
+      story.steps.every((step) => {
+        const tool = byId.get(step.id);
+        return (
+          tool &&
+          /^(?:mcp__conch__)?google_mail_send$/.test(tool.name) &&
+          (tool.view?.kind === 'mail-sent' || mailOf(tool.input)) &&
+          ((asked.get(step.id) &&
+            (!asked.get(step.id)?.decision ||
+              ((asked.get(step.id)?.decision === 'allow' ||
+                asked.get(step.id)?.decision === 'allow-always') &&
+                (tool.status === 'running' || tool.status === 'pending')))) ||
+            tool.view?.kind === 'mail-sent' ||
+            mailMoment(tool))
+        );
+      });
+    if (!mailOnly) stack.push(story);
+    else flush();
     const found = story.steps.flatMap((s): { id: string; kind: string; node: ReactNode }[] => {
       const tool = byId.get(s.id);
       const view = tool?.view;

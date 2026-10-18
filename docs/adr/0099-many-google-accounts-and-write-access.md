@@ -179,3 +179,13 @@ durable-effect contracts hold unchanged.
 - [Drive multipart upload](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
 - [Google incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth)
 - [OWASP OAuth2 Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html)
+
+## 2026-10-18: One mail status and narrow cards
+
+A mail-only story uses the email card for its visible sending status, without a
+second generic sending headline. Pending approvals still own their sending
+animation; failed, declined and uncertain sends keep their distinct outcomes.
+
+Narrow mail cards stack their actions with Send first, hide the keyboard hint,
+and constrain attachment tiles to their available width. A narrow Storybook
+journey checks the card and Send button bounds with a long attachment filename.

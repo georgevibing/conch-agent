@@ -98,6 +98,18 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   const review = page.getByRole('group', { name: /^Email to sam@example.org/ });
   await expect(review.getByText('ada@gmail.com', { exact: true })).toBeVisible();
   await expect(review.getByText('sam@example.org', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(review).toBeVisible();
+  await expect
+    .poll(() => review.evaluate((card) => card.scrollWidth - card.clientWidth))
+    .toBeLessThanOrEqual(1);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+    .toBeLessThanOrEqual(1);
+  const sendBounds = await review.getByRole('button', { name: 'Send', exact: true }).boundingBox();
+  expect(sendBounds).not.toBeNull();
+  expect(sendBounds!.x + sendBounds!.width).toBeLessThanOrEqual(390);
+  expect(sendBounds!.height).toBeGreaterThanOrEqual(44);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText('Sent it to sam@example.org.')).toBeVisible();
   const sent = (await (await request.post(`${MAIL}/__control/sent`)).json()) as {
@@ -107,6 +119,8 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   }[];
   expect(sent).toHaveLength(sentBefore + 1);
   expect(sent.at(-1)).toMatchObject({ from: 'ada@gmail.com', to: ['sam@example.org'] });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   // Each tool says what its choice means; sending is Ask by default and can be Allow.
   await page.goto('/apps/gmail');

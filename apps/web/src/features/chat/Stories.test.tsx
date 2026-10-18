@@ -442,3 +442,20 @@ describe('a live run, one step after another', () => {
     expect(line()).not.toHaveTextContent('Thinking…');
   });
 });
+
+describe('email has one visible sending status', () => {
+  it('uses the mail card instead of repeating the generic story', () => {
+    open(
+      reduceAll(
+        log(asked, {
+          type: 'tool.started',
+          toolUseId: 'mail1',
+          name: 'mcp__conch__google_mail_send',
+          input: { to: ['ada@example.com'], subject: 'Guide', body: 'Your guide.' },
+        }),
+      ),
+    );
+    expect(screen.getAllByText('Sending to ada@example.com…')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Sending an email/i })).not.toBeInTheDocument();
+  });
+});

@@ -567,6 +567,7 @@
   }
 
   .file {
+    max-inline-size: 100%;
     display: flex;
     align-items: center;
     gap: var(--nc-space-1);
@@ -764,6 +765,7 @@
 
   /* ── The answer ─────────────────────────────────────────────────────── */
   .actions {
+    min-inline-size: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -969,5 +971,41 @@
 
   :global([data-nacre-motion='reduced']) .fold[data-folded] {
     display: none;
+  }
+}
+
+@layer nacre.components {
+  .file > :first-child {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .file > button {
+    flex-shrink: 0;
+  }
+  @container (inline-size < 30rem) {
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .actions > button {
+      inline-size: 100%;
+      min-inline-size: 0;
+      min-block-size: var(--nc-control-lg);
+      margin-inline: 0;
+      white-space: normal;
+    }
+    .actions > button:last-child {
+      order: -1;
+    }
+    .shortcut {
+      display: none;
+    }
+    .sheet {
+      padding-inline: var(--nc-space-3);
+    }
+    .files,
+    .file {
+      inline-size: 100%;
+    }
   }
 }

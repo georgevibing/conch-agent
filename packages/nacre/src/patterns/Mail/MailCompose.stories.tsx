@@ -166,3 +166,33 @@ export const Journey: Story = {
     );
   },
 };
+
+/** A narrow chat with an attachment whose name cannot break at spaces. */
+export const PhoneWithLongAttachment: Story = {
+  args: {
+    to: ['a.very.long.email.address@example.com'],
+    files: [
+      {
+        id: 'att_long',
+        name: 'Illustrated-evening-flexibility-and-joint-health-routine-with-all-exercises.pdf',
+      },
+    ],
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ width: 280, maxWidth: '100%' }}>
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const card = canvas.getByRole('group', { name: /Email to/ });
+    await expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth + 1);
+    const send = canvas.getByRole('button', { name: /^Send/ });
+    await expect(send.getBoundingClientRect().right).toBeLessThanOrEqual(
+      card.getBoundingClientRect().right,
+    );
+    await expect(send.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  },
+};

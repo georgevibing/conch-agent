@@ -464,7 +464,11 @@ export function MailCompose({
                 disabled={answering || !valid}
                 loading={busy === 'send' && !sending}
                 leadingIcon={intent === 'send' ? <Send aria-hidden /> : undefined}
-                trailing={<Kbd keys="mod+enter" size="sm" inverse />}
+                trailing={
+                  <span className={styles.shortcut}>
+                    <Kbd keys="mod+enter" size="sm" inverse />
+                  </span>
+                }
                 onClick={() => send(letter)}
                 aria-keyshortcuts="Meta+Enter Control+Enter"
               >
