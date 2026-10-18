@@ -244,6 +244,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 - **Choose where work runs.** This computer, a locked-down container, a machine over
   SSH or a sandbox in the cloud.
   [Where work runs](./apps/docs/content/features/where-work-runs.md)
+- **See your computer’s RAM and usage**, with any smaller OS memory budget shown separately.
+  [This computer](./apps/docs/content/care/this-computer.md)
 - **See it, undo it.** **Settings → Activity** shows everything it did. **Undo** puts files back.
   [Undo](./apps/docs/content/care/undo.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID. A new device waits

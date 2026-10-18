@@ -232,6 +232,15 @@ Safe interrupted chats are deferred durably and resume one at a time, with resou
 headroom. A second restart does not lose the deferred queue. Automatic task admission
 uses the same resource signal. Manual work and explicit stop retain their meaning.
 
+### Machine memory and work budgets
+
+Settings → This computer uses host RAM total and available memory for its memory
+tile and chart. The resource sampler preserves those readings before applying
+process and ancestor cgroup constraints. A separate optional budget reports the
+smaller effective total and remaining headroom, which may include sibling usage.
+Admission, pacing and recovery continue to use constrained readings; a hardware
+display fix must never make the scheduler ignore OS limits.
+
 ### Explain through existing surfaces
 
 Managed tool results explain waiting and stopped states. Settings → Health shows

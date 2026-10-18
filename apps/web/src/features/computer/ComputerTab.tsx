@@ -249,6 +249,14 @@ export function ComputerPage({ status, live = true }: { status: ComputerStatus; 
         </div>
       )}
 
+      {last?.memoryBudget && (
+        <Text tone="muted">
+          The operating system limits Conch to a {memory(last.memoryBudget.totalBytes)} memory
+          budget, with {memory(last.memoryBudget.availableBytes)} available. This budget may be
+          shared with other apps. Conch can wait for room even when the computer has free memory.
+        </Text>
+      )}
+
       <Section title="The last few minutes">
         <div className={styles.charts}>
           <Stack gap={3}>

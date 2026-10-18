@@ -12,6 +12,8 @@ The top sums it up: **Room to spare**, **Busy right now**, **Working hard**, **L
 
 Then four numbers: processor, memory, the disk Conch keeps your things on, and battery (or the graphics processor, without one).
 
+Memory shows the whole computer’s RAM and usage. If the operating system gives Conch a smaller memory budget, a note shows that budget and how much remains available. Other apps may share it, so Conch can wait for room even when the computer has free memory.
+
 ## The last few minutes
 
 Processor, memory, network and graphics each have a live chart:

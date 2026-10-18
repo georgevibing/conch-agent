@@ -24,7 +24,9 @@ import {
 /** Everything the sampler reads, so a test can be any computer. */
 export interface ComputerReaders {
   cpuTimes(): CpuTimes[];
-  resources(): Promise<Pick<ResourceSnapshot, 'totalBytes' | 'availableBytes' | 'level'>>;
+  resources(): Promise<
+    Pick<ResourceSnapshot, 'totalBytes' | 'availableBytes' | 'hostMemory' | 'level'>
+  >;
   disk(): Promise<ComputerSample['disk']>;
   network(): Promise<NetTotals | undefined>;
   graphics(): Promise<GraphicsReading | undefined>;
@@ -215,15 +217,19 @@ export class ComputerSampler {
     const temperatureNow =
       reading !== undefined && reading > 0 && reading < 150 ? reading : undefined;
 
+    const memory = room.hostMemory ?? room;
     const sample: ComputerSample = {
       at,
       cpu,
       cores: perCore,
       ...(load !== undefined && { load: round(load, 2) }),
       memory: {
-        totalBytes: room.totalBytes,
-        usedBytes: Math.max(0, room.totalBytes - room.availableBytes),
+        totalBytes: memory.totalBytes,
+        usedBytes: Math.max(0, memory.totalBytes - memory.availableBytes),
       },
+      ...(room.totalBytes < memory.totalBytes && {
+        memoryBudget: { totalBytes: room.totalBytes, availableBytes: room.availableBytes },
+      }),
       room: room.level,
       ...(disk && { disk }),
       ...(net &&

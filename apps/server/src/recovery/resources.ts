@@ -8,6 +8,8 @@ export interface ResourceSnapshot {
   at: number;
   totalBytes: number;
   availableBytes: number;
+  /** Machine RAM before applying process or shared cgroup budgets. */
+  hostMemory?: { totalBytes: number; availableBytes: number };
   cpuCount: number;
   loadPerCpu: number;
   memoryPressure: number | null;
@@ -86,6 +88,7 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
       availableBytes = process.availableMemory();
     }
   }
+  let hostAvailableBytes = availableBytes;
   if (process.platform === 'linux') {
     const [memory, pressure, group] = await Promise.allSettled([
       readFile('/proc/meminfo', { encoding: 'utf8', signal: AbortSignal.timeout(1_000) }),
@@ -100,6 +103,7 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
       const match = /^full avg10=([\d.]+)/m.exec(pressure.value);
       if (match) memoryPressure = Number(match[1]);
     }
+    hostAvailableBytes = availableBytes;
     if (group.status === 'fulfilled') cgroup = group.value;
     else availableBytes = 0;
     if (cgroup.availableBytes !== undefined)
@@ -121,6 +125,7 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
     at: Date.now(),
     totalBytes,
     availableBytes,
+    hostMemory: { totalBytes: totalmem(), availableBytes: hostAvailableBytes },
     cpuCount,
     loadPerCpu: (loadavg()[0] ?? 0) / cpuCount,
     memoryPressure,

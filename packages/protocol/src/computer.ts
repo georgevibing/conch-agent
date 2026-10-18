@@ -55,7 +55,10 @@ export const ComputerSample = z.object({
   cores: z.array(Percent).max(512),
   /** The one-minute load average (not on Windows). */
   load: z.number().nonnegative().optional(),
+  /** Machine RAM, independent of the budget used to admit work. */
   memory: z.object({ usedBytes: Bytes, totalBytes: Bytes }),
+  /** A smaller OS budget inherited by Conch, possibly shared with other apps. */
+  memoryBudget: z.object({ totalBytes: Bytes, availableBytes: Bytes }).optional(),
   room: ComputerRoom,
   /** The disk Conch keeps your things on. */
   disk: z.object({ usedBytes: Bytes, totalBytes: Bytes }).optional(),

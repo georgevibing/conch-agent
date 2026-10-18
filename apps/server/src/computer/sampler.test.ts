@@ -123,6 +123,40 @@ describe('ComputerSampler', () => {
     expect(sample.room).toBe('healthy');
   });
 
+  it('shows machine RAM separately from a full shared OS budget', async () => {
+    const { readers } = computer();
+    const resources = vi.fn<ComputerReaders['resources']>().mockResolvedValue({
+      totalBytes: 7 * GiB,
+      availableBytes: 0,
+      hostMemory: { totalBytes: 16 * GiB, availableBytes: 6 * GiB },
+      level: 'critical',
+    });
+    readers.resources = resources;
+    sampler = new ComputerSampler({ home: '/tmp', intervalMs: 60_000, readers });
+    const status = ComputerStatus.parse(await sampler.status());
+    expect(status.info.memoryBytes).toBe(16 * GiB);
+    expect(status.samples[0]).toMatchObject({
+      memory: { totalBytes: 16 * GiB, usedBytes: 10 * GiB },
+      memoryBudget: { totalBytes: 7 * GiB, availableBytes: 0 },
+      room: 'critical',
+    });
+
+    // Removing the constraint changes the budget, not the hardware total.
+    resources.mockResolvedValue({
+      totalBytes: 16 * GiB,
+      availableBytes: 6 * GiB,
+      hostMemory: { totalBytes: 16 * GiB, availableBytes: 6 * GiB },
+      level: 'healthy',
+    });
+    await sampler.tick();
+    const unconstrained = await sampler.status();
+    expect(unconstrained.samples.at(-1)?.memory).toEqual({
+      totalBytes: 16 * GiB,
+      usedBytes: 10 * GiB,
+    });
+    expect(unconstrained.samples.at(-1)).not.toHaveProperty('memoryBudget');
+  });
+
   it('keeps only the last few minutes, and the battery is read now and then', async () => {
     const { readers, calls, advance } = computer();
     let now = 0;

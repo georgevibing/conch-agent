@@ -72,6 +72,7 @@ describe('Settings → This computer', () => {
     const tile = (name: string) => screen.getByRole('group', { name });
     expect(tile('Processor')).toHaveTextContent('Load 2.4');
     expect(tile('Memory')).toHaveTextContent('20 GB of 36 GB');
+    expect(screen.queryByText(/The operating system limits Conch/)).toBeNull();
     expect(tile('Disk')).toHaveTextContent('354 GB free');
     expect(tile('Battery')).toHaveTextContent('Charged');
 
@@ -94,6 +95,31 @@ describe('Settings → This computer', () => {
         .getAllByRole('cell')
         .map((c) => c.textContent),
     ).toEqual(['', '4.2%', '412 MB']);
+    expect(await violations(container)).toEqual([]);
+  });
+
+  it('shows host usage and explains why a smaller OS budget can hold work', async () => {
+    mockFetch({
+      'GET /api/computer': () =>
+        status({
+          info: { ...status().info, memoryBytes: 16 * GiB },
+          samples: [
+            sample(1000, {
+              memory: { usedBytes: 10 * GiB, totalBytes: 16 * GiB },
+              memoryBudget: { totalBytes: 7 * GiB, availableBytes: 0 },
+              room: 'critical',
+            }),
+          ],
+        }),
+    });
+    const { container } = renderApp(<ComputerTab />);
+    expect(await screen.findByRole('heading', { name: 'Low on memory' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Memory' })).toHaveTextContent('10 GB of 16 GB');
+    expect(screen.getByRole('group', { name: 'Memory' })).toHaveTextContent('63%');
+    expect(screen.getByRole('figure', { name: /Memory/ })).toHaveTextContent('10 GB of 16 GB');
+    expect(screen.getByText(/The operating system limits Conch/)).toHaveTextContent(
+      '7 GB memory budget, with 0 MB available',
+    );
     expect(await violations(container)).toEqual([]);
   });
 
