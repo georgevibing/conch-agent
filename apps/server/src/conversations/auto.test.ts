@@ -885,6 +885,7 @@ describe('requested mail after reading uses Auto review at the resolved send bou
     expect(outcomes).toEqual(['sent']);
     expect(looks).toHaveBeenCalledTimes(1);
     expect(looks?.mock.calls[0]?.[0]?.prompt).toContain('owner@example.com');
+    expect(looks?.mock.calls[0]?.[0]?.prompt).toContain('connector-verified sender:');
     expect(looks?.mock.calls[0]?.[0]?.prompt).toMatch(/email.it.to.me/);
   });
   it.each(['risky', 'unavailable', 'malformed', 'explicit', 'ask-first'] as const)(

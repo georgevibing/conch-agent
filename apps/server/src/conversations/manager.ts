@@ -3480,7 +3480,14 @@ export class ConversationManager {
           ![...limitsSaid].some((limit) => request.taint?.includes(limit))
         ) {
           const verdict = await judgeStep(
-            { app: 'Gmail', tool: request.toolName, access: 'write' },
+            {
+              app: 'Gmail',
+              tool: request.toolName,
+              access: 'write',
+              ...(typeof request.input.accountEmail === 'string' && {
+                resolvedAccountEmail: request.input.accountEmail,
+              }),
+            },
             request.toolName,
             request.input,
             read,
@@ -3959,7 +3966,13 @@ export class ConversationManager {
      */
     const lookedSteps = new Map<string, Promise<string | null | undefined>>();
     const judgeStep = async (
-      step: { app: string; tool: string; access: 'read' | 'write'; allowed?: boolean },
+      step: {
+        app: string;
+        tool: string;
+        access: 'read' | 'write';
+        allowed?: boolean;
+        resolvedAccountEmail?: string;
+      },
       toolName: string,
       args: Record<string, unknown>,
       read: readonly TaintSource[],
@@ -3971,7 +3984,7 @@ export class ConversationManager {
       let look = lookedSteps.get(key);
       if (!look) {
         look = lookAtAppStep(
-          { ...step, args, asked: this.#yourWords(live).slice(-2).join('\n') },
+          { ...step, args, asked: this.#yourWords(live).join('\n') },
           read,
           this.deps.riskLook,
           { signal: abort.signal },
