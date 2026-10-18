@@ -786,6 +786,57 @@ describe('gateway WebSocket', () => {
     });
   });
 
+  it('signed out: another provider that can carry the chat answers instead of stranding it', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const mock = services.engine();
+    const base = await mock.detect();
+    const signedOut = {
+      ...mock,
+      label: 'Claude Code',
+      local: false,
+      capabilities: () => mock.capabilities(),
+      detect: async () => ({ ...base, state: 'signed-out' as const }),
+    };
+    const plan = {
+      ...mock,
+      id: 'codex-cli' as const,
+      label: 'ChatGPT',
+      local: false,
+      capabilities: () => mock.capabilities(),
+      usage: undefined,
+      detect: async () => ({
+        ...base,
+        engine: 'codex-cli' as const,
+        state: 'ready' as const,
+        auth: { method: 'subscription' as const, description: 'ChatGPT Plus' },
+      }),
+    };
+    vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
+      id === 'codex-cli' ? plan : signedOut,
+    );
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([plan]);
+
+    // No limit, nothing offline: it was only signed out. The chat still goes on, and says why.
+    expect(await services.route(signedOut, {})).toMatchObject({
+      kind: 'use',
+      engine: { id: 'codex-cli' },
+      routed: {
+        reason: 'signed-out',
+        message: expect.stringContaining('Claude Code is signed out, so'),
+      },
+    });
+    // It never moves the chat for good: signing in again brings Claude Code back.
+    expect(await services.route(signedOut, { failed: 'signed-out' })).not.toMatchObject({
+      routed: { stayed: true },
+    });
+
+    // Nothing else connected: the chat's own provider, which then says it's signed out.
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([]);
+    vi.spyOn(services, 'localReady').mockResolvedValue(undefined);
+    expect(await services.route(signedOut, {})).toEqual({ kind: 'use', engine: signedOut });
+  });
+
   it('at a limit: Automatic, your pick, or waiting — and the model here last (ADR 0126)', async () => {
     const { app, services } = await setup();
     close = () => app.close();

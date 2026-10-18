@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { fakeClaude } from '../../test/fakeClaude';
 import { detectClaude } from './detect';
-import { startClaudeLogin } from './login';
+import { signInUrl, startClaudeLogin } from './login';
 
 function waitFor(states: LoginState[], phase: LoginState['phase']) {
   return new Promise<void>((resolve, reject) => {
@@ -17,6 +17,26 @@ function waitFor(states: LoginState[], phase: LoginState['phase']) {
     tick();
   });
 }
+
+describe('signInUrl', () => {
+  it('finds the OAuth page and drops trailing punctuation', () => {
+    const text =
+      'Docs: https://docs.claude.com/en/login.\nVisit https://claude.ai/oauth/authorize?code=true&state=abc).';
+    expect(signInUrl(text)).toBe('https://claude.ai/oauth/authorize?code=true&state=abc');
+  });
+
+  it('reads an address the pipe delivered in pieces', () => {
+    const first = 'If the browser did not open, visit: https://claude.ai/oauth/auth';
+    expect(signInUrl(first)).toBe('https://claude.ai/oauth/auth');
+    expect(signInUrl(`${first}orize?client_id=1&scope=a%20b\nPaste code here >`)).toBe(
+      'https://claude.ai/oauth/authorize?client_id=1&scope=a%20b',
+    );
+  });
+
+  it('is undefined before any link is printed', () => {
+    expect(signInUrl('Opening browser to sign in…')).toBeUndefined();
+  });
+});
 
 describe('Claude Code sign-in', () => {
   it('surfaces the URL, forwards the code and verifies', async () => {

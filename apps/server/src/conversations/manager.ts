@@ -416,7 +416,7 @@ export type TurnRoute =
        * Set when it isn't the chat's own provider: why, in one sentence.
        * `stayed`: at a limit, the chat moves to it for good (ADR 0126).
        */
-      routed?: { reason: 'offline' | 'limit'; message: string; stayed?: boolean };
+      routed?: { reason: 'offline' | 'limit' | 'signed-out'; message: string; stayed?: boolean };
     }
   | { kind: 'hold' };
 
@@ -1741,7 +1741,7 @@ export class ConversationManager {
         status.state === 'not-installed'
           ? `${engine.label} isn't installed yet.`
           : status.state === 'signed-out'
-            ? `${engine.label} is signed out.`
+            ? `${engine.label} is signed out. Sign in again in Settings → Providers, or connect another provider.`
             : (status.message ?? `${engine.label} is unavailable.`),
       );
     }
@@ -4841,7 +4841,9 @@ export class ConversationManager {
       // A limit or an outage someone else can answer is decided now, before the chat
       // hears the turn ended — so it never shows a failure it's about to fix (ADR 0023).
       const after =
-        retry && (problem === 'limit' || problem === 'unavailable') && !abort.signal.aborted
+        retry &&
+        (problem === 'limit' || problem === 'unavailable' || problem === 'signed-out') &&
+        !abort.signal.aborted
           ? await retry(problem, resolved.model).catch(() => undefined)
           : undefined;
       if (after?.kind === 'hold') {
@@ -5830,7 +5832,7 @@ export function sameRouteAsLast(
   events: readonly ConversationEvent[],
   from: EngineId,
   to: EngineId,
-  reason: 'offline' | 'limit',
+  reason: 'offline' | 'limit' | 'signed-out',
 ): boolean {
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i];

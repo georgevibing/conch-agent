@@ -3434,7 +3434,8 @@ export class Services {
    * At a usage limit, the next plan or key with room carries on (Automatic,
    * in your order), or your one pick does; when none can, the model on this
    * computer, if you let it. `wait` (yours, or this chat's Switch back) waits
-   * for the reset. Otherwise, the chat's own provider.
+   * for the reset. Signed out, any provider that can carry the chat answers, and
+   * signing in again brings the chat's own back. Otherwise, the chat's own provider.
    */
   async route(
     engine: Engine,
@@ -3468,6 +3469,68 @@ export class Services {
       }
     }
     if (engine.local) return { kind: 'use', engine };
+    // Another provider that could answer, in the order Automatic (or your one pick) would try.
+    const another = async () => {
+      const choices = await fallbackChoices(
+        engine,
+        this.#fallbackDeps(context),
+        preferences.limitOrder,
+      );
+      const how = preferences.limitFallback ?? 'auto';
+      const tried =
+        how === 'auto' || how === 'wait'
+          ? choices.filter(
+              (c) =>
+                !c.choice.skip &&
+                c.choice.room !== 'none' &&
+                // A key that charges per reply only when the person said so.
+                (preferences.limitPaid || c.choice.billing === 'plan'),
+            )
+          : choices
+              .filter((c) => c.choice.engines.includes(how))
+              .filter((c) => !c.choice.skip && c.choice.room !== 'none')
+              .map((c) => ({ ...c, engine: this.providers.engineFor(how) }));
+      for (const { engine: other, choice } of tried) {
+        if (other.id === engine.id) continue;
+        // It answers with the model it would anyway: choosing a pricier one
+        // would be a spending choice you didn't make.
+        const carried = await carry(other, false);
+        if (carried) return { other, choice, carried, named: how === 'auto' || how === 'wait' };
+      }
+      return undefined;
+    };
+    // Signed out (or the sign-in expired): nothing to wait for, and a chat that only says so
+    // strands the person. Another connected provider answers now; signing in again brings this
+    // one back, since the chat keeps it.
+    const own = await engine.detect().catch(() => undefined);
+    if (own?.state === 'signed-out' || context.failed === 'signed-out') {
+      const found = await another().catch(() => undefined);
+      if (found) {
+        const name = found.named ? found.choice.name : found.other.label;
+        return {
+          kind: 'use',
+          engine: found.other,
+          ...(found.carried.model && { model: found.carried.model }),
+          routed: {
+            reason: 'signed-out',
+            message: `${engine.label} is signed out, so ${name} is answering. Sign in again in Settings to switch back.`,
+          },
+        };
+      }
+      const local = preferences.offlineFallback ? await this.localReady() : undefined;
+      const carried = local ? await carry(local, true) : false;
+      if (local && carried)
+        return {
+          kind: 'use',
+          engine: local,
+          ...(carried.model && { model: carried.model }),
+          routed: {
+            reason: 'signed-out',
+            message: `${engine.label} is signed out, so ${local.label} is answering from this computer. Sign in again in Settings to switch back.`,
+          },
+        };
+      return { kind: 'use', engine };
+    }
     // What's already known, never a new read: this is asked before every turn, and a read
     // here would open a provider's session and fix the meter's spend before the turn counts.
     const usage = this.usage.known(engine.id);
@@ -3482,36 +3545,13 @@ export class Services {
 
     const reached = `${engine.label} reached its limit${until ? ` until ${clock(until)}` : ' for now'}.`;
     const stay = preferences.limitReturn === false;
-    const choices = await fallbackChoices(
-      engine,
-      this.#fallbackDeps(context),
-      preferences.limitOrder,
-    );
-    // Automatic: the first with room, in your order. Your pick: that one, while it has room.
-    const tried =
-      mode === 'auto'
-        ? choices.filter(
-            (c) =>
-              !c.choice.skip &&
-              c.choice.room !== 'none' &&
-              // A key that charges per reply only when the person said so.
-              (preferences.limitPaid || c.choice.billing === 'plan'),
-          )
-        : choices
-            .filter((c) => c.choice.engines.includes(mode))
-            .filter((c) => !c.choice.skip && c.choice.room !== 'none')
-            .map((c) => ({ ...c, engine: this.providers.engineFor(mode) }));
-    for (const { engine: other, choice } of tried) {
-      if (other.id === engine.id) continue;
-      // It answers with the model it would anyway: choosing a pricier one
-      // would be a spending choice you didn't make.
-      const carried = await carry(other, false);
-      if (!carried) continue;
-      const name = mode === 'auto' ? choice.name : other.label;
+    const found = await another();
+    if (found) {
+      const name = found.named ? found.choice.name : found.other.label;
       return {
         kind: 'use',
-        engine: other,
-        ...(carried.model && { model: carried.model }),
+        engine: found.other,
+        ...(found.carried.model && { model: found.carried.model }),
         routed: {
           reason: 'limit',
           message: stay

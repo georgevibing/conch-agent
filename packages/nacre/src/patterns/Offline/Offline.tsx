@@ -97,9 +97,9 @@ export function WaitingMessage({
 export interface RoutedNoteProps extends Omit<ComponentProps<'div'>, 'children'> {
   /**
    * Why another provider answered: offline (the model on this computer), a
-   * usage limit, or someone asked for another model (`switched`, ADR 0132).
+   * usage limit, a sign-in that ran out, or someone asked for another model (`switched`, ADR 0132).
    */
-  reason: 'offline' | 'limit' | 'switched';
+  reason: 'offline' | 'limit' | 'switched' | 'signed-out';
   /** One sentence, e.g. "Claude reached its limit until 15:00, so OpenRouter answered." */
   children: ReactNode;
   /** Where to change it (e.g. the setting that chose it). */

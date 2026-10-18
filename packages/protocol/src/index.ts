@@ -1168,7 +1168,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('turn.routed'),
     from: EngineId,
     to: EngineId,
-    reason: z.enum(['offline', 'limit']),
+    reason: z.enum(['offline', 'limit', 'signed-out']),
     /** One plain sentence: "Claude Code reached its limit until 6:00 PM. Codex is answering." */
     message: z.string(),
     /** The model the chat had with `from`, so Switch back can return to it. */

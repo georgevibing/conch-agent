@@ -7,11 +7,21 @@ import { launch } from '../../lib/proc';
 import type { LoginHandle } from '../types';
 import { childEnv } from './env';
 
-const URL_RE = /https:\/\/[^\s"'<>]+/;
+const URL_RE = /https:\/\/[^\s"'<>]+/g;
 const CODE_PROMPT_RE = /paste|enter (the )?(authori[sz]ation )?code|code:/i;
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 const TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * The sign-in page in what the CLI has printed so far. Read from everything
+ * printed, not a chunk at a time: the address is long, and a pipe may hand it
+ * over in pieces. The OAuth page is preferred to any other link in the text.
+ */
+export function signInUrl(transcript: string): string | undefined {
+  const urls = [...transcript.matchAll(URL_RE)].map((m) => m[0].replace(/[.,;:!?)\]]+$/, ''));
+  return urls.find((url) => /oauth|authorize/i.test(url)) ?? urls[0];
+}
 
 /**
  * Drives `claude auth login` non-interactively. Claude Code opens the browser
@@ -44,8 +54,10 @@ export function startClaudeLogin(options: {
   const onOutput = (chunk: Buffer) => {
     const text = chunk.toString('utf8').replace(ANSI_RE, '');
     transcript = (transcript + text).slice(-8000);
-    const url = URL_RE.exec(text)?.[0];
-    if (url && !state.url) update({ phase: 'waiting-for-browser', url });
+    const url = signInUrl(transcript);
+    // The link stays on the state through every later phase, so the page can keep offering it.
+    if (url && url !== state.url)
+      update({ url, ...(state.phase === 'starting' && { phase: 'waiting-for-browser' }) });
     if (CODE_PROMPT_RE.test(text)) update({ phase: 'needs-code' });
   };
   child.stdout.on('data', onOutput);

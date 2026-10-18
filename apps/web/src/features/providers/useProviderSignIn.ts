@@ -33,8 +33,21 @@ function openPopup(): Window | null {
   }
 }
 
+/**
+ * A window for a sign-in whose address isn't known yet, opened in the click. It
+ * waits on Conch's own page and is sent on once the address arrives. Phones get
+ * none: popups are awkward there, and the page offers the link as a button.
+ */
+export function openSignInWindow(): Window | null {
+  if (window.matchMedia?.('(pointer: coarse)').matches) return null;
+  const popup = openPopup();
+  // The provider's page gets no handle back to Conch.
+  if (popup) popup.opener = null;
+  return popup;
+}
+
 /** Only ever send the browser to a web page — never `javascript:` or anything else. */
-function isWebUrl(url: string): boolean {
+export function isWebUrl(url: string): boolean {
   try {
     const { protocol } = new URL(url);
     return protocol === 'https:' || protocol === 'http:';

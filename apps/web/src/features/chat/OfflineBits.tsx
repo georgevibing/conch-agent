@@ -108,7 +108,9 @@ export function RoutedItem({
             : []),
           { label: 'Change', onClick: () => openSettings('providers', FALLBACK_FOCUS) },
         ]
-      : undefined;
+      : item.reason === 'signed-out'
+        ? [{ label: 'Sign in', onClick: () => openSettings('providers') }]
+        : undefined;
   return (
     <div className={styles.aside}>
       <RoutedNote reason={item.reason} {...(actions && { actions })}>

@@ -46,7 +46,13 @@ import {
   useUseProvider,
   useWatchProvider,
 } from './queries';
-import { SIGN_IN_CHANNEL, useProviderSignIn, useSignInWindow } from './useProviderSignIn';
+import {
+  isWebUrl,
+  openSignInWindow,
+  SIGN_IN_CHANNEL,
+  useProviderSignIn,
+  useSignInWindow,
+} from './useProviderSignIn';
 import { brandOf } from './words';
 
 function phaseOf(provider: Provider, busy: boolean): HandshakePhase {
@@ -150,6 +156,8 @@ function SignInProgram({ provider }: { provider: Provider }) {
   /** This sign-in was started here, so seeing it through is this screen's job. */
   const [mine, setMine] = useState(false);
   const [code, setCode] = useState('');
+  /** The window the sign-in page opens in: opened in the click, so popup blockers allow it. */
+  const popup = useRef<Window | null>(null);
   // Signed in: stay on "getting it ready" until the provider answers, so the
   // button you started from never shows again in between.
   const finishing = mine && login?.phase === 'done';
@@ -175,8 +183,25 @@ function SignInProgram({ provider }: { provider: Provider }) {
       }),
     [],
   );
+  // The sign-in page opens by itself the moment its address is known: Conch's own
+  // browser window is on the computer it runs on, which may not be the one you're using.
+  const url = mine ? login?.url : undefined;
+  useEffect(() => {
+    if (url && isWebUrl(url) && popup.current && !popup.current.closed) {
+      popup.current.location.href = url;
+      popup.current.focus();
+    }
+  }, [url]);
+  const phase = login?.phase;
+  useEffect(() => {
+    if (phase === 'done' || phase === 'failed' || phase === 'cancelled') {
+      popup.current?.close();
+      popup.current = null;
+    }
+  }, [phase]);
 
   const start = async () => {
+    popup.current = openSignInWindow();
     setMine(true);
     setStarting(true);
     setLogin({ loginId: 'local', phase: 'starting' });
@@ -203,23 +228,37 @@ function SignInProgram({ provider }: { provider: Provider }) {
         {login.phase === 'waiting-for-browser' && login.code && login.url && (
           <SignInCode code={login.code} url={login.url} />
         )}
-        {login.phase === 'waiting-for-browser' && !(login.code && login.url) && (
-          <Stack gap={3}>
-            <Text weight="medium">Open the sign-in page to continue.</Text>
-            <Text tone="muted" size="sm">
-              {login.message ?? 'Finish there and come back — this updates on its own.'}
-            </Text>
-            {login.url && (
-              <div>
-                <Button asChild variant="surface" size="sm">
-                  <a href={login.url} target="_blank" rel="noreferrer">
-                    Open the sign-in page <ExternalLink aria-hidden className={styles.linkIcon} />
-                  </a>
-                </Button>
-              </div>
-            )}
-          </Stack>
-        )}
+        {(login.phase === 'waiting-for-browser' || login.phase === 'needs-code') &&
+          !(login.code && login.url) && (
+            <Stack gap={3}>
+              <Text weight="medium">
+                {login.phase === 'needs-code'
+                  ? 'Sign in on the provider’s page, then paste the code it shows you.'
+                  : 'Open the sign-in page to continue.'}
+              </Text>
+              {login.url && isWebUrl(login.url) ? (
+                <div>
+                  <Button asChild variant="surface" size="sm">
+                    <a href={login.url} target="_blank" rel="noreferrer">
+                      Open the sign-in page <ExternalLink aria-hidden className={styles.linkIcon} />
+                    </a>
+                  </Button>
+                </div>
+              ) : (
+                <div className={styles.waiting}>
+                  <Spinner size="xs" label={null} />
+                  <Text as="span" size="sm" tone="muted">
+                    Getting the sign-in link…
+                  </Text>
+                </div>
+              )}
+              {login.phase === 'waiting-for-browser' && (
+                <Text tone="muted" size="sm">
+                  {login.message ?? 'Finish there and come back — this updates on its own.'}
+                </Text>
+              )}
+            </Stack>
+          )}
         {login.phase === 'needs-code' && (
           <form
             onSubmit={(event: FormEvent) => {
@@ -252,6 +291,8 @@ function SignInProgram({ provider }: { provider: Provider }) {
               variant="ghost"
               size="sm"
               onClick={() => {
+                popup.current?.close();
+                popup.current = null;
                 void api.cancelLogin();
                 setLogin(undefined);
               }}

@@ -488,7 +488,7 @@ export type TranscriptItem =
       id: string;
       from: EngineId;
       to: EngineId;
-      reason: 'offline' | 'limit';
+      reason: 'offline' | 'limit' | 'signed-out';
       message: string;
       /** The model `to` answers with, when routing chose one. */
       model?: string;
