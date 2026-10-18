@@ -266,3 +266,23 @@ Read 2026-10-07:
 - [OWASP Top 10 for LLM applications 2025](https://genai.owasp.org/llm-top-10/) and
   [Agentic AI threats and mitigations](https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/).
 - Greshake et al. (2023), indirect prompt injection; Willison's lethal trifecta (ADR 0028).
+
+## 2026-10-18: Full trust and Claude Code's separate sandbox
+
+Claude Code's permission mode and its command sandbox are independent. Setting
+bypassPermissions did not select host execution: ordinary git commands still
+hit read-only mounts unless the model supplied dangerouslyDisableSandbox.
+
+The native Bash preflight now adds that flag in Full trust, before Conch's guard
+judges the actual command. Mode changes update this choice on the next call.
+Protected-path denials, resource admission, remote-place checks and explicit
+guard questions still run. Auto and Ask first retain their existing policy.
+Shared recovery instructions point every provider to managed process_start for
+authorized work needing host access, rather than declaring git impossible.
+
+Regression coverage checks the updated input, mode changes and guard denial.
+No credentials are added to prompts or returned to the model.
+
+Reference: [Claude Agent SDK permission evaluation](https://code.claude.com/docs/en/agent-sdk/permissions),
+consulted 18 October 2026: hooks run before permission-mode approval, including
+in bypassPermissions.

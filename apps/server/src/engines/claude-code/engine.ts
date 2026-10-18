@@ -727,7 +727,8 @@ export class ClaudeCodeEngine implements Engine {
 
     const translator = new Translator();
     /** The mode Claude Code starts in (it follows a mode picked mid-turn). */
-    const sdkMode = this.#sdkMode(input.options.permissionMode);
+    let currentMode = input.options.permissionMode;
+    const sdkMode = this.#sdkMode(currentMode);
     const asksItself = input.tools.some((t) => t.name === 'ask');
     // Where work runs (ADR 0106): its Bash, handed to the place through this turn's relay.
     const place = input.place;
@@ -853,9 +854,11 @@ export class ClaudeCodeEngine implements Engine {
                       place &&
                       toolName === 'Bash' &&
                       typeof toolInput.command === 'string';
-                    // A place that can't seal runs every command as if it left the box: judged so.
+                    // Full trust chooses host execution; the guard still checks protected paths,
+                    // resource admission and remote-place policy before anything runs.
                     const judged =
-                      elsewhere && !place.seals
+                      (elsewhere && !place.seals) ||
+                      (toolName === 'Bash' && currentMode === 'bypassPermissions')
                         ? { ...toolInput, dangerouslyDisableSandbox: true }
                         : toolInput;
                     const verdict = await input.guard?.({
@@ -893,15 +896,25 @@ export class ClaudeCodeEngine implements Engine {
                         },
                       };
                     }
+                    if (judged !== toolInput && hookInput.tool_use_id)
+                      routed.set(hookInput.tool_use_id, { shown: judged, runs: judged });
                     if (verdict?.decision === 'ask')
                       return {
                         hookSpecificOutput: {
                           hookEventName: 'PreToolUse' as const,
                           permissionDecision: 'ask' as const,
                           permissionDecisionReason: verdict.reason,
+                          updatedInput: judged,
                         },
                       };
-                    return {};
+                    return judged === toolInput
+                      ? {}
+                      : {
+                          hookSpecificOutput: {
+                            hookEventName: 'PreToolUse' as const,
+                            updatedInput: judged,
+                          },
+                        };
                   },
                 ],
               },
@@ -949,6 +962,7 @@ export class ClaudeCodeEngine implements Engine {
       // itself (the manager), so what must still ask (ADR 0028) still does.
       const startedTrusted = input.options.permissionMode === 'bypassPermissions';
       input.onModeChange?.((mode) => {
+        currentMode = mode;
         const next =
           mode === 'bypassPermissions' && !startedTrusted ? 'default' : this.#sdkMode(mode);
         void q.setPermissionMode(next).catch(() => undefined);

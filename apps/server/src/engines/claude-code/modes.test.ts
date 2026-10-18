@@ -208,3 +208,56 @@ describe('a turn stopped while Claude Code was getting ready', () => {
     expect(options?.abortController?.signal.aborted).toBe(true);
   });
 });
+
+describe('Full trust chooses host execution before guarding native Bash', () => {
+  it('updates commands, follows mode changes, and keeps guard denials', async () => {
+    let change: ((mode: 'auto' | 'bypassPermissions') => void) | undefined;
+    const guard = vi.fn<NonNullable<TurnInput['guard']>>(async () => undefined);
+    const input = turn({
+      options: { effort: 'auto', fastMode: false, permissionMode: 'bypassPermissions' },
+      guard,
+      protectedPaths: ['/private/conch-keys'],
+      onModeChange: (listener) => {
+        change = listener;
+      },
+    });
+    const options = await run(engineFor(), input);
+    const hook = options?.hooks?.PreToolUse?.[0]?.hooks[0];
+    if (!hook) throw new Error('Missing preflight');
+    const invoke = (command = 'git push origin HEAD:main') =>
+      hook(
+        {
+          hook_event_name: 'PreToolUse',
+          session_id: 's',
+          transcript_path: '/tmp/t',
+          cwd: '/tmp',
+          tool_name: 'Bash',
+          tool_use_id: 'git',
+          tool_input: { command },
+        },
+        undefined,
+        { signal: input.signal },
+      );
+    expect(await invoke()).toMatchObject({
+      hookSpecificOutput: { updatedInput: { dangerouslyDisableSandbox: true } },
+    });
+    expect(guard).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        input: { command: 'git push origin HEAD:main', dangerouslyDisableSandbox: true },
+      }),
+    );
+    expect(await invoke('cat /private/conch-keys/token')).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    });
+    change?.('auto');
+    expect(await invoke()).toEqual({});
+    change?.('bypassPermissions');
+    guard.mockResolvedValueOnce({ decision: 'deny', message: 'Protected path' });
+    expect(await invoke()).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'Protected path',
+      },
+    });
+  });
+});
