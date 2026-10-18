@@ -2,6 +2,13 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.15](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-18)
+
+### Fixed
+
+- Signed-out default no longer strands chats; Claude Code sign-in keeps its link
+- Show machine RAM separately from OS memory budgets
+
 ## [0.1.0-alpha.14](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-17)
 
 ### New
