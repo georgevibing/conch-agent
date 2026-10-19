@@ -30,7 +30,7 @@ On a phone, Conch keeps the chat's name in view and folds the rest away.
 
 ## Let it reach you
 
-Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question, when an answer is ready while you're away, and when a routine has run. Never while you're looking at it.
+Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question, when an answer is ready while you're away, and when a routine has run. Never on the device where you're looking at Conch: your phone still hears while you're at the computer.
 
 **Topics** sets what this device hears about. Turn off **Show what it’s about** and a notification only says to open Conch. **Send a test** sends one now.
 

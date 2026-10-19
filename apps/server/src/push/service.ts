@@ -5,8 +5,9 @@
  * browser's own push service, encrypted end to end (`webpush.ts`).
  *
  * Quiet by design:
- * - nothing is sent while a Conch page is in front of you on any device
- *   (each page says whether it's visible; `presence`);
+ * - nothing is sent to a device while a Conch page is in front of you there
+ *   (each page says whether it's visible; `presence`); the phone in your
+ *   pocket still hears while you're at the computer;
  * - one notification per thing (a `tag` replaces the last one about it);
  * - each device chooses what it's told, and whether it says what it's about.
  *
@@ -89,7 +90,10 @@ export interface PushDeps {
   retryMs?: (afterMs: number) => number;
 }
 
-/** Each page of Conch says whether it's in front of someone. */
+/**
+ * Each page of Conch says whether it's in front of someone, and whose it is: the
+ * same owner its device's notifications have (`pushOwner`).
+ */
 export class Presence {
   readonly #pages = new Map<symbol, { owner: string; visible: boolean; at: number }>();
 
@@ -103,9 +107,9 @@ export class Presence {
     };
   }
 
-  /** Someone has a Conch page in front of them, on any device. */
-  watching(): boolean {
-    return [...this.#pages.values()].some((p) => p.visible);
+  /** A Conch page is in front of someone on this device. */
+  watching(owner: string): boolean {
+    return [...this.#pages.values()].some((p) => p.owner === owner && p.visible);
   }
 }
 
@@ -208,12 +212,16 @@ export class PushService {
     return sent;
   }
 
-  /** Tell every device that wants to hear about `topic`, unless someone's already looking. */
+  /**
+   * Tell every device that wants to hear about `topic`, except one where Conch is
+   * already in front of someone: that page shows it. Another device's page doesn't
+   * keep the phone quiet; it may be on a desk across the room.
+   */
   async notify(topic: PushTopic, message: PushMessage, options: { except?: string } = {}) {
-    if (this.presence.watching()) return 0;
     let sent = 0;
     for (const s of await this.deps.store.list()) {
       if (!s.prefs[topic] || s.owner === options.except) continue;
+      if (this.presence.watching(s.owner)) continue;
       if (!(await this.deps.ownerExists(s.owner))) {
         await this.deps.store.remove((x) => x.id === s.id);
         continue;

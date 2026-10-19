@@ -359,9 +359,8 @@ src/
   https name once serve reaches Conch. `PushService` turns the live stream into Web
   Push notifications (approvals with Allow and Deny, each a one-use ticket per device
   and question, Allow only for everyday steps: `push/approve.ts`, ADR 0108; replies,
-  routines, devices), never
-  while a page reports `presence` visible; subscriptions belong to a device and end
-  with it; endpoints are limited to the browsers' push services (SSRF). `VoiceService`
+  routines, devices), never to a device while its own page reports `presence`
+  visible; subscriptions belong to a device and end with it; endpoints are limited to the browsers' push services (SSRF). `VoiceService`
   reads 16 kHz WAVs with whisper.cpp and fetches its model (resumable, SHA-256). The
   web app is installable (manifest, `sw.js` with an offline screen), dictates
   (on-device, private, or the browser's service with consent), reads aloud, and talks

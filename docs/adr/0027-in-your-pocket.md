@@ -114,9 +114,11 @@ Each device chooses its topics and whether previews show:
 **Quiet by design.**
 
 - **Presence.** Every page reports whether it is visible and focused (a
-  `presence` WebSocket command). Nothing is sent while a Conch page is in front
-  of someone on any device. The service worker also skips showing a
-  notification while one of its own pages is focused.
+  `presence` WebSocket command), under its device's own push owner. Nothing is
+  sent to a device while a Conch page is in front of someone there; the others
+  are still told, so a page left open on the computer never silences the phone.
+  The service worker also skips showing a notification while one of its own
+  pages is focused.
 - **One per thing.** A notification's `tag` (and the push `Topic`) replaces the
   last one about the same thing.
 - **Previews off.** The notification only says "Open Conch to see what it's

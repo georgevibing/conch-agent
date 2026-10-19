@@ -210,22 +210,35 @@ describe('notifications', () => {
     expect(shown).not.toHaveProperty('deny');
   });
 
-  it('stays quiet while a Conch page is in front of someone', async () => {
+  it('stays quiet on the device where a Conch page is in front of someone', async () => {
     const { push, sent } = setup();
     await push.subscribe('device:phone', 'iPhone', browser().subscription);
-    const page = push.presence.open('device:laptop');
+    const page = push.presence.open('device:phone');
     page.set(true);
-    await push.onEvent(
-      event({
-        type: 'permission.requested',
-        permissionId: 'p',
-        toolName: 'x',
-        input: {},
-        summary: 's',
-      }),
-    );
+    const asked = event({
+      type: 'permission.requested',
+      permissionId: 'p',
+      toolName: 'x',
+      input: {},
+      summary: 's',
+    });
+    await push.onEvent(asked);
     expect(sent).toHaveLength(0);
     page.set(false);
+    await push.onEvent(asked);
+    expect(sent).toHaveLength(1);
+    page.close();
+  });
+
+  it('still tells the phone while a page is open in front of someone at the computer', async () => {
+    const { push, sent } = setup();
+    const phone = browser();
+    await push.subscribe('device:phone', 'iPhone', phone.subscription);
+    await push.subscribe('device:laptop', 'Mac', browser().subscription);
+    const desk = push.presence.open('device:laptop');
+    desk.set(true);
+    // The phone's own page, in the background: hidden.
+    push.presence.open('device:phone').set(false);
     await push.onEvent(
       event({
         type: 'permission.requested',
@@ -236,7 +249,8 @@ describe('notifications', () => {
       }),
     );
     expect(sent).toHaveLength(1);
-    page.close();
+    expect(sent[0]?.url).toBe(phone.subscription.endpoint);
+    desk.close();
   });
 
   it('says only that something needs you when previews are off', async () => {
@@ -465,13 +479,15 @@ describe('notifications', () => {
       });
     });
 
-    it('stays quiet about a task while a Conch page is in front of someone', async () => {
+    it('stays quiet about a task on the device that’s looking, and tells the others', async () => {
       const t = task();
       const { push, sent } = setup({ tasks: async () => [t] });
-      await push.subscribe('device:phone', 'iPhone', browser().subscription);
+      const phone = browser();
+      await push.subscribe('device:phone', 'iPhone', phone.subscription);
+      await push.subscribe('device:laptop', 'Mac', browser().subscription);
       push.presence.open('device:laptop').set(true);
       await push.onEvent(changed(t));
-      expect(sent).toHaveLength(0);
+      expect(sent.map((s) => s.url)).toEqual([phone.subscription.endpoint]);
     });
 
     it('says a task needs your OK, and opens at it in the chat it came from', async () => {
