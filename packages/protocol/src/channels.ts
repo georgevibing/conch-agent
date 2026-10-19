@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import { AgentId } from './agents';
 import { Id } from './common';
+import { ChannelCalls, ChannelCallUsage } from './phone-calls';
 
 /**
  * The apps Conch can talk through today. WhatsApp and Signal aren't bots:
@@ -75,6 +76,9 @@ export const VOICE_REPLY_CHANNELS: readonly ChannelKind[] = [
   'signal',
   'discord',
 ];
+
+/** The apps that also take phone calls (ADR 0138): a Twilio number rings too. */
+export const PHONE_CALL_CHANNELS: readonly ChannelKind[] = ['sms'];
 
 /**
  * How the connection is.
@@ -236,6 +240,11 @@ export const ChannelSettings = z.object({
    * `never`. The answer is written too, either way.
    */
   voiceReplies: z.enum(['match', 'always', 'never']).optional(),
+  /**
+   * SMS: phone calls on the number (ADR 0138). Unset, both are off: the
+   * number only texts.
+   */
+  calls: ChannelCalls.optional(),
 });
 export type ChannelSettings = z.infer<typeof ChannelSettings>;
 
@@ -281,6 +290,8 @@ export const Channel = z.object({
   hook: ChannelHook.optional(),
   /** Voice notes waiting until Conch can hear them (ADR 0077). */
   voiceNotes: ChannelVoiceNotes.optional(),
+  /** SMS: what phone calls used today (ADR 0138). */
+  calls: ChannelCallUsage.optional(),
   lastMessageAt: z.number().optional(),
   /** The agent that answers here (ADR 0101); unset, the default agent. `/agent` changes a chat's. */
   agentId: AgentId.optional(),
