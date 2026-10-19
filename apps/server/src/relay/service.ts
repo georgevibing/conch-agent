@@ -505,6 +505,7 @@ export class RelayService {
     const request: HookRequest = {
       method: delivery.method,
       query: delivery.query,
+      ...(delivery.search !== undefined && { search: delivery.search }),
       headers,
       body: delivery.body,
       // Kept a while: freshness is measured from when it reached the relay.

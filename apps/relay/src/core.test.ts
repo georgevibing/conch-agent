@@ -98,6 +98,7 @@ describe('the relay', () => {
       hookId: HOOK,
       method: 'POST',
       query: { x: '1' },
+      search: 'x=1',
       body: '{"secret":"the launch code"}',
     });
     expect(delivery.headers['webhook-id']).toBe('msg_1');

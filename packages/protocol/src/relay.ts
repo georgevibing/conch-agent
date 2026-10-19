@@ -49,6 +49,7 @@ export const RelayDelivery = z.object({
   hookId: z.string().regex(/^[A-Za-z0-9_-]{16,128}$/),
   method: z.enum(['GET', 'POST']),
   query: z.record(z.string().max(200), z.string().max(4_000)),
+  search: z.string().max(8_000).optional(),
   headers: z.record(z.string().max(200), z.string().max(16_000)),
   body: z.string().max(1024 * 1024),
 });

@@ -88,6 +88,8 @@ export interface Delivery {
   hookId: string;
   method: 'GET' | 'POST';
   query: Record<string, string>;
+  /** What came after `?`, exactly as sent: a signature may cover it (Twilio's does). */
+  search?: string;
   headers: Record<string, string>;
   body: string;
 }
@@ -252,6 +254,7 @@ export class Relay {
       hookId,
       method: request.method === 'GET' ? 'GET' : 'POST',
       query,
+      ...(url.search.length > 1 && { search: url.search.slice(1) }),
       headers,
       body: new TextDecoder().decode(raw),
     };
