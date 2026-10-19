@@ -60,9 +60,17 @@ const eventId = z.string().regex(/^[A-Za-z0-9_]{1,1024}$/);
 const calendarId = z.string().trim().min(1).max(300).default('primary');
 /** A time with its offset, or a whole day. */
 const When = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
+/**
+ * An IANA zone's shape: letters, then parts joined by `/`, `_`, `+` or `-`.
+ * The same names as `/^[A-Za-z]+(?:[/_+-][A-Za-z0-9_+-]+)*$/`, written so each
+ * character can be read only one way: that one could split `A++++` many ways,
+ * exponential on a long near-miss (CodeQL js/redos). After the first joiner,
+ * only `/` starts a new part, since the others are part letters too.
+ */
+export const TIME_ZONE = /^[A-Za-z]+(?:[/_+-][A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*)?$/;
 const timeZone = z
   .string()
-  .regex(/^[A-Za-z]+(?:[/_+-][A-Za-z0-9_+-]+)*$/)
+  .regex(TIME_ZONE)
   .max(64)
   .optional()
   .describe('An IANA time zone such as Europe/Berlin, for the event’s own clock.');

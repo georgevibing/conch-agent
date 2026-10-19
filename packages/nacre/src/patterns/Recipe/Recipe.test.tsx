@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expectAccessible, renderNacre } from '../../test/render';
 import { formatAmount, unitFor, writeAmount } from './amounts';
 import { loaf, shakshuka } from './fixtures';
-import { stepIngredients, stepPieces, type RecipeData } from './recipe';
+import { hasWords, stepIngredients, stepPieces, withoutAsides, type RecipeData } from './recipe';
 import { RecipeCard } from './RecipeCard';
 import { formatClock, formatDuration, formatSpan } from './time';
 import { resetKitchenTimers } from './timers';
@@ -232,5 +232,48 @@ describe('cook mode', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Cook' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Step 3 of 3');
+  });
+});
+
+describe('an ingredient’s asides in brackets', () => {
+  /** What it did before. */
+  const old = (text: string) => text.replace(/\(.*?\)/g, ' ');
+
+  it('are each a space, exactly as before, on every short string', () => {
+    const alphabet = ['(', ')', 'a', ' ', '\n', '\u2028'];
+    let level = [''];
+    for (let n = 0; n <= 7; n++) {
+      for (const text of level) expect(withoutAsides(text), JSON.stringify(text)).toBe(old(text));
+      level = level.flatMap((s) => alphabet.map((ch) => s + ch));
+    }
+    expect(withoutAsides('plain flour (sifted)')).toBe('plain flour  ');
+    expect(
+      stepIngredients('Sift the flour', [
+        { text: 'plain flour (sifted)', item: 'plain flour (sifted)' },
+      ]),
+    ).toEqual([0]);
+  });
+
+  it('an ingredient is found as whole words, exactly as the old expression found it', () => {
+    const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const old = (text: string, phrase: string) => new RegExp(`\\b${escape(phrase)}\\b`).test(text);
+    const alphabet = ['a', 'b', ' ', '-', '('];
+    let texts = [''];
+    for (let n = 0; n <= 5; n++) {
+      for (const text of texts)
+        for (const phrase of ['a', 'ab', 'a b', '-', 'a-', '(a', ' '])
+          expect(hasWords(text, phrase), `${text}|${phrase}`).toBe(old(text, phrase));
+      texts = texts.flatMap((s) => alphabet.map((ch) => s + ch));
+    }
+  });
+
+  it('are quick on a long run of brackets that never close', () => {
+    const began = Date.now();
+    expect(withoutAsides('('.repeat(200_000))).toBe('('.repeat(200_000));
+    expect(stepIngredients('eggs', [{ text: 'eggs', item: `${'('.repeat(100_000)}eggs` }])).toEqual(
+      [0],
+    );
+    expect(stepIngredients('eggs', [{ text: 'e', item: 'e'.repeat(100_000) }])).toEqual([]);
+    expect(Date.now() - began).toBeLessThan(1000);
   });
 });

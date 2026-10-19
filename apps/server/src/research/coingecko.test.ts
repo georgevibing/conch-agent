@@ -114,7 +114,7 @@ function services(options: Options = {}) {
     timeZone: options.timeZone ?? 'America/New_York',
     ...(options.rate && { rate: options.rate }),
   });
-  const coingecko = () => seen.filter((r) => r.url.includes('api.coingecko.com'));
+  const coingecko = () => seen.filter((r) => new URL(r.url).hostname === 'api.coingecko.com');
   return { fetcher, seen, coingecko, source, tools: financeTools(ctx, { source }) };
 }
 

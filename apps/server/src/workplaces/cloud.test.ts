@@ -4,6 +4,8 @@ import { CloudSandboxes, DAYTONA_API, daytonaUrl, LIFETIME } from './cloud';
 import { PlaceUnavailable } from './types';
 
 const KEY = 'dtn_' + 'a1b2c3d4e5f6a7b8c9d0';
+/** Daytona's own name or one under it: the whole label, never a look-alike like `evildaytona.io`. */
+const onDaytona = (host: string) => host === 'daytona.io' || host.endsWith('.daytona.io');
 
 interface Call {
   url: string;
@@ -78,9 +80,7 @@ describe('the cloud sandbox', () => {
     const { fetch, calls } = daytona({ state: 'started' });
     await run(new CloudSandboxes({ key: async () => KEY, fetch, sleep: async () => undefined }));
     for (const call of calls) {
-      expect(
-        daytonaUrl(call.url) ?? new URL(call.url).hostname.endsWith('daytona.io'),
-      ).toBeTruthy();
+      expect(daytonaUrl(call.url) ?? onDaytona(new URL(call.url).hostname)).toBeTruthy();
       expect(call.url).not.toContain(KEY);
       expect(call.headers.authorization).toBe(`Bearer ${KEY}`);
     }

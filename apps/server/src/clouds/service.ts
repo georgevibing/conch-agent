@@ -50,9 +50,13 @@ export interface CloudServiceDeps {
 
 type Cloudy = 'bedrock' | 'vertex' | 'azure-openai';
 
-/** A found account's id for the page: stable, and safe whatever the profile is called. */
+/**
+ * A found account's id for the page: stable, and safe whatever the profile is
+ * called. Not a secret and not a check, only a name; SHA-256 all the same, so
+ * nothing here leans on SHA-1.
+ */
 const foundId = (provider: string, account: string) =>
-  `cloud-${provider}-${createHash('sha1').update(account, 'utf8').digest('hex').slice(0, 16)}`;
+  `cloud-${provider}-${createHash('sha256').update(account, 'utf8').digest('hex').slice(0, 16)}`;
 
 const NAMES: Record<Cloudy, string> = {
   bedrock: 'Amazon Bedrock',

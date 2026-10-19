@@ -245,7 +245,7 @@ describe('asking OpenStreetMap', () => {
     const overpass = calls.find((c) => c.url.includes('overpass'));
     expect(overpass?.method).toBe('POST');
     expect(decodeURIComponent(overpass?.body ?? '')).toContain('around:800');
-    const tiles = calls.filter((c) => c.url.includes('tile.openstreetmap.org'));
+    const tiles = calls.filter((c) => new URL(c.url).hostname === 'tile.openstreetmap.org');
     expect(tiles).toHaveLength(6);
     expect(tiles.every((t) => t.headers['user-agent'] === PLACES_USER_AGENT)).toBe(true);
 

@@ -3,6 +3,7 @@
  * "Running" and "Ran", text cut short at a word, paths and addresses said
  * the short way. Pure, and safe on anything.
  */
+import { afterSpace } from '../scan';
 
 /** What a step says while it runs, once it's done, and when it couldn't. */
 export interface Words {
@@ -257,9 +258,11 @@ export function say(verb: string, rest = ''): Words {
  * answered): the verb negated, "Didn’t run the tests", "Didn’t send an email",
  * read from the words it would have said.
  */
+const COULDNT = ['Couldn’t', "Couldn't"];
+
 export function notDone(said: Words): string {
-  const couldnt = /^Couldn[’']t\s+(.+)$/.exec(said.tried);
-  if (couldnt?.[1]) return `Didn’t ${couldnt[1]}`;
+  const couldnt = afterSpace(said.tried, COULDNT);
+  if (couldnt) return `Didn’t ${couldnt}`;
   const doing = said.doing.trim();
   const verb = /^(\S+ing)\b(.*)$/i.exec(doing);
   if (verb?.[1] && !NOT_ING.has(verb[1].toLowerCase()))

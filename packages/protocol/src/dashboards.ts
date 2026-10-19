@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { trimEndWhere } from './scan';
+
 /**
  * Dashboards (ADR 0121): Conch's numbers, and the shape of its work, for a
  * dashboard of your own — Grafana, Honeycomb, Datadog, New Relic, Langfuse,
@@ -473,7 +475,10 @@ const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /** Base64 (or base64url) to text, without the platform's `atob` (the protocol runs everywhere). */
 export function fromBase64(text: string): string | undefined {
-  const clean = text.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  // The padding at the end, dropped by index (`/=+$/` is slow on a long run of `=` with more after).
+  const clean = trimEndWhere(text, (ch) => ch === '=')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
   let bits = 0;
   let value = 0;
   const bytes: number[] = [];

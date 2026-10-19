@@ -34,6 +34,7 @@ import { IconButton } from '../../components/IconButton';
 import { Input } from '../../components/Input';
 import { Skeleton } from '../../components/Skeleton';
 import styles from './FolderBrowser.module.css';
+import { withLastPart } from './paths';
 
 export type FolderBrowserPlaceKind =
   | 'home'
@@ -287,7 +288,7 @@ export function FolderBrowser({
       : undefined;
 
   const complete = (entry: FolderBrowserEntry) => {
-    const next = typed.replace(/[^\\/]*$/, entry.name) + separator;
+    const next = withLastPart(typed, entry.name) + separator;
     setTyped(next);
     input.current?.focus();
   };
