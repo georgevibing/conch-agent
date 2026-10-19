@@ -43,6 +43,7 @@ export const powers: BackupPowerInfo[] = [
   { kind: 'browser-local' },
   { kind: 'terminal-remote' },
   { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'] },
+  { kind: 'phone-calls', name: '(500) 555-0006 on SMS', answers: true, approves: true },
   { kind: 'routines-spend', limitUsd: 60 },
 ];
 

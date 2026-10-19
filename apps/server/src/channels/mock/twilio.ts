@@ -14,6 +14,25 @@ export interface MockText {
   body: string;
 }
 
+/** A call Conch placed (ADR 0138), as Twilio was asked to make it. */
+export interface MockCall {
+  sid: string;
+  from: string;
+  to: string;
+  url: string;
+  statusCallback?: string;
+  timeLimit?: string;
+  machineDetection?: string;
+}
+
+/** What Conch answered a call's webhook with: the TwiML, and where its next step goes. */
+export interface MockTurn {
+  status: number;
+  body: string;
+  /** The `action` of a `<Gather>`, or a `<Redirect>`'s address, if there is one. */
+  next?: string;
+}
+
 /**
  * A pretend Twilio for tests, E2E and `pnpm dev:mock`: the account, its
  * numbers, sending texts, and the media of a picture someone sent.
@@ -23,6 +42,11 @@ export interface MockText {
  * Conch sets itself). `forge()` sends one that's wrong in one way, for the
  * security tests. `undeliverable(code)` makes the next texts fail later, as a
  * carrier would, through the status callback.
+ *
+ * Calls (ADR 0138): `call()` rings the number as a phone would, signed the
+ * same way, and `step()` follows the TwiML Conch answered with (what was
+ * said, or a key pressed). Calls Conch places are kept in `calls`, and
+ * `pickUp()` answers one.
  */
 export class MockTwilio {
   // Written in two parts, so secret scanners never take them for real ones.
@@ -46,8 +70,12 @@ export class MockTwilio {
     phone_number: MockTwilio.NUMBER,
     friendly_name: '(500) 555-0006',
     sms_url: 'https://demo.twilio.com/welcome/sms/reply',
+    voice_url: 'https://demo.twilio.com/welcome/voice/',
     capabilities: { sms: true, voice: true, mms: true },
   };
+  /** Calls Conch placed, and the ones it hung up. */
+  readonly calls: MockCall[] = [];
+  readonly hungUp: string[] = [];
   /** Keys that work. */
   token = MockTwilio.AUTH_TOKEN;
   /** No numbers on the account (a new trial before buying one). */
@@ -95,6 +123,7 @@ export class MockTwilio {
         if (request.params.sid !== `${this.number.sid}.json`) return reply.code(404).send({});
         const body = (request.body ?? {}) as Record<string, string>;
         if (body.SmsUrl) this.number.sms_url = body.SmsUrl;
+        if (body.VoiceUrl) this.number.voice_url = body.VoiceUrl;
         return this.number;
       },
     );
@@ -121,6 +150,30 @@ export class MockTwilio {
           20,
         );
       return reply.code(201).send({ sid, status: 'queued' });
+    });
+    app.post(`${account}/Calls.json`, (request, reply) => {
+      const body = (request.body ?? {}) as Record<string, string>;
+      if (body.From !== this.number.phone_number)
+        return reply
+          .code(400)
+          .send({ code: 21210, message: 'The source phone number is not verified' });
+      const sid = `CA${randomBytes(16).toString('hex')}`;
+      this.calls.push({
+        sid,
+        from: body.From,
+        to: body.To ?? '',
+        url: body.Url ?? '',
+        ...(body.StatusCallback && { statusCallback: body.StatusCallback }),
+        ...(body.TimeLimit && { timeLimit: body.TimeLimit }),
+        ...(body.MachineDetection && { machineDetection: body.MachineDetection }),
+      });
+      return reply.code(201).send({ sid, status: 'queued' });
+    });
+    app.post<{ Params: { sid: string } }>(`${account}/Calls/:sid`, (request) => {
+      const body = (request.body ?? {}) as Record<string, string>;
+      const sid = request.params.sid.replace(/[.]json$/, '');
+      if (body.Status === 'completed') this.hungUp.push(sid);
+      return { sid, status: body.Status ?? 'in-progress' };
     });
     app.get(`${account}/Messages/:message/Media/:media`, (_request, reply) =>
       // Another host, as Twilio's file host is: the key must not follow.
@@ -227,6 +280,136 @@ export class MockTwilio {
   /** The next texts Conch sends fail later with this error code (30034: an unregistered US number). */
   undeliverable(code: string | undefined) {
     this.#undeliverable = code;
+  }
+
+  // ── Calls (ADR 0138) ───────────────────────────────────────────────────
+
+  /** Ring the number from `from`. Resolves with what Conch answered. */
+  async call(
+    from = MockTwilio.OWNER,
+    extra: Record<string, string> = {},
+  ): Promise<MockTurn & { sid: string }> {
+    const sid = extra.CallSid ?? `CA${randomBytes(16).toString('hex')}`;
+    const turn = await this.#turn(this.number.voice_url, {
+      AccountSid: MockTwilio.ACCOUNT_SID,
+      ApiVersion: '2010-04-01',
+      CallSid: sid,
+      CallStatus: 'ringing',
+      Direction: 'inbound',
+      From: from,
+      To: this.number.phone_number,
+      ...extra,
+    });
+    return { ...turn, sid };
+  }
+
+  /** Follow a call to its next step (a Gather's action, a Redirect) with what happened. */
+  step(
+    url: string,
+    sid: string,
+    fields: Record<string, string> = {},
+    from = MockTwilio.OWNER,
+    to = this.number.phone_number,
+  ): Promise<MockTurn> {
+    return this.#turn(url, {
+      AccountSid: MockTwilio.ACCOUNT_SID,
+      ApiVersion: '2010-04-01',
+      CallSid: sid,
+      CallStatus: 'in-progress',
+      From: from,
+      To: to,
+      ...fields,
+    });
+  }
+
+  /** The owner picks up a call Conch placed (or their voicemail does). */
+  pickUp(call: MockCall, answeredBy = 'human'): Promise<MockTurn> {
+    return this.step(
+      call.url,
+      call.sid,
+      { AnsweredBy: answeredBy, Direction: 'outbound-api' },
+      call.from,
+      call.to,
+    );
+  }
+
+  /** How a call ended, as Twilio's status callback says it. */
+  ended(
+    url: string,
+    sid: string,
+    seconds: number,
+    from = MockTwilio.OWNER,
+    to = this.number.phone_number,
+  ): Promise<MockTurn> {
+    return this.step(
+      url,
+      sid,
+      { CallStatus: 'completed', CallDuration: String(seconds) },
+      from,
+      to,
+    );
+  }
+
+  /** A call webhook signed wrong in one way, for the security tests. */
+  forgeCall(how: 'token' | 'unsigned' | 'account' | 'tampered'): Promise<MockTurn> {
+    const fields: Record<string, string> = {
+      AccountSid:
+        how === 'account' ? 'AC' + 'ffffffffffffffffffffffffffffffff' : MockTwilio.ACCOUNT_SID,
+      CallSid: `CA${randomBytes(16).toString('hex')}`,
+      CallStatus: 'ringing',
+      Direction: 'inbound',
+      From: MockTwilio.OWNER,
+      To: this.number.phone_number,
+    };
+    const url = this.number.voice_url;
+    const signature =
+      how === 'unsigned'
+        ? null
+        : twilioSignature(
+            how === 'token' ? 'ffffffffffffffff' + 'ffffffffffffffff' : this.token,
+            url,
+            Object.entries(fields),
+          );
+    const sent = how === 'tampered' ? { ...fields, From: MockTwilio.STRANGER } : fields;
+    return this.#turn(url, sent, signature);
+  }
+
+  async #turn(
+    url: string,
+    fields: Record<string, string>,
+    given?: string | null,
+  ): Promise<MockTurn> {
+    const signature =
+      given === undefined ? twilioSignature(this.token, url, Object.entries(fields)) : given;
+    const at = url.indexOf('?');
+    const base = at >= 0 ? url.slice(0, at) : url;
+    const query = at >= 0 ? new URLSearchParams(url.slice(at + 1)) : undefined;
+    try {
+      const response = await deliverMockHook(
+        this.deliveryOrigin(),
+        this.resolve(base),
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            'user-agent': 'TwilioProxy/1.1',
+            ...(signature && { 'x-twilio-signature': signature }),
+          },
+          body: new URLSearchParams(fields).toString(),
+        },
+        query,
+      );
+      const next =
+        /<Gather[^>]* action="([^"]+)"/.exec(response.body)?.[1] ??
+        /<Redirect[^>]*>([^<]+)<[/]Redirect>/.exec(response.body)?.[1];
+      return {
+        status: response.status,
+        body: response.body,
+        ...(next && { next: next.replace(/&amp;/g, '&') }),
+      };
+    } catch {
+      return { status: 0, body: '' };
+    }
   }
 
   /** The texts sent to one number. */

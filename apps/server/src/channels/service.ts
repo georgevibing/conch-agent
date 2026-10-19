@@ -43,6 +43,9 @@ import {
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
   TELEGRAM_TOKEN,
+  CALLS_DEFAULT,
+  type ChannelCallUsage,
+  type ChannelCalls,
 } from '@conch/protocol';
 
 import type { AttachmentStore } from '../attachments/store';
@@ -74,9 +77,11 @@ import {
   type ChannelUser,
   type SentRef,
   type StateDetail,
+  appId,
   personId,
   type VoiceNote,
 } from './types';
+import type { CallAsk } from './calls/phone';
 import { normalizeLine } from './line';
 import { normalizeMattermost } from './mattermost';
 import { normalizeRocketChat } from './rocketchat';
@@ -198,9 +203,9 @@ interface Relay {
   /** Streaming the answer as a draft (Telegram): which draft, what it says, when it last went. */
   draft?: { id: number; text: string; sentAt: number; timer?: NodeJS.Timeout };
   /** Messages sent while it was busy: they go next, together. */
-  queued: { text: string; attachments: string[]; outside?: string; spoken?: boolean }[];
+  queued: { text: string; attachments: string[]; outside?: string; spoken?: boolean | string }[];
   /** It started with a voice note (ADR 0077): the answer may go back as one. */
-  spoken?: boolean;
+  spoken?: boolean | string;
   /** Everything the assistant said this turn, for a voice note back. */
   said: string[];
   /** Said "I'll get to that" already this turn. */
@@ -595,6 +600,7 @@ export class ChannelService {
               : { model: this.#hearing.model })),
         },
       }),
+      ...(stored.callUsage && { calls: stored.callUsage }),
       ...(stored.lastMessageAt && { lastMessageAt: stored.lastMessageAt }),
     };
   }
@@ -646,7 +652,14 @@ export class ChannelService {
 
   /** What the security checkup needs: each channel that's on, and who besides you may use it. */
   async checkupCopy(): Promise<
-    { app: string; bot: string; others: string[]; groups: string[]; fullTrust?: boolean }[]
+    {
+      app: string;
+      bot: string;
+      others: string[];
+      groups: string[];
+      fullTrust?: boolean;
+      calls?: boolean;
+    }[]
   > {
     return (await this.deps.store.all())
       .filter((c) => c.enabled && c.people.length > 0)
@@ -655,6 +668,8 @@ export class ChannelService {
         bot: c.bot.username ? `@${c.bot.username}` : c.bot.name,
         others: c.people.slice(1).map((p) => p.name),
         ...(c.chatOptions.permissionMode === 'bypassPermissions' && { fullTrust: true }),
+        // It answers calls from your number (ADR 0138): a caller ID can be faked.
+        ...(c.settings.calls?.answer && { calls: true }),
         groups: c.groups.filter((g) => g.on).map((g) => g.name),
       }));
   }
@@ -1080,6 +1095,9 @@ export class ChannelService {
     });
     if (!stored) throw new ChannelServiceError('not-found', 'That channel isn’t connected.');
     if (patch.agentId !== undefined) await this.#ownerChatWith(stored);
+    // Calls turned on or off (ADR 0138): the number is pointed at Conch for them, or not.
+    if (patch.settings?.calls && patch.enabled === undefined)
+      this.#live.get(id)?.connection.refresh?.();
     if (patch.enabled !== undefined) {
       const secrets = await this.deps.store.secrets(id);
       if (patch.enabled && secrets) this.#connect(stored, secrets);
@@ -1453,6 +1471,7 @@ export class ChannelService {
           if (first) void this.#emit(id);
         },
         changed: () => void this.#emit(id),
+        called: (usage) => this.#quietly(this.#called(id, usage), 'call'),
         // Kept a moment later, so a busy minute is one write, not hundreds.
         cursor: (value) => {
           live.cursor = value;
@@ -1468,8 +1487,101 @@ export class ChannelService {
           cursor.unref?.();
         },
       },
-      { ...(stored.cursor && { cursor: stored.cursor }) },
+      {
+        ...(stored.cursor && { cursor: stored.cursor }),
+        // Calls on an SMS number (ADR 0138): who the owner is and what they chose, read per call.
+        ...(stored.kind === 'sms' && { phone: () => this.#phoneContext(id) }),
+      },
     );
+  }
+
+  async #phoneContext(id: string) {
+    const now = await this.deps.store.get(id);
+    const owner = now?.people[0];
+    return {
+      settings: now?.settings.calls ?? CALLS_DEFAULT,
+      ...(owner && { owner: appId(owner.id) }),
+      assistant: await this.#assistant({ channelId: id }),
+    };
+  }
+
+  /** Today on the person's clock (`2026-10-19`), for the day's calls. */
+  async #today(): Promise<string> {
+    const zone = (await this.deps.settings.get().catch(() => undefined))?.preferences.timezone;
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: zone || undefined }).format(this.#now);
+    } catch {
+      return new Intl.DateTimeFormat('en-CA').format(this.#now);
+    }
+  }
+
+  /** A call ended: today's count goes up. */
+  async #called(id: string, usage: { direction: 'in' | 'out'; seconds: number }) {
+    const today = await this.#today();
+    await this.deps.store.update(id, (c) => {
+      const day: ChannelCallUsage =
+        c.callUsage?.day === today
+          ? c.callUsage
+          : { day: today, placed: 0, answered: 0, seconds: 0 };
+      return {
+        ...c,
+        callUsage: {
+          ...day,
+          answered: day.answered + (usage.direction === 'in' ? 1 : 0),
+          seconds: day.seconds + Math.max(0, Math.round(usage.seconds)),
+        },
+      };
+    });
+    void this.#emit(id);
+  }
+
+  /**
+   * The SMS numbers that may ring their owner about a question that waited
+   * (ADR 0138): calls for approvals on, the owner known, and the line up.
+   */
+  async phoneLines(): Promise<{ channelId: string; settings: ChannelCalls }[]> {
+    const lines: { channelId: string; settings: ChannelCalls }[] = [];
+    for (const stored of await this.deps.store.all()) {
+      const calls = stored.settings.calls;
+      if (!stored.enabled || stored.kind !== 'sms' || !calls?.approvals || !stored.people[0])
+        continue;
+      if (!this.#live.get(stored.id)?.connection.phone) continue;
+      lines.push({ channelId: stored.id, settings: calls });
+    }
+    return lines;
+  }
+
+  /**
+   * Ring the owner about one question (ADR 0138). Counted before it's dialled,
+   * so the day's limit holds even if Conch restarts while it rings.
+   */
+  async callOwner(
+    channelId: string,
+    ask: CallAsk,
+  ): Promise<'placed' | 'limit' | 'busy' | 'unavailable'> {
+    const stored = await this.deps.store.get(channelId);
+    const live = this.#live.get(channelId);
+    const calls = stored?.settings.calls;
+    const owner = stored?.people[0];
+    const phone = live?.connection.phone;
+    if (!stored?.enabled || !calls?.approvals || !owner || !phone) return 'unavailable';
+    if (live.health.state !== 'online') return 'unavailable';
+    if (phone.busy) return 'busy';
+    const today = await this.#today();
+    let allowed = false;
+    await this.deps.store.update(channelId, (c) => {
+      const day: ChannelCallUsage =
+        c.callUsage?.day === today
+          ? c.callUsage
+          : { day: today, placed: 0, answered: 0, seconds: 0 };
+      const limit = c.settings.calls?.perDay ?? CALLS_DEFAULT.perDay;
+      allowed = day.placed < limit;
+      return allowed ? { ...c, callUsage: { ...day, placed: day.placed + 1 } } : c;
+    });
+    if (!allowed) return 'limit';
+    void this.#emit(channelId);
+    await phone.ring(appId(owner.id), ask);
+    return 'placed';
   }
 
   #disconnect(id: string) {
@@ -2000,7 +2112,8 @@ export class ChannelService {
       return false;
     }
     const owner = stored.people[0]?.id === message.user.id;
-    if (!owner || message.outside || message.quote || message.files.length) return false;
+    if (!owner || message.outside || message.spoken || message.quote || message.files.length)
+      return false;
     if (!this.#settingsMenu.waiting(stored.id, message.chatId, message.user.id)) return false;
     try {
       const ctx = await this.#settingsContext(stored.id, message.chatId, message.user.id);
@@ -2774,7 +2887,8 @@ export class ChannelService {
     if (!text && !attachments.length) return;
 
     // Decided now, after the downloads: a turn that started meanwhile takes this as its next message.
-    const spoken = words.length > 0;
+    // Words heard on a call (ADR 0138) are spoken words too, named as such.
+    const spoken = message.spoken ?? words.length > 0;
     if (
       this.#queueBehind(
         stored.id,
@@ -2809,8 +2923,8 @@ export class ChannelService {
     attachments: string[],
     live: LiveChannel,
     outside?: string,
-    /** It came as a voice note. */
-    spoken?: boolean,
+    /** It came as a voice note, or as words on a call (named). */
+    spoken?: boolean | string,
   ): boolean {
     const running = this.#inflight.get(`${channelId}:${seatKey}`);
     if (!running) return false;
@@ -2847,8 +2961,8 @@ export class ChannelService {
     source?: SentRef,
     /** Someone else's words, even from the owner (a forwarded email). */
     outside?: string,
-    /** It came as a voice note (ADR 0077). */
-    spoken?: boolean,
+    /** It came as a voice note (ADR 0077), or as words on a call (named, ADR 0138). */
+    spoken?: boolean | string,
   ) {
     const live = this.#live.get(stored.id);
     if (!live) return;
@@ -2925,7 +3039,11 @@ export class ChannelService {
             (outside || spoken) && {
               untrusted: {
                 kind: 'person' as const,
-                label: `${outside ?? 'a voice note'} on ${channelName(stored)}`.slice(0, 120),
+                label:
+                  `${outside ?? (typeof spoken === 'string' ? spoken : 'a voice note')} on ${channelName(stored)}`.slice(
+                    0,
+                    120,
+                  ),
               },
             }),
           // A new chat here is with the channel's agent; unset or gone, the default (ADR 0101).
@@ -3246,7 +3364,7 @@ export class ChannelService {
       queued.flatMap((q) => q.attachments),
       undefined,
       queued.find((q) => q.outside)?.outside,
-      queued.some((q) => q.spoken),
+      queued.find((q) => typeof q.spoken === 'string')?.spoken ?? queued.some((q) => q.spoken),
     );
   }
 

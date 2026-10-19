@@ -183,6 +183,10 @@ export function registerChannelRoutes(
     const body = parse(UpdateChannelBody, request.body, reply);
     if (!body) return reply;
     if (body.enabled === true && !trusted(request, reply)) return reply;
+    // Answering calls, or being rung to allow a step, lets a phone reach your assistant
+    // (ADR 0138): turned on here, or right after confirming it's you.
+    const calls = body.settings?.calls;
+    if ((calls?.answer || calls?.approvals) && !trusted(request, reply)) return reply;
     try {
       return await channels.update(request.params.id, body);
     } catch (error) {

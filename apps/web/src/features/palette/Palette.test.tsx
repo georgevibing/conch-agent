@@ -2282,6 +2282,43 @@ describe('Palette search', () => {
     expect(screen.queryByRole('option', { name: /Connect Signal/ })).toBeNull();
   });
 
+  it('finds phone calls on an SMS number by the words people use (ADR 0138)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/channels': () => ({
+        channels: [
+          {
+            id: 'ch_sms',
+            kind: 'sms',
+            enabled: true,
+            createdAt: 1,
+            bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+            people: [],
+            requests: [],
+            blocked: 0,
+            settings: { notifyRoutines: true },
+            health: { state: 'online' },
+          },
+        ],
+        catalog: [],
+      }),
+    });
+    renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'call me');
+    expect(
+      await screen.findByRole('option', { name: /Phone calls on \(500\) 555-0006/ }),
+    ).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'ring me');
+    expect(
+      await screen.findByRole('option', { name: /Phone calls on \(500\) 555-0006/ }),
+    ).toBeInTheDocument();
+  });
+
   it('finds saved passwords by name or site, and opens them', async () => {
     const user = userEvent.setup();
     mockFetch({

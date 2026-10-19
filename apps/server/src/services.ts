@@ -130,6 +130,8 @@ import { MockRocketChat } from './channels/mock/rocketchat';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
 import { ChannelService } from './channels/service';
+import { ApprovalCalls } from './channels/calls/approvals';
+import { phoneCallsCheck } from './channels/calls/doctor';
 import { channelName } from './channels/catalog';
 import { channelTools } from './channels/tools';
 import { ChannelStore } from './channels/store';
@@ -462,6 +464,8 @@ export class Services {
   readonly tailscale: Tailscale;
   /** Notifications on your devices (ADR 0027). */
   readonly push: PushService;
+  /** Ringing the owner about an OK that waited (ADR 0138). */
+  readonly approvalCalls: ApprovalCalls;
   /** Revoked devices must be forgotten before shutdown releases their storage. */
   readonly #pushRevocations = new Set<Promise<void>>();
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
@@ -2102,6 +2106,16 @@ export class Services {
       whatsapp: this.linked.whatsapp,
       signal: this.linked.signal,
       ...(this.mockMessages && { imessage: this.mockMessages.endpoints }),
+      // A phone call's own audio (ADR 0138): heard and spoken here; `voice` and `speech` come below.
+      phone: {
+        ready: async () =>
+          (await this.voice.hearing(true)).ready && Boolean(await this.speech.replyVoice()),
+        hear: (wav) => this.voice.transcribe(wav),
+        speak: async (text) => {
+          const voice = await this.speech.replyVoice();
+          return voice ? this.speech.speak(text, voice) : undefined;
+        },
+      },
     };
     const messages = this.mockMessages;
     this.#channelStore = new ChannelStore(config.CONCH_HOME, heal);
@@ -2235,6 +2249,21 @@ export class Services {
     this.background = this.#background(config);
     this.push = this.#push(config);
     this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
+    // An OK that waited rings the owner's phone, if they turned that on (ADR 0138): what the call
+    // may allow is what a lock-screen tap may, asked of the notifications themselves.
+    this.approvalCalls = new ApprovalCalls({
+      lines: () => this.channels.phoneLines(),
+      call: (channelId, ask) => this.channels.callOwner(channelId, ask),
+      approval: (conversationId, permissionId) => {
+        const asked = this.push.approval(conversationId, permissionId);
+        return { waiting: asked.waiting, quick: asked.waiting && !asked.confirm };
+      },
+      respond: (conversationId, permissionId, decision) =>
+        this.conversations.respond(conversationId, permissionId, decision),
+      timezone: async () => (await this.settings.get()).preferences.timezone,
+    });
+    this.broadcast.on((event) => void this.approvalCalls.onEvent(event).catch(() => undefined));
+    this.doctor.register(phoneCallsCheck(this.channels, () => this.door.status()));
     this.gate.signedOut.on((ids) => {
       const pending = this.push
         .forget(ids.map((id) => `session:${id}`))
@@ -3426,6 +3455,7 @@ export class Services {
     void this.conchApps.stop();
     this.slack.stop();
     this.channels.stop();
+    this.approvalCalls.stop();
     this.speech.stop();
     this.wake.stop();
     this.channelLinking.stop();

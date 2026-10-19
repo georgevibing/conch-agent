@@ -16,6 +16,8 @@
  * - **Delivery problems come back later** (a status callback): the ones only
  *   a person can fix (an unregistered US number, a trial account) become the
  *   channel's state, in plain words.
+ * - **Calls on the same number** (ADR 0138, `calls/phone.ts`) come through the
+ *   same door, signed the same way, once the owner turns them on.
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
@@ -23,6 +25,7 @@ import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
 import { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN } from '@conch/protocol';
 
 import type { ChannelEndpoints } from './adapters';
+import { PhoneLine } from './calls/phone';
 import type { HookReply, HookRequest } from './door';
 import { fit, plain } from './format';
 import { TextChoices } from './linked';
@@ -33,6 +36,7 @@ import {
   ChannelError,
   type ChannelEvents,
   type ChannelFile,
+  type ConnectOptions,
   type SendOptions,
   type SentRef,
   appId,
@@ -54,6 +58,9 @@ const FILE_LIMIT = 5 * 1024 * 1024;
 /** MessageSids remembered, so a repeated delivery is one message. */
 const SEEN = 500;
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+/** A call when this Conch doesn't take calls: refused, and nothing is charged. */
+const REJECT_TWIML =
+  '<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="rejected"/></Response>';
 
 /** "+4915112345678" → "+49 151 123 45678"-ish, for names; the number itself stays as it is. */
 export function readableNumber(number: string): string {
@@ -132,7 +139,8 @@ interface TwilioNumber {
   phone_number: string;
   friendly_name?: string;
   sms_url?: string;
-  capabilities?: { sms?: boolean; SMS?: boolean };
+  voice_url?: string;
+  capabilities?: { sms?: boolean; SMS?: boolean; voice?: boolean };
 }
 
 /** Twilio's own error codes, as the setting to change. */
@@ -310,22 +318,30 @@ export class TwilioSmsAdapter implements ChannelAdapter {
     return url ? { url } : {};
   }
 
-  /** Point the number's incoming texts at the door's address (an old address is replaced). */
-  async #point(url: string, events: ChannelEvents, signal: AbortSignal) {
+  /**
+   * Point the number's incoming texts at the door's address (an old address
+   * is replaced), and its calls too while the owner wants them answered.
+   */
+  async #point(url: string, events: ChannelEvents, signal: AbortSignal, calls: boolean) {
     const number = this.#number ?? (await this.#pick(signal));
-    if (number.sms_url === url) return;
+    const voice = calls && number.capabilities?.voice !== false && number.voice_url !== url;
+    if (number.sms_url === url && !voice) return;
     await this.call(
       'POST',
       `/IncomingPhoneNumbers/${encodeURIComponent(number.sid)}.json`,
-      { SmsUrl: url, SmsMethod: 'POST' },
+      {
+        SmsUrl: url,
+        SmsMethod: 'POST',
+        ...(voice && { VoiceUrl: url, VoiceMethod: 'POST' }),
+      },
       signal,
     );
-    if (number.sms_url && !number.sms_url.includes('/hooks/'))
+    if (number.sms_url && number.sms_url !== url && !number.sms_url.includes('/hooks/'))
       events.healed(`Pointed ${readableNumber(number.phone_number)}’s texts back to Conch`);
-    this.#number = { ...number, sms_url: url };
+    this.#number = { ...number, sms_url: url, ...(voice && { voice_url: url }) };
   }
 
-  connect(events: ChannelEvents): ChannelConnection {
+  connect(events: ChannelEvents, options: ConnectOptions = {}): ChannelConnection {
     const stop = new AbortController();
     const choices = new TextChoices();
     const seen = new Set<string>();
@@ -341,6 +357,33 @@ export class TwilioSmsAdapter implements ChannelAdapter {
     const order = new Map<string, number>();
     let sentCount = 0;
 
+    // Calls on the number (ADR 0138): only with the channel's say on who's calling.
+    const phone = options.phone
+      ? new PhoneLine({
+          api: (method, path, form) => this.call(method, path, form, stop.signal),
+          number: async () => (this.#number ?? (await this.#pick(stop.signal))).phone_number,
+          hookUrl: () => this.hook().url,
+          context: options.phone,
+          ...(this.endpoints.phone && { voice: this.endpoints.phone }),
+          words: (from, callSid, text) =>
+            events.message({
+              chatId: from,
+              messageId: `${callSid}-${++heardCount}`,
+              user: { id: personId(from), name: readableNumber(from), anonymous: true },
+              text,
+              files: [],
+              direct: true,
+              spoken: 'a phone call',
+            }),
+          used: (usage) => events.called?.(usage),
+          healed: (message) => events.healed(message),
+        })
+      : undefined;
+    let heardCount = 0;
+    let callRefs = 0;
+    const answering = async () =>
+      Boolean(options.phone && (await options.phone().catch(() => undefined))?.settings.answer);
+
     const health = async () => {
       const url = this.hook().url;
       if (!url) {
@@ -355,7 +398,7 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       const backoff = new Backoff();
       while (!stop.signal.aborted) {
         try {
-          await this.#point(url, events, stop.signal);
+          await this.#point(url, events, stop.signal, await answering());
           if (undelivered) events.state('error', { message: undelivered });
           else events.state('online');
           return;
@@ -377,15 +420,26 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       if (request.method !== 'POST') return { status: 405 };
       const url = this.hook().url;
       const params = [...new URLSearchParams(request.body)];
-      // Nothing is read before Twilio's signature checks out.
+      // Nothing is read before Twilio's signature checks out: over the address as
+      // called, its query too (a call's next step is in it).
+      const signed = url && request.search ? `${url}?${request.search}` : url;
       if (
-        !url ||
-        !signedByTwilio(this.secrets.authToken, url, params, request.headers['x-twilio-signature'])
+        !signed ||
+        !signedByTwilio(
+          this.secrets.authToken,
+          signed,
+          params,
+          request.headers['x-twilio-signature'],
+        )
       )
         return { status: 403 };
       const field = (name: string) => params.find(([k]) => k === name)?.[1];
       if (field('AccountSid') !== this.secrets.accountSid) return { status: 403 };
       events.heard?.();
+      if (PhoneLine.isCall(new Map(params), request.query)) {
+        if (!phone) return { status: 200, body: REJECT_TWIML, type: 'text/xml' };
+        return phone.deliver(new Map(params), request.query);
+      }
       const status = field('MessageStatus');
       if (status && field('Body') === undefined) {
         // How a text Conch sent went.
@@ -438,7 +492,17 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       return { status: 200, body: EMPTY_TWIML, type: 'text/xml' };
     };
 
-    const unmount = door?.mount(this.secrets.hookId ?? '', 'sms', deliver);
+    // A call's audio (Media Streams): Twilio signs the upgrade over the socket's own address.
+    const stream = phone?.stream((request) => {
+      const url = this.hook().url;
+      if (!url) return false;
+      const base = `${url}/stream${request.search ? `?${request.search}` : ''}`;
+      const signature = request.headers['x-twilio-signature'];
+      return [base.replace(/^http/, 'ws'), base].some((address) =>
+        signedByTwilio(this.secrets.authToken, address, [], signature),
+      );
+    });
+    const unmount = door?.mount(this.secrets.hookId ?? '', 'sms', deliver, stream);
     const offDoor = door?.onChange(() => {
       events.changed?.();
       void health();
@@ -447,6 +511,9 @@ export class TwilioSmsAdapter implements ChannelAdapter {
     void health();
 
     const send = async (chatId: string, markdown: string, options?: SendOptions) => {
+      // The owner is on a call: the answer is said, not texted (a question still goes by text).
+      if (phone?.take(chatId, markdown, Boolean(options?.buttons?.length)))
+        return [{ chatId, messageId: `call-${++callRefs}` }];
       const number = this.#number ?? (await this.#pick());
       const words = options?.buttons?.length
         ? TextChoices.render(markdown, options.buttons)
@@ -481,11 +548,24 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       // (`MediaUrl`), and Conch never puts your files on the internet. The assistant is told so.
       // A text can't be changed once sent; the question just stops taking answers.
       edit: async (ref) => choices.forget(ref),
-      typing: () => Promise.resolve(),
+      typing: (chatId) => {
+        phone?.working(chatId);
+        return Promise.resolve();
+      },
+      refresh: () => void health(),
+      ...(phone && {
+        phone: {
+          ring: (to: string, ask: Parameters<PhoneLine['ring']>[1]) => phone.ring(to, ask),
+          get busy() {
+            return phone.busy;
+          },
+        },
+      }),
       download: (file) => this.#download(file),
       directChat: (userId) => Promise.resolve(appId(userId)),
       close: () => {
         stop.abort();
+        phone?.close();
         unmount?.();
         offDoor?.();
       },

@@ -127,6 +127,7 @@ export * from './desktop';
 export * from './dashboards';
 export * from './doctor';
 export * from './phone';
+export * from './phone-calls';
 export * from './providers';
 export * from './routines';
 export * from './checkins';

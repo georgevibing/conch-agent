@@ -256,6 +256,35 @@ describe('what in a backup can act for you', () => {
     for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });
 
+  it('names a number that answers calls or rings you to allow a step (ADR 0138)', () => {
+    const powers = powersOf(
+      ['channels.json'],
+      reader({
+        'channels.json': {
+          version: 1,
+          channels: [
+            {
+              kind: 'sms',
+              bot: { name: '(500) 555-0006' },
+              people: [],
+              settings: { calls: { answer: true, approvals: false } },
+            },
+            {
+              kind: 'sms',
+              bot: { name: 'Off' },
+              people: [],
+              settings: { calls: { answer: false } },
+            },
+          ],
+        },
+      }),
+    );
+    expect(powers).toEqual([
+      { kind: 'phone-calls', name: '(500) 555-0006 on SMS', answers: true, approves: false },
+    ]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
+  });
+
   it('names who a bot will talk to, so an old backup can’t quietly let someone back in', () => {
     const powers = powersOf(
       ['channels.json'],

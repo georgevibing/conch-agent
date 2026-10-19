@@ -561,6 +561,73 @@ describe('Voice notes on a channel’s page (ADR 0077)', () => {
   });
 });
 
+describe('Phone calls on an SMS number (ADR 0138)', () => {
+  const sms = (patch: Partial<Channel> = {}) =>
+    channel({
+      id: 'ch_sms',
+      kind: 'sms',
+      bot: { id: '+15005550006', name: '(500) 555-0006', phone: '+15005550006' },
+      people: [ada],
+      ...patch,
+    });
+
+  it('starts off, turns on in one press, and shows the limits once it is', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [sms()], catalog }),
+      'PATCH /api/channels/ch_sms': () =>
+        sms({
+          settings: {
+            notifyRoutines: true,
+            calls: {
+              answer: false,
+              approvals: true,
+              after: 5,
+              quiet: { from: '22:00', to: '07:00' },
+              perDay: 3,
+              maxMinutes: 10,
+            },
+          },
+        }),
+    });
+    const { container } = renderApp(<ChannelDetailView channelId="ch_sms" />, {
+      route: '/channels/ch_sms',
+    });
+    const section = await screen.findByRole('region', { name: 'Phone calls' });
+    const answer = within(section).getByRole('switch', { name: 'Answer your calls' });
+    const ring = within(section).getByRole('switch', { name: 'Call me when an OK waits' });
+    expect(answer).not.toBeChecked();
+    expect(ring).not.toBeChecked();
+    expect(section).toHaveTextContent('No calls today.');
+    expect(within(section).queryByRole('combobox', { name: 'Calls a day' })).toBeNull();
+    await userEvent.click(ring);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toMatchObject({
+        settings: { calls: { approvals: true, answer: false, perDay: 3 } },
+      }),
+    );
+    expect(await within(section).findByRole('combobox', { name: 'Calls a day' })).toHaveTextContent(
+      '3 calls',
+    );
+    expect(within(section).getByRole('combobox', { name: 'Longest call' })).toHaveTextContent(
+      '10 minutes',
+    );
+    expect(
+      (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
+    ).toEqual([]);
+  });
+
+  it('isn’t offered for other chat apps', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    await screen.findByRole('region', { name: /Who can talk/ });
+    expect(screen.queryByRole('region', { name: 'Phone calls' })).toBeNull();
+  });
+});
+
 describe('Guides', () => {
   it('suggests Telegram names that fit its rules', () => {
     const names = telegramNames('Conch', 'Zoë Ångström', '1234');

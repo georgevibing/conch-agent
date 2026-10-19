@@ -74,6 +74,44 @@ describe('the public door', () => {
     expect((await post('/hooks/abcdefghijklmnopqrstuvwx')).status).toBe(404);
   });
 
+  it('opens a hook’s socket only where one is mounted, and only once it accepts the upgrade (ADR 0138)', async () => {
+    const { door } = await make();
+    const seen: string[] = [];
+    const id = 'abcdefghijklmnopqrstuvwx';
+    door.mount(id, 'sms', async () => ({ status: 200 }), {
+      accept: (request) => request.headers['x-twilio-signature'] === 'good',
+      open: (socket) =>
+        socket.onMessage((text) => {
+          seen.push(text);
+          socket.send(`heard ${text}`);
+        }),
+    });
+    door.mount('nostreamhere0000000000000', 'sms', async () => ({ status: 200 }));
+    await door.useTailscale();
+    const local = (door.local ?? '').replace(/^http/, 'ws');
+    const open = (path: string, signature?: string) =>
+      new Promise<{ ok: boolean; got?: string }>((resolve) => {
+        const ws = new WebSocket(`${local}${path}`, {
+          headers: signature ? { 'x-twilio-signature': signature } : {},
+        } as unknown as string[]);
+        ws.onopen = () => ws.send('hello');
+        ws.onmessage = (event) => {
+          resolve({ ok: true, got: String(event.data) });
+          ws.close();
+        };
+        ws.onerror = () => resolve({ ok: false });
+      });
+    expect(await open(`/hooks/${id}/stream`, 'good')).toEqual({ ok: true, got: 'heard hello' });
+    expect(await open(`${DOOR_PATH}/hooks/${id}/stream`, 'good')).toMatchObject({ ok: true });
+    expect(await open(`/hooks/${id}/stream`, 'bad')).toEqual({ ok: false });
+    expect(await open(`/hooks/${id}/stream`)).toEqual({ ok: false });
+    expect(await open('/hooks/nostreamhere0000000000000/stream', 'good')).toEqual({ ok: false });
+    expect(await open('/hooks/unknown00000000000000000/stream', 'good')).toEqual({ ok: false });
+    expect(seen).toEqual(['hello', 'hello']);
+    // A plain request to a socket's address isn't one.
+    expect((await fetch(`${door.local}/hooks/${id}/stream`)).status).toBe(403);
+  });
+
   it('turns on with Tailscale on 443, or 8443 when the phone’s private address has 443', async () => {
     expect(pickPort([])).toBe(443);
     expect(pickPort([443])).toBe(8443);

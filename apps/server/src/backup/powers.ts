@@ -344,9 +344,18 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
         .filter((group) => group?.on === true)
         .map((group) => `Everyone in ${text(group?.name, 'a group')}`),
     ];
-    if (!people.length) continue;
     const bot = text(record(channel.bot)?.name, 'A bot');
     const app = APP_NAMES[String(channel.kind)] ?? 'a chat app';
+    // A number that answers calls or rings to allow a step (ADR 0138).
+    const calls = record(record(channel.settings)?.calls);
+    if (calls && (calls.answer === true || calls.approvals === true))
+      powers.push({
+        kind: 'phone-calls',
+        name: text(`${bot} on ${app}`, 'A number'),
+        answers: calls.answer === true,
+        approves: calls.approvals === true,
+      });
+    if (!people.length) continue;
     powers.push({
       kind: 'channel-people',
       name: text(`${bot} on ${app}`, 'A bot'),

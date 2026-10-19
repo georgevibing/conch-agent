@@ -1,4 +1,5 @@
 import type { NoteFormat } from '../voice/audio';
+import type { CallAsk, PhoneContext } from './calls/phone';
 import type {
   ChannelBot,
   ChannelField,
@@ -114,6 +115,11 @@ export interface ChannelMessage {
   outside?: string;
   /** It starts something new (an email in a new thread): a fresh conversation, as `/new` would. */
   fresh?: boolean;
+  /**
+   * Words heard, not typed (a phone call, ADR 0138), named like this: read
+   * like a voice note's (ADR 0077), since a voice on a line can be anyone's.
+   */
+  spoken?: string;
 }
 
 /** Someone pressed one of Conch's buttons. */
@@ -158,6 +164,8 @@ export interface ChannelEvents {
    * channel so a restart carries on from there instead of answering twice.
    */
   cursor?(value: string): void;
+  /** SMS: a phone call ended, for today's count (ADR 0138). */
+  called?(usage: { direction: 'in' | 'out'; seconds: number }): void;
 }
 
 export interface StateDetail {
@@ -173,6 +181,8 @@ export interface StateDetail {
 export interface ConnectOptions {
   /** The last `cursor` it reported, if any. */
   cursor?: string;
+  /** SMS: phone calls on the number (ADR 0138): who the owner is and what they chose, read per call. */
+  phone?: () => Promise<PhoneContext>;
 }
 
 /** A live connection to one bot. It reconnects by itself until closed. */
@@ -219,6 +229,10 @@ export interface ChannelConnection {
    * An app without it can't carry files from Conch, and the assistant is told so.
    */
   files?: ChannelFiles;
+  /** Something the person chose changed (phone calls): set the app up again for it. */
+  refresh?(): void;
+  /** SMS: ring the owner about a question that waited (ADR 0138). */
+  phone?: { ring(to: string, ask: CallAsk): Promise<void>; readonly busy: boolean };
   close(): void;
 }
 

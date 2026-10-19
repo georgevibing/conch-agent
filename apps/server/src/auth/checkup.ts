@@ -193,6 +193,8 @@ export interface CheckupInput {
     others: string[];
     groups?: string[];
     fullTrust?: boolean;
+    /** It answers calls from your number (ADR 0138). */
+    calls?: boolean;
   }[];
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
@@ -486,6 +488,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
   }
+
+  const calling = channels.filter((c) => c.calls);
+  if (calling.length)
+    items.push({
+      id: 'phone-calls',
+      level: 'info',
+      title: `Your assistant answers calls from your number on ${calling.map((c) => c.bot).join(' and ')}`,
+      detail:
+        'Someone could fake your number to call it. Conch hangs up when the carrier says a number failed its check, reads what’s said on a call like a voice note, so steps that matter still ask you, and a call to it can’t allow anything. Turn calls off when you don’t use them.',
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
+    });
 
   const grouped = channels.filter((c) => c.groups?.length);
   if (grouped.length) {

@@ -135,6 +135,17 @@ describe('channel routes', () => {
         cookie,
         payload: { on: true },
       }),
+      // Answering calls, or being rung to allow a step, lets a phone reach it (ADR 0138).
+      remote(app, `/api/channels/${id}`, {
+        method: 'PATCH',
+        cookie,
+        payload: { settings: { calls: { answer: true } } },
+      }),
+      remote(app, `/api/channels/${id}`, {
+        method: 'PATCH',
+        cookie,
+        payload: { settings: { calls: { approvals: true } } },
+      }),
     ];
     for (const res of await Promise.all(attempts)) {
       expect(res.statusCode).toBe(403);

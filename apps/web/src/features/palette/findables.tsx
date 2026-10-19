@@ -9,6 +9,7 @@ import {
   type TextRange,
   chatAgentId,
   type Agent,
+  PHONE_CALL_CHANNELS,
 } from '@conch/protocol';
 import {
   AgentAvatar,
@@ -807,6 +808,19 @@ export function useFindables(query: string, conversationId: string | undefined):
       to: `/channels/${c.id}`,
       hint: 'Open',
     })),
+    // A number that can take calls (ADR 0138): its calls are on its page.
+    ...(channels?.channels ?? [])
+      .filter((c) => PHONE_CALL_CHANNELS.includes(c.kind))
+      .map((c) => ({
+        id: `${c.id}-calls`,
+        label: `Phone calls on ${c.bot.name}`,
+        keywords:
+          'phone calls call me ring voice answer calls hands-free driving approval ok twilio quiet hours',
+        brand: c.kind as string,
+        color: APPS[c.kind].color,
+        to: `/channels/${c.id}`,
+        hint: c.settings.calls?.answer || c.settings.calls?.approvals ? 'On' : 'Off',
+      })),
     ...(channels?.catalog ?? [])
       .filter((c) => c.available)
       .map((c) => ({

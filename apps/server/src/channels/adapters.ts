@@ -1,5 +1,7 @@
 import type { ChannelSecrets } from '@conch/protocol';
 
+import type { PhoneVoice } from './calls/phone';
+
 import { DISCORD_API, DiscordAdapter } from './discord';
 import { SignalAdapter } from './signal';
 import type { SignalDaemon } from './signal-cli';
@@ -47,6 +49,8 @@ export interface ChannelEndpoints {
   wechatFiles?: string[];
   /** Twilio's REST API (the pretend Twilio in tests). */
   twilio?: string;
+  /** Hearing and speaking on this computer, for a phone call's own audio (ADR 0138). */
+  phone?: PhoneVoice;
   /** LINE's Messaging API, and where it serves content (the pretend LINE in tests). */
   line?: string;
   lineData?: string;
