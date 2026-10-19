@@ -23,6 +23,13 @@ const watching: WaitingRowProps = {
 };
 
 describe('WaitingRow', () => {
+  it('keeps the clock on one line: minutes and seconds joined by a no-break space', () => {
+    const { container } = renderNacre(<WaitingRow {...watching} />);
+    expect(container.querySelector('[data-value]')?.getAttribute('data-value')).toMatch(
+      /^2m\u00a0\d\ds$/,
+    );
+  });
+
   it('says what it waits for, how it stands, and that the chat is free', async () => {
     const { container } = renderNacre(
       <WaitingRow {...watching} onCheck={() => {}} onStop={() => {}} />,

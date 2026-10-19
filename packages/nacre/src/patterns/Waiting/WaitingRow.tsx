@@ -153,7 +153,7 @@ export function WaitingRow({
         </span>
         <span className={styles.meta} aria-hidden>
           {watching ? (
-            elapsed >= 1000 && <Odometer value={formatElapsed(elapsed).replace(' ', ' ')} />
+            elapsed >= 1000 && <Odometer value={formatElapsed(elapsed).replace(' ', '\u00a0')} />
           ) : (
             <span>{storyDuration(Math.max(0, elapsed))}</span>
           )}

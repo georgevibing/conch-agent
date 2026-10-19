@@ -224,25 +224,49 @@ ${blocksHtml(doc, options.images)}
 }
 
 /**
- * An HTML page the model wrote itself, made safe to print: scripts, frames,
- * forms and outside resources removed, and the same CSP. Chromium prints it
- * with JavaScript off and the network cut, so this is a second wall.
+ * What `sealHtml` takes out, as one pattern so it can run again on its own
+ * output: a script with its words (one never closed runs to the end, as a
+ * browser reads it), the tags that frame, embed, submit or redirect, and
+ * every `on…` handler. End tags may carry junk before their `>`
+ * (`</script foo>`), as browsers allow. A handler may follow a space, a
+ * slash or a quote, as browsers read it (`<svg/onload=…>`, `<a x=""onclick=…>`).
+ * Nothing unclosed is looked for twice, so a pass stays linear.
+ */
+const UNSAFE_HTML =
+  /<script\b[\s\S]*?(?:<\/script\b[^>]*>|$)|<\/?(?:iframe|frame|frameset|object|embed|form|base|link|meta)\b[^>]*(?:>|$)|(?<=[\s/"'])on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+/** Passes before a page that keeps making new tags is shown as text instead. */
+const SEAL_PASSES = 16;
+
+/**
+ * An HTML page the model wrote itself, made safe to print and to open: the
+ * CSP first, before anything the page says, so nothing in it can slip in
+ * ahead of the policy (a `<head>` inside a comment, say). With no
+ * `script-src` the policy alone stops scripts, handlers and `javascript:`
+ * links; scripts, frames, forms and handlers are also taken out, again and
+ * again until none is left, since taking one out can join the halves of
+ * another (`<scr<script></script>ipt>`). Chromium prints it with JavaScript
+ * off and the network cut as well.
  */
 export function sealHtml(html: string): string {
-  let out = html
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<script\b[^>]*>/gi, '')
-    .replace(/<(iframe|frame|frameset|object|embed|form|base|link|meta)\b[^>]*>/gi, '')
-    .replace(/<\/(iframe|frame|frameset|object|embed|form)\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  let out = html;
+  let before: string;
+  let passes = 0;
+  do {
+    before = out;
+    out = out.replace(UNSAFE_HTML, '');
+  } while (out !== before && ++passes < SEAL_PASSES);
+  if (out !== before) out = `<pre>${escapeHtml(html)}</pre>`;
+  out = out
     .replace(
       /(href|src|action|formaction|xlink:href)\s*=\s*(["']?)\s*javascript:[^"'>\s]*\2/gi,
       '$1="#"',
-    );
+    )
+    // The page's own doctype goes: the one written first is the one that counts.
+    .replace(/<!doctype\b[^>]*>/gi, '');
   const csp =
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; font-src data:">';
-  out = /<head\b[^>]*>/i.test(out)
-    ? out.replace(/<head\b[^>]*>/i, (head) => `${head}<meta charset="utf-8">${csp}`)
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'\">";
+  // A <meta> before <html> opens the head; the page's own <html> and <head> tags then add to it.
+  return /<(?:html|head|body)\b/i.test(out)
+    ? `<!doctype html><meta charset="utf-8">${csp}${out}`
     : `<!doctype html><html><head><meta charset="utf-8">${csp}</head><body>${out}</body></html>`;
-  return out;
 }

@@ -202,6 +202,10 @@ describe('CoinGecko’s answers, read defensively', () => {
     expect(profile?.about?.length).toBeLessThanOrEqual(480);
     expect(profile?.about).toMatch(/^Bitcoin is the first successful internet money/);
     expect(plainText('<p>A &amp; B</p><script>x</script>')).toBe('A & B x');
+    // Read once: an escaped entity stays the words it spells, never what they mean.
+    expect(plainText('a &amp;lt;b&amp;gt; &amp;amp; &amp;#39; &constructor; c')).toBe(
+      'a &lt;b&gt; &amp; &#39; c',
+    );
   });
 
   it('reads a chart oldest first, and crypto as a whole in the asked currency', () => {

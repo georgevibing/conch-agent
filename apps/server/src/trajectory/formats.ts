@@ -427,7 +427,7 @@ export function toMarkdown(list: Trajectory[], heading: string): string {
     for (const s of tl.steps) {
       const when = duration(s.at - tl.startedAt);
       if (s.kind === 'asked') {
-        out.push(`### You · ${when}`, '', s.peek ?? s.title.replace(/^/, ''), '');
+        out.push(`### You · ${when}`, '', s.peek ?? s.title, '');
         continue;
       }
       if (s.kind === 'said') {

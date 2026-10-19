@@ -425,7 +425,8 @@ describe('show_search', () => {
         { title: 'Elsewhere' },
       ],
     });
-    expect(JSON.stringify(result.view)).not.toMatch(/<p>|<b>|<script/);
+    // No tag of any case or spelling: `<P class>`, `</b >`, `<SCRIPT`.
+    expect(JSON.stringify(result.view)).not.toMatch(/<\/?(?:p|b|script)\b/i);
     expect(asked.some((a) => a.url.includes('evil.example'))).toBe(false);
     logsAsIs(result.view);
   });

@@ -189,6 +189,11 @@
     opacity: 0;
   }
 
+  /* Holds the picture without a box of its own: the stage places it. */
+  .slot {
+    display: contents;
+  }
+
   .photo {
     position: absolute;
     inset-block-start: 50%;

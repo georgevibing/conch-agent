@@ -11,6 +11,12 @@ describe('a provider’s notes in plain words (ADR 0103)', () => {
     expect(cleanNarration('   \n ')).toBe('');
   });
 
+  it('leaves no tag behind when taking one out joins the halves of another', () => {
+    expect(cleanNarration('a <scr<b>ipt>alert(1)</scr</b>ipt> b')).toBe('a alert(1) b');
+    expect(cleanNarration('<<i>i<b>mg src=x onerror=y>>')).not.toMatch(/<[a-z]/i);
+    expect(cleanNarration('1 < 2 and 3 > 2')).toBe('1 < 2 and 3 > 2');
+  });
+
   it('keeps it to 240 characters, at a word where it can', () => {
     const said = cleanNarration(`${'word '.repeat(100)}end`);
     expect(said.length).toBeLessThanOrEqual(NARRATION_MAX);

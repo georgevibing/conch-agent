@@ -19,7 +19,7 @@ import { fileName } from './formats';
 import { sealHtml } from './html';
 import { ChromiumPrinter, type Printer } from './printer';
 import { makeCsv, parseCsv } from './sheets';
-import { FileMaker, markdownSlides, sealSvg } from './tools';
+import { FileError, FileMaker, markdownSlides, sealSvg } from './tools';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
@@ -570,6 +570,96 @@ describe('the pieces', () => {
       '<svg><script>1</script><a xlink:href="https://e.com"><text onclick="x">t</text></a><image href="https://e.com/a.png"/></svg>',
     );
     expect(svg).not.toMatch(/script|onclick|https:/);
+  });
+
+  it('seals HTML whose tags come back together when one is taken out', () => {
+    const attacks = [
+      '<scr<script></script>ipt>alert(1)</script>',
+      '<script>alert(1)</script foo="bar">',
+      '<SCRIPT>alert(1)</SCRIPT >',
+      '<script>never closed',
+      '<ifr<iframe>ame src="https://e.com"></iframe>',
+      '<img src=x on onerror=1 error=alert(1)>',
+      '<img src="x"onerror=alert(1)>',
+      '<svg/onload=alert(1)>',
+      '<img src=x o onclick="1"nerror=alert(1)>',
+      '<met<meta>a http-equiv="refresh" content="0;url=https://e.com">',
+    ];
+    for (const attack of attacks) {
+      const html = sealHtml(`<p>hi</p>${attack}`);
+      expect(html, attack).not.toMatch(
+        /<script|<iframe|<meta http-equiv="refresh"|[\s/"']on[a-z]+\s*=/i,
+      );
+      expect(html.indexOf('Content-Security-Policy')).toBeLessThan(html.indexOf('hi'));
+    }
+    // A page that keeps making new tags is shown as its words.
+    const tangled = `${'<ifr'.repeat(40)}<iframe>${'ame>'.repeat(40)}`;
+    expect(sealHtml(tangled)).not.toMatch(/<iframe/i);
+    expect(sealHtml(tangled)).toContain('<pre>&lt;ifr');
+    // A handler goes, the quote before it stays: the next attribute can't shift.
+    expect(sealHtml('<a title="x"onclick=y href="#">a</a>')).toContain(
+      '<a title="x" href="#">a</a>',
+    );
+  });
+
+  it('puts the CSP before anything the page says, a <head> in a comment or not', () => {
+    for (const page of [
+      '<!-- <head> --><html><head><title>t</title></head><body>x</body></html>',
+      '<!DOCTYPE html><html lang="en"><body><head></head>x</body></html>',
+    ]) {
+      const html = sealHtml(page);
+      expect(
+        html.startsWith(
+          '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy"',
+        ),
+      ).toBe(true);
+      expect(html.match(/<!doctype/gi)).toHaveLength(1);
+      expect(html).toContain("form-action 'none'");
+    }
+    expect(sealHtml('<p>a < b</p>')).toContain('<body><p>a < b</p></body>');
+  });
+
+  it('seals SVG by rebuilding it, so nothing a filter would miss gets through', () => {
+    const attacks = [
+      '<svg><scr<script>1</script>ipt>alert(1)</script></svg>',
+      '<svg><script >1</script foo></svg>',
+      '<svg xmlns:x="http://www.w3.org/2000/svg"><x:script>alert(1)</x:script></svg>',
+      '<svg><rect x="1"onload="alert(1)"/></svg>',
+      '<svg><rect ONLOAD="alert(1)"/></svg>',
+      '<svg><a href=javascript:alert(1)><text>t</text></a></svg>',
+      '<svg><a xlink:href=" javascript:alert(1)"><text>t</text></a></svg>',
+      '<svg><a href="#"><set attributeName="href" to="javascript:alert(1)"/></a></svg>',
+      '<svg><animate attributeName="onclick" values="alert(1)"/></svg>',
+      '<svg><foreignObject><iframe src="https://e.com"/></foreignObject></svg>',
+      '<svg><g xmlns="http://www.w3.org/1999/xhtml"><img src="x" onerror="alert(1)"/></g></svg>',
+      '<svg><h:iframe xmlns:h="http://www.w3.org/1999/xhtml" src="https://e.com"/></svg>',
+      '<?xml-stylesheet type="text/xsl" href="https://e.com/x.xsl"?><svg/>',
+      '<svg><text>&lt;script&gt;alert(1)&lt;/script&gt;</text></svg>',
+    ];
+    for (const attack of attacks) {
+      const svg = sealSvg(attack);
+      expect(svg, attack).not.toMatch(
+        /<[\w:]*script|\son[a-z]+=|javascript:|https:|<iframe|<img|xml-stylesheet/i,
+      );
+    }
+    expect(sealSvg(`<svg><rect title='" onload="x'/></svg>`)).toBe(
+      '<svg><rect title="&quot; onload=&quot;x"/></svg>',
+    );
+    expect(sealSvg('<svg><text>&lt;b&gt; &amp; c</text></svg>')).toBe(
+      '<svg><text>&lt;b&gt; &amp; c</text></svg>',
+    );
+    expect(() => sealSvg('<svg><!-- never closed')).toThrow(FileError);
+  });
+
+  it('keeps an ordinary SVG as it was written', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" width="10">\n' +
+      '  <!-- a dot -->\n  <defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient></defs>\n' +
+      '  <style><![CDATA[ .a { fill: url(#g) } ]]></style>\n' +
+      '  <use xlink:href="#g"/><image href="data:image/png;base64,AAAA"/>\n' +
+      '  <circle class="a" cx="5" cy="5" r="4"><animate attributeName="r" values="4;3;4" dur="1s"/></circle>\n' +
+      '  <text x="1" y="9">A &amp; B</text>\n</svg>';
+    expect(sealSvg(svg)).toBe(svg);
   });
 
   it('writes CSV a spreadsheet reads back exactly', () => {

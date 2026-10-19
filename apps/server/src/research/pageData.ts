@@ -75,10 +75,11 @@ export function pageData(html: string): PageData {
   const source = html.slice(0, 3_000_000);
   const ld: LdNode[] = [];
   for (const m of source.matchAll(
-    /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi,
+    /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi,
   )) {
     try {
-      flatten(JSON.parse((m[1] ?? '').trim().replace(/^<!--|-->$/g, '')), ld);
+      // Old pages wrap JSON-LD in a comment; it may end `--!>`, which HTML accepts too.
+      flatten(JSON.parse((m[1] ?? '').trim().replace(/^<!--|--!?>$/g, '')), ld);
     } catch {
       // A site's broken JSON-LD is its own business.
     }

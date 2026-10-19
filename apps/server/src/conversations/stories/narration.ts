@@ -9,10 +9,14 @@
 export const NARRATION_MAX = 240;
 /** At most one line this often; what comes between waits, and only the latest goes. */
 export const NARRATION_EVERY_MS = 500;
+/** The most of a raw note read: far more than a line shows, and each pass over it stays cheap. */
+const NARRATION_READ = 10_000;
 
 /** A note in plain words: markdown, links and list marks gone, one line, capped. Empty: nothing to say. */
 export function cleanNarration(raw: string): string {
-  const flat = raw
+  // Only the start can show; a note longer than this is cut before it's read.
+  let words = raw
+    .slice(0, NARRATION_READ)
     // Pictures and links say their words.
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -20,10 +24,14 @@ export function cleanNarration(raw: string): string {
     .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+•]\s+|\d+[.)]\s+)/gm, '')
     // Emphasis and code marks around words.
     .replace(/(\*{1,3}|_{1,3}|~~|`+)(\S(?:.*?\S)?)\1/g, '$2')
-    .replace(/`+/g, '')
-    .replace(/<\/?[a-z][^>]*>/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/`+/g, '');
+  // Tags go until none is left: taking one out can join the halves of another (`<scr<b>ipt>`).
+  let before: string;
+  do {
+    before = words;
+    words = words.replace(/<\/?[a-z][^<>]*>/gi, '');
+  } while (words !== before);
+  const flat = words.replace(/\s+/g, ' ').trim();
   if (flat.length <= NARRATION_MAX) return flat;
   const cut = flat.slice(0, NARRATION_MAX - 1);
   const space = cut.lastIndexOf(' ');
