@@ -104,6 +104,7 @@ export * from './background';
 export * from './backups';
 export * from './browser';
 export * from './channels';
+export * from './relay';
 export * from './speech';
 export * from './engine';
 export * from './first-job';
