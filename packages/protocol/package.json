@@ -19,6 +19,7 @@
     "@conch/eslint-config": "workspace:*",
     "@conch/tsconfig": "workspace:*",
     "eslint": "^9.39.0",
+    "fast-check": "^4.10.2",
     "typescript": "~6.0.3",
     "vitest": "^5.0.2"
   }
