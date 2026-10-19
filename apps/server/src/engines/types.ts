@@ -63,6 +63,13 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   ): Promise<string | HostToolResult>;
   /** Trusted host declaration, independent of receipt support. Never taken from model text. */
   effect?: 'read' | 'write';
+  /**
+   * Trusted host declaration of which calls are the same action, for a tool with no
+   * receipt contract: a task's ledger otherwise treats equal arguments as one action
+   * never to repeat. The browser's names the page it acted on, so the same click on a
+   * newer page is a new action. `verification.identity` wins when there is one.
+   */
+  identity?(args: Record<string, unknown>): string;
   /** Optional durable-effect contract; a write is confirmed only by a provider receipt. */
   verification?: {
     effect: 'read' | 'write';

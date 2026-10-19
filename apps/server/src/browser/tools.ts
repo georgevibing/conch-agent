@@ -51,6 +51,16 @@ function hostOf(url: string): string | undefined {
 /** A refusal the agent should hear as-is (the user said no, plan mode, a secret field). */
 class Refusal extends Error {}
 
+/** A failure that provably left the page alone: the ref is gone, the site was never reached. */
+class Untouched extends Error {}
+
+/** Steps that only look: a failure there is a failed look, never an action that may have happened. */
+const LOOKS: ReadonlySet<BrowserActionKind> = new Set(['read', 'screenshot', 'wait', 'scroll']);
+
+/** The address never reached a server: nothing was sent to the site. */
+const UNREACHED =
+  /net::ERR_(NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED|CONNECTION_REFUSED|ADDRESS_UNREACHABLE|INTERNET_DISCONNECTED)|NS_ERROR_(UNKNOWN_HOST|CONNECTION_REFUSED)/;
+
 /** A tab that went away before work began can be reopened without replaying an action. */
 const CLOSED =
   /Target page, context or browser has been closed|Target closed|Browser has been closed/i;
@@ -139,11 +149,35 @@ export function browserTools(
     active.getStore()?.check();
     ctx.signal.throwIfAborted();
   };
+  /** Steps that reached the page: from here on, a failure may have done something there. */
+  const acted = new WeakSet<BrowserStepBudget>();
+  /** Mark the moment this step acts (the cursor at the control, the person handed the browser). */
+  const acting = () => {
+    check();
+    const budget = active.getStore();
+    if (budget) acted.add(budget);
+  };
+  /**
+   * Which page an action is on, for a task's ledger (ADR 0033): this turn's tools and
+   * every step that reached a tab. Pressing Enter twice, or the same ref on a newer page,
+   * is a new action; only a call whose step never reached a tab keeps its place.
+   */
+  const session = newId('pages');
+  let generation = 0;
   const { conversationId } = ctx;
   /** The person said yes to something significant in this step: the site's own "Are you sure?" after it doesn't ask again. */
   let vouched = false;
 
   const locate = (tab: Tab, ref: string): Locator => tab.page.locator(`aria-ref=${ref}`);
+  /** A ref to act on, which must still be on the page: a gone one fails before anything is done. */
+  const present = async (tab: Tab, ref: string): Promise<Locator> => {
+    const target = locate(tab, ref);
+    if (!(await target.count().catch(() => 0)))
+      throw new Untouched(
+        'That element isn’t on the page any more: the page changed. Read the page again and use a fresh ref.',
+      );
+    return target;
+  };
 
   /** Wait a beat so the agent's cursor visibly reaches the control, if anyone's watching. */
   const point = async (
@@ -152,7 +186,7 @@ export function browserTools(
     label: string,
     box?: BrowserBox,
   ): Promise<void> => {
-    check();
+    acting();
     tab.announce({ type: 'action', action, label, box });
     if (tab.watched) await new Promise((r) => setTimeout(r, WATCHED_PAUSE_MS));
     check();
@@ -166,6 +200,7 @@ export function browserTools(
   ): Promise<string | HostToolResult> => {
     let tab: Tab | undefined;
     let ended = false;
+    let budget: BrowserStepBudget | undefined;
     const stepId = newId('step');
     const log = (
       status: 'running' | 'waiting' | 'done' | 'error',
@@ -196,13 +231,14 @@ export function browserTools(
         context.signal,
         () => log('waiting', 'Waiting for the previous browser step'),
         async () => {
-          const budget = new BrowserStepBudget(context.signal, {
+          const own = new BrowserStepBudget(context.signal, {
             timeoutMs,
             state: (label) => log(label ? 'waiting' : 'running', label ?? labels.running),
             cancel: (humanWait) => {
               if (tab && !humanWait) service.cancelStep(tab);
             },
           });
+          budget = own;
           const execute = async (attempt = 0): Promise<string | HostToolResult> => {
             let workStarted = false;
             try {
@@ -265,7 +301,9 @@ export function browserTools(
                 !(error instanceof Refusal) && CLOSED.test(String((error as Error)?.message));
               if (closed && workStarted) {
                 throw new Error(
-                  'The browser closed during this step. It may have acted on the site before closing. Check the page before repeating the action.',
+                  acted.has(own) || LOOKS.has(action)
+                    ? 'The browser closed during this step. It may have acted on the site before closing. Check the page before repeating the action.'
+                    : 'The browser closed before this step did anything on the page, so nothing happened there. Try it again.',
                   { cause: error },
                 );
               }
@@ -280,24 +318,37 @@ export function browserTools(
             } finally {
               if (tab) tab.answerer = undefined;
               if (tab?.control === 'agent') tab.setControl('idle');
+              // The page this turn's next action sees is a newer one.
+              if (workStarted) generation += 1;
             }
           };
-          return active.run(budget, () => budget.run(() => execute()));
+          return active.run(own, () => own.run(() => execute()));
         },
       );
     } catch (error) {
+      // An action that never reached the page (refused, its element gone, held up before
+      // acting) says so: a task's ledger keeps it as never run, not as an action that may
+      // have happened and so blocks the task's next ones (ADR 0033). Looks never act.
+      const untouched =
+        !LOOKS.has(action) && (error instanceof Untouched || !(budget && acted.has(budget)));
       const message = context.signal.aborted
         ? 'Stopped.'
-        : error instanceof BrowserStepStopped || error instanceof Refusal
-          ? error.message
-          : error instanceof BrowserProblemError
-            ? `The browser isn’t available: ${error.problem.message}`
-            : explain(error);
+        : error instanceof BrowserStepStopped && error.timedOut && untouched
+          ? 'The browser took too long, so Conch stopped this step before it did anything on the page. Nothing happened there; try it again.'
+          : error instanceof BrowserStepStopped ||
+              error instanceof Refusal ||
+              error instanceof Untouched
+            ? error.message
+            : error instanceof BrowserProblemError
+              ? `The browser isn’t available: ${error.problem.message}`
+              : explain(error);
       log('error', message);
       // A plain result is success to every provider. Only deliberate refusals are
       // successful answers; cancellation and uncertain execution must stay errors.
       if (context.signal.aborted) throw new BrowserStepStopped(false);
-      if (error instanceof Refusal) return message;
+      if (error instanceof Refusal)
+        return untouched ? { text: message, effect: 'not-executed' } : message;
+      if (untouched) return { text: message, isError: true, effect: 'not-executed' };
       if (error instanceof BrowserStepStopped) throw error;
       throw new Error(message, { cause: error });
     }
@@ -426,6 +477,8 @@ export function browserTools(
 
   /** You type the secret yourself: the agent waits, then carries on. */
   const handoff = async (tab: Tab, reason: string): Promise<'done' | 'auto' | 'cancelled'> => {
+    // The person may do anything there: what follows is no longer provably untouched.
+    acting();
     const handoffId = newId('handoff');
     const url = tab.page.url();
     // A sign-in or a captcha: it carries on by itself once that's behind you.
@@ -557,10 +610,16 @@ export function browserTools(
   /** Open an address; a heavy page settles for its first byte, and is read as it is. */
   const goTo = async (page: Page, url: string): Promise<Response | null> => {
     try {
-      return await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      try {
+        return await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      } catch (error) {
+        if (!/Timeout/i.test(String((error as Error).message))) throw error;
+        return await page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
+      }
     } catch (error) {
-      if (!/Timeout/i.test(String((error as Error).message))) throw error;
-      return page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
+      if (UNREACHED.test(String((error as Error)?.message)))
+        throw new Untouched(plainNavigationError(error as Error));
+      throw error;
     }
   };
 
@@ -661,6 +720,7 @@ export function browserTools(
 
   const read: HostTool<{ find: z.ZodOptional<z.ZodString>; part: z.ZodOptional<z.ZodNumber> }> = {
     name: 'browser_read',
+    effect: 'read',
     description:
       'Read the whole page that’s open now: its text and controls with [ref] handles. Other browser actions answer with only what changed, so use this when you need to see everything again. Pass `find` to see only the parts that mention something. A long page comes in parts: `part` reads the next one.',
     input: {
@@ -719,7 +779,7 @@ export function browserTools(
         async (tab) => {
           if (how === 'drag' && !to)
             throw new Refusal('To drag, say where to drop it: `to` is the ref of the place.');
-          const target = locate(tab, ref);
+          const target = await present(tab, ref);
           const own = await wordsOf(target);
           // Scrolled into view inside whatever list or panel holds it, then measured.
           await target.scrollIntoViewIfNeeded({ timeout: 4_000 }).catch(() => undefined);
@@ -731,7 +791,7 @@ export function browserTools(
             await new Promise((r) => setTimeout(r, 400));
             return { text: await pageText(tab) };
           }
-          const drop = to ? locate(tab, to) : undefined;
+          const drop = to ? await present(tab, to) : undefined;
           const dropWords = drop ? await wordsOf(drop) : '';
           await permit(tab, {
             action:
@@ -813,10 +873,11 @@ export function browserTools(
         { running: `Typing in “${element}”`, done: `Typed in “${element}”` },
         async (tab) => {
           await markSecrets(tab.page);
-          const target = locate(tab, ref);
+          const target = await present(tab, ref);
           const secret = await secretOf(target);
           // Passwords fills sign-ins, codes, cards and new passwords, with the person's OK.
           const deps = secret || !text ? fillDeps(tab) : undefined;
+          if (deps) acting();
           const filled = deps
             ? await agentFill(deps, tab, target, { secret, text, item, element })
             : undefined;
@@ -900,7 +961,7 @@ export function browserTools(
     },
     run: ({ key, ref }) =>
       step('press', { running: `Pressing ${key}`, done: `Pressed ${key}` }, async (tab) => {
-        const target = ref ? locate(tab, ref) : undefined;
+        const target = ref ? await present(tab, ref) : undefined;
         if (target) {
           await markSecrets(tab.page);
           // A shortcut on a secret field could paste one in: those are the user's.
@@ -948,7 +1009,7 @@ export function browserTools(
           done: `Chose “${option}” in “${element}”`,
         },
         async (tab) => {
-          const target = locate(tab, ref);
+          const target = await present(tab, ref);
           const box = await tab.boxOf(target);
           await permit(tab, {
             action: `Choose “${option}” in “${element}”`,
@@ -1126,6 +1187,7 @@ export function browserTools(
     ref: z.ZodOptional<typeof Ref>;
   }> = {
     name: 'browser_scroll',
+    effect: 'read',
     description:
       'Scroll the page by most of a screen (`direction`), bring an element into view (`ref` alone, even inside a scrolling list or panel), or scroll inside a list or panel (`ref` and `direction`).',
     input: {
@@ -1221,6 +1283,7 @@ export function browserTools(
 
   const screenshot: HostTool = {
     name: 'browser_screenshot',
+    effect: 'read',
     description:
       'Look at the page as a picture of what’s on screen (layout, pictures, charts, canvas, captchas). Prefer browser_read for text and controls. If your model can’t see pictures, you get a description from one that can. Secret fields are masked.',
     input: {},
@@ -1256,6 +1319,7 @@ export function browserTools(
   const wait: HostTool<{ text: z.ZodOptional<z.ZodString>; seconds: z.ZodOptional<z.ZodNumber> }> =
     {
       name: 'browser_wait',
+      effect: 'read',
       description: 'Wait for some text to appear on the page (up to 20 s), or for a few seconds.',
       input: {
         text: z.string().max(200).optional().describe('Text to wait for.'),
@@ -1405,7 +1469,7 @@ export function browserTools(
                   by: 'agent',
                 },
               });
-            check();
+            acting();
             await armCreate(tab.page, (credential) => {
               void passwords.savePasskey?.(credential, host).then(
                 (saved) =>
@@ -1486,7 +1550,7 @@ export function browserTools(
             .catch((e: Error) => e);
           if (credential instanceof Error)
             return { label: 'Couldn’t use the passkey', text: credential.message };
-          check();
+          acting();
           await armSignIn(tab.page, credential, (signCount) => {
             void passwords
               .passkeyUsed?.(pick.itemId, credential.credentialId, signCount)
@@ -1577,6 +1641,7 @@ export function browserTools(
           }
           if (!id)
             throw new Refusal(`Say which tab: one of ${tab.tabs.map((t) => t.id).join(', ')}.`);
+          acting();
           if (action === 'switch') {
             if (!tab.switchTo(id))
               throw new Refusal(
@@ -1802,7 +1867,7 @@ export function browserTools(
             if (error instanceof UploadRefused) throw new Refusal(error.message);
             throw error;
           }
-          const target = locate(tab, ref);
+          const target = await present(tab, ref);
           const box = await tab.boxOf(target);
           const kind = await target
             .evaluate((el: { tagName: string; type?: string; multiple?: boolean }) => ({
@@ -1863,7 +1928,11 @@ export function browserTools(
     clickAt,
     upload,
   ] as HostTool[];
-  for (const t of all) t.searchHint = 'browser web page website';
+  for (const t of all) {
+    t.searchHint = 'browser web page website';
+    // The page it acted on is part of what the action is (see `generation`).
+    if (t.effect !== 'read') t.identity = (args) => JSON.stringify([session, generation, args]);
+  }
   // A browsing task starts with these, so they're there without a tool search first.
   for (const t of [open, read, click, type] as HostTool[]) t.alwaysLoad = true;
   return all;

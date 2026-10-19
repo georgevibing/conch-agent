@@ -147,7 +147,7 @@ export class TaskOperations {
               );
             const key = hash({
               tool: tool.name,
-              identity: contract?.identity?.(args) ?? args,
+              identity: contract?.identity?.(args) ?? tool.identity?.(args) ?? args,
               goalRevision: task.goalRevision ?? 0,
             });
             const history = (task.operations ?? []).filter((entry) => entry.key === key);

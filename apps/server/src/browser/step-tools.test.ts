@@ -27,6 +27,7 @@ function setup(timeoutMs = 100) {
   const events: ConversationEventInput[] = [];
   const stop = new AbortController();
   const target = {
+    count: vi.fn(async () => 1),
     evaluate: vi.fn(async () => 'Continue'),
     scrollIntoViewIfNeeded: vi.fn(async () => undefined),
     click: vi.fn(async () => undefined),
@@ -84,9 +85,11 @@ function setup(timeoutMs = 100) {
   const tools = new Map(
     browserTools(service as unknown as BrowserService, ctx, { timeoutMs }).map((t) => [t.name, t]),
   );
+  const raw = (name: string, args: Record<string, unknown> = {}) =>
+    (tools.get(name) as HostTool).run(args as never);
   const call = async (name: string, args: Record<string, unknown> = {}) =>
-    hostToolText(await (tools.get(name) as HostTool).run(args as never));
-  return { stop, target, tab: tab as unknown as Tab, service, ctx, events, call };
+    hostToolText(await raw(name, args));
+  return { stop, target, tab: tab as unknown as Tab, service, ctx, events, call, raw };
 }
 afterEach(() => vi.useRealTimers());
 
@@ -164,14 +167,42 @@ describe('browser step deadlines through the actual tools', () => {
     expect(h.service.runtime.heal).toHaveBeenCalledTimes(1);
   });
 
-  it('reports navigation failures as tool errors with the plain helpful message', async () => {
+  it('reports an address that never reached a site as a tool error that did nothing', async () => {
     const h = setup(1_000);
     vi.mocked(h.tab.page.goto).mockRejectedValue(new Error('net::ERR_NAME_NOT_RESOLVED'));
-    await expect(h.call('browser_open', { url: 'https://example.com' })).rejects.toThrow(
-      'Couldn’t find that site. Check the address.',
-    );
+    expect(await h.raw('browser_open', { url: 'https://example.com' })).toEqual({
+      text: 'Couldn’t find that site. Check the address.',
+      isError: true,
+      effect: 'not-executed',
+    });
     expect(h.events.at(-1)).toMatchObject({ step: { status: 'error' } });
     expect(h.tab.page.goto).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a navigation that may have reached the site an uncertain error', async () => {
+    const h = setup(1_000);
+    vi.mocked(h.tab.page.goto).mockRejectedValue(new Error('net::ERR_CONNECTION_RESET'));
+    await expect(h.call('browser_open', { url: 'https://example.com' })).rejects.toThrow();
+    expect(h.events.at(-1)).toMatchObject({ step: { status: 'error' } });
+  });
+
+  it('says a gone element, a refusal and a timeout before acting did nothing', async () => {
+    const h = setup(1_000);
+    h.target.count.mockResolvedValueOnce(0);
+    expect(await h.raw('browser_click', { ref: 'e9', element: 'Gone' })).toMatchObject({
+      isError: true,
+      effect: 'not-executed',
+    });
+    vi.mocked(h.ctx.ask).mockResolvedValueOnce('deny');
+    const refused = await h.raw('browser_click', { ref: 'e1', element: 'Continue' });
+    expect(refused).toMatchObject({ effect: 'not-executed' });
+    expect(refused).not.toHaveProperty('isError');
+    // Reading the button's words hangs: the step runs out of time before it clicks.
+    h.target.evaluate.mockReturnValueOnce(new Promise<string>(() => undefined));
+    const late = h.raw('browser_click', { ref: 'e1', element: 'Continue' });
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(await late).toMatchObject({ isError: true, effect: 'not-executed' });
+    expect(h.target.click).not.toHaveBeenCalled();
   });
 
   it('reports Stop after a click as an error and ignores the late page result', async () => {

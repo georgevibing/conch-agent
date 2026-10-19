@@ -69,7 +69,13 @@ Sources: [RFC 9110 §9.2.2, idempotent methods](https://www.rfc-editor.org/rfc/r
 Trusted tool code may return `HostToolResult.effect = 'not-executed'` only when
 no write was attempted (for example an approval declined before POST). The
 ledger keeps `not-run`, allowing a fresh approval on retry. It never derives this
-state from a model string or a network error. Semantic tool identities bind their
+state from a model string, and never from a network error that could follow a
+sent request. The browser's tools return it for a step that failed before it
+reached the page (refused, its element gone, out of time before acting, an address
+that never resolved or connected); once a step has acted, a failure stays
+uncertain. Their trusted `HostTool.identity` names the page an action was on, so
+the same click or key on a newer page is a new action, while looking (read,
+screenshot, wait, scroll) is a read. Semantic tool identities bind their
 original argument digest within a goal revision; changed content cannot evade
 an uncertain or already-confirmed write. Per-tool operation limits bound guided
 workflow effects in addition to tool/account allowlists.
