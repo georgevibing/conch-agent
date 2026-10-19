@@ -17,7 +17,7 @@ export interface PublicDoorProps extends Omit<ComponentProps<'section'>, 'title'
   state: PublicDoorState;
   /** The public address, once there is one. */
   url?: string;
-  via?: 'tailscale' | 'own';
+  via?: 'tailscale' | 'own' | 'relay';
   /** Conch's own address (ADR 0064), offered first when there is one: `https://conch.example.com`. */
   conchAddress?: string;
   /** The apps that come in through it ("Teams", "WeChat"), for the words. */
@@ -104,7 +104,11 @@ export function PublicDoor({
               <CopyButton value={url} label="Copy the public address" />
             </div>
             <Text size="sm" tone="muted">
-              {via === 'tailscale' ? 'Through Tailscale Funnel. ' : ''}
+              {via === 'tailscale'
+                ? 'Through Tailscale Funnel. '
+                : via === 'relay'
+                  ? 'Through your always-on relay, which keeps them while this computer is off. '
+                  : ''}
               It only lets in messages {names} signed. Nothing else on this computer can be reached
               through it.
             </Text>

@@ -56,6 +56,7 @@ import {
   Smartphone,
   Globe,
   HeartPulse,
+  Inbox,
   Laptop,
   MousePointerClick,
   ListChecks,
@@ -431,6 +432,15 @@ const settingsPlaces: {
     keywords:
       'always on background start at login startup login items launch boot keep running daemon service close window server headless log out logout awake sleep caffeinate little computer mac mini raspberry pi',
     icon: <Power />,
+  },
+  {
+    // The always-on relay (ADR 0140), on the Always on page.
+    tab: 'health',
+    focus: BACKGROUND_FOCUS,
+    label: 'Always-on relay',
+    keywords:
+      'relay always on relay offline while off computer off missed messages queue webhooks twilio cloudflare worker vps keep messages',
+    icon: <Inbox />,
   },
   {
     tab: 'security',

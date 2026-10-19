@@ -2,6 +2,7 @@ import { SettingsRow, SettingsSubpages, Stack } from '@conch/nacre';
 import { Power } from 'lucide-react';
 
 import { AlwaysOnSection, useBackground } from '../background/AlwaysOnSection';
+import { RelayStep } from '../channels/RelayStep';
 import { HealedSection } from '../settings/HealedSection';
 import { useSubpage } from '../settings/subpages';
 import { BackupSection } from './BackupSection';
@@ -20,7 +21,11 @@ export function HealthTab() {
   return (
     <SettingsSubpages page={page}>
       {page === 'always-on' ? (
-        <AlwaysOnSection />
+        <Stack gap={8}>
+          <AlwaysOnSection />
+          {/* While this computer is off: the relay keeps what arrives (ADR 0140). */}
+          <RelayStep />
+        </Stack>
       ) : (
         <Stack gap={8}>
           <UpdatesHeadline />

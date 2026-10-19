@@ -13,6 +13,7 @@ import { Handset, type HandsetMessage } from './Handset';
 import { HelloCard } from './HelloCard';
 import { KeyField, type KeyFieldStatus } from './KeyField';
 import { PortalSketch } from './PortalSketch';
+import { AlwaysOnRelay, type AlwaysOnRelayState } from './AlwaysOnRelay';
 import { PublicDoor, type PublicDoorState } from './PublicDoor';
 
 const meta = {
@@ -685,6 +686,56 @@ export const PublicAddress: Story = {
           onOwn={() => undefined}
           onOff={() => undefined}
           ownError="Teams and WeChat only deliver to HTTPS addresses. Use one starting https://."
+        />
+      </Stack>
+    );
+  },
+};
+
+const RELAY_CODE = `conch-relay-1.${'Q'.repeat(43)}.${'h'.repeat(43)}`;
+
+/**
+ * The always-on relay (ADR 0140): off with its one button, pairing with the
+ * command for each place it can run and a field for its address, on with
+ * what waits there, and out of reach.
+ */
+export const Relay: Story = {
+  render: function Render() {
+    const [state, setState] = useState<AlwaysOnRelayState>('off');
+    return (
+      <Stack gap={4} style={{ maxInlineSize: 560 }}>
+        <AlwaysOnRelay
+          state={state}
+          {...(state !== 'off' && { url: 'https://conch-relay.ada.workers.dev' })}
+          setup={{
+            code: RELAY_CODE,
+            worker: `npx wrangler@4 deploy --var CONCH_RELAY_SETUP:${RELAY_CODE}`,
+            node: `curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/v0.1.0/apps/relay/install.sh | sh -s -- ${RELAY_CODE} v0.1.0`,
+            docker: `docker run -d -p 8787:8787 -e CONCH_RELAY_SETUP=${RELAY_CODE} conch-relay`,
+          }}
+          waiting={3}
+          onPair={() => setState('pairing')}
+          onConnect={() => setState('ready')}
+          onCheck={() => undefined}
+          onForget={() => setState('off')}
+        />
+        <AlwaysOnRelay
+          state="pairing"
+          setup={{
+            code: RELAY_CODE,
+            worker: `npx wrangler@4 deploy --var CONCH_RELAY_SETUP:${RELAY_CODE}`,
+            node: `curl -fsSL https://raw.githubusercontent.com/georgevibing/conch-agent/v0.1.0/apps/relay/install.sh | sh -s -- ${RELAY_CODE} v0.1.0`,
+            docker: `docker run -d -p 8787:8787 -e CONCH_RELAY_SETUP=${RELAY_CODE} conch-relay`,
+          }}
+          onConnect={() => undefined}
+          onForget={() => undefined}
+        />
+        <AlwaysOnRelay
+          state="error"
+          url="https://relay.example.com"
+          message="The relay at https://relay.example.com doesn’t answer. Conch keeps trying."
+          onCheck={() => undefined}
+          onForget={() => undefined}
         />
       </Stack>
     );

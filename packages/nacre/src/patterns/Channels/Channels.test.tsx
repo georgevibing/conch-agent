@@ -12,6 +12,7 @@ import { Handset } from './Handset';
 import { HelloCard } from './HelloCard';
 import { KeyField } from './KeyField';
 import { PortalSketch } from './PortalSketch';
+import { AlwaysOnRelay } from './AlwaysOnRelay';
 import { PublicDoor } from './PublicDoor';
 
 describe('Channel logos', () => {
@@ -462,6 +463,65 @@ describe('PublicDoor', () => {
     expect(screen.getByText('Run this once.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+});
+
+describe('AlwaysOnRelay', () => {
+  const setup = {
+    code: 'conch-relay-1.abc.def',
+    worker: 'npx wrangler@4 deploy --var CONCH_RELAY_SETUP:conch-relay-1.abc.def',
+    node: 'curl -fsSL https://example.com/install.sh | sh -s -- conch-relay-1.abc.def',
+    docker: 'docker run conch-relay',
+  };
+
+  it('off: says what it’s for, and sets up with one press', async () => {
+    const onPair = vi.fn();
+    const { container } = renderNacre(<AlwaysOnRelay state="off" onPair={onPair} />);
+    expect(
+      screen.getByRole('heading', { name: 'Keep messages while this computer is off' }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Set up a relay' }));
+    expect(onPair).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
+  it('pairing: a command to copy for each place, and its address from the keyboard', async () => {
+    const onConnect = vi.fn();
+    const { container } = renderNacre(
+      <AlwaysOnRelay
+        state="pairing"
+        setup={setup}
+        onConnect={onConnect}
+        onForget={vi.fn()}
+        connectError="The relay must have an HTTPS address, starting https://."
+      />,
+    );
+    expect(screen.getByText(setup.worker)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the command for Docker' })).toBeInTheDocument();
+    await userEvent.type(
+      screen.getByLabelText('The relay’s address'),
+      'https://conch-relay.ada.workers.dev{Enter}',
+    );
+    expect(onConnect).toHaveBeenCalledWith('https://conch-relay.ada.workers.dev');
+    expect(screen.getByText(/must have an HTTPS address/)).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('on: the address, what waits, and how to stop', async () => {
+    const onForget = vi.fn();
+    const { container } = renderNacre(
+      <AlwaysOnRelay
+        state="ready"
+        url="https://relay.example.com"
+        waiting={2}
+        onCheck={vi.fn()}
+        onForget={onForget}
+      />,
+    );
+    expect(screen.getByText(/2 waiting to come in/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Stop using it' }));
+    expect(onForget).toHaveBeenCalled();
     await expectAccessible(container);
   });
 });
