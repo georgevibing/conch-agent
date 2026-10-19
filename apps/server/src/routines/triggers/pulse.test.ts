@@ -193,6 +193,39 @@ describe('the pulse', () => {
     pulse.stop();
   });
 
+  it('folds a backlog bigger than one run takes into one line, and starts one run, not hundreds', async () => {
+    const pushed = fakePushed();
+    let held = true;
+    const { pulse, fired } = await setup({
+      routines: [taskRoutine],
+      sources: { task: pushed.source },
+      // Over the spending limit while the backlog lands (ADR 0057): it all waits.
+      fire: async (id, batch) => {
+        if (held) return { held: 'This month’s limit is reached.' };
+        fired.push({ id, batch });
+        return 'started';
+      },
+    });
+    await pulse.sync();
+    // A week of webhooks the relay kept, all at once (ADR 0140).
+    pushed.arrive(...Array.from({ length: 200 }, (_, i) => happening(`w${i}`)));
+    await pulse.beat();
+    pushed.arrive(...Array.from({ length: 30 }, (_, i) => happening(`x${i}`)));
+    await pulse.beat();
+    expect(fired).toHaveLength(0);
+    expect((await pulse.state(taskRoutine)).waiting).toBe(50);
+    held = false;
+    await pulse.beat();
+    expect(fired).toHaveLength(1);
+    const batch = fired[0]?.batch.happenings ?? [];
+    expect(batch).toHaveLength(50);
+    // Nothing lost without a word: the oldest 181 are one line that counts them.
+    expect(batch[0]?.label).toBe('181 earlier ones, folded together');
+    expect(batch[0]?.detail).toContain('- email w0');
+    expect(batch.at(-1)?.id).toBe('x29');
+    pulse.stop();
+  });
+
   it('runs at most four times an hour; the rest waits for the next run', async () => {
     const pushed = fakePushed();
     let now = 1_000_000;

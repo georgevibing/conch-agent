@@ -92,6 +92,41 @@ interface Live {
 
 const keyOf = (r: PulseRoutine) => JSON.stringify([r.when, r.onlyIf ?? '']);
 
+/** Labels named in a folded line, at most. */
+const FOLD_NAMES = 20;
+
+/**
+ * More waiting than one run takes (a week of webhooks the relay kept, a
+ * morning of mail after Conch was off, ADR 0140): the oldest are folded into
+ * one line that says how many and names the first few, instead of being lost
+ * without a word or each becoming a run. The newest stay as they are.
+ */
+export function fold(pending: PendingHappening[], now: number): PendingHappening[] {
+  if (pending.length <= MAX_PENDING) return pending;
+  const cut = pending.length - (MAX_PENDING - 1);
+  const older = pending.slice(0, cut);
+  const count = older.reduce((n, h) => n + (h.folded ?? 1), 0);
+  const names = older
+    .flatMap((h) => (h.folded ? [] : [h.label.replace(/\s+/g, ' ').slice(0, 120)]))
+    .slice(0, FOLD_NAMES);
+  const earlier = older.find((h) => h.folded);
+  const first = older[0]?.at ?? now;
+  const line: PendingHappening = {
+    id: `folded:${first}:${count}`,
+    at: first,
+    label: `${count} earlier ones, folded together`,
+    detail: [
+      `${count} more happened before the ones listed separately, from ${new Date(first).toISOString()}. Only their names are kept:`,
+      ...names.map((n) => `- ${n}`),
+      ...(count > names.length ? [`- …and ${count - names.length} more`] : []),
+      ...(earlier ? ['', earlier.detail.slice(0, 2_000)] : []),
+    ].join('\n'),
+    folded: count,
+    ...(older.some((h) => h.unchecked) && { unchecked: true }),
+  };
+  return [line, ...pending.slice(cut)];
+}
+
 export class Pulse {
   #timer?: NodeJS.Timeout;
   #live = new Map<string, Live>();
@@ -341,7 +376,7 @@ export class Pulse {
       }
       await this.deps.store.updateSeen(id, (s) => {
         s.passed += passed;
-        s.pending = [...s.pending, ...keep].slice(-MAX_PENDING);
+        s.pending = fold([...s.pending, ...keep], this.#now);
       });
       this.deps.onChange?.(id);
       if (keep.length) await this.#drainLocked(id);

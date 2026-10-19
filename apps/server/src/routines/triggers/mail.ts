@@ -46,8 +46,15 @@ export interface MailAccess {
 const EVERY_MS = 2 * 60_000;
 /** Gmail indexes some mail late: each look reaches back this far, and ids keep it to once. */
 const OVERLAP_MS = 60 * 60_000;
-/** At most this many new messages read in one look (the rest wait for the next). */
+/** At most this many new messages read in one look. */
 const PER_LOOK = 20;
+/**
+ * Ids asked for in one look: more than are read, so a look after Conch was off
+ * (ADR 0140) can say how many more there were instead of losing them quietly.
+ */
+const IDS_PER_LOOK = 100;
+/** However long Conch was off, a look reaches back at most this far (a week, as the relay keeps). */
+export const CATCH_UP_MS = 7 * 24 * 60 * 60_000;
 const DETAIL_CHARS = 2_000;
 
 const quote = (text: string) => `"${text.replace(/["\\]/g, ' ').trim()}"`;
@@ -130,6 +137,24 @@ export function mailSource(access: MailAccess): TriggerSource<'mail'> {
     };
   };
 
+  /** Many more matched than one look reads: one line that says so, and where to see them. */
+  const more = (
+    account: MailAccount,
+    count: number,
+    atLeast: boolean,
+    from: number,
+    ctx: SourceContext<TriggerOf<'mail'>>,
+  ): Happening => {
+    const n = `${atLeast ? 'At least ' : ''}${count}`;
+    return {
+      id: `mail:${account.id}:more:${ctx.now}`,
+      at: from,
+      label: `${n} more emails to ${account.email}`,
+      link: `https://mail.google.com/mail/u/${encodeURIComponent(account.email)}/#search/${encodeURIComponent(mailQuery(ctx.trigger, from))}`,
+      detail: `${n} more emails matched since ${new Date(from).toISOString()} than Conch reads at once (it was off, or they came together). The newest ${PER_LOOK} are listed separately; these weren't read. They're in Gmail with this search: ${mailQuery(ctx.trigger, from)}`,
+    };
+  };
+
   /** Mail sent from this account (Conch's own replies included) and drafts never count. */
   const own = (account: MailAccount, m: MailMessage) =>
     m.labels?.some((l) => l === 'SENT' || l === 'DRAFT') ||
@@ -149,7 +174,8 @@ export function mailSource(access: MailAccess): TriggerSource<'mail'> {
       return { ...trigger, from, words };
     },
     describe: describeMail,
-    note: () => 'Conch looks for new email every 2 minutes while it’s running.',
+    note: () =>
+      'Conch looks for new email every 2 minutes while it’s running, and catches up on the last week when it starts again.',
     taint: () => ({ kind: 'app', label: 'an email' }),
     every: () => EVERY_MS,
     async check(ctx) {
@@ -158,13 +184,23 @@ export function mailSource(access: MailAccess): TriggerSource<'mail'> {
       const happenings: Happening[] = [];
       const failures: SourceError[] = [];
       for (const account of accounts) {
-        const from = Math.max(ctx.since, (looked[account.id] ?? ctx.since) - OVERLAP_MS);
+        const from = Math.max(
+          ctx.since,
+          (looked[account.id] ?? ctx.since) - OVERLAP_MS,
+          ctx.now - CATCH_UP_MS,
+        );
         try {
-          const ids = await access.search(account.id, mailQuery(ctx.trigger, from), PER_LOOK);
+          const ids = await access.search(account.id, mailQuery(ctx.trigger, from), IDS_PER_LOOK);
           const known = new Set((ctx.state.ids as string[] | undefined) ?? []);
-          for (const id of ids) {
+          const unread = ids.filter((id) => !known.has(`${account.id}:${id}`));
+          // Newest first: the newest are read, and the rest are counted in one line.
+          const rest = unread.slice(PER_LOOK);
+          if (rest.length) {
+            for (const id of rest) known.add(`${account.id}:${id}`);
+            happenings.push(more(account, rest.length, ids.length >= IDS_PER_LOOK, from, ctx));
+          }
+          for (const id of unread.slice(0, PER_LOOK)) {
             if (ctx.signal.aborted) break;
-            if (known.has(`${account.id}:${id}`)) continue;
             const message = await access.read(account.id, id);
             known.add(`${account.id}:${id}`);
             // Older than the routine itself (a slow index, a moved message): not news.
@@ -172,7 +208,7 @@ export function mailSource(access: MailAccess): TriggerSource<'mail'> {
               continue;
             happenings.push(happening(account, message));
           }
-          ctx.state.ids = [...known].slice(-300);
+          ctx.state.ids = [...known].slice(-500);
           looked[account.id] = ctx.now;
         } catch (error) {
           failures.push(
