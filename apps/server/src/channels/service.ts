@@ -652,7 +652,14 @@ export class ChannelService {
 
   /** What the security checkup needs: each channel that's on, and who besides you may use it. */
   async checkupCopy(): Promise<
-    { app: string; bot: string; others: string[]; groups: string[]; fullTrust?: boolean }[]
+    {
+      app: string;
+      bot: string;
+      others: string[];
+      groups: string[];
+      fullTrust?: boolean;
+      calls?: boolean;
+    }[]
   > {
     return (await this.deps.store.all())
       .filter((c) => c.enabled && c.people.length > 0)
@@ -661,6 +668,8 @@ export class ChannelService {
         bot: c.bot.username ? `@${c.bot.username}` : c.bot.name,
         others: c.people.slice(1).map((p) => p.name),
         ...(c.chatOptions.permissionMode === 'bypassPermissions' && { fullTrust: true }),
+        // It answers calls from your number (ADR 0138): a caller ID can be faked.
+        ...(c.settings.calls?.answer && { calls: true }),
         groups: c.groups.filter((g) => g.on).map((g) => g.name),
       }));
   }

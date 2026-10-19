@@ -117,6 +117,7 @@ describe('checkup findings', () => {
       channels: [
         { app: 'Telegram', bot: '@adas_conch_bot', others: ['Grace Hopper'] },
         { app: 'Slack', bot: 'Conch', others: [], groups: ['#general'] },
+        { app: 'SMS', bot: '(500) 555-0006', others: [], calls: true },
       ],
       door: { url: 'https://mac.tail1.ts.net/conch', apps: ['Microsoft Teams', 'WeChat'] },
     });
@@ -147,19 +148,23 @@ describe('checkup findings', () => {
       'channel-people': { kind: 'open', place: 'channels' },
       'channel-groups': { kind: 'open', place: 'channels', label: 'Review' },
       'channel-door': { kind: 'open', place: 'channels', label: 'Review' },
+      'phone-calls': { kind: 'open', place: 'channels', label: 'Review' },
     });
   });
 
   it('name the chat apps and the people let in, in plain words', () => {
     const items = everything();
     expect(items.find((i) => i.id === 'channels-full-trust')?.title).toBe(
-      'Messages from Telegram and Slack run without asking',
+      'Messages from Telegram, Slack and SMS run without asking',
     );
     expect(items.find((i) => i.id === 'channel-people')?.title).toBe(
       'Grace Hopper can use your assistant from Telegram',
     );
     expect(items.find((i) => i.id === 'channel-groups')?.title).toBe(
       'Your assistant answers in “#general”',
+    );
+    expect(items.find((i) => i.id === 'phone-calls')?.title).toBe(
+      'Your assistant answers calls from your number on (500) 555-0006',
     );
     expect(items.find((i) => i.id === 'channel-door')?.title).toBe(
       'https://mac.tail1.ts.net/conch is open to the internet, for Microsoft Teams and WeChat',

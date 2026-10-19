@@ -211,6 +211,13 @@ export const BackupPower = z.discriminatedUnion('kind', [
   }),
   /** Anything with the scrape token can read Conch's numbers at `/metrics` (ADR 0121). */
   z.object({ kind: z.literal('dashboards-scrape') }),
+  /** A phone number that answers calls from you, or rings you to allow a step (ADR 0138). */
+  z.object({
+    kind: z.literal('phone-calls'),
+    name: PowerText,
+    answers: z.boolean(),
+    approves: z.boolean(),
+  }),
 ]);
 export type BackupPower = z.infer<typeof BackupPower>;
 

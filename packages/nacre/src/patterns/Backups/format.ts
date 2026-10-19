@@ -44,6 +44,7 @@ export type BackupPowerInfo =
   | { kind: 'terminal-remote' }
   | { kind: 'computer-use'; apps: string[]; more?: number }
   | { kind: 'channel-people'; name: string; people: string[]; more?: number }
+  | { kind: 'phone-calls'; name: string; answers: boolean; approves: boolean }
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
   | { kind: 'conch-apps'; names: string[]; more?: number }
   | { kind: 'page-data-sites'; sites: string[]; more?: number }
@@ -179,6 +180,16 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: power.name,
         text: `Lets ${named(power.people, power.more)} talk to your assistant`,
+      };
+    case 'phone-calls':
+      return {
+        subject: power.name,
+        text:
+          power.answers && power.approves
+            ? 'Answers your calls, and rings you to allow a step'
+            : power.answers
+              ? 'Answers your calls: your assistant, by voice'
+              : 'Rings you to allow a step that waited',
       };
     case 'own-address':
       return {
