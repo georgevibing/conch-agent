@@ -210,6 +210,9 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   page changes. [Routines](./apps/docs/content/features/routines.md)
 - **Standing orders.** Say once "always tell me if a flight changes". Conch looks now
   and then, for free until something is new. [Check-ins](./apps/docs/content/features/check-ins.md)
+- **Nothing lost while it's off.** A tiny relay on a free Cloudflare account or a Pi keeps
+  texts, Teams messages and webhooks, locked for your computer alone, until Conch is back.
+  [The always-on relay](./apps/docs/content/care/relay.md)
 - **A browser you can watch** and take over. It signs in from your passwords without seeing
   one. A real terminal is a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
