@@ -462,33 +462,92 @@ export function searchCheck(services: Services): DoctorCheck {
       const base = { id: 'search', group: COMPUTER, title: 'Search' };
       const broken = services.search.state === 'unavailable';
       const state = repair && broken ? await services.search.repair() : services.search.state;
-      if (state === 'unavailable')
-        return [
-          repair
-            ? {
-                ...base,
-                state: 'info',
-                message: 'Conch couldn’t build search again just now. Your chats are all kept.',
-              }
-            : {
-                ...base,
-                state: 'warning',
-                message: 'Search isn’t working. Repair builds it again from your chats.',
-                repairable: true,
-              },
-        ];
-      return [
-        {
-          ...base,
-          state: broken ? 'fixed' : 'ok',
-          message: broken
-            ? 'Built again from your chats.'
-            : state === 'catching-up'
-              ? 'Catching up with your chats…'
-              : 'Up to date.',
-        },
-      ];
+      const meaning = await meaningItem(services.search, repair).catch(() => undefined);
+      return [...wordsItems(base, broken, state, repair), ...(meaning ? [meaning] : [])];
     },
+  };
+}
+
+function wordsItems(
+  base: { id: string; group: string; title: string },
+  broken: boolean,
+  state: Services['search']['state'],
+  repair: boolean,
+): DoctorItem[] {
+  if (state === 'unavailable')
+    return [
+      repair
+        ? {
+            ...base,
+            state: 'info',
+            message: 'Conch couldn’t build search again just now. Your chats are all kept.',
+          }
+        : {
+            ...base,
+            state: 'warning',
+            message: 'Search isn’t working. Repair builds it again from your chats.',
+            repairable: true,
+          },
+    ];
+  return [
+    {
+      ...base,
+      state: broken ? 'fixed' : 'ok',
+      message: broken
+        ? 'Built again from your chats.'
+        : state === 'catching-up'
+          ? 'Catching up with your chats…'
+          : 'Up to date.',
+    },
+  ];
+}
+
+/**
+ * Search by meaning (ADR 0139): vectors made from the chats, so a damaged
+ * file is made again, and a backfill under way is news, never a problem.
+ * Nothing to say while there's no model: memory's check offers that.
+ */
+export async function meaningItem(
+  search: Pick<Services['search'], 'meaningStatus' | 'repairMeaning'>,
+  repair: boolean,
+): Promise<DoctorItem | undefined> {
+  const base = { id: 'search:meaning', group: COMPUTER, title: 'Search by meaning' } as const;
+  const status = await search.meaningStatus();
+  if (!status) return undefined;
+  if (status.damaged || status.state === 'unavailable') {
+    if (!repair)
+      return {
+        ...base,
+        state: 'warning',
+        message: 'Searching chats by meaning isn’t working. Repair makes it again from your chats.',
+        repairable: true,
+      };
+    await search.repairMeaning();
+    const after = await search.meaningStatus();
+    return after && !after.damaged && after.state !== 'unavailable'
+      ? {
+          ...base,
+          state: 'fixed',
+          message: 'Made again from your chats. It catches up in the background.',
+        }
+      : {
+          ...base,
+          state: 'info',
+          message: 'Conch couldn’t make it again just now. Searching by words still works.',
+        };
+  }
+  if (status.state === 'off') return undefined;
+  const left = status.total - status.indexed;
+  if (status.state === 'catching-up' && left > 0)
+    return {
+      ...base,
+      state: 'info',
+      message: `${left === 1 ? 'One chat isn’t' : `${left} chats aren’t`} searchable by meaning yet. Conch is catching up.`,
+    };
+  return {
+    ...base,
+    state: 'ok',
+    message: `Every chat is searchable by meaning, with ${status.model ?? 'the meaning model'}.`,
   };
 }
 

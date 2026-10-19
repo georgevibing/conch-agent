@@ -176,6 +176,8 @@ export async function useConch(g: Gateway) {
   // Memory search by meaning: the (pretend) model, downloaded, and its vectors.
   await services.onDevice.get(['en-GB']);
   await services.memoryIndex.sync();
+  // And chat search by meaning, with its vectors (ADR 0139).
+  await services.search.meaningSettled();
   await ok(
     await inject({
       method: 'PUT',

@@ -137,8 +137,10 @@ don't know; `recall` first for facts about the person; say which chat it was in.
 - A tainted look marks the chat for good, like any other read: the next command
   asks. That's the cost of reading.
 - **Known limits:**
-  - Words, not meaning: the index matches spelling (ADR 0007). "Our honeymoon"
-    won't find "the trip to Bali" unless one of those words was said.
+  - ~~Words, not meaning: the index matches spelling (ADR 0007). "Our honeymoon"
+    won't find "the trip to Bali" unless one of those words was said.~~ Lifted by
+    [ADR 0139](./0139-meaning-search-for-chats.md): once the meaning model is
+    here, search blends words and meaning, under every rule above.
   - A forward takes the tools away from that chat until **New chat**.
   - Secrets are caught by shape and by Passwords; a bare password with no label
     can't be.

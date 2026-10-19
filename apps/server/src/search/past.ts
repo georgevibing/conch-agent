@@ -2,8 +2,10 @@
  * Your assistant looking through your earlier chats (ADR 0059).
  *
  * Two read-only tools over the search index every chat already feeds (ADR
- * 0007): `search_chats` finds the chats and lines that match, ranked and cut
- * exactly as ⌘K does, and `read_chat` reads a stretch of one of them. The
+ * 0007): `search_chats` finds the chats and lines that match, by words and
+ * by meaning (ADR 0139), ranked and cut exactly as ⌘K does, and `read_chat`
+ * reads a stretch of one of them. Lines found by meaning go through every rule
+ * below just as lines found by words do. The
  * rules, each tested in `past.test.ts`:
  *
  * - **Only for you.** A chat with someone else's words in it (a chat app's
@@ -223,9 +225,9 @@ export function pastChatTools(deps: PastChatsDeps, ctx: ToolContext): HostTool[]
   const search: HostTool<{ query: z.ZodString; limit: z.ZodOptional<z.ZodNumber> }> = {
     name: PAST_CHATS_TOOLS.search,
     description: [
-      'Look through the user’s earlier chats with you for words: what was decided, planned, made or said before.',
+      'Look through the user’s earlier chats with you: what was decided, planned, made or said before. It matches the words, and, once the meaning model is here, what they were about (“our honeymoon” can find “the trip to Bali”).',
       'Use it when they refer to an earlier conversation (“like last time”, “the Lisbon plan”, “what did we decide about the venue?”), or when the answer is likely in a past chat. For facts about the user themselves, use recall first.',
-      'Search for the distinctive words that were probably said (a name, a place, a term), not a whole question; part of a word matches, and close spellings are found when nothing matches exactly. Put a phrase in "quotes" to keep it together.',
+      'Search for the distinctive words that were probably said (a name, a place, a term) or a short phrase for the topic, not a whole question; part of a word matches, and close spellings are found when nothing matches exactly. Put a phrase in "quotes" to keep it together.',
       'Answers with the best-matching chats (this one left out; archived ones included and marked), when each was active, who said each line and a short snippet. Use read_chat with a chat id and a line’s message id to read around it.',
     ].join(' '),
     input: {
@@ -257,16 +259,25 @@ export function pastChatTools(deps: PastChatsDeps, ctx: ToolContext): HostTool[]
           text: clean(hit.snippet),
         }));
         const title = facts.title ?? group.title;
+        // No word of it matched: found by what it's about (ADR 0139).
+        const byMeaning = group.hits.length > 0 && group.hits.every((hit) => hit.byMeaning);
         chats.push({
           ...describe(group.conversationId, title, group.updatedAt, facts),
           matches: group.matches,
+          ...(byMeaning && { byMeaning: true }),
           lines,
         });
         if (facts.taint.length) tainted.set(group.conversationId, title);
       }
+      const onlyMeaning = chats.length > 0 && chats.every((chat) => chat.byMeaning);
       const notes = [
         results.catchingUp && 'Conch is still indexing the chats, so some may be missing.',
-        results.mode === 'fuzzy' && chats.length > 0 && 'Nothing matched exactly; these are close.',
+        results.mode === 'fuzzy' &&
+          chats.length > 0 &&
+          !onlyMeaning &&
+          'Nothing matched exactly; these are close.',
+        chats.some((chat) => chat.byMeaning) &&
+          'Chats marked byMeaning share no words with the search: they were found by what they’re about, so check they are what the user means.',
         tainted.size > 0 && CAUTION,
       ].filter(Boolean);
       const found: PastChatsFound = {
@@ -276,9 +287,11 @@ export function pastChatTools(deps: PastChatsDeps, ctx: ToolContext): HostTool[]
             ? 'too-short'
             : !chats.length
               ? 'none'
-              : results.mode === 'fuzzy'
-                ? 'close'
-                : 'exact',
+              : onlyMeaning
+                ? 'meaning'
+                : results.mode === 'fuzzy'
+                  ? 'close'
+                  : 'exact',
         chats,
         ...(results.mode === 'short'
           ? { note: 'Search for words of three letters or more.' }

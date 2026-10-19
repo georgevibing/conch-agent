@@ -5,6 +5,7 @@ import type { SearchPreview, SearchResults, SearchState, ServerEvent } from '@co
 import { setAside, type Heal } from '../lib/recover';
 import { isBroken, SearchIndex, type SearchSlice } from './index';
 import { SearchIndexer, type SearchSource } from './indexer';
+import { blend, ChatMeaning, type ChatMeaningDeps, type ChatMeaningStatus } from './meaning';
 
 export interface SearchServiceDeps {
   /** `~/.conch/search.db`. */
@@ -14,6 +15,11 @@ export interface SearchServiceDeps {
   log?: (error: unknown) => void;
   /** How long a search waits for the catch-up before answering with what's there. */
   waitMs?: number;
+  /**
+   * Search by meaning too (ADR 0139): vectors in their own file, made with
+   * memory's model. Without it, or without a model, search is by words.
+   */
+  meaning?: Omit<ChatMeaningDeps, 'source' | 'heal' | 'log'>;
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
@@ -35,8 +41,18 @@ export class SearchService {
   /** Opening or rebuilding; searches wait for it. */
   #work: Promise<void> = Promise.resolve();
   #rebuilt = false;
+  readonly #meaning?: ChatMeaning;
 
-  constructor(private readonly deps: SearchServiceDeps) {}
+  constructor(private readonly deps: SearchServiceDeps) {
+    if (deps.meaning)
+      this.#meaning = new ChatMeaning({
+        ...deps.meaning,
+        // The keyword index of the moment: it's replaced when it's rebuilt.
+        source: () => (this.#state === 'unavailable' ? undefined : this.#index),
+        heal: (message) => deps.heal?.('search', message),
+        log: deps.log,
+      });
+  }
 
   get state(): SearchState {
     return this.#state;
@@ -59,7 +75,27 @@ export class SearchService {
   }
 
   onEvent(event: ServerEvent): void {
+    // A deleted chat's vectors go at once, whatever the keyword index is doing.
+    if (event.type === 'conversation.deleted') this.#meaning?.remove(event.conversationId);
     this.#indexer?.onEvent(event);
+  }
+
+  /** A meaning model arrived (or came back): make the vectors it can (ADR 0139). */
+  meaningLanded(): Promise<void> {
+    return this.#meaning?.wake() ?? Promise.resolve();
+  }
+
+  /** How search by meaning is doing, for Repair everything; undefined when it isn't on. */
+  async meaningStatus(): Promise<(ChatMeaningStatus & { damaged: boolean }) | undefined> {
+    const meaning = this.#meaning;
+    if (!meaning) return undefined;
+    await this.#work;
+    return { ...(await meaning.status()), damaged: meaning.check() === 'damaged' };
+  }
+
+  /** Make the vectors again from the chats (Repair). */
+  async repairMeaning(): Promise<void> {
+    await this.#meaning?.repair();
   }
 
   /**
@@ -67,7 +103,7 @@ export class SearchService {
    * start-up shouldn't miss what's being indexed), then answers with what's
    * there and `catchingUp`.
    */
-  search(
+  async search(
     q: string,
     options: { in?: string; limit?: number },
   ): Promise<SearchResults | 'unavailable'> {
@@ -80,10 +116,26 @@ export class SearchService {
       tookMs: 0,
       catchingUp: true,
     };
-    return this.#use((index) => {
+    const words = await this.#use((index) => {
       const results = index.search(q, options);
       return this.#state === 'catching-up' ? { ...results, catchingUp: true } : results;
     }, nothingYet);
+    // Meaning for a search of every chat with something to search for; finding in one chat is by words.
+    if (words === 'unavailable' || !this.#meaning || options.in || words.mode === 'short')
+      return words;
+    const found = await this.#meaning.search(q).catch((error: unknown) => {
+      this.deps.log?.(error);
+      return undefined;
+    });
+    const index = this.#index;
+    if (!found?.length || !index) return words;
+    try {
+      return blend(words, found, index, options.limit ?? 20);
+    } catch (error) {
+      // The keyword index broke between the two: what words found still stands.
+      if (!isBroken(error)) throw error;
+      return words;
+    }
   }
 
   preview(
@@ -106,6 +158,7 @@ export class SearchService {
   async refresh(): Promise<void> {
     await this.#work;
     await this.#indexer?.refresh();
+    void this.#meaning?.wake();
   }
 
   /** Wait for pending indexing (tests). */
@@ -114,7 +167,19 @@ export class SearchService {
     await this.#indexer?.settled(id);
   }
 
+  /** Wait for the vectors too (tests). */
+  async meaningSettled(): Promise<void> {
+    await this.settled();
+    await this.#meaning?.wake();
+    await this.#meaning?.settled();
+  }
+
   close(): void {
+    this.#closeIndex();
+    this.#meaning?.close();
+  }
+
+  #closeIndex(): void {
     this.#generation++;
     try {
       this.#index?.close();
@@ -152,8 +217,11 @@ export class SearchService {
   #attach(index: SearchIndex, done?: string) {
     const generation = ++this.#generation;
     this.#index = index;
-    this.#indexer = new SearchIndexer(index, this.deps.source, (error) =>
-      this.#failed(error, generation),
+    this.#indexer = new SearchIndexer(
+      index,
+      this.deps.source,
+      (error) => this.#failed(error, generation),
+      (id) => this.#meaning?.changed(id),
     );
     this.#state = 'catching-up';
     void this.#indexer.start().then(() => {
@@ -161,6 +229,8 @@ export class SearchService {
       this.#state = 'ready';
       // Said once the chats are back in, so the note is true when it's read.
       if (done) this.deps.heal?.('search', done);
+      // Then meaning catches up, in the background (and carries on a backfill a restart cut short).
+      void this.#meaning?.wake();
     });
   }
 
@@ -180,7 +250,7 @@ export class SearchService {
   #automatic(error: unknown, note: string) {
     this.deps.log?.(error);
     if (this.#rebuilt) {
-      this.close();
+      this.#closeIndex();
       this.#state = 'unavailable';
       return;
     }
@@ -194,7 +264,7 @@ export class SearchService {
    * `note` says what happened, once it's done (a Repair isn't noted).
    */
   async #rebuild(note?: string) {
-    this.close();
+    this.#closeIndex();
     const { path } = this.deps;
     try {
       // Derived data holding every chat's text: keep one copy to look at, no more.

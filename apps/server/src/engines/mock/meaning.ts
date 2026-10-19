@@ -54,6 +54,7 @@ const MEANINGS = [
   /\bcars?\b|vehicle|automobile|\bdrives?\b/i,
   /\b(summar|recap|round-?up|overview|what happened)/i,
   /coffee|espresso|latte/i,
+  /honeymoon|\bbali\b|holiday|vacation|getaway/i,
 ];
 
 export const mockMeaningLoad: LoadRunner = async () => ({
