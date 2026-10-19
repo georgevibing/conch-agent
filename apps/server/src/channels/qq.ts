@@ -64,6 +64,23 @@ const UPLOAD_LIMIT = 10 * 1024 * 1024;
 const DOWNLOAD_LIMIT = 50 * 1024 * 1024;
 /** How long, and how many times, a message may be replied to (QQ: an hour and 4 in private, 5 minutes and 5 in a group). */
 const REPLY_WINDOW = { direct: 55 * 60_000, group: 4.5 * 60_000 };
+
+/** How often to beat when QQ's Hello says nothing usable, and the range it may ask for. */
+export const QQ_HEARTBEAT = { usual: 41_250, min: 5_000, max: 120_000 };
+
+/**
+ * How often to beat, from QQ's Hello: what it asked, held between five
+ * seconds and two minutes. The Hello comes off the network, and Node turns a
+ * huge, negative or non-finite delay into 1 ms (a beat as fast as it can go),
+ * so nothing it says is used unchecked.
+ */
+export function heartbeatEvery(asked: unknown): number {
+  const ms = Number(asked);
+  if (Number.isNaN(ms) || ms === 0) return QQ_HEARTBEAT.usual;
+  if (ms < QQ_HEARTBEAT.min) return QQ_HEARTBEAT.min;
+  if (ms > QQ_HEARTBEAT.max) return QQ_HEARTBEAT.max;
+  return ms;
+}
 const REPLIES = { direct: 4, group: 5 };
 
 /** What was pasted, tidied. */
@@ -416,12 +433,11 @@ class QqSession {
         if (typeof payload.s === 'number' && this.#session) this.#session.seq = payload.s;
         switch (payload.op) {
           case 10: {
-            const interval = Math.max(
-              5_000,
-              Number(
-                (payload.d as { heartbeat_interval?: number } | undefined)?.heartbeat_interval,
-              ) || 41_250,
+            const interval = heartbeatEvery(
+              (payload.d as { heartbeat_interval?: unknown } | undefined)?.heartbeat_interval,
             );
+            // A second Hello replaces the beat; it never leaves the first one running.
+            clearInterval(beat);
             beat = setInterval(() => {
               // Two heartbeats without an answer: this socket is gone, whatever it looks like.
               if (++missed > 2) return finish('resume');

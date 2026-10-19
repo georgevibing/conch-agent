@@ -8,7 +8,7 @@ import { loadConfig } from '../config';
 import { Services } from '../services';
 import { askFirst } from '../test/modes';
 import { MockQq } from './mock/qq';
-import { INTENTS, normalizeQq } from './qq';
+import { heartbeatEvery, INTENTS, normalizeQq, QQ_HEARTBEAT } from './qq';
 import { personId } from './types';
 
 let services: Services | undefined;
@@ -84,6 +84,27 @@ describe('QQ’s keys', () => {
       appId: MockQq.APP_ID,
       appSecret: 'x',
     });
+  });
+});
+
+describe('QQ’s heartbeat', () => {
+  it('beats as often as Hello asks, held between five seconds and two minutes', () => {
+    expect(heartbeatEvery(41_250)).toBe(41_250);
+    expect(heartbeatEvery('30000')).toBe(30_000);
+    expect(heartbeatEvery(undefined)).toBe(QQ_HEARTBEAT.usual);
+    expect(heartbeatEvery(0)).toBe(QQ_HEARTBEAT.usual);
+    expect(heartbeatEvery('soon')).toBe(QQ_HEARTBEAT.usual);
+    expect(heartbeatEvery(1)).toBe(5_000);
+    expect(heartbeatEvery(-1e9)).toBe(5_000);
+  });
+
+  it('never takes a delay Node would turn into a beat every millisecond', () => {
+    // Above 2^31 - 1 ms, or Infinity, setInterval fires every 1 ms instead.
+    for (const asked of [2 ** 31, 2 ** 53, Infinity, -Infinity, 1e308, '9'.repeat(400)]) {
+      const ms = heartbeatEvery(asked);
+      expect(ms).toBeGreaterThanOrEqual(QQ_HEARTBEAT.min);
+      expect(ms).toBeLessThanOrEqual(QQ_HEARTBEAT.max);
+    }
   });
 });
 
