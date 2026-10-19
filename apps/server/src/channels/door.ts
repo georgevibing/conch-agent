@@ -30,6 +30,7 @@ import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 
 import type { ChannelDoor as DoorView, ChannelKind, DoctorItem } from '@conch/protocol';
+import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -46,6 +47,8 @@ export const DOOR_PATH = '/conch';
 const BODY_LIMIT = 1024 * 1024;
 /** Deliveries per address per minute, before the door answers 429. */
 const PER_MINUTE = 240;
+/** A message on a call's audio socket is at most this big (20 ms of audio is a few hundred bytes). */
+const STREAM_MESSAGE_LIMIT = 64 * 1024;
 /** How often a door that's on is checked from the outside. */
 const CHECK_EVERY_MS = 10 * 60_000;
 
@@ -55,6 +58,8 @@ export interface HookRequest {
   headers: Record<string, string | undefined>;
   /** The raw body, as text. */
   body: string;
+  /** What came after `?` in the address, exactly as sent (signatures cover it). */
+  search?: string;
 }
 
 export interface HookReply {
@@ -64,6 +69,24 @@ export interface HookReply {
 }
 
 export type HookHandler = (request: HookRequest) => Promise<HookReply>;
+
+/** One open socket at a hook's `/stream` (a phone call's audio, ADR 0138). */
+export interface DoorSocket {
+  send(text: string): void;
+  close(): void;
+  onMessage(listener: (text: string) => void): void;
+  onClose(listener: () => void): void;
+}
+
+/**
+ * A hook that also takes a WebSocket at `/hooks/<id>/stream` (Twilio's
+ * Media Streams). `accept` checks the app's signature on the upgrade before
+ * it opens; nothing is read from a socket it didn't accept.
+ */
+export interface HookStream {
+  accept(request: HookRequest): boolean;
+  open(socket: DoorSocket): void;
+}
 
 /** What the door needs from Tailscale (`network/tailscale.ts`). */
 export interface DoorTailscale {
@@ -120,7 +143,7 @@ export class ChannelDoorService {
   #listening?: Promise<void>;
   #port?: number;
   /** `kind` is the chat app's; a routine's address (ADR 0056) has none. */
-  #routes = new Map<string, { kind?: ChannelKind; handler: HookHandler }>();
+  #routes = new Map<string, { kind?: ChannelKind; handler: HookHandler; stream?: HookStream }>();
   #counts = new Map<string, { minute: number; count: number }>();
   #file?: DoorFile;
   #state: DoorView = { state: 'off', apps: [] };
@@ -151,9 +174,17 @@ export class ChannelDoorService {
 
   // ── Addresses ──────────────────────────────────────────────────────────
 
-  /** Serve `handler` at `/hooks/<hookId>`. Returns what takes it away again. */
-  mount(hookId: string, kind: ChannelKind | undefined, handler: HookHandler): () => void {
-    this.#routes.set(hookId, { kind, handler });
+  /**
+   * Serve `handler` at `/hooks/<hookId>` (and `stream` at its `/stream`, when
+   * given). Returns what takes it away again.
+   */
+  mount(
+    hookId: string,
+    kind: ChannelKind | undefined,
+    handler: HookHandler,
+    stream?: HookStream,
+  ): () => void {
+    this.#routes.set(hookId, { kind, handler, ...(stream && { stream }) });
     void this.#listen().catch((error: unknown) =>
       this.#set({ state: 'error', message: (error as Error).message }),
     );
@@ -450,27 +481,48 @@ export class ChannelDoorService {
     app.addContentTypeParser('*', { parseAs: 'string' }, (_request, body, done) =>
       done(null, body),
     );
-    const handle = async (
-      request: { method: string; query: unknown; headers: Record<string, unknown>; body: unknown },
-      hookId: string,
-    ): Promise<HookReply> => {
-      const route = this.#routes.get(hookId);
-      if (!route || (request.method !== 'GET' && request.method !== 'POST'))
-        return { status: 404, body: 'Not found.' };
-      if (!this.#allow(hookId)) return { status: 429, body: 'Too many requests.' };
+    // A phone call's audio (ADR 0138): small messages, nothing else on the socket.
+    await app.register(fastifyWebsocket, {
+      options: { maxPayload: STREAM_MESSAGE_LIMIT, perMessageDeflate: false },
+    });
+    const hookRequest = (request: {
+      method: string;
+      url: string;
+      query: unknown;
+      headers: Record<string, unknown>;
+      body: unknown;
+    }): HookRequest => {
       const headers: Record<string, string | undefined> = {};
       for (const [key, value] of Object.entries(request.headers))
         headers[key] = typeof value === 'string' ? value : undefined;
       const query: Record<string, string> = {};
       for (const [key, value] of Object.entries((request.query ?? {}) as Record<string, unknown>))
         if (typeof value === 'string') query[key] = value;
+      const at = request.url.indexOf('?');
+      return {
+        method: request.method === 'POST' ? 'POST' : 'GET',
+        query,
+        headers,
+        body: typeof request.body === 'string' ? request.body : '',
+        search: at >= 0 ? request.url.slice(at + 1) : '',
+      };
+    };
+    const handle = async (
+      request: {
+        method: string;
+        url: string;
+        query: unknown;
+        headers: Record<string, unknown>;
+        body: unknown;
+      },
+      hookId: string,
+    ): Promise<HookReply> => {
+      const route = this.#routes.get(hookId);
+      if (!route || (request.method !== 'GET' && request.method !== 'POST'))
+        return { status: 404, body: 'Not found.' };
+      if (!this.#allow(hookId)) return { status: 429, body: 'Too many requests.' };
       try {
-        return await route.handler({
-          method: request.method,
-          query,
-          headers,
-          body: typeof request.body === 'string' ? request.body : '',
-        });
+        return await route.handler(hookRequest(request));
       } catch (error) {
         this.deps.log?.(`door: ${(error as Error).message}`);
         return { status: 500, body: 'Something went wrong.' };
@@ -489,6 +541,40 @@ export class ChannelDoorService {
             .header('x-content-type-options', 'nosniff')
             .type(answer.type ?? 'text/plain; charset=utf-8')
             .send(answer.body ?? '');
+        },
+      });
+      // A hook's socket: only where one is mounted, and only once its signature checks out.
+      app.route<{ Params: { hookId: string } }>({
+        method: 'GET',
+        url: `${prefix}/hooks/:hookId/stream`,
+        preValidation: async (request, reply) => {
+          const route = this.#routes.get(request.params.hookId);
+          if (!route?.stream) return reply.code(404).type('text/plain').send('Not found.');
+          if (!this.#allow(request.params.hookId))
+            return reply.code(429).type('text/plain').send('Too many requests.');
+          let ok = false;
+          try {
+            ok = route.stream.accept(hookRequest(request));
+          } catch (error) {
+            this.deps.log?.(`door: ${(error as Error).message}`);
+          }
+          if (!ok) return reply.code(403).type('text/plain').send('Not accepted.');
+        },
+        handler: (_request, reply) => reply.code(426).type('text/plain').send('Upgrade required.'),
+        wsHandler: (socket, request) => {
+          const stream = this.#routes.get(request.params.hookId)?.stream;
+          if (!stream) return socket.close();
+          stream.open({
+            send: (text) => {
+              if (socket.readyState === socket.OPEN) socket.send(text);
+            },
+            close: () => socket.close(),
+            onMessage: (listener) =>
+              socket.on('message', (data: Buffer, binary: boolean) => {
+                if (!binary) listener(data.toString('utf8'));
+              }),
+            onClose: (listener) => socket.on('close', listener),
+          });
         },
       });
       app.get<{ Params: { nonce: string } }>(`${prefix}/ping/:nonce`, (request, reply) => {
