@@ -20,6 +20,13 @@ describe('page data', () => {
       'https://shop.example/img/k.png',
     );
   });
+  it('reads JSON-LD wrapped in a comment, however the comment and the script end', () => {
+    const html = `<script type="application/ld+json"><!--{"@type":"Product","name":"A"}--!></script >
+      <script type="application/ld+json"><!-- {"@type":"Recipe","name":"B"} --></SCRIPT>`;
+    const data = pageData(html);
+    expect(findLd(data, 'product')?.name).toBe('A');
+    expect(findLd(data, 'recipe')?.name).toBe('B');
+  });
   it('keeps only https pictures, plain text and real durations', () => {
     expect(ldImage('http://shop.example/k.jpg', 'https://shop.example')).toBeUndefined();
     expect(ldImage('javascript:alert(1)', 'https://shop.example')).toBeUndefined();

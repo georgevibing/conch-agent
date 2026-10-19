@@ -327,17 +327,24 @@ export function parseMarkets(body: unknown): CoinMarket[] {
   });
 }
 
+/** The entities a coin's description uses, read; any other is a space. */
+const ENTITIES = new Map([
+  ['nbsp', ' '],
+  ['amp', '&'],
+  ['quot', '"'],
+  ['#39', '’'],
+  ['apos', '’'],
+  ['lt', '‹'],
+  ['gt', '›'],
+]);
+
 /** HTML in a coin's description, as plain text: tags gone, entities read, clipped at a sentence. */
 export function plainText(html: string, most = 480): string {
   const text = html
     .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, '’')
-    .replace(/&lt;/g, '‹')
-    .replace(/&gt;/g, '›')
-    .replace(/&#\d+;|&\w+;/g, ' ')
+    // Every entity read in one pass, so what one turns into is never read again
+    // (`&amp;lt;` is the words "&lt;", not "‹").
+    .replace(/&(#\d+|\w+);/g, (_, name: string) => ENTITIES.get(name) ?? ' ')
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();

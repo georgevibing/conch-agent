@@ -201,9 +201,25 @@ export class MockDiscord {
     );
     app.post('/api/v10/channels/:id/typing', (_request, reply) => reply.code(204).send());
     // The bot's application commands: Discord's own "/" menu.
-    app.put('/api/v10/applications/:id/commands', (request) => {
-      this.commands = (request.body as MockDiscord['commands'] | undefined) ?? [];
-      return this.commands;
+    app.put('/api/v10/applications/:id/commands', (request, reply) => {
+      // As Discord does: a JSON list of commands, each named, or a 400. What
+      // comes back is JSON, never the bytes sent (a text/plain body is refused).
+      const body = request.body;
+      if (
+        !Array.isArray(body) ||
+        !body.every(
+          (c) =>
+            !!c &&
+            typeof (c as { name?: unknown }).name === 'string' &&
+            typeof (c as { description?: unknown }).description === 'string',
+        )
+      )
+        return reply.code(400).send({ code: 50035, message: 'Invalid Form Body' });
+      this.commands = body as MockDiscord['commands'];
+      return reply
+        .header('content-type', 'application/json; charset=utf-8')
+        .header('x-content-type-options', 'nosniff')
+        .send(JSON.stringify(this.commands));
     });
     app.post('/api/v10/interactions/:id/:token/callback', (_request, reply) =>
       reply.code(204).send(),

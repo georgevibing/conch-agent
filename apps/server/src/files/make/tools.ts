@@ -9,6 +9,7 @@
  * in the sealed worker (`../worker.ts`); what the model wrote is printed in
  * a browser with JavaScript off and the network cut (`printer.ts`).
  */
+import { XMLParser } from 'fast-xml-parser';
 import { convert as htmlToText } from 'html-to-text';
 import { z } from 'zod';
 
@@ -1330,14 +1331,113 @@ function htmlText(html: string): string {
   });
 }
 
-/** An SVG without anything that could run or reach out when it's opened. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** Elements that run, frame, submit or load a document: never kept, whatever their prefix. */
+const SVG_DENIED = new Set([
+  'script',
+  'foreignobject',
+  'iframe',
+  'frame',
+  'frameset',
+  'object',
+  'embed',
+  'applet',
+  'form',
+  'base',
+  'link',
+  'meta',
+  'handler',
+  'listener',
+]);
+/** An XML name with nothing a browser could read as the end of a tag or an attribute. */
+const XML_NAME = /^[A-Za-z_][\w.:-]*$/;
+const svgParser = new XMLParser({
+  preserveOrder: true,
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  commentPropName: '#comment',
+  cdataPropName: '#cdata',
+  // Entities stay as they were written; nothing is decoded and written back.
+  processEntities: false,
+  htmlEntities: false,
+  trimValues: false,
+  parseTagValue: false,
+  parseAttributeValue: false,
+  allowBooleanAttributes: true,
+  // The parser's own ceiling, said aloud: it bounds the walk below.
+  maxNestedTags: 100,
+});
+type SvgNode = Record<string, unknown> & { ':@'?: Record<string, unknown> };
+
+const localName = (name: string) => name.slice(name.lastIndexOf(':') + 1).toLowerCase();
+
+function svgAttributes(raw: Record<string, unknown> | undefined): string | undefined {
+  let out = '';
+  for (const [name, value] of Object.entries(raw ?? {})) {
+    const text = typeof value === 'string' ? value : '';
+    if (!XML_NAME.test(name)) continue;
+    const local = localName(name);
+    if (local.startsWith('on')) continue;
+    // A default namespace other than SVG's (XHTML, say) makes a different kind of element.
+    if (name === 'xmlns' && text.trim() !== SVG_NS) return undefined;
+    const link = local === 'href' || ['src', 'action', 'formaction'].includes(name.toLowerCase());
+    const kept = link && !/^\s*(?:#|data:image\/)/i.test(text) ? '#' : text;
+    out += ` ${name}="${kept.replace(/"/g, '&quot;').replace(/</g, '&lt;')}"`;
+  }
+  return out;
+}
+
+function svgNodes(nodes: SvgNode[]): string {
+  let out = '';
+  for (const node of nodes) {
+    const name = Object.keys(node).find((k) => k !== ':@');
+    if (!name) continue;
+    const body = node[name];
+    if (name === '#text') {
+      out += String(body).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      continue;
+    }
+    const inner = Array.isArray(body) ? (body as SvgNode[]) : [];
+    const text = inner.map((n) => (typeof n['#text'] === 'string' ? n['#text'] : '')).join('');
+    if (name === '#comment') {
+      if (!text.includes('--')) out += `<!--${text}-->`;
+      continue;
+    }
+    if (name === '#cdata') {
+      if (!text.includes(']]>')) out += `<![CDATA[${text}]]>`;
+      continue;
+    }
+    // Processing instructions (an XSLT stylesheet among them), odd names, other
+    // namespaces' elements and anything that runs or loads a document go, with all inside.
+    if (!XML_NAME.test(name) || (name.includes(':') && !name.startsWith('svg:'))) continue;
+    if (SVG_DENIED.has(localName(name))) continue;
+    const attrs = node[':@'];
+    // An animation that sets a link or a handler is a script by another name.
+    const target = typeof attrs?.attributeName === 'string' ? localName(attrs.attributeName) : '';
+    if (target === 'href' || target.startsWith('on')) continue;
+    const attributes = svgAttributes(attrs);
+    if (attributes === undefined) continue;
+    out += inner.length
+      ? `<${name}${attributes}>${svgNodes(inner)}</${name}>`
+      : `<${name}${attributes}/>`;
+  }
+  return out;
+}
+
+/**
+ * An SVG without anything that could run or reach out when it's opened. An
+ * SVG file opened on its own has no CSP to fall back on, so this doesn't
+ * filter the markup: it parses it and writes out only what it understood,
+ * every name checked and every value quoted again.
+ */
 export function sealSvg(svg: string): string {
-  return svg
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<script\b[^>]*\/?>/gi, '')
-    .replace(/<foreignObject\b[\s\S]*?<\/foreignObject\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/((?:xlink:)?href)\s*=\s*(["'])(?!#|data:image\/)[^"']*\2/gi, '$1="#"');
+  let tree: SvgNode[];
+  try {
+    tree = svgParser.parse(svg) as SvgNode[];
+  } catch {
+    throw new FileError('That SVG couldn’t be read: check that its tags and quotes are closed.');
+  }
+  return svgNodes(tree);
 }
 
 function svgSize(svg: string): { width: number; height: number } {
