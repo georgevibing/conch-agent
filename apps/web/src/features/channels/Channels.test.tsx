@@ -617,6 +617,75 @@ describe('Phone calls on an SMS number (ADR 0138)', () => {
     ).toEqual([]);
   });
 
+  const answering = {
+    notifyRoutines: true,
+    calls: {
+      answer: true,
+      approvals: false,
+      after: 5,
+      quiet: { from: '22:00', to: '07:00' },
+      perDay: 3,
+      maxMinutes: 10,
+    },
+  };
+
+  it('says plainly that calls need a passcode, and sets one only once it’s a good one', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [sms({ settings: answering })], catalog }),
+      'PUT /api/channels/ch_sms/call-passcode': () =>
+        sms({ settings: answering, callPasscode: { setAt: Date.now() } }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_sms" />, { route: '/channels/ch_sms' });
+    const section = await screen.findByRole('region', { name: 'Phone calls' });
+    expect(section).toHaveTextContent(
+      'Without full caller verification from your carrier, Conch asks for your call passcode. Set one so calls always work.',
+    );
+    await userEvent.click(within(section).getByRole('button', { name: /Set passcode/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Set a call passcode' });
+    const field = within(dialog).getByLabelText('Passcode');
+    expect(field).toHaveAttribute('inputmode', 'numeric');
+    expect(field).toHaveAttribute('type', 'password');
+    await userEvent.type(field, '123456');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Set passcode' }));
+    expect(await within(dialog).findByText(/a run of digits/)).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+    await userEvent.clear(field);
+    await userEvent.type(field, '482913');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Set passcode' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ passcode: '482913' }),
+    );
+    expect(await within(section).findByRole('button', { name: /Change/ })).toBeInTheDocument();
+    expect(section).toHaveTextContent('Asked on the keypad when your carrier can’t fully verify');
+    expect(section).not.toHaveTextContent('482913');
+  });
+
+  it('says when wrong passcodes turned calls away for the day', async () => {
+    const day = new Intl.DateTimeFormat('en-CA').format(Date.now());
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          sms({
+            settings: answering,
+            callPasscode: { setAt: 1 },
+            calls: { day, placed: 0, answered: 2, seconds: 60, passcodeFails: 5 },
+          }),
+        ],
+        catalog,
+      }),
+    });
+    const { container } = renderApp(<ChannelDetailView channelId="ch_sms" />, {
+      route: '/channels/ch_sms',
+    });
+    const section = await screen.findByRole('region', { name: 'Phone calls' });
+    expect(section).toHaveTextContent('Calls are turned away until tomorrow');
+    expect(
+      (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
+    ).toEqual([]);
+  });
+
   it('isn’t offered for other chat apps', async () => {
     mockFetch({
       ...base,

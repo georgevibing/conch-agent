@@ -428,6 +428,18 @@ function Detail({ channel }: { channel: Channel }) {
         onChange={(calls) =>
           void guard(() => update.mutateAsync([{ settings: { calls } }])).catch(() => undefined)
         }
+        // The passcode lets a call the carrier can't vouch for in: the same confirmation.
+        onPasscode={(passcode) =>
+          guard(async () => {
+            putChannel(
+              client,
+              passcode === null
+                ? await channelsApi.clearCallPasscode(channel.id)
+                : await channelsApi.setCallPasscode(channel.id, { passcode }),
+            );
+            toast.success(passcode === null ? 'Call passcode removed.' : 'Call passcode set.');
+          })
+        }
       />
 
       <section aria-labelledby="ch-settings" className={styles.section}>

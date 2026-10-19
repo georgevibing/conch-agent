@@ -13,6 +13,7 @@ import {
   ImessageSetup,
   type OpenImessageBody,
   type ReplaceChannelTokenBody,
+  type SetCallPasscodeBody,
   type UpdateChannelBody,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -30,6 +31,11 @@ export const channelsApi = {
     request(Channel, `/api/channels/${id}`, { method: 'PATCH', body }),
   replaceToken: (id: string, body: ReplaceChannelTokenBody) =>
     request(Channel, `/api/channels/${id}/token`, { method: 'PUT', body }),
+  /** The call passcode (ADR 0138): sent once, kept as a hash, never sent back. */
+  setCallPasscode: (id: string, body: SetCallPasscodeBody) =>
+    request(Channel, `/api/channels/${id}/call-passcode`, { method: 'PUT', body }),
+  clearCallPasscode: (id: string) =>
+    request(Channel, `/api/channels/${id}/call-passcode`, { method: 'DELETE' }),
   remove: (id: string) => request(z.unknown(), `/api/channels/${id}`, { method: 'DELETE' }),
   pair: (id: string) => request(Channel, `/api/channels/${id}/pair`, { method: 'POST', body: {} }),
   answer: (id: string, personId: string, answer: 'allow' | 'block' | 'dismiss') =>

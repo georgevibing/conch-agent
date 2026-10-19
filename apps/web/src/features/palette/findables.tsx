@@ -815,7 +815,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         id: `${c.id}-calls`,
         label: `Phone calls on ${c.bot.name}`,
         keywords:
-          'phone calls call me ring voice answer calls hands-free driving approval ok twilio quiet hours',
+          'phone calls call me ring voice answer calls hands-free driving approval ok twilio quiet hours call passcode pin keypad caller id verification',
         brand: c.kind as string,
         color: APPS[c.kind].color,
         to: `/channels/${c.id}`,

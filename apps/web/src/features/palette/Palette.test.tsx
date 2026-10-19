@@ -2317,6 +2317,12 @@ describe('Palette search', () => {
     expect(
       await screen.findByRole('option', { name: /Phone calls on \(500\) 555-0006/ }),
     ).toBeInTheDocument();
+    // Its passcode is set there too (ADR 0138).
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'call passcode');
+    expect(
+      await screen.findByRole('option', { name: /Phone calls on \(500\) 555-0006/ }),
+    ).toBeInTheDocument();
   });
 
   it('finds saved passwords by name or site, and opens them', async () => {
