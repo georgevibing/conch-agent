@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectAccessible, renderNacre } from '../../test/render';
 import { FolderBrowser, type FolderBrowserProps } from './FolderBrowser';
 import { guessOf, HOME, listingOf, PLACES, RECENT } from './fixtures';
+import { withLastPart } from './paths';
 
 function Harness(
   props: Partial<FolderBrowserProps> & { start?: string; onChosen?: (path: string) => void },
@@ -155,5 +156,33 @@ describe('FolderBrowser', () => {
       />,
     );
     await expectAccessible(document.body);
+  });
+});
+
+describe('a typed path’s last part, swapped for a folder', () => {
+  /** What it did before: `typed.replace(/[^\\/]*$/, name)`, with a name that has no `$` in it. */
+  const old = (typed: string, name: string) => typed.replace(/[^\\/]*$/, name);
+
+  it('keeps everything up to the last separator, as before', () => {
+    const alphabet = ['a', '/', '\\', '.', ' ', '\n'];
+    let level = [''];
+    for (let n = 0; n <= 6; n++) {
+      for (const typed of level)
+        expect(withLastPart(typed, 'Projects')).toBe(old(typed, 'Projects'));
+      level = level.flatMap((s) => alphabet.map((ch) => s + ch));
+    }
+    expect(withLastPart('~/Pro', 'Projects')).toBe('~/Projects');
+    expect(withLastPart('C:\\Users\\ad', 'ada')).toBe('C:\\Users\\ada');
+  });
+
+  it('takes a folder’s name as its letters, `$&` and all', () => {
+    expect(withLastPart('~/x', 'a$&b$`c')).toBe('~/a$&b$`c');
+  });
+
+  it('is quick on a long path with no separator', () => {
+    const began = Date.now();
+    expect(withLastPart('.'.repeat(500_000), 'x')).toBe('x');
+    expect(withLastPart(`/${'a'.repeat(500_000)}/`, 'x')).toBe(`/${'a'.repeat(500_000)}/x`);
+    expect(Date.now() - began).toBeLessThan(1000);
   });
 });

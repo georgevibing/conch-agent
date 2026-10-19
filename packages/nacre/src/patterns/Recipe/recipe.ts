@@ -65,6 +65,53 @@ function stem(word: string): string {
 }
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Where `.` stops: the ends of lines, which an aside in brackets never crosses. */
+const LINE_BREAK = /([\n\r\u2028\u2029])/;
+
+/**
+ * Each aside in brackets (`flour (sifted)`) as a space: what
+ * `text.replace(/\(.*?\)/g, ' ')` gave, read by index. That expression went
+ * back over the rest of the line for every `(` without a `)` after it, slow on
+ * a long run of them (CodeQL js/polynomial-redos); here a `(` with no `)` after
+ * it on its line ends the search for that line.
+ */
+export function withoutAsides(text: string): string {
+  // Split keeps the line ends (odd places), so they're put back as they were.
+  return text
+    .split(LINE_BREAK)
+    .map((line, i) => {
+      if (i % 2 === 1) return line;
+      let out = '';
+      let at = 0;
+      for (;;) {
+        const open = line.indexOf('(', at);
+        const close = open < 0 ? -1 : line.indexOf(')', open + 1);
+        if (close < 0) return out + line.slice(at);
+        out += `${line.slice(at, open)} `;
+        at = close + 1;
+      }
+    })
+    .join('');
+}
+
+const WORD_CHAR = /^\w$/;
+const isWordAt = (text: string, at: number) => WORD_CHAR.test(text.charAt(at));
+
+/**
+ * Whether `phrase` stands in `text` as whole words: what
+ * `new RegExp(`\\b${escape(phrase)}\\b`).test(text)` said, by index, so a long
+ * ingredient can't make an expression too big to build.
+ */
+export function hasWords(text: string, phrase: string): boolean {
+  const boundary = (at: number) => isWordAt(text, at - 1) !== isWordAt(text, at);
+  for (let at = text.indexOf(phrase); at >= 0; at = text.indexOf(phrase, at + 1))
+    if (boundary(at) && boundary(at + phrase.length)) return true;
+  return false;
+}
+
+/** Longer than any ingredient's naming word: such a "word" is never looked for. */
+const LONGEST_WORD = 60;
+
 /**
  * The ingredients a step's words mention, by place in the list: "Whisk the
  * eggs into the flour" uses the eggs and the flour. Each ingredient is
@@ -77,15 +124,12 @@ export function stepIngredients(
 ): number[] {
   const words = text.toLowerCase();
   return ingredients.flatMap((ingredient, i) => {
-    const item = (ingredient.item ?? '')
-      .toLowerCase()
-      .replace(/\(.*?\)/g, ' ')
-      .trim();
+    const item = withoutAsides((ingredient.item ?? '').toLowerCase()).trim();
     if (!item) return [];
-    if (new RegExp(`\\b${escape(item)}\\b`).test(words)) return [i];
+    if (hasWords(words, item)) return [i];
     const naming = item.split(/[^\p{L}]+/u).filter((w) => w.length > 2 && !DESCRIBING.has(w));
     const last = naming.at(-1);
-    if (!last) return [];
+    if (!last || last.length > LONGEST_WORD) return [];
     const root = stem(last);
     const forms = [`${escape(root)}(?:s|es)?`];
     if (root.endsWith('y')) forms.push(`${escape(root.slice(0, -1))}ies`);
