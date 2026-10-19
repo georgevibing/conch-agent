@@ -233,7 +233,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   menu bar, and an installable app on your phone over a private address.
   [On your phone](./apps/docs/content/start/phone.md)
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Teams, Matrix and more, with the same commands.
+  Teams, Matrix and more, with the same commands. Call your assistant's SMS number
+  hands-free, or let it ring you when an OK waits.
   [Chat apps](./apps/docs/content/channels)
 - **A server of your own.** One line installs it at `conch.yourname.com` with its own
   certificate. [On a server](./apps/docs/content/start/server.md)
