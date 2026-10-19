@@ -552,6 +552,8 @@ export async function useConch(g: Gateway) {
       payload: { app: 'other', name: 'An editor', scopes: ['memory.read'] },
     }),
   );
+  // The always-on relay, paired (ADR 0140): its address file and its sealed key.
+  await ok(await inject({ method: 'POST', url: '/api/relay/pair', payload: {} }));
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
   const signedIn = await inject({

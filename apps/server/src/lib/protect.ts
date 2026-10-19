@@ -54,6 +54,11 @@ export function protectedPaths(home: string): string[] {
     join(home, 'channels'),
     // Whether the public door is open: the agent mustn't open it.
     join(home, 'door.json'),
+    // The always-on relay (ADR 0140): where the door leads, the key that opens what it
+    // keeps, and what was already taken from it (a ledger the agent could reset to replay).
+    join(home, 'relay.json'),
+    join(home, 'relay.secrets.json'),
+    join(home, 'relay-seen.json'),
     // An address of your own lets the internet reach Conch, and its folder holds the
     // certificate's private key and the ACME account key (ADR 0064).
     join(home, 'address.json'),

@@ -19,6 +19,7 @@
     "@anthropic-ai/sandbox-runtime": "^0.0.78",
     "@anthropic-ai/sdk": "^0.129.0",
     "@conch/protocol": "workspace:*",
+    "@conch/relay": "workspace:*",
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.1",
     "@huggingface/transformers": "4.3.0",

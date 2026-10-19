@@ -1,4 +1,8 @@
 {
   "extends": "@conch/tsconfig/node.json",
+  "compilerOptions": {
+    // The relay (apps/relay) runs its .ts as is on Node, so its imports name the .ts.
+    "allowImportingTsExtensions": true
+  },
   "include": ["src"]
 }

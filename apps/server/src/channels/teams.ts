@@ -385,7 +385,15 @@ export class TeamsAdapter implements ChannelAdapter {
     }
     if (!activity || typeof activity !== 'object') return { status: 400, body: 'Not accepted.' };
     try {
-      await verifyActivity(request.headers.authorization, activity, this.secrets.appId, this.#keys);
+      await verifyActivity(
+        request.headers.authorization,
+        activity,
+        this.secrets.appId,
+        this.#keys,
+        {
+          ...(request.receivedAt !== undefined && { at: request.receivedAt }),
+        },
+      );
     } catch (error) {
       if (error instanceof TeamsAuthError) return { status: 401, body: 'Not authorised.' };
       throw error;

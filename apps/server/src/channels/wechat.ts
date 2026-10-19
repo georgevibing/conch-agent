@@ -3,7 +3,7 @@ import { createDecipheriv, randomBytes } from 'node:crypto';
 import { type ChannelBot, type ChannelSecrets, WECHAT_APP_ID } from '@conch/protocol';
 
 import type { ChannelEndpoints } from './adapters';
-import type { HookReply, HookRequest } from './door';
+import { arrivedAt, type HookReply, type HookRequest } from './door';
 import { fit, plain, toDiscordMarkdown } from './format';
 import { Recent, TextChoices } from './linked';
 import {
@@ -886,7 +886,7 @@ class OfficialSession {
     if (!signed(q.signature, token, timestamp, nonce))
       return { status: 401, body: 'Not authorised.' };
     // A delivery far from now is a replay (WeChat's clock and this one agree to minutes).
-    if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 10 * 60)
+    if (Math.abs(arrivedAt(request) / 1000 - Number(timestamp)) > 10 * 60)
       return { status: 401, body: 'Not authorised.' };
     if (request.method === 'GET') {
       // WeChat checking the address when the settings are saved: answer its echo.

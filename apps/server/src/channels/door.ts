@@ -55,7 +55,18 @@ export interface HookRequest {
   headers: Record<string, string | undefined>;
   /** The raw body, as text. */
   body: string;
+  /**
+   * When it reached Conch's public address, if that was earlier than now: set
+   * only for a delivery the always-on relay kept while Conch was off (ADR 0140),
+   * within a week. Checks that refuse a stale delivery measure from this, never
+   * from a time the sender wrote; the signature is still checked as it came.
+   */
+  receivedAt?: number;
 }
+
+/** The clock a delivery's freshness is measured against (ADR 0140). */
+export const arrivedAt = (request: Pick<HookRequest, 'receivedAt'>, now = Date.now()) =>
+  request.receivedAt ?? now;
 
 export interface HookReply {
   status: number;
@@ -64,6 +75,15 @@ export interface HookReply {
 }
 
 export type HookHandler = (request: HookRequest) => Promise<HookReply>;
+
+/**
+ * What the door needs from the always-on relay (`relay/service.ts`, ADR 0140):
+ * whether the relay at `url` answers, with this Conch's key. `undefined` is
+ * yes; otherwise the sentence to show, and whether only a person can fix it.
+ */
+export type DoorRelayCheck = (
+  url: string,
+) => Promise<undefined | { message: string; needsYou?: boolean }>;
 
 /** What the door needs from Tailscale (`network/tailscale.ts`). */
 export interface DoorTailscale {
@@ -75,8 +95,8 @@ export interface DoorTailscale {
 const DoorFile = z.object({
   version: z.literal(1).default(1),
   /** How it's reached, as the person chose. */
-  via: z.enum(['tailscale', 'own']).optional(),
-  /** The address of their own, when `via` is `own`. */
+  via: z.enum(['tailscale', 'own', 'relay']).optional(),
+  /** The address of their own, when `via` is `own`; the relay's, when it's `relay` (ADR 0140). */
   url: z.string().max(500).optional(),
   /**
    * The tailnet name of the computer it was turned on for. A Funnel that's
@@ -146,8 +166,12 @@ export class ChannelDoorService {
       conchAddress?: () => string | undefined;
       onHeal?: (message: string) => void;
       log?: (message: string) => void;
+      /** The always-on relay's own check (ADR 0140), when one can be paired. */
+      relay?: DoorRelayCheck;
     },
   ) {}
+
+  #routeListeners = new Set<() => void>();
 
   // ── Addresses ──────────────────────────────────────────────────────────
 
@@ -158,15 +182,59 @@ export class ChannelDoorService {
       this.#set({ state: 'error', message: (error as Error).message }),
     );
     this.#apps();
+    this.#routesChanged();
     return () => {
       if (this.#routes.get(hookId)?.handler === handler) this.#routes.delete(hookId);
       this.#apps();
+      this.#routesChanged();
     };
+  }
+
+  /** The addresses served right now (the relay is told them, by hash: ADR 0140). */
+  hookIds(): string[] {
+    return [...this.#routes.keys()].filter(Boolean);
+  }
+
+  /** The addresses served changed. */
+  onRoutes(listener: () => void): () => void {
+    this.#routeListeners.add(listener);
+    return () => this.#routeListeners.delete(listener);
+  }
+
+  #routesChanged() {
+    for (const listener of this.#routeListeners) listener();
+  }
+
+  /**
+   * A delivery that reached the public address some other way than this
+   * door's own listener: the always-on relay's (ADR 0140). It goes to exactly
+   * the handler a live one would, which checks the sender's signature as it
+   * came; `none` when nothing serves that address (yet: channels mount as
+   * they connect), so the relay keeps it.
+   */
+  async deliver(hookId: string, request: HookRequest): Promise<HookReply | 'none'> {
+    const route = this.#routes.get(hookId);
+    if (!route) return 'none';
+    return this.#dispatch(route.handler, request);
+  }
+
+  async #dispatch(handler: HookHandler, request: HookRequest): Promise<HookReply> {
+    try {
+      return await handler(request);
+    } catch (error) {
+      this.deps.log?.(`door: ${(error as Error).message}`);
+      return { status: 500, body: 'Something went wrong.' };
+    }
   }
 
   /** The public address of a channel's hook, while the door is reachable. */
   hookUrl(hookId: string): string | undefined {
-    const base = this.#state.state === 'ready' ? this.#state.url : undefined;
+    // The relay's address stays the address while the relay is briefly out of reach: what's
+    // sent meanwhile waits there, and signatures are over the address the sender used.
+    const base =
+      this.#state.state === 'ready' || (this.#state.via === 'relay' && this.#state.state !== 'off')
+        ? this.#state.url
+        : undefined;
     return base ? `${base}/hooks/${hookId}` : undefined;
   }
 
@@ -267,6 +335,20 @@ export class ChannelDoorService {
     return this.check();
   }
 
+  /**
+   * Use the always-on relay at `url` (ADR 0140): every public address Conch
+   * hands out from now on is the relay's, and channels point their apps at it.
+   */
+  async useRelay(url: string): Promise<DoorView> {
+    const file = await this.#read();
+    if (file.via === 'tailscale') {
+      const now = await this.deps.tailscale.funnelStatus(DOOR_PATH, this.#target());
+      if (now.port) await this.deps.tailscale.unfunnel(now.port, DOOR_PATH).catch(() => undefined);
+    }
+    await this.#write({ via: 'relay', url: url.replace(/\/+$/, ''), name: undefined });
+    return this.check();
+  }
+
   /** Nothing from the internet reaches Conch any more. */
   async turnOff(): Promise<DoorView> {
     const file = await this.#read();
@@ -295,6 +377,7 @@ export class ChannelDoorService {
       this.#set({ state: 'off' });
       return this.#state;
     }
+    if (file.via === 'relay') return this.#relayCheck(file.url ?? '');
     try {
       await this.#listen();
     } catch (error) {
@@ -334,6 +417,29 @@ export class ChannelDoorService {
       return this.#fromFunnel(funnel);
     }
     return this.#reach(file.url ?? '', 'own');
+  }
+
+  async #relayCheck(url: string): Promise<DoorView> {
+    const problem = this.deps.relay
+      ? await this.deps.relay(url).catch((error: unknown) => ({
+          message: (error as Error).message,
+          needsYou: false,
+        }))
+      : { message: 'The always-on relay isn’t set up on this computer.', needsYou: true };
+    if (!problem) {
+      this.#set({ state: 'ready', via: 'relay', url, checkedAt: Date.now() });
+      return this.#state;
+    }
+    // Still the relay's address: what arrives meanwhile waits there, and Twilio keeps sending to it.
+    this.#set({
+      state: problem.needsYou ? 'needs-you' : 'error',
+      via: 'relay',
+      url,
+      message: problem.message,
+      ...(problem.needsYou && { problem: { kind: 'other', message: problem.message } }),
+      ...(this.#state.checkedAt && { checkedAt: this.#state.checkedAt }),
+    });
+    return this.#state;
   }
 
   #noPort(): DoorView {
@@ -464,17 +570,12 @@ export class ChannelDoorService {
       const query: Record<string, string> = {};
       for (const [key, value] of Object.entries((request.query ?? {}) as Record<string, unknown>))
         if (typeof value === 'string') query[key] = value;
-      try {
-        return await route.handler({
-          method: request.method,
-          query,
-          headers,
-          body: typeof request.body === 'string' ? request.body : '',
-        });
-      } catch (error) {
-        this.deps.log?.(`door: ${(error as Error).message}`);
-        return { status: 500, body: 'Something went wrong.' };
-      }
+      return this.#dispatch(route.handler, {
+        method: request.method,
+        query,
+        headers,
+        body: typeof request.body === 'string' ? request.body : '',
+      });
     };
     // With or without the mount path in front: Tailscale may or may not pass it on.
     for (const prefix of ['', DOOR_PATH]) {

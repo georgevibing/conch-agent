@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 import { z } from 'zod';
 
-import type { HookHandler, HookReply, HookRequest } from '../../channels/door';
+import { arrivedAt, type HookHandler, type HookReply, type HookRequest } from '../../channels/door';
 import { Mutex, writeJson } from '../../lib/fs';
 import { readStore } from '../../lib/recover';
 import { SourceError, type Happening, type TriggerSource } from './types';
@@ -184,7 +184,7 @@ export function hookSource(deps: {
         const secret = await deps.secrets.get(hookId);
         let id: string;
         if (secret) {
-          const verdict = verifyDelivery(request, secret, now());
+          const verdict = verifyDelivery(request, secret, arrivedAt(request, now()));
           if (!verdict.ok) return { status: 401, body: verdict.why };
           id = verdict.id;
           if (remembered(id, REMEMBER_MS)) return { status: 200, body: 'Already received.' };

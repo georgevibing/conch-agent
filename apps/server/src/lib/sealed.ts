@@ -43,6 +43,8 @@ export const SEALED_FILES = new Set([
   'a2a.secrets.json',
   // Your dashboard's key and the scrape token's hash (ADR 0121).
   'telemetry.secrets.json',
+  // The always-on relay's private key and token (ADR 0140).
+  'relay.secrets.json',
 ]);
 
 const MAGIC = 'conch-sealed';

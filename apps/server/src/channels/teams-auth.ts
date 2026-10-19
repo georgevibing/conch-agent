@@ -91,7 +91,8 @@ export async function verifyActivity(
   activity: { channelId?: unknown; serviceUrl?: unknown },
   appId: string,
   keys: BotFrameworkKeys,
-  options: { issuer?: string } = {},
+  /** `at`: when the delivery reached Conch (a relay kept it, ADR 0140); the token was valid then. */
+  options: { issuer?: string; at?: number } = {},
 ): Promise<JWTPayload> {
   const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(
     authorization ?? '',
@@ -120,6 +121,7 @@ export async function verifyActivity(
       audience: appId,
       algorithms: ALGORITHMS,
       clockTolerance: SKEW_SECONDS,
+      ...(options.at !== undefined && { currentDate: new Date(options.at) }),
       requiredClaims: ['exp', 'iss', 'aud'],
     });
     payload = verified.payload;
