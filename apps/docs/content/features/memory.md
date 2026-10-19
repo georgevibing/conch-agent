@@ -86,6 +86,8 @@ Your assistant uses the same search: with many memories, each reply starts with 
 
 Your chats hold the rest: the plan you made, the command that fixed the build. Say "like last time" or "what did we decide about the venue?" and your assistant searches your other chats, like [Find anything](./find.md), then reads around the line it needs. The chat shows **Looked through your chats**; open it to see each line found and go there.
 
+With the model for [search that understands](#search-that-understands), it finds chats by meaning too: "our honeymoon" finds the chat about the trip to Bali.
+
 - It finds [archived](./chats.md#archive) chats too, and knows they're archived. The chat you're in is left out.
 - It finds [past chats you brought in](../care/past-chats.md) from Claude Code, Codex and other apps, and names the app. Reading one marks your chat like reading a web page, and nothing in them is learned by itself.
 - **Activity** lists every time it looked.

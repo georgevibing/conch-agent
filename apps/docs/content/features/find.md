@@ -45,6 +45,17 @@ On a wide screen, a preview shows the chat or message beside the list; on a narr
 - With no exact match, Conch shows **Close matches**.
 - Messages need three letters; fewer search titles and names only.
 
+## By meaning
+
+With the meaning model from [Memory](./memory.md#search-that-understands), messages are
+found by what they're about too: "our honeymoon" finds "the trip to Bali". Chats with
+your words come first.
+
+- Conch reads your chats into it in the background, newest first, and pauses while your
+  computer is busy. Until it's done, search finds what it has, and words always work.
+- **Settings → Health** shows how far it is under **Search by meaning**.
+- In the chat you're reading, <kbd>mod+f</kbd> matches words only.
+
 ## In the chat you're reading
 
 <kbd>mod+f</kbd> highlights every match in the open chat, with marks along the
@@ -65,6 +76,6 @@ name finds what happened in it.
   [Memory](./memory.md#your-earlier-chats).
 - [Past chats you brought in](../care/past-chats.md) are found too and open beside
   where you are.
-- The index is rebuilt from your chats whenever it's missing, so it's left out of
-  [backups](../care/backups.md).
+- The index, and what search by meaning keeps, are rebuilt from your chats whenever
+  they're missing, so they're left out of [backups](../care/backups.md).
 - If search breaks, the box offers **Repair search**.
