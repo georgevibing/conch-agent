@@ -12,6 +12,8 @@ import type { Engine, HostTool } from '../engines/types';
 import { needs } from '../skills/permissions';
 import { sinkReason, taintFrom } from '../conversations/taint';
 import { SearchIndex } from './index';
+import { fakeEmbedder } from '../test/meaning';
+import { blend, ChatMeaning } from './meaning';
 import {
   offersPastChats,
   pastChatTools,
@@ -527,5 +529,75 @@ describe('never a secret', () => {
       expect(out).not.toContain(vaultValue);
       expect(out).toContain('•••');
     }
+  });
+});
+
+describe('by meaning (ADR 0139): the same rules', () => {
+  const key = ['sk', 'proj', 'Z9y8X7w6V5u4T3s2R1q0P9o8'].join('-');
+  const trips = (): Chat[] => [
+    {
+      id: 'bali',
+      title: 'Flights',
+      events: turn('bali', `Book the trip to Bali, my card key is ${key}`, 'Booked for May.'),
+      facts: { taint: [{ kind: 'web', label: 'a travel site' }] },
+    },
+    {
+      id: 'here',
+      title: 'This chat',
+      events: turn('here', 'Where did we go on our honeymoon?', 'Let me look.'),
+    },
+  ];
+
+  /** The world, with search blending words and meaning as `SearchService` does. */
+  async function meaningWorld(chats: Chat[]) {
+    const { index, deps } = world(chats);
+    const meaning = new ChatMeaning({
+      path: ':memory:',
+      source: () => index,
+      meaning: async () => fakeEmbedder(),
+      sleep: async () => undefined,
+    });
+    await meaning.wake();
+    deps.search = {
+      search: async (q, o) => {
+        const words = index.search(q, o);
+        const found = await meaning.search(q);
+        return found?.length ? blend(words, found, index, o.limit ?? 20) : words;
+      },
+      slice: async (id, o) => index.slice(id, o),
+    };
+    return { deps, meaning };
+  }
+
+  it('finds the chat by what it was about, marked, without this chat, and says so', async () => {
+    const { deps, meaning } = await meaningWorld(trips());
+    const { ctx } = context();
+    const found = readPastChatsFound(
+      await run(pastChatTools(deps, ctx), 'search_chats', { query: 'honeymoon' }),
+    );
+    meaning.close();
+    expect(found?.match).toBe('meaning');
+    expect(found?.chats.map((c) => c.chat)).toEqual(['bali']);
+    expect(found?.chats[0]).toMatchObject({ byMeaning: true, untrusted: true });
+    expect(found?.note).toContain('found by what they’re about');
+  });
+
+  it('carries the taint of what it found, and never a secret', async () => {
+    const { deps, meaning } = await meaningWorld(trips());
+    const { ctx, taint, appended } = context();
+    const out = await run(pastChatTools(deps, ctx), 'search_chats', { query: 'honeymoon' });
+    meaning.close();
+    expect(taint).toHaveBeenCalledWith({ kind: 'app', label: 'your chat “Flights”' });
+    for (const text of [out, JSON.stringify(appended)]) {
+      expect(text).not.toContain(key);
+      expect(text).toContain('•••');
+    }
+  });
+
+  it('is still not for a chat where someone else writes', async () => {
+    const { deps, meaning } = await meaningWorld(trips());
+    const { ctx } = context('here', [{ kind: 'person', label: 'Ana on Telegram' }]);
+    expect(pastChatTools(deps, ctx)).toEqual([]);
+    meaning.close();
   });
 });
