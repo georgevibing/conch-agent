@@ -1,18 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 
-import { RequestLimiter } from '../../auth/requests';
+import { limitRoutes } from '../../ratelimit';
 import { readCapped } from '../types';
 
 /**
  * Pretend providers have published fixture credentials. Binding to loopback
  * alone does not protect them from a web page or another local program.
  * Budget before body parsing, and share the budget across all callers.
+ * Await it before adding routes: the budget covers routes added after it.
  */
-export function guardMockServer(
+export async function guardMockServer(
   app: FastifyInstance,
-  options: { burst?: number; perMinute?: number; concurrent?: number; timeoutMs?: number } = {},
-): void {
-  const requests = new RequestLimiter(options.burst ?? 300, options.perMinute ?? 1200, 1);
+  options: { perMinute?: number; concurrent?: number; timeoutMs?: number } = {},
+): Promise<void> {
   let running = 0;
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-content-type-options', 'nosniff');
@@ -28,11 +28,10 @@ export function guardMockServer(
     const site = request.headers['sec-fetch-site'];
     if (request.headers.origin !== undefined || (site !== undefined && site !== 'none'))
       return reply.code(403).send({ error: 'Web pages cannot drive a pretend provider.' });
-    const wait = requests.take('all');
-    if (wait || running >= (options.concurrent ?? 32))
+    if (running >= (options.concurrent ?? 32))
       return reply
         .code(429)
-        .header('retry-after', String(Math.max(1, Math.ceil(wait / 1000))))
+        .header('retry-after', '1')
         .send({ error: 'Too many requests to this pretend provider.' });
     running++;
     const deadline = setTimeout(() => {
@@ -56,6 +55,14 @@ export function guardMockServer(
     reply.raw.once('close', release);
     // A WebSocket hijacks the response; its slot lasts until its socket closes.
     request.raw.socket.once('close', release);
+  });
+  // One budget for every caller: they all look like this computer, and the
+  // headers that would tell them apart are theirs to rotate.
+  await limitRoutes(app, {
+    max: options.perMinute ?? 1200,
+    timeWindow: 60_000,
+    key: () => 'all',
+    message: (seconds) => `Too many requests to this pretend provider. Wait ${seconds} seconds.`,
   });
 }
 

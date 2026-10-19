@@ -139,7 +139,7 @@ describe('pretend providers cannot become network proxies', () => {
 describe('pretend provider admission', () => {
   it('rejects browser origins and rebinding hosts before reading a control body', async () => {
     const app = Fastify();
-    guardMockServer(app);
+    await guardMockServer(app);
     const work = vi.fn(() => ({ ok: true }));
     app.post('/__control/say', work);
     const origin = await serve(app);
@@ -166,7 +166,7 @@ describe('pretend provider admission', () => {
 
   it('charges one shared burst before parsing, even if caller and token headers rotate', async () => {
     const app = Fastify();
-    guardMockServer(app, { burst: 2, perMinute: 1 });
+    await guardMockServer(app, { perMinute: 2 });
     const work = vi.fn(() => ({ ok: true }));
     app.post('/token', work);
     const origin = await serve(app);
@@ -188,7 +188,7 @@ describe('pretend provider admission', () => {
 
   it('ends a stalled HTTP handler and releases its slot at the fixed deadline', async () => {
     const app = Fastify();
-    guardMockServer(app, { concurrent: 1, timeoutMs: 100 });
+    await guardMockServer(app, { concurrent: 1, timeoutMs: 100 });
     let finish: (() => void) | undefined;
     app.get(
       '/stall',
@@ -212,7 +212,7 @@ describe('pretend provider admission', () => {
 
   it('caps concurrent work and releases its slot after completion', async () => {
     const app = Fastify();
-    guardMockServer(app, { concurrent: 2 });
+    await guardMockServer(app, { concurrent: 2 });
     const waiting: (() => void)[] = [];
     app.get('/wait', () => new Promise<string>((resolve) => waiting.push(() => resolve('done'))));
     app.get('/ready', () => 'ready');

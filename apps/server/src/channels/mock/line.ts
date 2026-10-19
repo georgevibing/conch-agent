@@ -55,7 +55,7 @@ export class MockLine {
   async start(port = 0): Promise<string> {
     const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     app.addHook('onRequest', async (request, reply) => {
       if (request.url.startsWith('/__control')) return;
       const token = request.headers.authorization?.replace(/^Bearer /, '');

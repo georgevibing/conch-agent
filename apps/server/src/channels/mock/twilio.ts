@@ -90,7 +90,7 @@ export class MockTwilio {
   async start(port = 0): Promise<string> {
     const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     app.addContentTypeParser(
       'application/x-www-form-urlencoded',
       { parseAs: 'string' },

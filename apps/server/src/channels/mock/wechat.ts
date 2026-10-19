@@ -70,7 +70,7 @@ export class MockWeChat {
   async start(port = 0): Promise<string> {
     const app = Fastify({ logger: false, requestTimeout: 20_000, bodyLimit: 12 * 1024 * 1024 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     await app.register(fastifyWebsocket);
     app.post('/cgi-bin/stable_token', (request) => {
       const body = (request.body ?? {}) as { appid?: string; secret?: string };

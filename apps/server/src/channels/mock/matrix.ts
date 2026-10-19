@@ -103,7 +103,7 @@ export class MockMatrix {
   async start(port = 0): Promise<string> {
     const app = Fastify({ logger: false, bodyLimit: 10 * 1024 * 1024, requestTimeout: 20_000 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     app.addContentTypeParser(
       ['image/jpeg', 'image/png', 'application/octet-stream'],
       { parseAs: 'buffer' },

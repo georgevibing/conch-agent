@@ -70,7 +70,7 @@ export class MockTeams {
     this.#other = (await generateKeyPair('RS256')).privateKey;
     const app = Fastify({ logger: false, requestTimeout: 20_000, bodyLimit: 4 * 1024 * 1024 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     app.addContentTypeParser(
       'application/x-www-form-urlencoded',
       { parseAs: 'string' },

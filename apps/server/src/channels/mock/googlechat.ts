@@ -111,7 +111,7 @@ export class MockGoogleChat {
     };
     const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     app.addContentTypeParser(
       'application/x-www-form-urlencoded',
       { parseAs: 'string' },

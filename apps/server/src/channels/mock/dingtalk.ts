@@ -58,7 +58,7 @@ export class MockDingTalk {
   async start(port = 0): Promise<string> {
     const app = Fastify({ logger: false, requestTimeout: 20_000, bodyLimit: 30 * 1024 * 1024 });
     this.#app = app;
-    guardMockServer(app);
+    await guardMockServer(app);
     await app.register(fastifyWebsocket);
     app.addContentTypeParser('multipart/form-data', { parseAs: 'buffer' }, (_request, body, done) =>
       done(null, body),
