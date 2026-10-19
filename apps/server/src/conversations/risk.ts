@@ -34,7 +34,7 @@ import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-import { isRunScript } from '@conch/protocol';
+import { isRunScript, isSpaceChar } from '@conch/protocol';
 
 import { declared, fromTooling, imitates, packageName, type Registry, wellKnown } from './packages';
 
@@ -269,9 +269,9 @@ const PREFIX =
  * and the shell's own words before a command (`then`, `do`, `!`, an unquoted `eval`): what
  * follows is the command that runs.
  */
-const WRAPPERS: RegExp[] = [
+const WRAPPERS: (RegExp | ((text: string) => string))[] = [
   /^(?:if|then|else|elif|do|while|until|!)\s+/,
-  /^timeout(?:\s+-(?:s|k)\s*\S+|\s+--(?:signal|kill-after)=\S+|\s+-[\w-]+)*\s+\d+(?:\.\d+)?[smhd]?\s+/i,
+  stripTimeout,
   /^nice(?:\s+-n\s*[+-]?\d+|\s+--adjustment=[+-]?\d+|\s+-[+-]?\d+)+\s+/i,
   /^ionice(?:\s+-[cnpP]\s*\S+|\s+-t)+\s+/i,
   /^stdbuf(?:\s+-[ioe]\s*\S+|\s+--(?:input|output|error)=\S+)+\s+/i,
@@ -280,12 +280,65 @@ const WRAPPERS: RegExp[] = [
   /^eval\s+(?=[^\s"'])/,
 ];
 
+const TIMEOUT_VALUED = /^-[sk]/i;
+const TIMEOUT_LONG = /^--(?:signal|kill-after)=/i;
+const TIMEOUT_FLAG = /^-[\w-]+$/;
+const TIMEOUT_DURATION = /^\d+(?:\.\d+)?[smhd]?$/i;
+
+/**
+ * `timeout`'s own words off the front (`timeout -k 5 -s KILL 60 cargo test`
+ * runs `cargo test`): what
+ * `/^timeout(?:\s+-(?:s|k)\s*\S+|\s+--(?:signal|kill-after)=\S+|\s+-[\w-]+)*\s+\d+(?:\.\d+)?[smhd]?\s+/i`
+ * took off, read word by word instead. That expression could read `-k-` two
+ * ways, so a long run of them without a duration took exponential time (CodeQL
+ * js/redos); here each word is decided once, from the last back, with the
+ * expression's own preference (an option's value first, then a bare flag).
+ */
+export function stripTimeout(text: string): string {
+  if (text.slice(0, 7).toLowerCase() !== 'timeout') return text;
+  // The words after `timeout`, by where they start and end; the first needs a space before it.
+  const words: { start: number; end: number }[] = [];
+  let at = 7;
+  for (;;) {
+    let start = at;
+    while (start < text.length && isSpaceChar(text.charAt(start))) start++;
+    if (start === at || start === text.length) break;
+    let end = start;
+    while (end < text.length && !isSpaceChar(text.charAt(end))) end++;
+    words.push({ start, end });
+    at = end;
+  }
+  // rest[i]: where the command starts if reading options from word i on succeeds, else -1.
+  const rest = new Array<number>(words.length + 1).fill(-1);
+  for (let i = words.length - 1; i >= 0; i--) {
+    const { start, end } = words[i] as { start: number; end: number };
+    const word = text.slice(start, end);
+    if (TIMEOUT_VALUED.test(word)) {
+      // `-s KILL`, `-k 5`: the value is the next word; `-sKILL` carries its own.
+      const valued = word.length === 2 ? (rest[i + 2] ?? -1) : (rest[i + 1] ?? -1);
+      rest[i] = valued >= 0 || !TIMEOUT_FLAG.test(word) ? valued : (rest[i + 1] ?? -1);
+    } else if (
+      (TIMEOUT_LONG.test(word) && word.length > word.indexOf('=') + 1) ||
+      TIMEOUT_FLAG.test(word)
+    ) {
+      rest[i] = rest[i + 1] ?? -1;
+    } else if (TIMEOUT_DURATION.test(word) && end < text.length) {
+      let next = end;
+      while (next < text.length && isSpaceChar(text.charAt(next))) next++;
+      rest[i] = next;
+    }
+  }
+  const from = rest[0] ?? -1;
+  return from >= 0 ? text.slice(from) : text;
+}
+
 /** One piece of a command line with every wrapper taken off. */
 function unwrap(piece: string): string {
   let text = piece;
   for (let i = 0; i < 20; i++) {
     const before = text;
-    for (const wrapper of WRAPPERS) text = text.replace(wrapper, '');
+    for (const wrapper of WRAPPERS)
+      text = typeof wrapper === 'function' ? wrapper(text) : text.replace(wrapper, '');
     text = text.replace(PREFIX, '');
     if (text === before) break;
   }

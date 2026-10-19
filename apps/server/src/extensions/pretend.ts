@@ -13,6 +13,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { afterSpace } from '@conch/protocol';
+
 import { splitContextNote } from '../conversations/instructions';
 
 /** The pretend company's key and the pretend bot's token, written in two parts (agreement 6). */
@@ -96,7 +98,8 @@ export class PretendWorld {
         return {};
       }
     };
-    const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? '')?.[1];
+    // `/^Bearer\s+(.+)$/i`, by index: the expression is slow on a header of spaces.
+    const bearer = afterSpace(req.headers.authorization ?? '', 'Bearer', true);
     const path = url.pathname;
 
     // ── Control ──
