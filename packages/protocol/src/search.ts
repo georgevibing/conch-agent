@@ -33,6 +33,11 @@ export const SearchHit = z.object({
   at: z.number(),
   snippet: z.string(),
   ranges: z.array(TextRange),
+  /**
+   * Found by what it's about, not its words (ADR 0139): "our honeymoon" finding
+   * "the trip to Bali". Its `ranges` are empty: no word of it matched.
+   */
+  byMeaning: z.boolean().optional(),
 });
 export type SearchHit = z.infer<typeof SearchHit>;
 
@@ -64,6 +69,8 @@ export const SearchResults = z.object({
    * after it broke): these are the results so far, and more may come.
    */
   catchingUp: z.boolean().optional(),
+  /** Some of `groups` were found by meaning (`SearchHit.byMeaning`), not by the words (ADR 0139). */
+  byMeaning: z.boolean().optional(),
 });
 export type SearchResults = z.infer<typeof SearchResults>;
 

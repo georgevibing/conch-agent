@@ -51,6 +51,8 @@ export const PastChat = z.object({
   ...about,
   /** Matching lines in it (the best few are in `lines`). */
   matches: z.number().int().nonnegative(),
+  /** None of the words matched: it was found by what it's about (ADR 0139). */
+  byMeaning: z.boolean().optional(),
   lines: z.array(PastChatLine).max(10),
 });
 export type PastChat = z.infer<typeof PastChat>;
@@ -58,8 +60,11 @@ export type PastChat = z.infer<typeof PastChat>;
 /** What `search_chats` answers. */
 export const PastChatsFound = z.object({
   query: z.string().max(400),
-  /** `exact`: every word was there; `close`: nothing was, these are near (typos); `none`; `too-short`. */
-  match: z.enum(['exact', 'close', 'none', 'too-short']),
+  /**
+   * `exact`: every word was there; `close`: nothing was, these are near (typos);
+   * `meaning`: no words matched, these chats are about the same thing (ADR 0139); `none`; `too-short`.
+   */
+  match: z.enum(['exact', 'close', 'meaning', 'none', 'too-short']),
   chats: z.array(PastChat).max(10),
   note: z.string().max(600).optional(),
 });
