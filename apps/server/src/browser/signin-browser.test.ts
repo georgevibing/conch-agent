@@ -26,23 +26,26 @@ const hasBrowser =
   existsSync(chromium.executablePath());
 
 let port = 0;
-const pages: Record<string, () => string> = {
-  '/ph': () => `<title>Product Hunt</title><h1>Welcome to Product Hunt</h1>
+/** The test site's pages by path: a Map, so a request's path can only ever pick one of these. */
+const pages = new Map<string, () => string>(
+  Object.entries({
+    '/ph': () => `<title>Product Hunt</title><h1>Welcome to Product Hunt</h1>
     <button type=button onclick="location.href='http://localhost:${port}/google'">Continue with Google</button>
     <form><label>Email <input type=email name=email></label><button type=button>Continue with email</button></form>`,
-  '/google': () => `<title>Sign in – Google Accounts</title><form>
+    '/google': () => `<title>Sign in – Google Accounts</title><form>
     <label>Email or phone <input name=identifier autocomplete=username></label>
     <label>Enter your password <input type=password name=Passwd autocomplete=current-password></label>
     <button type=button>Next</button></form>`,
-  '/ph2': () => `<title>Product Hunt</title><h1>Welcome to Product Hunt</h1>
+    '/ph2': () => `<title>Product Hunt</title><h1>Welcome to Product Hunt</h1>
     <button type=button onclick="location.href='http://localhost:${port}/google'">Continue with Google</button>
     <button type=button onclick="location.href='http://localhost:${port}/apple'">Continue with Apple</button>`,
-  '/chooser': () => `<title>Choose an account</title><h1>Choose an account</h1>
+    '/chooser': () => `<title>Choose an account</title><h1>Choose an account</h1>
     <a href="/google">Bob Builder bob@gmail.com</a><a href="/google">Ada Lovelace ada@gmail.com</a>`,
-  '/pk':
-    () => `<title>Shop</title><form><label>Email <input type=email name=email autocomplete=username></label>
+    '/pk':
+      () => `<title>Shop</title><form><label>Email <input type=email name=email autocomplete=username></label>
     <button type=button>Sign in with a passkey</button></form>`,
-};
+  }),
+);
 
 const ADA = 'ada' + '-google-pass-1';
 const BOB = 'bob' + '-google-pass-2';
@@ -146,7 +149,7 @@ let browser: BrowserService;
 
 beforeAll(async () => {
   site = createServer((req, res) => {
-    const page = pages[(req.url ?? '').split('?')[0] ?? ''];
+    const page = pages.get((req.url ?? '').split('?')[0] ?? '');
     res.writeHead(page ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
     res.end(`<!doctype html>${page ? page() : '<title>Not found</title>'}`);
   });

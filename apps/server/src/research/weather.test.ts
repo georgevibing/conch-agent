@@ -100,7 +100,7 @@ describe('the weather tool', () => {
     const { fetcher, seen } = openMeteo({ geocode: ok(paris) });
     const { view } = await run(fetcher, { place: 'Paris, Texas' });
     expect(view.kind === 'weather' && view.place.region).toBe('Texas');
-    const forecast = seen.find((r) => r.url.startsWith('https://api.open-meteo.com'));
+    const forecast = seen.find((r) => new URL(r.url).origin === 'https://api.open-meteo.com');
     expect(new URL(forecast?.url ?? '').searchParams.get('latitude')).toBe('33.6600');
     expect(placeQuery('Paris, Texas')).toEqual({ name: 'Paris', hints: ['texas'] });
     expect(pickPlace([], [])).toBeUndefined();
@@ -110,7 +110,7 @@ describe('the weather tool', () => {
     const { fetcher, seen } = openMeteo();
     const { view, text } = await run(fetcher, { place: 'Berlin' }, 'imperial' as never);
     const forecast = new URL(
-      seen.find((r) => r.url.startsWith('https://api.open-meteo.com'))?.url ?? '',
+      seen.find((r) => new URL(r.url).origin === 'https://api.open-meteo.com')?.url ?? '',
     );
     expect(forecast.searchParams.get('temperature_unit')).toBe('fahrenheit');
     expect(forecast.searchParams.get('wind_speed_unit')).toBe('mph');
