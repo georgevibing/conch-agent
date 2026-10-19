@@ -166,11 +166,13 @@ export async function applyPlan(home: string, plan: Plan): Promise<void> {
     await chmod(to, 0o600).catch(() => undefined);
   }
 
-  // The search index is rebuilt from the chats now here. Only ever a nicety:
-  // an index that can't go now is set aside by search itself when it misreads.
+  // The search index, and its vectors (ADR 0139), are rebuilt from the chats now
+  // here. Only ever a nicety: an index that can't go now is set aside by search
+  // itself when it misreads, and stale vectors are made again by their hash.
   if (groups.has('chats'))
-    for (const name of ['search.db', 'search.db-wal', 'search.db-shm', 'search.db-journal'])
-      await rm(join(home, name), { force: true }).catch(() => undefined);
+    for (const db of ['search.db', 'chats-meaning.db'])
+      for (const suffix of ['', '-wal', '-shm', '-journal'])
+        await rm(join(home, `${db}${suffix}`), { force: true }).catch(() => undefined);
 }
 
 export type ApplyResult =

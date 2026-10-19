@@ -27,6 +27,8 @@ export class SearchIndexer {
     private readonly index: SearchIndex,
     private readonly source: SearchSource,
     private readonly log: (error: unknown) => void = () => {},
+    /** A conversation's messages are in the index now (meaning search follows, ADR 0139). */
+    private readonly indexed: (id: string) => void = () => {},
   ) {}
 
   /** Resolves once the start-up catch-up has finished. */
@@ -48,6 +50,7 @@ export class SearchIndexer {
         this.#run(conversationId, async () => {
           const { conversation, events } = await this.source.detail(conversationId);
           this.index.index(conversation, events);
+          this.indexed(conversationId);
         });
       }
     }

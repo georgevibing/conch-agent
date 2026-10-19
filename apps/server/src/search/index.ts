@@ -241,6 +241,46 @@ export class SearchIndex {
     });
   }
 
+  /**
+   * Every indexed conversation and when the index last saw it, newest first:
+   * what meaning search catches up on (`meaning.ts`, ADR 0139).
+   */
+  chats(): { id: string; updatedAt: number }[] {
+    return (
+      this.#stmt('SELECT id, updated_at FROM conversations ORDER BY updated_at DESC').all() as {
+        id: string;
+        updated_at: number;
+      }[]
+    ).map((r) => ({ id: r.id, updatedAt: r.updated_at }));
+  }
+
+  /** One conversation's messages, oldest first, as the index keeps them. */
+  messages(conversationId: string): SliceRow[] {
+    return this.#stmt(
+      'SELECT anchor, role, seq, at, text FROM docs WHERE conversation_id = ? ORDER BY seq',
+    ).all(conversationId) as unknown as SliceRow[];
+  }
+
+  /** One message, if it's (still) in the index. */
+  message(conversationId: string, anchor: string): SliceRow | undefined {
+    return this.#stmt(
+      'SELECT anchor, role, seq, at, text FROM docs WHERE conversation_id = ? AND anchor = ?',
+    ).get(conversationId, anchor) as SliceRow | undefined;
+  }
+
+  /** A conversation's title and times, if it's indexed. */
+  about(conversationId: string): IndexedConversation | undefined {
+    const row = this.#conversation(conversationId);
+    return (
+      row && {
+        id: row.id,
+        title: row.title,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }
+    );
+  }
+
   /** Title changes don't need a re-index of the messages. */
   retitle(id: string, title: string, updatedAt: number) {
     this.#stmt('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?').run(

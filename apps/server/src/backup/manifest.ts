@@ -135,6 +135,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Conch’s own model for memory search by meaning: a download pinned by hash, fetched again when missing.',
   },
   {
+    match: 'chats-meaning.db*',
+    class: 'derived',
+    why: 'Chat search by meaning: vectors made from your chats, made again in the background when missing.',
+  },
+  {
     match: 'memory-index.db*',
     class: 'derived',
     why: 'Memory search by meaning: vectors made from your memories, made again when missing.',

@@ -1040,7 +1040,11 @@ export class Services {
       store: this.memory,
       tidy: this.tidy,
       model: this.onDevice,
-      reindex: () => this.memoryIndex.sync(),
+      reindex: async () => {
+        await this.memoryIndex.sync();
+        // Chats follow in the background (ADR 0139).
+        void this.search.meaningLanded();
+      },
     });
     const muted = async () => (await this.settings.get()).preferences.mutedSuggestions;
     this.offers = new OfferDesk({
@@ -1974,6 +1978,12 @@ export class Services {
       },
       heal,
       log: (error) => console.error('[search]', error),
+      // By meaning too (ADR 0139): memory's model, in the background, only while there's room.
+      meaning: {
+        path: join(config.CONCH_HOME, 'chats-meaning.db'),
+        meaning,
+        room: () => this.recovery.room().room,
+      },
     });
     this.conversations.events.on((event) => this.search.onEvent(event));
     this.search.open();
@@ -3639,11 +3649,13 @@ export class Services {
     };
   }
 
-  /** Conch's own model for meaning arrived (ADR 0041): index every memory, and look at habits again. */
+  /** Conch's own model for meaning arrived (ADR 0041): index every memory and chat, and look at habits again. */
   meaningLanded(): void {
     this.suggester.refresh();
     // Then every open search asks again: it understands more now.
     void this.memoryIndex.sync().finally(() => this.broadcast.emit({ type: 'memory.changed' }));
+    // And every chat becomes searchable by meaning, in the background (ADR 0139).
+    void this.search.meaningLanded();
   }
 
   /**
