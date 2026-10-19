@@ -49,6 +49,7 @@ import { HelloStep } from './HelloStep';
 import { HookSection } from './HookSection';
 import { SignInAgain } from './SignInAgain';
 import { VoiceNotesSection } from './VoiceNotesSection';
+import { PhoneCallsSection } from './PhoneCallsSection';
 import { useKeyCheck } from './hooks';
 import {
   channelKeys,
@@ -418,6 +419,15 @@ function Detail({ channel }: { channel: Channel }) {
         channel={channel}
         assistant={assistant}
         onReplies={(voiceReplies) => update.mutate([{ settings: { voiceReplies } }])}
+      />
+
+      <PhoneCallsSection
+        channel={channel}
+        assistant={assistant}
+        // Turning calls on lets a phone reach your assistant: from elsewhere, confirm it's you.
+        onChange={(calls) =>
+          void guard(() => update.mutateAsync([{ settings: { calls } }])).catch(() => undefined)
+        }
       />
 
       <section aria-labelledby="ch-settings" className={styles.section}>

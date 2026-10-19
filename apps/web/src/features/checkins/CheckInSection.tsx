@@ -77,12 +77,16 @@ export function orderItem(order: StandingOrder, now = Date.now()): StandingOrder
   };
 }
 
-function QuietHoursButton({
+/** Quiet hours in a popover: check-ins, and calls Conch places (ADR 0138), use it. */
+export function QuietHoursButton({
   quiet,
   onSave,
+  note = 'No check-ins between these times. The first look after them covers the night.',
 }: {
   quiet: QuietHours;
   onSave: (quiet: QuietHours) => void;
+  /** What quiet means here, in a sentence. */
+  note?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(quiet.from);
@@ -106,7 +110,7 @@ function QuietHoursButton({
       <Popover.Content align="start" padding="md">
         <Stack gap={3}>
           <Text size="sm" tone="muted">
-            No check-ins between these times. The first look after them covers the night.
+            {note}
           </Text>
           <div className={styles.quietRow}>
             <TimePicker
