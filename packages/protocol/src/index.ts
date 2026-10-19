@@ -1540,3 +1540,4 @@ export * from './task-assessment';
 export * from './task-notice';
 export * from './task-notice';
 export * from './task-waiting';
+export * from './scan';

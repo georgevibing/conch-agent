@@ -206,8 +206,16 @@ export function modelTier(model: { id: string; label: string; description?: stri
   return 2;
 }
 
-/** Strip the picker's "(recommended)" from a name. */
-const nameOf = (label: string) => label.replace(/\s*\(recommended\)\s*$/i, '').trim();
+const RECOMMENDED = '(recommended)';
+/**
+ * Strip the picker's "(recommended)" from a name: `/\s*\(recommended\)\s*$/i`
+ * then trim, by index (the expression is slow on a long run of spaces).
+ */
+export function withoutRecommended(label: string): string {
+  const name = label.trimEnd();
+  const tail = name.slice(-RECOMMENDED.length);
+  return (tail.toLowerCase() === RECOMMENDED ? name.slice(0, -RECOMMENDED.length) : name).trim();
+}
 
 /**
  * Every model a chat could switch to now, from the model catalog (ADR 0012).
@@ -227,7 +235,9 @@ export function switchCandidates(
     // "Use the default model (currently Opus 5.5)": that one leads.
     const lead =
       (fallback &&
-        models.find((m) => foldText(fallback.description).includes(foldText(nameOf(m.label))))) ??
+        models.find((m) =>
+          foldText(fallback.description).includes(foldText(withoutRecommended(m.label))),
+        )) ??
       models[0];
     const billing = provider.local ? 'free' : provider.billing;
     for (const m of models) {
@@ -236,7 +246,7 @@ export function switchCandidates(
         engine: provider.engine,
         provider: provider.label,
         model: m.id,
-        label: nameOf(m.label),
+        label: withoutRecommended(m.label),
         ...(billing && { billing }),
         ...(provider.account && { account: provider.account }),
         ...(provider.local && { local: true }),

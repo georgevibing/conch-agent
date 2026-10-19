@@ -1,11 +1,17 @@
 /** Long-term memory (ADR 0003, ADR 0032, ADR 0088). */
 import { z } from 'zod';
 
+import { isSpaceChar, trimEndWhere } from './scan';
+
 /** The longest a headline is: about twelve words, one line on a phone (ADR 0003 § Headlines). */
 export const MEMORY_HEADLINE_MAX = 80;
 
 /** Where a clause ends: a sentence, a semicolon, a colon or dash before more, an aside in brackets. */
 const CLAUSE_END = /[.!?;:](?=\s)|\s[–—-]\s|\s\(/u;
+
+/** What a headline never ends on: spaces and the punctuation between clauses (`/[\s,.;:–—-]+$/u`). */
+const trailing = (text: string) =>
+  trimEndWhere(text, (ch) => isSpaceChar(ch) || ',.;:–—-'.includes(ch));
 
 /**
  * Words in a few, without a model: the first clause, and if that's still too
@@ -17,12 +23,12 @@ export function clipHeadline(text: string, max = MEMORY_HEADLINE_MAX): string {
   const words = text.replace(/\s+/g, ' ').trim();
   if (words.length <= max) return words;
   const end = CLAUSE_END.exec(words);
-  const clause = (end ? words.slice(0, end.index) : words).replace(/[\s,.;:–—-]+$/u, '');
+  const clause = trailing(end ? words.slice(0, end.index) : words);
   if (clause.length >= 12 && clause.length <= max) return clause;
   // A clause too short to say anything (“Rule:”) runs on into the next.
   const room = (clause.length >= 12 ? clause : words).slice(0, max - 1);
   const cut = room.lastIndexOf(' ');
-  return `${(cut > max / 2 ? room.slice(0, cut) : room).replace(/[\s,.;:–—-]+$/u, '')}…`;
+  return `${trailing(cut > max / 2 ? room.slice(0, cut) : room)}…`;
 }
 
 /** What to show where a memory (or a skill's description) is summed up: its headline, else its words in a few. */
