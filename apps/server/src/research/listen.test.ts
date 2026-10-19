@@ -13,7 +13,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { placeOf } from '../artifacts/live';
-import { audioType, carriedIn, registerListenRoutes, type Carried } from './listen';
+import { audioType, carriedIn, listenTarget, registerListenRoutes, type Carried } from './listen';
 
 // The app fetcher's test certificate (api / other / elsewhere .example.test), for these tests only.
 // Its markers are written in two parts, so secret scanners never take it for a real key.
@@ -115,11 +115,18 @@ const place = (address: string) => (address === '127.0.0.1' ? 'public' : placeOf
 
 const at = (path: string, host = 'api.example.test') => `https://${host}:${port}${path}`;
 
-async function gateway(cards: Record<string, Carried>, limits = {}) {
+interface Card {
+  whole: boolean;
+  url?: string;
+}
+
+/** A gateway whose chat `c1` carries `cards`; a card's own address is its key unless it says one. */
+async function gateway(cards: Record<string, Card>, limits = {}) {
   const app = Fastify();
-  const carried = vi.fn(async (chat: string, src: string) =>
-    chat === 'c1' ? cards[src] : undefined,
-  );
+  const carried = vi.fn(async (chat: string, src: string): Promise<Carried> => {
+    const card = chat === 'c1' && Object.hasOwn(cards, src) ? cards[src] : undefined;
+    return card && { whole: card.whole, url: card.url ?? src };
+  });
   registerListenRoutes(app, {
     carried,
     resolve,
@@ -218,6 +225,32 @@ describe('/api/listen: what a music card plays', () => {
     await close(g.app);
   });
 
+  it('fetches the card’s own address, never the one the request spells', async () => {
+    // The request only picks a card; what Conch connects to is what the card carries.
+    const g = await gateway({
+      [at('/preview.m4a')]: { whole: true, url: at('/episode.mp3', 'other.example.test') },
+    });
+    const before = seen.length;
+    const got = await get(g, at('/preview.m4a'));
+    expect(got.status).toBe(200);
+    expect(seen.slice(before).map((s) => s.path)).toEqual(['/episode.mp3']);
+    await close(g.app);
+  });
+
+  it('refuses a card whose own address is plain http, carries a password, or isn’t Apple’s for a preview', async () => {
+    const g = await gateway({
+      [at('/a.m4a')]: { whole: true, url: `http://api.example.test:${port}/episode.mp3` },
+      [at('/b.m4a')]: { whole: true, url: `https://user:pw@api.example.test:${port}/episode.mp3` },
+      [at('/c.m4a')]: { whole: false, url: at('/preview.m4a', 'other.example.test') },
+      [at('/d.m4a')]: { whole: true, url: 'not an address' },
+    });
+    const before = seen.length;
+    for (const path of ['/a.m4a', '/b.m4a', '/c.m4a', '/d.m4a'])
+      expect((await get(g, at(path))).status).toBe(403);
+    expect(seen.length).toBe(before);
+    await close(g.app);
+  });
+
   it('plays a whole episode from its own host, but never one on your network', async () => {
     const g = await gateway({
       [at('/episode.mp3', 'other.example.test')]: { whole: true },
@@ -293,11 +326,32 @@ describe('what a chat’s cards carry', () => {
     ] as unknown as ConversationEvent[];
 
   it('is only what music_search put in that same chat', () => {
-    expect(carriedIn(events('mcp__conch__music_search'), 'c1', src)).toEqual({ whole: true });
-    expect(carriedIn(events('music_search'), 'c1', src)).toEqual({ whole: true });
+    expect(carriedIn(events('mcp__conch__music_search'), 'c1', src)).toEqual({
+      whole: true,
+      url: src,
+    });
+    expect(carriedIn(events('music_search'), 'c1', src)).toEqual({ whole: true, url: src });
     expect(carriedIn(events('mcp__someapp__music_search'), 'c1', src)).toBeUndefined();
     expect(carriedIn(events('music_search', 'c2'), 'c1', src)).toBeUndefined();
     expect(carriedIn(events('music_search'), 'c1', 'https://a.example/y.m4a')).toBeUndefined();
+  });
+
+  it('lets a card’s address through only as https, with no name or password, and Apple’s for a preview', () => {
+    const apple = 'https://audio-ssl.itunes.apple.com/a/preview.m4a';
+    expect(listenTarget({ whole: false, url: apple })).toMatchObject({ ok: true });
+    for (const url of [
+      'https://itunes.apple.com.evil.example/a.m4a',
+      'https://evilitunes.apple.com/a.m4a',
+      'https://audio-ssl.itunes.apple.com@evil.example/a.m4a',
+      'http://audio-ssl.itunes.apple.com/a.m4a',
+      'https://u:p@audio-ssl.itunes.apple.com/a.m4a',
+      'https://user@audio-ssl.itunes.apple.com/a.m4a',
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+    ])
+      expect(listenTarget({ whole: false, url }).ok, url).toBe(false);
+    expect(listenTarget({ whole: true, url: 'https://feeds.example.org/e.mp3' }).ok).toBe(true);
+    expect(listenTarget({ whole: true, url: 'http://feeds.example.org/e.mp3' }).ok).toBe(false);
   });
 
   it('tells audio by its type, or by its name when the type says nothing', () => {

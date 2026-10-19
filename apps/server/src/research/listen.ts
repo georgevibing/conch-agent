@@ -9,7 +9,11 @@
  *
  * - **Only what a card in that chat carries.** `src` must be the `preview` of
  *   an item in an `audio` view that `music_search` put in that same chat's
- *   log. Nothing the model writes can name an address here.
+ *   log. Nothing the model writes can name an address here, and the address
+ *   fetched is the card's own copy from the log, never the request's.
+ * - **Only from where it may come.** Before anything connects, the card's
+ *   address must be https without a name or password in it (`listenTarget`),
+ *   and a song's preview must be on Apple's preview servers.
  * - **A song's preview only from Apple.** A 30-second preview must come from
  *   Apple's preview servers (`isPreviewHost`), every redirect included. A
  *   podcast episode lives on its own host, so it may come from any public
@@ -44,8 +48,11 @@ export const LISTEN_LIMITS = {
   redirects: 5,
 };
 
-/** What a card carries at `src`: a preview, or a whole episode. Nothing when no card does. */
-export type Carried = { whole: boolean } | undefined;
+/**
+ * What a card carries at `src`: a preview, or a whole episode, and its
+ * address as the card has it (what is fetched). Nothing when no card does.
+ */
+export type Carried = { whole: boolean; url: string } | undefined;
 
 export interface ListenDeps {
   /** Whether a music card in this chat carries `src`, and as what. */
@@ -78,7 +85,7 @@ export function carriedIn(
     if (e.type !== 'tool.finished' || e.view?.kind !== 'audio' || e.view.chat !== chat) continue;
     if (!MUSIC_TOOL.test(names.get(e.toolUseId) ?? '')) continue;
     const item = e.view.items.find((i) => i.preview?.url === src);
-    if (item?.preview) return { whole: item.preview.whole };
+    if (item?.preview) return { whole: item.preview.whole, url: item.preview.url };
   }
   return undefined;
 }
@@ -96,6 +103,33 @@ export function audioType(contentType: string | undefined, url: URL): string | u
   if (ext === 'ogg' || ext === 'oga' || ext === 'opus') return 'audio/ogg';
   return undefined;
 }
+
+/**
+ * The address a card carries, if Conch may ask for it: https, no name or
+ * password in it, and for a song's preview one of Apple's preview servers
+ * (`previewHost`). Checked again on every redirect by `openAudio`, and every
+ * address the name resolves to by the guard as it connects.
+ */
+export function listenTarget(
+  carried: { whole: boolean; url: string },
+  previewHost: (hostname: string) => boolean = isPreviewHost,
+): { ok: true; url: URL } | { ok: false; message: string } {
+  let url: URL;
+  try {
+    url = new URL(carried.url);
+  } catch {
+    return { ok: false, message: 'That card’s address isn’t one.' };
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '')
+    return { ok: false, message: SECURE_ONLY };
+  if (!carried.whole && !previewHost(url.hostname))
+    return { ok: false, message: previewOnly(url.hostname) };
+  return { ok: true, url };
+}
+
+const SECURE_ONLY = 'Conch plays only from secure (https) addresses.';
+const previewOnly = (hostname: string) =>
+  `A song’s preview only comes from Apple, not ${hostname}.`;
 
 type Opened =
   | { ok: true; response: IncomingMessage; type: string; url: URL }
@@ -121,10 +155,8 @@ export async function openAudio(
   };
   let url = start;
   for (let hop = 0; hop <= limits.redirects; hop++) {
-    if (url.protocol !== 'https:' || url.username || url.password)
-      return refuse(403, 'Conch plays only from secure (https) addresses.');
-    if (!options.whole && !previewHost(url.hostname))
-      return refuse(403, `A song’s preview only comes from Apple, not ${url.hostname}.`);
+    if (url.protocol !== 'https:' || url.username || url.password) return refuse(403, SECURE_ONLY);
+    if (!options.whole && !previewHost(url.hostname)) return refuse(403, previewOnly(url.hostname));
     const literal = url.hostname.replace(/^\[|\]$/g, '');
     if (isIP(literal)) {
       const no = why(literal, url);
@@ -264,8 +296,13 @@ export function registerListenRoutes(app: FastifyInstance, deps: ListenDeps): vo
       const range = typeof request.headers.range === 'string' ? request.headers.range : undefined;
       const stop = new AbortController();
       reply.raw.on('close', () => stop.abort());
+      // What is fetched is the card's own address from the chat's log, checked here before
+      // anything connects; the request's `src` only picks which card.
+      const target = listenTarget(what, deps.previewHost);
+      if (!target.ok)
+        return reply.code(403).send({ error: 'unavailable', message: target.message });
       const opened = await openAudio(
-        url,
+        target.url,
         {
           whole: what.whole,
           range: range && RANGE.test(range) ? range : undefined,
