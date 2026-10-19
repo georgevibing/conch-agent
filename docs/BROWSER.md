@@ -131,6 +131,28 @@ everything it reads, including screenshots.
 
 Sites you sign in to stay signed in, so you only do it once.
 
+## Tasks have a browser of their own
+
+Each [task](../apps/docs/content/features/tasks.md), and each part of a job split into several, browses in a
+browser of its own. Its cookies, sign-ins and tabs are nobody else's, so two tasks comparing
+prices never fill the same basket or sign each other out. The panel says **Its own browser**.
+
+- It starts signed in only to the sites you chose **Always for** a site. Point at
+  **Its own browser** to see which.
+- When it asks to use another site, **Allow** also lends it your sign-in there, until the task
+  ends. In Auto it doesn't ask, so it signs in from Passwords instead.
+- Nothing it signs in to comes back to your main browser.
+- When the task is done, its browser closes and is forgotten. When it's interrupted, it's kept
+  locked on this computer, so **Resume** carries on in the same browser, signed in, on the
+  same pages.
+- A few run at once, more on a computer with more memory. One nobody is using steps aside for
+  another and comes back as it was.
+- With **Your Chrome**, tasks use Conch's own browser instead. Conch never copies your Chrome's
+  sign-ins.
+
+A chat uses your main browser. To give one a browser of its own, press the layers button
+in its panel. Press it again to go back.
+
 ## Every model sees the page
 
 The assistant reads a page as text, and looks at it as a picture when words aren't enough: a
@@ -194,7 +216,7 @@ meanwhile and Settings says why.
   Browser → Advanced. That asks for your password first, and the security checkup
   mentions it.
 - **Sign out of every site** (Settings → Browser → Advanced) wipes the browser's cookies and
-  sign-ins in one go.
+  sign-ins in one go, tasks' own browsers too.
 
 ## When something goes wrong
 

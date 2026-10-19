@@ -211,7 +211,7 @@ that does it. Daily backups and signed updates that roll back on failure come wi
 - **Standing orders.** Say once "always tell me if a flight changes". Conch looks now
   and then, for free until something is new. [Check-ins](./apps/docs/content/features/check-ins.md)
 - **A browser you can watch** and take over. It signs in from your passwords without seeing
-  one. A real terminal is a keystroke away.
+  one, and each task gets a browser of its own. A real terminal is a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
   [Passwords](./apps/docs/content/features/passwords.md) ·
   [Terminal](./apps/docs/content/features/terminal.md)
