@@ -150,8 +150,10 @@ let browser: BrowserService;
 beforeAll(async () => {
   site = createServer((req, res) => {
     const page = pages.get((req.url ?? '').split('?')[0] ?? '');
-    res.writeHead(page ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(`<!doctype html>${page ? page() : '<title>Not found</title>'}`);
+    // Only the pages this test made answer, and only as the functions it set.
+    const known = typeof page === 'function';
+    res.writeHead(known ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html>${known ? page() : '<title>Not found</title>'}`);
   });
   await new Promise<void>((resolve) => site.listen(0, '127.0.0.1', resolve));
   port = (site.address() as { port: number }).port;
