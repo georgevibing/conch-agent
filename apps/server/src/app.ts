@@ -141,7 +141,7 @@ import { registerComputerUseRoutes } from './computer-use/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { UpdatesError } from './updates/service';
-import { registerSecurity } from './security';
+import { limitGatewayRoutes, registerSecurity } from './security';
 import { SERVER_VERSION, type Services } from './services';
 
 function parse<T extends z.ZodType>(
@@ -257,6 +257,8 @@ export async function buildApp(services: Services) {
     return typeof access === 'object' && gate.verified(access);
   };
   registerSecurity(app, gate);
+  // Before any route: the plugin charges only routes registered after it.
+  await limitGatewayRoutes(app, gate);
   // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
   registerAuthRoutes(app, services, gate);

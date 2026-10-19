@@ -6,7 +6,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../config';
-import { Gatekeeper, registerSecurity } from '../security';
+import { Gatekeeper, limitGatewayRoutes, registerSecurity } from '../security';
 import { hereCookieName } from './here';
 import { RequestLimiter } from './requests';
 import { AccessStore } from './store';
@@ -55,7 +55,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function gateway() {
+async function gateway(routeBudget?: number) {
   vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
   home = await mkdtemp(join(tmpdir(), 'conch-request-limits-'));
   const config = loadConfig({ CONCH_HOME: home, CONCH_ALLOWED_HOSTS: 'conch.example' });
@@ -63,6 +63,8 @@ async function gateway() {
   const server = Fastify();
   app = server;
   registerSecurity(server, gate);
+  // As in buildApp: every test below also runs with the plugin's budget behind the guard.
+  await limitGatewayRoutes(server, gate, routeBudget);
   const work = vi.fn(() => ({ ok: true }));
   server.get('/api/state/:id', work);
   server.post('/api/state/:id', work);
@@ -257,6 +259,31 @@ describe('the common gateway guard', () => {
     expect((await server.inject({ url: '/assets/app.js', headers: remote })).statusCode).toBe(200);
     vi.mocked(Date.now).mockReturnValue(1_000_050);
     expect((await server.inject({ url: '/api/auth', headers: remote })).statusCode).toBe(200);
+  });
+
+  it('backs every route with the plugin budget, counted apart for the proven local browser', async () => {
+    const { server, remote, local } = await gateway(3);
+    // Refused by the guard first: never charged to the budget behind it.
+    for (let i = 0; i < 5; i++)
+      expect(
+        (
+          await server.inject({
+            url: '/assets/app.js',
+            headers: { ...remote, 'sec-fetch-site': 'cross-site' },
+          })
+        ).statusCode,
+      ).toBe(403);
+    for (let i = 0; i < 3; i++)
+      expect((await server.inject({ url: '/assets/app.js', headers: remote })).statusCode).toBe(
+        200,
+      );
+    const refused = await server.inject({ url: '/assets/app.js', headers: remote });
+    expect(refused.statusCode).toBe(429);
+    expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
+    expect(refused.json()).toMatchObject({ error: 'rate-limited', retryAfter: expect.any(Number) });
+    expect((await server.inject({ url: '/api/state/one', headers: remote })).statusCode).toBe(429);
+    // Same loopback address, but proven: its own budget.
+    expect((await server.inject({ url: '/api/state/one', headers: local })).statusCode).toBe(200);
   });
 
   it('keeps the write allowance on a device when it starts another session', async () => {

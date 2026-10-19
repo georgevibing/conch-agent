@@ -16,6 +16,7 @@ import {
   VERIFY_WINDOW_MS,
 } from './auth/store';
 import { cliName } from './cli/command';
+import { limitRoutes } from './ratelimit';
 import { A2A_ENDPOINTS } from './a2a/door';
 
 /** How a request was let in. */
@@ -514,6 +515,34 @@ function securityHeaders(request: FastifyRequest, reply: FastifyReply, secure: b
   if (route.startsWith('/api/') || route === '/ws') reply.header('cache-control', 'no-store');
 }
 
+const tooManyRequests = (seconds: number) =>
+  `Conch is receiving too many requests. Wait ${seconds} seconds, then try again.`;
+
+/**
+ * Per client, all requests a minute (pages and assets too). Above every budget
+ * in `registerSecurity`, so those still answer first on the API.
+ */
+export const GATEWAY_ROUTE_BUDGET = 3000;
+
+/**
+ * A second, coarser budget behind `registerSecurity`, through the official
+ * `@fastify/rate-limit` plugin, on every route registered after it resolves.
+ * It never counts a request the guards refused. A proven local browser is
+ * counted apart from everything else at its address, keeping its recovery.
+ */
+export function limitGatewayRoutes(
+  app: FastifyInstance,
+  gate: Gatekeeper,
+  max = GATEWAY_ROUTE_BUDGET,
+): Promise<void> {
+  return limitRoutes(app, {
+    max,
+    timeWindow: 60_000,
+    key: (request) => `${gate.isLocal(request) ? 'here' : 'other'}:${gate.clientKey(request)}`,
+    message: tooManyRequests,
+  });
+}
+
 /**
  * Guards every request, in order:
  *
@@ -538,7 +567,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       .header('retry-after', String(seconds))
       .send({
         error: 'rate-limited',
-        message: `Conch is receiving too many requests. Wait ${seconds} seconds, then try again.`,
+        message: tooManyRequests(seconds),
         retryAfter: seconds,
       });
   };
