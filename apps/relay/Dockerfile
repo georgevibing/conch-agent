@@ -2,7 +2,7 @@
 #   docker build -t conch-relay apps/relay
 #   docker run -d --restart unless-stopped -p 8787:8787 -v conch-relay:/data \
 #     -e CONCH_RELAY_SETUP=<the setup code from Conch> conch-relay
-FROM node:24-alpine
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
 WORKDIR /relay
 COPY src/core.ts src/envelope.ts src/store.ts src/node.ts ./
 RUN mkdir /data && chown node /data
