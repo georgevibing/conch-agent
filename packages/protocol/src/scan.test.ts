@@ -52,18 +52,19 @@ describe('linear scans agree with the expressions they replaced', () => {
   const spaces = [' ', '\t', '\n', '\r', ' ', ' ', '﻿'];
 
   it('afterSpace is `/^prefix\\s+(.+)$/`, on every short string', () => {
+    // Over a hundred thousand strings: compared plainly, and only what differs is reported.
+    const differs: string[] = [];
     for (const tail of strings([...spaces.slice(0, 5), 'x', '.'], 6)) {
       for (const head of ['Bearer', 'bEaReR', 'Bear', 'Bearerx', '']) {
         const text = head + tail;
-        expect(afterSpace(text, 'Bearer', true), JSON.stringify(text)).toBe(OLD.bearer(text));
+        if (afterSpace(text, 'Bearer', true) !== OLD.bearer(text)) differs.push(text);
       }
       for (const head of ['Couldn’t', "Couldn't", 'couldn’t', 'Couldnt']) {
         const text = head + tail;
-        expect(afterSpace(text, ['Couldn’t', "Couldn't"]), JSON.stringify(text)).toBe(
-          OLD.couldnt(text),
-        );
+        if (afterSpace(text, ['Couldn’t', "Couldn't"]) !== OLD.couldnt(text)) differs.push(text);
       }
     }
+    expect(differs).toEqual([]);
   });
 
   it('afterSpace is `/^prefix\\s+(.+)$/`, on random strings (property)', () => {
