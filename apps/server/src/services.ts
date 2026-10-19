@@ -1796,6 +1796,11 @@ export class Services {
     this.conversations.events.on((event) => this.broadcast.emit(event));
     // Each task follows its own chat: what it's doing, what it did (ADR 0033).
     this.broadcast.on((event) => this.tasks.onEvent(event));
+    // A task's own browser ends with it, or waits, sealed, for Resume (ADR 0141).
+    this.broadcast.on((event) => {
+      if (event.type === 'task.changed')
+        void this.browser.taskChanged(event.task).catch(() => undefined);
+    });
     // A deleted chat takes its browser tab, thumbnails and tasks' cards with it.
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.deleted') {

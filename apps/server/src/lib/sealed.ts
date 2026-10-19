@@ -30,6 +30,8 @@ export const SEALED_FILES = new Set([
   'onepassword.secrets.json',
   // A cloud browser's key, or a browser address with its token (ADR 0080).
   'browser.secrets.json',
+  // Each errand's own browser session: copies of sign-ins it was lent (ADR 0141).
+  'browser.errands.secrets.json',
   // The cloud sandbox's key, for where chats' work runs (ADR 0106).
   'workplaces.secrets.json',
   'channels.secrets.json',

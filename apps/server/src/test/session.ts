@@ -437,6 +437,9 @@ export async function useConch(g: Gateway) {
     at: Date.now(),
   });
   await services.browser.saved.flush();
+  // …and a task's browser of its own, kept for Resume (ADR 0141).
+  await services.browser.errands.mark(convo.id, 'task');
+  await services.browser.errands.store.flush();
   // What a plain model API keeps to carry a chat on.
   await new TranscriptStore(sessionsDir(home)).save(TranscriptStore.newId(), {
     provider: 'anthropic-api',

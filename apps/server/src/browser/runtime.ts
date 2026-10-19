@@ -8,7 +8,7 @@ import type {
   BrowserPhase,
   BrowserProblem,
 } from '@conch/protocol';
-import { chromium, type BrowserContext, type Page } from 'playwright-core';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 
 import { run } from '../lib/proc';
 import type { Heal } from '../lib/recover';
@@ -138,6 +138,9 @@ export interface RuntimeDeps {
   heal?: Heal;
 }
 
+/** A context's cookies and storage, as Playwright reads and seeds them (ADR 0141). */
+export type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
+
 /** What runs: Conch's own browser here, or one it attached to (ADR 0080). */
 export interface RunningBackend {
   kind: BrowserBackendKind;
@@ -209,6 +212,9 @@ export class BrowserRuntime {
   #attached?: Attached;
   #starting?: Promise<BrowserContext>;
   #stopping = false;
+  /** The browser errands get their own contexts in, here (ADR 0141): started when one needs it. */
+  #errands?: Promise<Browser>;
+  #stoppingErrands = false;
 
   constructor(private readonly deps: RuntimeDeps) {}
 
@@ -372,7 +378,8 @@ export class BrowserRuntime {
   async adopt(page: Page): Promise<void> {
     if (!this.#attached || OWNED.has(page)) return;
     OWNED.add(page);
-    if (!this.backend.shared) return;
+    // An errand's page beside your Chrome is in Conch's own browser: contained as a whole already.
+    if (!this.backend.shared || page.context() !== this.#context) return;
     await this.#contain(page);
     await page.addInitScript(conchBadge).catch(() => undefined);
     await page.evaluate(conchBadge).catch(() => undefined);
@@ -492,6 +499,93 @@ export class BrowserRuntime {
     );
   }
 
+  // ── Errands: a browser context of their own (ADR 0141) ──────────────
+
+  /**
+   * A new, empty context for an errand, seeded with `state` (the cookies and
+   * storage it may have, chosen by the caller), and contained like the main
+   * one: every request goes past the guard. In a browser of Conch's own
+   * elsewhere (a DevTools address, the cloud) it's a context of that browser,
+   * when it gives one; otherwise, and always beside your own Chrome, a
+   * context of a separate browser here, never one of yours.
+   */
+  async errandContext(state?: StorageState): Promise<{ context: BrowserContext; remote: boolean }> {
+    const options = {
+      viewport: VIEWPORT,
+      deviceScaleFactor: 1,
+      serviceWorkers: 'block' as const,
+      acceptDownloads: true,
+      ...(state && { storageState: state }),
+    };
+    const remote = this.#attached && !this.backend.shared ? this.#context?.browser() : undefined;
+    if (remote) {
+      try {
+        const context = await remote.newContext(options);
+        await this.#contain(context);
+        return { context, remote: true };
+      } catch {
+        // That browser keeps one context (some clouds do): one here instead.
+        this.heal(`Opened a task’s own browser here. ${this.backend.name} keeps only one.`);
+      }
+    }
+    const { browser, userAgent } = await this.#errandBrowser();
+    const context = await browser.newContext({ ...options, ...(userAgent && { userAgent }) });
+    await this.#contain(context);
+    return { context, remote: false };
+  }
+
+  /** The browser here that errands' contexts live in, started (once) when the first needs it. */
+  async #errandBrowser(): Promise<{ browser: Browser; userAgent?: string }> {
+    const settings = await this.deps.store.settings();
+    const candidates = this.candidates();
+    const running = this.backend.kind === 'local' ? this.running?.id : undefined;
+    const candidate =
+      candidates.find((c) => c.id === running) ?? pickBrowser(candidates, settings.preferred);
+    if (!candidate)
+      throw new BrowserProblemError({
+        message: 'There’s no browser on this computer for this task.',
+        action: 'install',
+      });
+    const userAgent = await this.deps.store.userAgent(candidate.path);
+    this.#errands ??= chromium
+      .launch({
+        executablePath: candidate.path,
+        headless: true,
+        ignoreDefaultArgs: ['--enable-automation'],
+        args: LAUNCH_ARGS,
+        timeout: 30_000,
+      })
+      .then(
+        (browser) => {
+          browser.on('disconnected', () => {
+            this.#errands = undefined;
+            if (!this.#stoppingErrands) this.heal('Restarted the browser tasks use');
+          });
+          return browser;
+        },
+        (error: unknown) => {
+          this.#errands = undefined;
+          throw error;
+        },
+      );
+    return { browser: await this.#errands, ...(userAgent && { userAgent }) };
+  }
+
+  /** Close the errands' browser here (shutting down, wiping, repairing). It starts again on demand. */
+  async stopErrands(): Promise<void> {
+    const starting = this.#errands;
+    if (!starting) return;
+    this.#stoppingErrands = true;
+    try {
+      await (await starting).close();
+    } catch {
+      // Never started, or already gone.
+    } finally {
+      this.#errands = undefined;
+      this.#stoppingErrands = false;
+    }
+  }
+
   /** Close the browser (idle, settings changed, shutting down). It starts again on demand. */
   async stop(): Promise<void> {
     const context = this.#context;
@@ -512,6 +606,7 @@ export class BrowserRuntime {
   async repair(): Promise<void> {
     this.#set('repairing');
     await this.stop();
+    await this.stopErrands();
     await killOrphans(this.deps.store.profileDir).catch(() => undefined);
     await clearLocks(this.deps.store.profileDir);
     this.deps.guard.reset();
@@ -527,6 +622,7 @@ export class BrowserRuntime {
   /** Sign out of everything: close the browser and delete its profile. */
   async wipe(): Promise<void> {
     await this.stop();
+    await this.stopErrands();
     await killOrphans(this.deps.store.profileDir).catch(() => undefined);
     await rm(this.deps.store.profileDir, { recursive: true, force: true, maxRetries: 5 });
     this.heal('Signed out of every site. The browser starts fresh next time.');
