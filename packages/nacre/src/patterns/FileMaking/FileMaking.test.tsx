@@ -247,4 +247,17 @@ describe('fileKind', () => {
       lines: ['One & two'],
     });
   });
+
+  it('leaves no tag in Markdown’s words when taking one out joins another', () => {
+    expect(markdownLines('a <scr<b>ipt>alert(1)</scr</b>ipt> b\n- <<i>i<b>mg src=x>>')).toEqual([
+      { kind: 'p', text: 'a alert(1) b' },
+      { kind: 'li', text: '>' },
+    ]);
+  });
+
+  it('reads an escaped entity in HTML once, as the words it spells', () => {
+    expect(htmlGist('<p>&amp;lt;script&amp;gt; &amp;amp; &lt;b&gt;</p>').lines).toEqual([
+      '&lt;script&gt; &amp; <b>',
+    ]);
+  });
 });

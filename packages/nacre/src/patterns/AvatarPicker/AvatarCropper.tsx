@@ -1,5 +1,12 @@
 import { ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+} from 'react';
 
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
@@ -37,6 +44,10 @@ export async function openPicture(file: Blob): Promise<OpenedPicture> {
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
+    // Shown as it is in the frame (`Framer`): dressed for that here.
+    image.alt = '';
+    image.draggable = false;
+    image.className = styles.photo ?? '';
     image.src = url;
     await image.decode();
     if (!image.naturalWidth || !image.naturalHeight) throw new Error('no size');
@@ -125,6 +136,17 @@ function Framer({
   const stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; from: Frame; side: number }>(undefined);
 
+  // What shows is the picture already decoded, the one the square is drawn
+  // from: no address is written into the page, so none can be anything but it.
+  const showPhoto = useCallback(
+    (slot: HTMLSpanElement | null) => {
+      if (!slot) return;
+      slot.replaceChildren(picked.image);
+      return () => picked.image.remove();
+    },
+    [picked],
+  );
+
   // A wheel or a pinch on the trackpad zooms; it mustn't scroll the page behind.
   useEffect(() => {
     const el = stage.current;
@@ -201,7 +223,7 @@ function Framer({
           onPointerUp={up}
           onPointerCancel={up}
         >
-          <img src={picked.url} alt="" draggable={false} className={styles.photo} />
+          <span ref={showPhoto} className={styles.slot} />
           <span className={styles.circle} data-shape={shape} aria-hidden />
           <input
             type="range"

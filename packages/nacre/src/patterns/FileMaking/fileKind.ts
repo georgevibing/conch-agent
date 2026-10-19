@@ -233,13 +233,19 @@ export function markdownLines(text: string, max = 12): ExcerptLine[] {
       /^\s*\|?[-:| ]+\|?$/.test(line)
     )
       continue;
-    const plain = (s: string) =>
-      s
+    const plain = (s: string) => {
+      let words = s
         .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
         .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-        .replace(/[*_`~]+/g, '')
-        .replace(/<[^>]+>/g, '')
-        .trim();
+        .replace(/[*_`~]+/g, '');
+      // Tags go until none is left: taking one out can join the halves of another (`<scr<b>ipt>`).
+      let before: string;
+      do {
+        before = words;
+        words = words.replace(/<[^<>]+>/g, '');
+      } while (words !== before);
+      return words.trim();
+    };
     if (fenced) {
       out.push({ kind: 'p', text: line.trim() });
       continue;
@@ -279,11 +285,12 @@ export function htmlGist(html: string): { title?: string; lines: string[] } {
     .replace(/<(?:br|\/p|\/h\d|\/li|\/div|\/tr|\/section|\/article)\s*\/?>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    // Last, so `&amp;lt;` reads as the words "&lt;", not as "<".
+    .replace(/&amp;/g, '&');
   const lines = body
     .split('\n')
     .map((l) => l.replace(/\s+/g, ' ').trim())

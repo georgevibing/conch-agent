@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
+import { AvatarCropper, openPicture } from './AvatarCropper';
 import { AvatarPicker } from './AvatarPicker';
 import { MAX_ZOOM, START, cropOf, moveFrame, zoomFrame } from './framing';
 
@@ -128,6 +129,24 @@ describe('AvatarPicker', () => {
     expect(drawImage).toHaveBeenCalledOnce();
     expect(onSave).not.toHaveBeenCalledWith(upload);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo');
+  });
+
+  it('shows the decoded picture itself, never an address handed to it', async () => {
+    const opened = await openPicture(file);
+    const image = opened.image;
+    renderNacre(
+      <AvatarCropper
+        picture={{ ...opened, url: 'javascript:alert(1)' }}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Frame your photo' });
+    expect(dialog.querySelectorAll('img')).toHaveLength(1);
+    expect(dialog.querySelector('img')).toBe(image);
+    expect(image).toHaveAttribute('alt', '');
+    expect(image.draggable).toBe(false);
+    expect(dialog.innerHTML).not.toContain('javascript:');
   });
 
   it('with a photo, offers a new one or taking it away', async () => {
