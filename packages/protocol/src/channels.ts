@@ -789,8 +789,11 @@ export type OpenImessageBody = z.infer<typeof OpenImessageBody>;
  */
 export const ChannelDoor = z.object({
   state: z.enum(['off', 'starting', 'ready', 'needs-you', 'error']),
-  /** How the internet reaches it: Tailscale Funnel, or an address of your own (a proxy you run). */
-  via: z.enum(['tailscale', 'own']).optional(),
+  /**
+   * How the internet reaches it: Tailscale Funnel, an address of your own (a proxy you run),
+   * or the always-on relay (ADR 0140), which keeps what comes while Conch is off.
+   */
+  via: z.enum(['tailscale', 'own', 'relay']).optional(),
   /** The public base address, `https://mac.tail1234.ts.net:8443/conch`. */
   url: z.string().max(2000).optional(),
   /** Conch's own address (ADR 0064), which the door could use in one press, when it isn't already. */

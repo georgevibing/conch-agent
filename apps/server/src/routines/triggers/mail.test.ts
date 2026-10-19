@@ -163,6 +163,31 @@ describe('when an email arrives', () => {
     expect(result?.happenings.map((h) => h.id)).toEqual(['mail:a2:m1']);
   });
 
+  it('catches up after Conch was off: the newest read, the rest counted in one line, a week at most', async () => {
+    const many: Record<string, MailMessage> = {};
+    for (let i = 0; i < 60; i++) many[`m${i}`] = message(`m${i}`, { subject: `Order ${i}` });
+    const gmail = fakeGmail(many);
+    const now = Date.UTC(2026, 9, 20, 12);
+    // Last looked a fortnight ago.
+    const result = await mailSource(gmail.access).check?.(
+      ctx(anna, { looked: { a1: Date.UTC(2026, 9, 6) } }, now),
+    );
+    // A look reaches back a week however long it was off.
+    expect(gmail.queries[0]).toContain(`after:${Math.floor((now - 7 * 86_400_000) / 1000)}`);
+    expect(gmail.reads).toHaveLength(20);
+    const happenings = result?.happenings ?? [];
+    expect(happenings).toHaveLength(21);
+    const line = happenings.find((h) => h.id.includes(':more:'));
+    expect(line?.label).toBe('40 more emails to me@example.com');
+    expect(line?.link).toContain('#search/');
+    // The ones counted aren't read on the next look either.
+    const next = await mailSource(gmail.access).check?.(
+      ctx(anna, result?.state ?? {}, now + 120_000),
+    );
+    expect(next?.happenings).toEqual([]);
+    expect(gmail.reads).toHaveLength(20);
+  });
+
   it('tidies senders and words before saving', async () => {
     const tidy = await mailSource(fakeGmail({}).access).validate?.(
       {

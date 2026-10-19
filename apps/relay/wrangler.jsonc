@@ -1,0 +1,14 @@
+// The relay on Cloudflare Workers' free plan (ADR 0140), from this folder:
+//   npx wrangler@4 deploy --var CONCH_RELAY_SETUP:<the setup code from Conch>
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "conch-relay",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "RELAY", "class_name": "RelayObject" }],
+  },
+  // SQLite-backed Durable Objects are the ones the free plan includes.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RelayObject"] }],
+}

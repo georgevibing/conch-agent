@@ -5,7 +5,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { ApiError } from '../../api/client';
 import { channelsApi } from './api';
 
-export const channelKeys = { all: ['channels'] as const, door: ['channel-door'] as const };
+export const channelKeys = {
+  all: ['channels'] as const,
+  door: ['channel-door'] as const,
+  relay: ['channel-relay'] as const,
+};
 
 /** Live changes that arrived after a list request began must outlive its snapshot. */
 const duringFetch = new WeakMap<QueryClient, Map<string, Channel | null>>();
@@ -33,6 +37,16 @@ export function useDoor(enabled = true) {
     queryFn: channelsApi.door,
     enabled,
     staleTime: 30_000,
+  });
+}
+
+/** The always-on relay (ADR 0140): asked again every half minute while it's on. */
+export function useRelay(enabled = true) {
+  return useQuery({
+    queryKey: channelKeys.relay,
+    queryFn: channelsApi.relay,
+    enabled,
+    refetchInterval: (query) => (query.state.data?.state === 'off' ? false : 30_000),
   });
 }
 

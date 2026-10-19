@@ -1359,6 +1359,28 @@ describe('Palette search', () => {
     );
   });
 
+  it('finds the always-on relay by the words people use (ADR 0140)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['relay', 'missed messages', 'while off', 'cloudflare worker']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Always-on relay/ }),
+      ).toBeInTheDocument();
+    }
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'always-on relay');
+    await user.click(await screen.findByRole('option', { name: /Settings: Always-on relay/ }));
+    await waitFor(() => expect(where()).toBe('/settings/health/always-on'));
+  });
+
   it('finds Always on and quitting by the words people use, straight into Settings → Health', async () => {
     const user = userEvent.setup();
     mockFetch({

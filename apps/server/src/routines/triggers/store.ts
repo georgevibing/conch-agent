@@ -23,6 +23,8 @@ const Pending = z.object({
   /** The only-if couldn't be checked for it. */
   unchecked: z.boolean().optional(),
   chain: z.array(z.string()).optional(),
+  /** Several older ones folded into this one line, when more waited than a run takes (ADR 0140). */
+  folded: z.number().int().positive().optional(),
 });
 
 /**

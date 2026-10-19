@@ -102,6 +102,8 @@ import { installChromium } from './browser/install';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
 import { ChannelDoorService, doorCheck } from './channels/door';
+import { relayCheck } from './relay/doctor';
+import { RelayService } from './relay/service';
 import { addressCheck } from './address/doctor';
 import { AddressService } from './address/service';
 import { ChatDb, imessageSetup, MESSAGES_DB, openForImessage } from './channels/imessage';
@@ -523,6 +525,8 @@ export class Services {
   readonly pretendWorld?: PretendWorld;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
+  /** The always-on relay, which keeps what reaches the door while Conch is off (ADR 0140). */
+  readonly relay: RelayService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
   readonly address: AddressService;
   /** The gateway's own server, once it listens: where the address hands its requests. */
@@ -2058,6 +2062,8 @@ export class Services {
           fetch(door.localFor(String(url)), init),
       }),
       onHeal: (message) => void this.healed.note('channels', message),
+      // The relay (made just below) checks itself when the door uses it.
+      relay: (url) => this.relay.probe(url),
       // Read when asked, so the address (made further on) is always the current one.
       conchAddress: () => {
         const name = this.address.name();
@@ -2065,6 +2071,14 @@ export class Services {
       },
     });
     this.door = door;
+    this.relay = new RelayService({
+      home: config.CONCH_HOME,
+      door,
+      version: SERVER_VERSION,
+      allowLoopback: config.CONCH_ENGINE === 'mock',
+      onHeal: (message) => void this.healed.note('channels', message),
+      log: (message) => console.warn(`[relay] ${message}`),
+    });
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
     if (this.mockTeams) this.mockTeams.deliveryOrigin = () => door.local;
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
@@ -2190,6 +2204,7 @@ export class Services {
     this.broadcast.on((event) => this.channels.onEvent(event));
     door.onChange((now) => this.broadcast.emit({ type: 'channel.door', door: now }));
     this.doctor.register(doorCheck(door));
+    this.doctor.register(relayCheck(this.relay));
     this.address = new AddressService({
       home: config.CONCH_HOME,
       config,
@@ -3221,6 +3236,22 @@ export class Services {
         manage: { label: 'Open Apps', place: 'integrations', focus: `capp_${key.appId}` },
         reveal: async () => key.value,
       });
+    // The always-on relay's key and token (ADR 0140): shown, never copied out.
+    const relayKey = await this.relay.keyId().catch(() => undefined);
+    if (relayKey)
+      out.push({
+        id: id('relay', 'key'),
+        title: 'Always-on relay key',
+        usedBy: 'The always-on relay',
+        hint: relayKey,
+        manage: { label: 'Open in Apps', place: 'channels', focus: 'relay' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'This key opens what the relay keeps, and never leaves this computer. To change it, set the relay up again.',
+            ),
+          ),
+      });
     // Your key for signing skills (ADR 0047): shown, never copied out.
     const signing = await this.skillTrust.signingKey({ lock: false }).catch(() => undefined);
     if (signing?.state === 'locked' || signing?.state === 'clear')
@@ -3350,6 +3381,8 @@ export class Services {
     await this.#channelsReady;
     void this.door.start().catch((error: unknown) => console.error('[door]', error));
     void this.channels.start().catch((error: unknown) => console.error('[channels]', error));
+    // What the relay kept while Conch was off comes in once the door is up, through it.
+    this.relay.start();
     // Uploads nobody sent (a closed tab, a dropped draft) are cleared on start and hourly.
     void this.attachments.sweep().catch(() => undefined);
     this.#sweeper ??= setInterval(
@@ -3397,6 +3430,7 @@ export class Services {
     this.wake.stop();
     this.channelLinking.stop();
     this.linked.stop();
+    this.relay.stop();
     this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();

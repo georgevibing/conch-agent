@@ -132,6 +132,7 @@ import { registerWorkPlaceRoutes } from './workplaces/routes';
 import { registerChannelLinkRoutes } from './channels/link-routes';
 import { registerFeishuScanRoutes } from './channels/feishu-routes';
 import { registerChannelRoutes } from './channels/routes';
+import { registerRelayRoutes } from './relay/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
 import { registerCloudRoutes } from './clouds/routes';
@@ -393,6 +394,7 @@ export async function buildApp(services: Services) {
   registerWaitRoutes(app, services.waits);
   registerTogetherRoutes(app, services.together);
   registerFirstJobRoutes(app, services);
+  registerRelayRoutes(app, services.relay, gate);
   registerChannelRoutes(
     app,
     services.channels,

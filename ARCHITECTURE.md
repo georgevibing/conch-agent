@@ -46,6 +46,13 @@ flowchart TB
 
 ## Packages
 
+### The always-on relay (`apps/relay`)
+
+A separately deployed program with no dependencies and no build (Node 22.18+ runs its
+`.ts`; Cloudflare Workers through `wrangler.jsonc`): one fetch handler (`core.ts`) that
+queues webhooks sealed to the gateway's key while Conch is off ([ADR 0140](./docs/adr/0140-always-on-relay.md)).
+The gateway imports only its envelope.
+
 ### Design system (`packages/nacre`)
 
 Tokens, the Lustre material, primitives (`src/components`) and chat patterns
@@ -830,6 +837,13 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     - `wechat.ts` (`WeChatOfficialAdapter`): an Official Account, with
       `wechat-crypto.ts` checking signatures and doing the AES.
 
+    The door's third way in is the **always-on relay** (`relay/`, ADR 0140), a
+    separate program (`apps/relay`) on a Pi, a server or a free Cloudflare Worker.
+    It seals each delivery with HPKE to a key only the gateway holds and keeps it
+    for up to a week; the gateway long-polls it and, on start, drains it through
+    `door.deliver`, the same handler a live delivery reaches, which checks the
+    sender's signature as it came (`HookRequest.receivedAt` for freshness).
+
     WhatsApp, Signal, iMessage and email are the person's own accounts
     (`linked.ts` `ownAccount`): groups never hear from them, other people are
     read only with `settings.others: 'ask'`, the owner is let in without a
@@ -941,7 +955,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   `browser/shots/`, `computer-use.json` (using your apps on or off, apps you always allow), `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `channels.json` + `channels.secrets.json` (bots, who may talk to
   them, their keys) + `channels/` (a Matrix session's encryption store, where
-  Teams chats live) + `door.json` (the public door: Funnel or your own address), `gateway.json` (where it's listening, while it runs), `workspace/`
+  Teams chats live) + `door.json` (the public door: Funnel, your own address or the relay) + `relay.json` + `relay.secrets.json` + `relay-seen.json` (the always-on relay: its address, the key that opens what it keeps, what was taken), `gateway.json` (where it's listening, while it runs), `workspace/`
   (default cwd), `backups.json` (daily backups on or off) + `backups/` (the backups
   themselves, and a restore being readied). What each of these is to a backup is
   decided in `backup/manifest.ts`.
@@ -1308,6 +1322,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - `CONCH_*` variables never reach the agent;
   - the agent can draft routines but can't enable them, grant trust or raise what
     they may spend, and rewriting an active routine (or what starts it) pauses it;
+  - the always-on relay (ADR 0140) holds only ciphertext sealed to the gateway's key,
+    the token's hash and hashed addresses; what it hands back goes through the same
+    door handlers, signatures re-checked, each delivery taken once (`relay-seen.json`);
   - a run something started (ADR 0056) is tainted from its first message, with
     what happened fenced as data; a page is only ever read through the live-data
     guard, and another app's address takes signed, fresh, unrepeated deliveries;

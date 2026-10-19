@@ -10,6 +10,7 @@ import { GetIt } from '../setup/GetIt';
 import { channelsApi } from './api';
 import { APPS } from './describe';
 import { channelKeys, errorText, useDoor } from './queries';
+import { RelayStep } from './RelayStep';
 
 /**
  * The public address Teams and WeChat deliver to (ADR 0045), as one card:
@@ -85,6 +86,7 @@ export function DoorStep() {
         }
         {...(ownError && { ownError })}
       />
+      <RelayStep />
       {dialog}
     </>
   );

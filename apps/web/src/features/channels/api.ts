@@ -1,4 +1,5 @@
 import {
+  RelayView,
   Channel,
   ChannelCheck,
   ChannelLink,
@@ -89,4 +90,10 @@ export const channelsApi = {
     request(ChannelDoor, '/api/channels/door', { method: 'PUT', body: { url } }),
   doorCheck: () => request(ChannelDoor, '/api/channels/door/check', { method: 'POST', body: {} }),
   doorOff: () => request(ChannelDoor, '/api/channels/door', { method: 'DELETE' }),
+  /** The always-on relay (ADR 0140). */
+  relay: () => request(RelayView, '/api/relay'),
+  relayPair: () => request(RelayView, '/api/relay/pair', { method: 'POST', body: {} }),
+  relayConnect: (url: string) => request(RelayView, '/api/relay', { method: 'PUT', body: { url } }),
+  relayCheck: () => request(RelayView, '/api/relay/check', { method: 'POST', body: {} }),
+  relayForget: () => request(RelayView, '/api/relay', { method: 'DELETE' }),
 };

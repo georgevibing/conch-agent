@@ -36,7 +36,7 @@ import {
 
 import { writeFileAtomic } from '../lib/fs';
 import type { ChannelEndpoints } from './adapters';
-import type { HookReply, HookRequest } from './door';
+import { arrivedAt, type HookReply, type HookRequest } from './door';
 import { blocks, fit, inline, prose } from './format';
 import { TextChoices } from './linked';
 import {
@@ -274,6 +274,8 @@ export async function fromGoogleChat(
   audience: string,
   keys: GoogleKeys,
   issuers: string[] = ISSUERS,
+  /** When the delivery reached Conch (a relay kept it, ADR 0140): the token was valid then. */
+  at?: number,
 ): Promise<boolean> {
   const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(
     authorization ?? '',
@@ -290,6 +292,7 @@ export async function fromGoogleChat(
       audience,
       algorithms: ['RS256'],
       clockTolerance: 60,
+      ...(at !== undefined && { currentDate: new Date(at) }),
       requiredClaims: ['exp', 'iss', 'aud'],
     });
     return payload.email === CHAT_SENDER && payload.email_verified === true;
@@ -534,6 +537,7 @@ export class GoogleChatAdapter implements ChannelAdapter {
           url,
           this.#keys,
           this.endpoints.googleIssuers,
+          request.receivedAt,
         ))
       ) {
         // Google Chat set to the "project number" audience: a genuine token, but never
@@ -564,7 +568,7 @@ export class GoogleChatAdapter implements ChannelAdapter {
       // A token lasts an hour and isn't bound to the body: an event must be fresh, and
       // what it says is read back from Google Chat, where each one is claimed once.
       const time = event.eventTime ? Date.parse(event.eventTime) : Number.NaN;
-      if (!Number.isFinite(time) || Math.abs(Date.now() - time) > FRESH_MS) return ok;
+      if (!Number.isFinite(time) || Math.abs(arrivedAt(request) - time) > FRESH_MS) return ok;
       void this.#event(event, events, choices).catch(() => undefined);
       return ok;
     };

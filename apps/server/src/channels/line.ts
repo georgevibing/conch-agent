@@ -22,7 +22,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
 
 import type { ChannelEndpoints } from './adapters';
-import type { HookReply, HookRequest } from './door';
+import { arrivedAt, type HookReply, type HookRequest } from './door';
 import { fit, plain } from './format';
 import {
   Backoff,
@@ -324,7 +324,7 @@ export class LineAdapter implements ChannelAdapter {
           seen.add(id);
           if (seen.size > SEEN) seen.delete(seen.values().next().value ?? '');
         }
-        if (event.timestamp && Date.now() - event.timestamp > STALE_MS) continue;
+        if (event.timestamp && arrivedAt(request) - event.timestamp > STALE_MS) continue;
         void this.#event(event, events, replies).catch(() => undefined);
       }
       return { status: 200, body: '{}', type: 'application/json' };

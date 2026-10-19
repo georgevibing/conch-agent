@@ -530,6 +530,17 @@ export const RULES: readonly BackupRule[] = [
     why: 'Whether Teams and WeChat reach Conch through Tailscale Funnel or an address of your own. Restored on another computer, it opens nothing by itself.',
   },
   {
+    match: 'relay.json',
+    class: 'kept',
+    group: 'integrations',
+    why: 'Your always-on relay’s address and public key (ADR 0140). Restored on another computer, it pulls nothing until it’s set up there.',
+  },
+  {
+    match: 'relay-seen.json',
+    class: 'derived',
+    why: 'Which deliveries from the always-on relay were already taken, so none is taken twice. Rebuilt as they come.',
+  },
+  {
     match: 'conversations/index.json',
     class: 'kept',
     group: 'chats',
@@ -672,6 +683,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'The keys your apps use (ADR 0061), like an API key you typed into one.',
+  },
+  {
+    match: 'relay.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The key that opens what your always-on relay keeps, and the token it knows this Conch by (ADR 0140).',
   },
   {
     match: 'routines.secrets.json',

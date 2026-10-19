@@ -1,0 +1,31 @@
+{
+  "name": "@conch/relay",
+  "private": true,
+  "license": "MIT",
+  "description": "The always-on relay: keeps Conch's webhooks, sealed to the gateway's key, while Conch is off (ADR 0140).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    "./envelope": "./src/envelope.ts",
+    "./core": "./src/core.ts",
+    "./store": "./src/store.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "start": "node src/node.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@conch/eslint-config": "workspace:*",
+    "@conch/tsconfig": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.0",
+    "globals": "^17.12.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  }
+}
