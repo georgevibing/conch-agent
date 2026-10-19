@@ -51,6 +51,35 @@ the person turns them on (`ChannelSettings.calls`, `@conch/protocol`
   ID failed, hears one fixed sentence and the call ends: no model turn, no
   request, nothing kept. With calls off, a stranger's call is rejected (no
   charge) and the owner hears how to turn calls on.
+- **And only once it's surely the owner** (amended the same day, see
+  "Security"). The owner's number counts as the owner only when `StirVerstat`
+  is `TN-Validation-Passed-A` (full attestation: the carrier knows the caller
+  and that they may use the number), or after the caller keys the **call
+  passcode**. Until then nothing is heard, said, streamed or claimed: the
+  call is answered with `<Gather input="dtmf">` ("Enter your call passcode,
+  then press the pound key"), before any `<Connect><Stream>`, so it works the
+  same with Media Streams and with Gather. B, C, no verdict, or anything else,
+  without a passcode set, hears "I can't confirm it's you calling, so I can't
+  help on this call" and the call ends.
+- **The passcode** is 6 to 12 digits, set on the number's page (`PUT
+/api/channels/:id/call-passcode`, `SetCallPasscodeBody` on both sides;
+  this computer or a fresh sign-in, as for turning calls on). A digit
+  repeated, a run (123456, 987654) and part of the owner's or the Twilio
+  number are refused (NIST SP 800-63B-4's blocklist of values an attacker
+  tries first). Only its scrypt hash is kept (`auth/secrets.ts`
+  `hashPassword`, N=2^17, r=8, p=1), in `calls.secrets.json`: sealed under
+  the device key, protected from the agent's own file tools, backed up as a
+  secret. The page learns only `callPasscode.setAt`. Keys are checked with
+  `verifyPassword` (`timingSafeEqual`); anything that isn't 1 to 12 digits is
+  wrong without being hashed.
+- **Bounded tries.** Three wrong passcodes end a call; a silence asks once
+  more and then ends it, without counting. Five wrong ones in a day
+  (`ChannelCallUsage.passcodeFails`, on the person's clock, counted in
+  `channels.json` before the call hears it was wrong, so a restart gives
+  none back) lock calls the carrier doesn't vouch for until tomorrow: no more
+  tries, right or wrong, and the owner is texted on the number and notified
+  on their devices (the `devices` topic). Setting a new passcode lifts the
+  lock: the person chose it.
 - **The call is the owner's SMS chat, by voice.** Each thing said becomes a
   message there, marked `spoken: 'a phone call'`, so it's read like a voice
   note's words (ADR 0077): a voice on a line can be anyone's. Answers are
@@ -114,7 +143,10 @@ started, and it's a "Fixed on its own" note. Barge-in works there too
 ### Whole Conch
 
 A Repair everything check per number with calls on (the door, the owner,
-the line); a security checkup line for answering calls; a `phone-calls`
+the line; a warning when calls are answered without a passcode, with the
+page's own words; and a passcode whose hash didn't come back, as after a
+backup restored without its keys); a security checkup line for answering
+calls that says what gets through; a `phone-calls`
 backup power, so a restored backup names a number that answers or rings;
 the person's today's calls and minutes on the page, with Twilio's price in
 words (Conch can't price a call itself yet); ⌘K finds **Phone calls on
@@ -133,14 +165,33 @@ Threat model, by who can reach it:
 - **A stranger who knows the number**: hears one sentence. Tested: no turn,
   no request.
 - **Someone faking the owner's caller ID** (NIST SP 800-63B-4 treats the
-  phone network as a restricted channel for exactly this reason): Conch
-  hangs up on a failed SHAKEN/STIR verdict where the carrier gives one, reads
-  what's said as untrusted words, so Auto still asks about steps that matter
-  after reading (ADR 0028, ADR 0117), and **a call to Conch never allows
-  anything**: questions go by text, or ring the real owner from Conch. A
-  faker could still ask questions and hear answers, as anyone with the
-  owner's phone could; the security checkup says so, and calls are off by
-  default.
+  phone network as a restricted channel for exactly this reason). Faking a
+  caller ID is easy, and most calls carry no verdict at all, while in Auto
+  reads don't ask (ADR 0100): the first version, which let the owner's
+  number in unless the verdict said Failed, let a faker ask "read my latest
+  email" and hear the answer. Now the owner's number alone gets nothing:
+  only full attestation (A) or the call passcode does. Attestation A means
+  the originating carrier authenticated the customer and their right to the
+  number (ATIS-1000074 SHAKEN); B and C don't, so they're asked. What the
+  passcode protects is guessed at most three times a call and five times a
+  day: with a million or more passcodes, a faker's chance is at most 5 in a
+  million a day, and the first lock tells the owner. Tested: Passed-A
+  without a passcode gets the assistant; Passed-B, Passed-C, none and
+  No-TN-Validation without one hang up; the right passcode gets it; three
+  wrong ones hang up, five lock the day and text the owner; the hash and the
+  digits never reach the page, an event or `channels.json`; the compare is
+  `timingSafeEqual` (`calls/phone.test.ts`, `calls/calls.test.ts`). After
+  that, what's said is still read as untrusted words, so Auto still asks
+  about steps that matter after reading (ADR 0028, ADR 0117), and **a call
+  to Conch never allows anything**: questions go by text, or ring the real
+  owner from Conch. Someone who has the owner's phone, or saw the passcode,
+  can still ask questions and hear answers; the security checkup says so,
+  and calls are off by default.
+- **The passcode itself** crosses Twilio (its keys are a `Digits` field in a
+  signed webhook) and may sit in Twilio's request logs for the account, as
+  any keypad entry does. Conch never logs it, never keeps it, and keeps no
+  copy it could show. It's a second factor against a faked caller ID, not a
+  secret from the phone company.
 - **Someone near the owner's phone** when Conch rings could press 1: it's
   exactly what a lock-screen tap could allow, no more.
 - **Prompt injection in the spoken words** (Greshake et al., 2023): what's
@@ -167,3 +218,6 @@ Threat model, by who can reach it:
 - To verify on a real number: Twilio's signature on the Media Streams
   handshake (if it were missing, calls would fall back to Gather, which is
   safe), and barge-in thresholds on a noisy line.
+- A call that isn't fully vouched for costs a few seconds of keypad first.
+  Outside the US, where `StirVerstat` is rarely sent, every call asks for the
+  passcode; the page says to set one so calls always work.

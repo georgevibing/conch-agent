@@ -34,6 +34,12 @@ The same number can take your calls, and ring you when your assistant needs an O
 
 **Call your assistant.** Turn on **Answer your calls**, then call the number from your phone. Talk as you would to a person: what you say goes into your chat, and the answer is said back. Start talking to stop it mid-sentence. A question with buttons still comes by text.
 
+**Set a call passcode.** Press **Set passcode** under **Answer your calls** and choose 6 to 12 digits. Your phone company vouches for some calls fully: those go straight through. For any other call, your assistant first asks for your passcode. Type it on the keypad, then press **#**. Without a passcode, those calls hear "I can't confirm it's you calling" and end, so set one so calls always work.
+
+- Three wrong tries end the call. Five wrong tries in a day stop all calls until tomorrow, and you get a text and a notification. Setting a new passcode lets calls in again.
+- Conch keeps only a scrambled copy of your passcode, so it can't show it to you. If you forget it, set a new one.
+- Avoid digits anyone would try first: the same digit over and over, a run like 123456, or part of a phone number. Conch refuses those.
+
 **Get a call when an OK waits.** Turn on **Call me when an OK waits**. If a question has waited the minutes you chose, your assistant rings you:
 
 - for an everyday step, it says what it would do. Press **1** or say "yes" to allow it, **2** or "no" to deny it;
@@ -42,7 +48,7 @@ The same number can take your calls, and ring you when your assistant needs an O
 
 It never rings in your **Quiet hours**, nor more than your **Calls a day**. Every call ends by itself after the **Longest call** you chose.
 
-- **Only your number gets through.** Anyone else hears one sentence and the call ends.
+- **Only your number gets through, and only once it's surely you.** Anyone else hears one sentence and the call ends.
 - **Heard on this computer** when Conch has private dictation and a natural voice (**Settings → Voice**). Until then, Twilio hears and speaks for the call.
 - **Calls cost** a cent or two a minute in the US. The page shows today's calls.
-- **A number can be faked.** Conch hangs up when the carrier says a call failed its caller-ID check, and nothing said on a call allows a step by itself.
+- **A number can be faked.** That's why Conch asks for your passcode unless your phone company fully vouches for the call. It hangs up when the phone company says a call failed its caller-ID check, and nothing said on a call allows a step by itself. Keep your passcode to yourself.

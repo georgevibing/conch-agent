@@ -954,7 +954,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   off), `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
   `browser/shots/`, `computer-use.json` (using your apps on or off, apps you always allow), `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `channels.json` + `channels.secrets.json` (bots, who may talk to
-  them, their keys) + `channels/` (a Matrix session's encryption store, where
+  them, their keys) + `calls.secrets.json` (the hash of each number's call passcode, ADR 0138) + `channels/` (a Matrix session's encryption store, where
   Teams chats live) + `door.json` (the public door: Funnel, your own address or the relay) + `relay.json` + `relay.secrets.json` + `relay-seen.json` (the always-on relay: its address, the key that opens what it keeps, what was taken), `gateway.json` (where it's listening, while it runs), `workspace/`
   (default cwd), `backups.json` (daily backups on or off) + `backups/` (the backups
   themselves, and a restore being readied). What each of these is to a backup is
