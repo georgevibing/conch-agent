@@ -241,6 +241,11 @@ export const RULES: readonly BackupRule[] = [
     class: 'derived',
     why: 'The browser’s own cookies and sign-ins: too sensitive to copy around and too big. Sign in to those sites again.',
   },
+  {
+    match: 'browser.errands.secrets.json',
+    class: 'derived',
+    why: 'Each task’s own browser session (ADR 0141): copies of sign-ins, sealed to this computer, and gone when the task ends. Never copied around.',
+  },
 
   // ── Kept: yours ────────────────────────────────────────────────────────
   {

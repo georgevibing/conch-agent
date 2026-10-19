@@ -445,6 +445,18 @@ export const InYourChrome: Story = {
   args: { tab: { ...hotels, control: 'agent', backend: 'chrome' } },
 };
 
+/** A task's own browser (ADR 0141): its cookies and tabs are nobody else's. */
+export const ItsOwnBrowser: Story = {
+  args: {
+    tab: { ...hotels, control: 'agent', session: { reason: 'task', signedIn: ['booking.com'] } },
+  },
+};
+
+/** A chat you can give a browser of its own, or take back to your main one. */
+export const ChatCanHaveItsOwn: Story = {
+  args: { tab: { ...hotels, control: 'idle', session: { reason: 'asked' } }, onSession: fn() },
+};
+
 /** A browser in the cloud. */
 export const InTheCloud: Story = {
   args: { tab: { ...hotels, control: 'agent', backend: 'browserbase' } },

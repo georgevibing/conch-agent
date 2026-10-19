@@ -548,6 +548,38 @@ describe('BrowserWindow', () => {
     expect(screen.getByText('In the cloud')).toBeInTheDocument();
   });
 
+  it('says when a task or a chat has a browser of its own, and whose sign-ins it has', async () => {
+    const { container, rerender } = renderNacre(
+      <BrowserWindow tab={{ ...tab, session: { reason: 'task', signedIn: ['shop.example'] } }} />,
+    );
+    const chip = screen.getByText('Its own browser');
+    expect(chip).toHaveAttribute('title', 'Signed in with your sign-in to shop.example');
+    await expectAccessible(container);
+    // A task always keeps its own: nothing to switch.
+    rerender(<BrowserWindow tab={{ ...tab, session: { reason: 'task' } }} onSession={vi.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: 'A browser of its own for this chat' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('gives a chat a browser of its own, and takes it back, with one toggle', async () => {
+    const user = userEvent.setup();
+    const onSession = vi.fn();
+    const { container, rerender } = renderNacre(<BrowserWindow tab={tab} onSession={onSession} />);
+    const toggle = screen.getByRole('button', { name: 'A browser of its own for this chat' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(toggle);
+    expect(onSession).toHaveBeenLastCalledWith(true);
+    rerender(
+      <BrowserWindow tab={{ ...tab, session: { reason: 'asked' } }} onSession={onSession} />,
+    );
+    const pressed = screen.getByRole('button', { name: 'A browser of its own for this chat' });
+    expect(pressed).toHaveAttribute('aria-pressed', 'true');
+    await user.click(pressed);
+    expect(onSession).toHaveBeenLastCalledWith(false);
+    await expectAccessible(container);
+  });
+
   it('shows the handoff and hands back with “I’m done”', async () => {
     const user = userEvent.setup();
     const onHandBack = vi.fn();
@@ -665,6 +697,13 @@ describe('BrowserApproval', () => {
     renderNacre(<BrowserApproval kind="site" site="bank.example" action="x" ownChrome />);
     expect(screen.getByText(/in your own Chrome, where you’re signed in/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Always/ })).not.toBeInTheDocument();
+  });
+
+  it('says that allowing a site in a task’s own browser lends your sign-in there', () => {
+    renderNacre(<BrowserApproval kind="site" site="shop.example" action="x" lendsSignIn />);
+    expect(
+      screen.getByText(/in this task’s own browser, with your sign-in there if you have one/),
+    ).toBeInTheDocument();
   });
 
   it('settles into a quiet line once answered', () => {

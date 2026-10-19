@@ -9,6 +9,7 @@ import type {
   BrowserStatus,
   ServerEvent,
   SetBrowserBackendBody,
+  Task,
   UpdateBrowserSettingsBody,
   VaultRequest,
   VaultSignIn,
@@ -29,6 +30,7 @@ import {
   type Fetcher,
 } from './backends';
 import { declineCookies } from './cookies';
+import { Errands } from './errands';
 import { offerFor, personFill } from './fill';
 import { BrowserGuard } from './guard';
 import { blockedPage } from './pages';
@@ -61,6 +63,8 @@ export interface BrowserServiceDeps {
   /** Where Chrome keeps its profiles, and the network, for tests. */
   chromeDirs?: () => string[];
   fetch?: Fetcher;
+  /** How many errands' own browsers may be open at once (tests; `errandLimit()` otherwise). */
+  errands?: number;
 }
 
 /**
@@ -144,7 +148,11 @@ export class BrowserService {
   readonly secrets: BrowserSecrets;
   readonly guard: BrowserGuard;
   readonly runtime: BrowserRuntime;
+  /** Tasks' and helpers' browsers of their own, and chats given one (ADR 0141). */
+  readonly errands: Errands;
   #tabs = new Map<string, Tab>();
+  /** The chats whose tab is in an errand's own context, not the main one. */
+  #own = new Set<string>();
   #opening = new Map<string, Promise<Tab>>();
   #watchers = new Map<string, Set<Watcher>>();
   /** Each chat's tabs, so a restarted browser (or Conch) opens them again. */
@@ -171,9 +179,12 @@ export class BrowserService {
       guard: this.guard,
       onChange: () => this.#changed(),
       onClosed: () => {
-        this.#tabs.clear();
-        this.#opening.clear();
+        // Only the main browser's tabs: errands' own carry on (ADR 0141).
+        for (const id of [...this.#tabs.keys()]) if (!this.#own.has(id)) this.#tabs.delete(id);
+        for (const id of [...this.#opening.keys()])
+          if (!this.#own.has(id)) this.#opening.delete(id);
         for (const [conversationId, watchers] of this.#watchers) {
+          if (this.#own.has(conversationId)) continue;
           void this.#pushTab(conversationId);
           // Someone is looking: the tabs come back, as after any crash.
           if (!this.runtime.stopping && [...watchers].some((w) => w.visible))
@@ -185,6 +196,34 @@ export class BrowserService {
       chromeDirs: deps.chromeDirs,
       fetch: deps.fetch,
       heal: deps.heal,
+    });
+    this.errands = new Errands({
+      home: deps.home,
+      heal: deps.heal,
+      open: (state) => this.runtime.errandContext(state),
+      main: async () => {
+        const context = await this.runtime.context();
+        // Your own Chrome's sign-ins are never copied anywhere (ADR 0141).
+        if (this.runtime.backend.shared) return undefined;
+        return context.storageState();
+      },
+      trusted: async () => (await this.store.sites()).map((s) => s.site),
+      busy: (id) => {
+        const tab = this.tabIfOpen(id);
+        const watched = [...(this.#watchers.get(id) ?? [])].some((w) => w.visible);
+        return watched || (tab !== undefined && tab.control !== 'idle');
+      },
+      closed: (id, crashed) => {
+        if (this.#own.has(id)) this.#tabs.delete(id);
+        this.#opening.delete(id);
+        this.#own.delete(id);
+        void this.#pushTab(id);
+        // Someone is looking: it comes back as it was, as the main browser's tabs do.
+        if (crashed && [...(this.#watchers.get(id) ?? [])].some((w) => w.visible))
+          void this.#reopen(id);
+        this.#changed();
+      },
+      max: deps.errands,
     });
     void this.store.settings().then((s) => (this.#settings = s));
     this.#idleTimer = setInterval(() => void this.#sweep(), 60_000);
@@ -322,6 +361,8 @@ export class BrowserService {
   async revokeSite(site: string): Promise<boolean> {
     const removed = await this.store.revoke(site);
     for (const tab of this.#tabs.values()) tab.sites.delete(site);
+    // Errands lent that site's sign-in give it back.
+    await this.errands.revoke(site);
     this.#changed();
     return removed;
   }
@@ -332,6 +373,8 @@ export class BrowserService {
   }
 
   async repair(): Promise<BrowserStatus> {
+    // Errands are set aside first: they come back as they were.
+    await this.errands.parkAll();
     await this.runtime.repair();
     this.#stoppingSteps.clear();
     this.#changed();
@@ -346,6 +389,7 @@ export class BrowserService {
   }
 
   async wipe(): Promise<BrowserStatus> {
+    await this.errands.wipe();
     await this.runtime.wipe();
     await this.saved.clear();
     return this.status();
@@ -354,6 +398,9 @@ export class BrowserService {
   async stop(): Promise<void> {
     clearInterval(this.#idleTimer);
     await this.saved.flush();
+    // An errand running now resumes in the same session (ADR 0141).
+    await this.errands.parkAll();
+    await this.runtime.stopErrands();
     await this.runtime.stop();
   }
 
@@ -389,13 +436,19 @@ export class BrowserService {
   }
 
   async #open(conversationId: string): Promise<Tab> {
-    const context = await this.runtime.context();
-    const { shared, kind } = this.runtime.backend;
+    // A task's, a helper's, or a chat given one: a context of its own (ADR 0141).
+    const own = Boolean(await this.errands.reason(conversationId));
+    const context = own ? await this.errands.context(conversationId) : await this.runtime.context();
+    if (own) this.#own.add(conversationId);
+    const { shared } = this.runtime.backend;
+    // Errands run in Conch's own browser beside your Chrome, and say where they run otherwise.
+    const kind = own && shared ? 'local' : this.runtime.backend.kind;
     // A fresh browser of Conch's own opens with one blank page: the first chat takes it.
     // In your own Chrome, a blank tab is yours: Conch always opens its own.
+    const taken = new Set([...this.#tabs.values()].flatMap((t) => t.tabs.map((e) => e.page)));
     const spare =
-      this.#tabs.size === 0 && !shared
-        ? context.pages().find((p) => p.url() === 'about:blank')
+      !own && !shared
+        ? context.pages().find((p) => p.url() === 'about:blank' && !taken.has(p))
         : undefined;
     const page = spare ?? (await this.runtime.newPage(context));
     const stage = this.#stage.get(conversationId);
@@ -408,7 +461,11 @@ export class BrowserService {
           this.#remember(t);
           void this.#pushTab(conversationId);
         },
-        loaded: (p) => void this.#afterLoad(p),
+        loaded: (p) => {
+          void this.#afterLoad(p);
+          // What an errand holds is kept as it goes, for a crash or a restart.
+          if (own) this.errands.changed(conversationId);
+        },
         crashed: () => this.runtime.heal('Reloaded a crashed page'),
         // Popups and new tabs: contained like the first, and their downloads caught.
         adopted: async (p) => {
@@ -418,7 +475,7 @@ export class BrowserService {
         },
       },
       {
-        emulate: !shared,
+        emulate: own || !shared,
         ...(kind !== 'local' && { backend: kind }),
         ...(stage && { viewport: fitViewport(stage) }),
       },
@@ -479,7 +536,8 @@ export class BrowserService {
   #remember(tab: Tab): void {
     const id = tab.conversationId;
     const save = () => {
-      if (tab.closed || this.#tabs.get(id) !== tab || !this.runtime.alive) return;
+      const alive = this.#own.has(id) ? this.errands.live(id) : this.runtime.alive;
+      if (tab.closed || this.#tabs.get(id) !== tab || !alive) return;
       const { urls, active } = tab.snapshot();
       const kept = urls.filter(restorable);
       const shown = kept.indexOf(urls[active] ?? '');
@@ -541,7 +599,8 @@ export class BrowserService {
   /** A new, empty tab in a chat's browser, in view. Undefined when the chat has as many as it may. */
   async openTab(tab: Tab): Promise<string | undefined> {
     if (tab.tabs.length >= MAX_TABS) return undefined;
-    const context = await this.runtime.context();
+    // In the chat's own browser: the main one, or its errand's (ADR 0141).
+    const context = tab.page.context();
     const page = await this.runtime.newPage(context);
     if (tab.closed) {
       await page.close();
@@ -592,6 +651,7 @@ export class BrowserService {
     this.#stage.delete(conversationId);
     await this.saved.set(conversationId, undefined);
     await tab?.close();
+    await this.errands.end(conversationId);
     await rm(join(this.store.shotsDir, conversationId), { recursive: true, force: true }).catch(
       () => undefined,
     );
@@ -600,12 +660,19 @@ export class BrowserService {
 
   /** Stop the browser when nobody has used or watched it for a while. */
   async #sweep(): Promise<void> {
+    // Errands nobody used for a while are set aside: they come back as they were.
+    await this.errands.sweep(IDLE_MS).catch(() => undefined);
     if (!this.runtime.alive) return;
-    const watched = [...this.#watchers.values()].some((set) => [...set].some((w) => w.visible));
-    const busy = [...this.#tabs.values()].some(
-      (t) => t.control !== 'idle' || Date.now() - t.lastUsed < IDLE_MS,
+    const watched = [...this.#watchers.entries()].some(
+      ([id, set]) => !this.#own.has(id) && [...set].some((w) => w.visible),
     );
-    if (!watched && !busy) await this.runtime.stop();
+    const busy = [...this.#tabs.values()].some(
+      (t) =>
+        !this.#own.has(t.conversationId) &&
+        (t.control !== 'idle' || Date.now() - t.lastUsed < IDLE_MS),
+    );
+    // An errand in a context of the browser elsewhere keeps that browser.
+    if (!watched && !busy && !this.errands.remote) await this.runtime.stop();
   }
 
   // ── The live view ─────────────────────────────────────────────────────
@@ -623,7 +690,12 @@ export class BrowserService {
     const watchers = this.#watchers.get(conversationId);
     if (!watchers?.size) return;
     const tab = this.tabIfOpen(conversationId);
-    const state = tab ? await tab.state().catch(() => null) : null;
+    const read = tab ? await tab.state().catch(() => null) : null;
+    // Its own browser, and whose sign-ins it was lent (ADR 0141).
+    const session = read
+      ? await this.errands.info(conversationId).catch(() => undefined)
+      : undefined;
+    const state = read && session ? { ...read, session } : read;
     // No tab, but some from last time: they open as soon as someone looks.
     const restoring = !state && (await this.#hasSaved(conversationId));
     for (const watcher of watchers)
@@ -673,6 +745,12 @@ export class BrowserService {
       this.#stage.set(conversationId, { width: command.width, height: command.height });
       const tab = this.tabIfOpen(conversationId);
       if (tab && (await tab.fit(command))) await this.#pushTab(conversationId);
+      return;
+    }
+    if (command.type === 'session') {
+      await this.setOwn(conversationId, command.own).catch((error: Error) =>
+        watcher.send({ type: 'error', message: error.message }),
+      );
       return;
     }
     if (command.type === 'watch') {
@@ -815,6 +893,61 @@ export class BrowserService {
     }
   }
 
+  // ── A browser per errand (ADR 0141) ───────────────────────────────────
+
+  /**
+   * The person gave this chat a browser of its own, or took it back to the
+   * main one. Its tabs open again where it now is; an own browser it leaves
+   * is closed and forgotten. A task always keeps its own.
+   */
+  async setOwn(conversationId: string, own: boolean): Promise<void> {
+    const reason = await this.errands.reason(conversationId);
+    if (reason === 'task')
+      throw new BrowserProblemError({ message: 'A task always has a browser of its own.' });
+    if (own === Boolean(reason)) return;
+    const tab = this.#tabs.get(conversationId);
+    // Its tabs are kept as they are, to open again in the other browser.
+    this.#tabs.delete(conversationId);
+    this.#own.delete(conversationId);
+    await tab?.close().catch(() => undefined);
+    if (own) await this.errands.mark(conversationId, 'asked');
+    else await this.errands.end(conversationId);
+    if (await this.#hasSaved(conversationId))
+      await this.tabFor(conversationId).catch(() => undefined);
+    await this.#pushTab(conversationId);
+    this.#changed();
+  }
+
+  /**
+   * A task moved on (ADR 0141): one that ended takes its browser with it; one
+   * that was interrupted or failed keeps its session, sealed, for Resume.
+   */
+  async taskChanged(task: Pick<Task, 'status' | 'conversationId'>): Promise<void> {
+    const id = task.conversationId;
+    if (!id || (await this.errands.reason(id)) !== 'task') return;
+    if (task.status === 'interrupted' || task.status === 'failed') {
+      await this.errands.park(id);
+      return;
+    }
+    if (task.status === 'done' || task.status === 'unverified' || task.status === 'stopped') {
+      await this.errands.end(id);
+      await this.saved.set(id, undefined);
+      await this.#pushTab(id);
+    }
+  }
+
+  /** Allowing a site here lends its sign-in: an errand's own browser, beside a main one Conch can lend from. */
+  lendsSignIn(conversationId: string): boolean {
+    return this.#own.has(conversationId) && !this.runtime.backend.shared;
+  }
+
+  /** The person allowed a site in an errand: lend it their sign-in there (ADR 0141). */
+  async lendSignIn(conversationId: string, site: string): Promise<void> {
+    if (!this.lendsSignIn(conversationId)) return;
+    if (await this.errands.share(conversationId, site).catch(() => false))
+      await this.#pushTab(conversationId);
+  }
+
   // ── Thumbnails ────────────────────────────────────────────────────────
 
   async saveShot(conversationId: string, jpeg: Buffer | undefined): Promise<string | undefined> {
@@ -850,6 +983,8 @@ export class BrowserService {
   /** The agent's browser tools for one turn, or none when the browser is off. */
   tools(ctx: ToolContext): HostTool[] {
     if (this.#settings && !this.#settings.enabled) return [];
+    // A task's or a helper's turn: its browser is its own (ADR 0141).
+    if (ctx.origin?.kind === 'task') void this.errands.mark(ctx.conversationId, 'task');
     return browserTools(this, ctx);
   }
 
@@ -882,6 +1017,7 @@ const BROWSER_PROMPT = [
   '- Never ask the user for a password, code or card number, and never type one. To sign in, sign up or pay, call browser_type with an empty text on the box (the username or email, the password, a new password, the code, the card number), one box at a time: Conch fills it from the user’s Passwords after they agree, makes and saves a strong password on a sign-up or change form, and hands the box to the user when nothing is saved. If Conch says the page only looks like one of their sites, stop and tell them.',
   '- Some accounts sign in another way: with Google, Apple, Microsoft or another account (“Continue with Google”), a company’s single sign-on, a passkey, or a link or code sent by email. Conch says so beside the page or when you try a box, with the page’s own button to press: press it, don’t look for a password. On the provider’s page (here or in a new tab) call browser_type with an empty text on its boxes as usual: Conch fills the account that site signs in with, after one question for the whole sign-in. If the provider already shows that account, just click it. A passkey Conch can’t use, or a sign-in with nothing saved, is the user’s: call browser_handoff with Conch’s reason.',
   '- When a site needs the user for anything else (a captcha, a payment approval in their bank’s app, anything personal), call browser_handoff with a short reason. You get the page back when they’re done.',
+  '- A task (and a chat the user gave one) has a browser of its own: its cookies, sign-ins and tabs are nobody else’s. It is signed in only where the user always allows Conch, or allows it in this task; elsewhere, sign in from Passwords as above.',
   '- Conch asks the user before you act on a new site and before anything significant (buying, sending, posting, deleting). If they say no, don’t look for another way.',
   '- If something fails, try once more another way (read the page again, scroll, wait) before telling the user. Say plainly what you did and what you found.',
 ].join('\n');

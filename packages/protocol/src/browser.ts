@@ -304,6 +304,11 @@ export const BrowserPermission = z.object({
   shot: z.string().optional(),
   /** It's the person's own signed-in Chrome (ADR 0080): said, and a site is never allowed for good. */
   ownChrome: z.boolean().optional(),
+  /**
+   * It's an errand's own browser (ADR 0141): allowing the site also lends it
+   * the person's sign-in there, copied from their main browser, until it ends.
+   */
+  lendsSignIn: z.boolean().optional(),
   /** For `fill`: what it does, for the card's words (ADR 0130). */
   fill: BrowserFillKind.optional(),
   /**
@@ -370,6 +375,19 @@ export const BrowserPageDialog = z.object({
 });
 export type BrowserPageDialog = z.infer<typeof BrowserPageDialog>;
 
+/**
+ * A browser of its own (ADR 0141): a task's (always), or a chat's the person
+ * gave one. Its cookies, storage and tabs are nobody else's.
+ */
+export const BrowserSession = z.object({
+  own: z.literal(true),
+  /** `task`: a task or a helper, always on its own; `asked`: a chat the person gave one. */
+  reason: z.enum(['task', 'asked']),
+  /** Sites whose sign-in was lent to it from the main browser. Names only. */
+  signedIn: z.array(z.string().max(253)).max(100).default([]),
+});
+export type BrowserSession = z.infer<typeof BrowserSession>;
+
 export const BrowserTab = z.object({
   conversationId: Id,
   url: z.string(),
@@ -387,6 +405,8 @@ export const BrowserTab = z.object({
   backend: BrowserBackendKind.optional(),
   /** The page asks you something (ADR 0131): answer it with `{ type: 'dialog' }`. */
   dialog: BrowserPageDialog.optional(),
+  /** Set when this chat or task has a browser of its own (ADR 0141); unset, the main one. */
+  session: BrowserSession.optional(),
 });
 export type BrowserTab = z.infer<typeof BrowserTab>;
 
@@ -510,6 +530,11 @@ export const BrowserLiveCommand = z.discriminatedUnion('type', [
     text: z.string().max(200),
     direction: z.enum(['next', 'previous']).optional(),
   }),
+  /**
+   * Give this chat a browser of its own (`own`), or back to the main one
+   * (ADR 0141). A person's press; a task always keeps its own.
+   */
+  z.object({ type: z.literal('session'), own: z.boolean() }),
   /**
    * Fill the box you're in from Passwords (ADR 0130): `item` is one of the
    * offer's, or `generate` makes a strong password and saves it. The gateway

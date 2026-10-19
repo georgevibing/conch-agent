@@ -44,6 +44,8 @@ export interface BrowserApprovalProps extends Omit<ComponentProps<'div'>, 'title
   busy?: boolean;
   /** It's your own signed-in Chrome (ADR 0080): said on the card, and never "Always". */
   ownChrome?: boolean;
+  /** A task's own browser (ADR 0141): Allow also lends it your sign-in there, until it ends. */
+  lendsSignIn?: boolean;
   /** For `fill`: what it does, for the card's words. Sign-ins and codes alone offer "Always". */
   fill?: BrowserFillKind;
   /**
@@ -97,11 +99,19 @@ function fillDetail(fill: BrowserFillKind | undefined, name: string) {
   }
 }
 
-function detail(kind: BrowserApprovalKind, site: string, name: string, ownChrome: boolean) {
+function detail(
+  kind: BrowserApprovalKind,
+  site: string,
+  name: string,
+  ownChrome: boolean,
+  lendsSignIn: boolean,
+) {
   if (kind === 'site')
     return ownChrome
       ? `${name} will click and type on ${site} in your own Chrome, where you’re signed in, in a tab it opened. You can watch, and take over at any time.`
-      : `${name} will click and type on ${site} for this task. You can watch, and take over at any time.`;
+      : lendsSignIn
+        ? `${name} will click and type on ${site} in this task’s own browser, with your sign-in there if you have one, until the task ends. You can watch, and take over at any time.`
+        : `${name} will click and type on ${site} for this task. You can watch, and take over at any time.`;
   if (kind === 'upload')
     return `The file leaves this computer and goes to ${site}. Nothing is sent until you decide.`;
   if (kind === 'download') return `It goes to the Downloads folder in your working folder.`;
@@ -146,6 +156,7 @@ export function BrowserApproval({
   guard,
   busy = false,
   ownChrome = false,
+  lendsSignIn = false,
   fill,
   accounts,
   savedFor,
@@ -235,7 +246,7 @@ export function BrowserApproval({
             ? `Conch types it in on ${site} from your Passwords, for the whole sign-in to ${signingInTo}. ${name} never sees it.`
             : kind === 'fill'
               ? fillDetail(fill, name)
-              : detail(kind, site, name, ownChrome)}
+              : detail(kind, site, name, ownChrome, lendsSignIn)}
           {kind === 'fill' && savedFor && ` It’s saved for ${savedFor}.`}
         </p>
         {guard && <GuardNote>{guard}</GuardNote>}

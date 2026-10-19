@@ -4,7 +4,8 @@
 - Date: 2026-09-30
 - Extended by: [ADR 0080](./0080-the-browser-does-what-you-do.md) (tabs, uploads, the
   person's gestures, clicking by position, handoffs that finish by themselves, your own Chrome
-  and browsers in the cloud)
+  and browsers in the cloud); [ADR 0141](./0141-a-browser-per-errand.md) (each task gets a
+  browser context of its own, with sign-ins lent only for permitted sites)
 
 ## Context
 

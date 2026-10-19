@@ -74,6 +74,9 @@ function setup(timeoutMs = 100) {
     store: { trusts: async () => false },
     runtime: { heal: vi.fn(), backend: { shared: false } },
     forgetTab: vi.fn(),
+    // The main browser: allowing a site lends nothing (ADR 0141).
+    lendsSignIn: () => false,
+    lendSignIn: vi.fn(async () => undefined),
   };
   const ctx = {
     conversationId: 'one',

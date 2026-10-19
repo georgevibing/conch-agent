@@ -100,6 +100,7 @@ Partial results stay. **Resume safely** carries on in the same chat from saved p
 - After a restart or backup restore, tasks wait for you to resume. Old approvals are cleared and asked afresh, under the chat's current limits. A lost network response is never treated as a decline.
 - An account change can't quietly reuse an earlier account's operations.
 - A resumed task keeps its work folder, branch and worktree. Conch never quietly swaps in a different folder.
+- A resumed task opens its own browser again, signed in, on the same pages ([Tasks have a browser of their own](./browser.md#tasks-have-a-browser-of-their-own)).
 
 Open a finished task and type to give it more to do. Its limits stay: a draft-only job can't start sending. Earlier results don't prove a changed goal.
 

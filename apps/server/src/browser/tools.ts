@@ -431,6 +431,8 @@ export function browserTools(
         box: picture?.box,
         shot,
         ...(own && { ownChrome: true }),
+        // An errand's own browser (ADR 0141): Allow also lends this site's sign-in.
+        ...(kind === 'site' && service.lendsSignIn(conversationId) && { lendsSignIn: true }),
       },
       ...(untrusted && { taint: `${untrusted} So I’m checking before I act on ${site}.` }),
     });
@@ -442,6 +444,8 @@ export function browserTools(
       );
     }
     if (kind === 'site' || kind === 'high-stakes') tab.sites.add(site);
+    // The person's press lends the site's sign-in to this errand, never Auto by itself.
+    if (kind === 'site') await service.lendSignIn(conversationId, site);
     if (kind === 'high-stakes') vouched = true;
     // "Always" in your own Chrome stays this chat's: it never grants a site for good there.
     if (decision === 'allow-always' && kind === 'site' && !own) await service.grantSite(site);
