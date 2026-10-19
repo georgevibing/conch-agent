@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   AgentId,
   ChannelBot,
+  ChannelCallUsage,
   ChannelGroup,
   ChannelKind,
   ChannelPerson,
@@ -48,6 +49,8 @@ export const StoredChannel = z.object({
   cursor: z.string().max(200).optional(),
   /** Voice notes waiting until Conch can hear them (ADR 0077), oldest first. */
   voiceWaiting: z.array(WaitingNote).default([]),
+  /** SMS: what phone calls used today (ADR 0138), so the day's limit holds across a restart. */
+  callUsage: ChannelCallUsage.optional().catch(undefined),
   /** A chat app a Conch app brings (ADR 0122): which app, and what the chat app is called. */
   contributed: z
     .object({ app: z.string().max(24), name: z.string().max(40) })
