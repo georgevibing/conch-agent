@@ -285,6 +285,19 @@ export const MakeANewPassword: Story = {
   ),
 };
 
+/** In a task's own browser (ADR 0141): Allow also lends your sign-in there. */
+export const AskInATasksBrowser: Story = {
+  render: () => (
+    <BrowserApproval
+      kind="site"
+      site="shop.example"
+      action="Click “Add to basket”"
+      lendsSignIn
+      onDecide={fn()}
+    />
+  ),
+};
+
 /** In your own Chrome: the card says so, and a site is never allowed for good. */
 export const AskInYourChrome: Story = {
   render: () => (

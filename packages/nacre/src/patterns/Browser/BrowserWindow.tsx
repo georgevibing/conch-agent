@@ -5,6 +5,7 @@ import {
   Cloud,
   Globe,
   Hand,
+  Layers,
   Lock,
   MousePointerClick,
   Plus,
@@ -79,6 +80,11 @@ export interface BrowserWindowTab {
   backend?: 'chrome' | 'browserbase' | 'steel' | 'cdp';
   /** The page asks you something while you drive: shown over it until you answer. */
   dialog?: BrowserWindowDialog;
+  /**
+   * A browser of its own (ADR 0141): a task's always, or a chat's you gave
+   * one. `signedIn`: the sites whose sign-in it was lent.
+   */
+  session?: { reason: 'task' | 'asked'; signedIn?: string[] };
 }
 
 export interface BrowserWindowTabEntry {
@@ -152,6 +158,11 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   onClose?: () => void;
   /** Extra controls at the end of the toolbar. */
   actions?: ReactNode;
+  /**
+   * Give this chat a browser of its own, or back to your main one (ADR 0141).
+   * Not offered for a task: it always has its own.
+   */
+  onSession?: (own: boolean) => void;
   /** While you drive, in a box Passwords can fill: what it can fill there (ADR 0130). */
   fill?: BrowserFillProps;
 }
@@ -200,6 +211,7 @@ export function BrowserWindow({
   onStop,
   onClose,
   actions,
+  onSession,
   fill,
   className,
   ...props
@@ -690,6 +702,18 @@ export function BrowserWindow({
 
         <div className={styles.tools}>
           {tab?.backend && <WhereItRuns backend={tab.backend} />}
+          {tab?.session && <OwnSession session={tab.session} />}
+          {onSession && tab && tab.session?.reason !== 'task' && (
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label="A browser of its own for this chat"
+              aria-pressed={Boolean(tab.session)}
+              onClick={() => onSession(!tab.session)}
+            >
+              <Layers />
+            </IconButton>
+          )}
           {control === 'agent' && (
             <span className={styles.driver} role="status">
               <Pearl size="xs" state="thinking" label={null} />
@@ -966,6 +990,25 @@ function WhereItRuns({ backend }: { backend: NonNullable<BrowserWindowTab['backe
     <span className={styles.where} data-backend={backend}>
       <Icon aria-hidden />
       {WHERE[backend]}
+    </span>
+  );
+}
+
+/** Its own browser (ADR 0141): its cookies and tabs are nobody else's. */
+function OwnSession({ session }: { session: NonNullable<BrowserWindowTab['session']> }) {
+  const signedIn = session.signedIn ?? [];
+  return (
+    <span
+      className={styles.where}
+      data-session={session.reason}
+      title={
+        signedIn.length
+          ? `Signed in with your sign-in to ${signedIn.join(', ')}`
+          : 'Signed in nowhere yet'
+      }
+    >
+      <Layers aria-hidden />
+      Its own browser
     </span>
   );
 }

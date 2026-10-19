@@ -116,6 +116,8 @@ export function BrowserPanel({
         live.send({ type: 'dialog', id, accept, ...(text !== undefined && { text }) })
       }
       onFind={find}
+      // A browser of its own for this chat, or back to the main one (ADR 0141).
+      onSession={(own) => live.send({ type: 'session', own })}
       found={live.found}
       findKey={findKey ?? undefined}
       running={running}

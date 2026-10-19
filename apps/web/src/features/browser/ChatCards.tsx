@@ -94,6 +94,7 @@ export function BrowserApprovalItem({
       decision={item.decision}
       guard={item.caution ?? item.taint}
       ownChrome={detail.ownChrome}
+      lendsSignIn={detail.lendsSignIn}
       fill={detail.fill}
       accounts={detail.accounts}
       savedFor={detail.savedFor}
