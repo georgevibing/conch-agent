@@ -1,7 +1,15 @@
-import { CALLS_DEFAULT, type ChannelCalls, type ServerEvent } from '@conch/protocol';
+import {
+  CALLS_DEFAULT,
+  type Channel,
+  type ChannelCalls,
+  type ChannelDoor,
+  type ChannelList,
+  type ServerEvent,
+} from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApprovalCalls } from './approvals';
+import { phoneCallsCheck } from './doctor';
 import {
   SpeechDetector,
   decodeUlaw,
@@ -19,6 +27,7 @@ import {
   type PhoneContext,
   type PhoneDeps,
   STRANGER_WORDS,
+  UNCONFIRMED_WORDS,
 } from './phone';
 import { FRAME, StreamCall } from './stream';
 import { twiml, xml } from './twiml';
@@ -72,9 +81,17 @@ function line(
 const params = (fields: Record<string, string>) =>
   new Map(Object.entries({ AccountSid: 'AC' + '0'.repeat(32), ...fields }));
 
+/** The carrier fully vouches for the caller ID, unless `extra` says otherwise. */
 const ring = (phone: PhoneLine, from = OWNER, n = 1, extra: Record<string, string> = {}) =>
   phone.deliver(
-    params({ CallSid: sid(n), From: from, To: NUMBER, Direction: 'inbound', ...extra }),
+    params({
+      CallSid: sid(n),
+      From: from,
+      To: NUMBER,
+      Direction: 'inbound',
+      StirVerstat: 'TN-Validation-Passed-A',
+      ...extra,
+    }),
     {},
   );
 
@@ -232,6 +249,135 @@ describe('calling your assistant (ADR 0138)', () => {
     const { phone, said } = line();
     expect((await step(phone, 'heard', { SpeechResult: 'rm -rf' }, 7)).body).toContain('<Hangup/>');
     expect(said).toEqual([]);
+  });
+});
+
+describe('only when it’s surely you: attestation A or the call passcode (ADR 0138)', () => {
+  const PASSCODE = '482913';
+  /** A passcode check that counts like the channel's: `lockAfter` wrong ones and it's locked. */
+  function passcode(lockAfter = 5, fails = 0) {
+    const tried: string[] = [];
+    const check = vi.fn(async (digits: string) => {
+      tried.push(digits);
+      if (fails >= lockAfter) return 'locked' as const;
+      if (digits === PASSCODE) return 'right' as const;
+      return ++fails >= lockAfter ? ('locked' as const) : ('wrong' as const);
+    });
+    return {
+      tried,
+      check,
+      context: {
+        passcode: {
+          get locked() {
+            return fails >= lockAfter;
+          },
+          check,
+        },
+      },
+    };
+  }
+  const unvouched = (verdict: string | undefined) => ({ StirVerstat: verdict ?? '' });
+
+  it('attestation A gets your assistant without a passcode', async () => {
+    const { phone } = line();
+    const hello = await ring(phone, OWNER, 1, { StirVerstat: 'TN-Validation-Passed-A' });
+    expect(hello.body).toContain('Hi, it’s Pearl.');
+    expect(hello.body).toContain('call=heard');
+  });
+
+  it.each(['TN-Validation-Passed-B', 'TN-Validation-Passed-C', 'No-TN-Validation', undefined])(
+    'without a passcode, %s hears it can’t confirm it’s you, and the call ends',
+    async (verdict) => {
+      const { phone, said } = line();
+      const answer = await ring(phone, OWNER, 1, unvouched(verdict));
+      expect(answer.body).toBe(twiml({ say: UNCONFIRMED_WORDS }, { hangup: true }));
+      expect(answer.body).not.toContain('Pearl');
+      expect(phone.busy).toBe(false);
+      expect(phone.take(OWNER, 'Your latest email says…', false)).toBe(false);
+      expect(said).toEqual([]);
+    },
+  );
+
+  it('asks for the passcode on the keypad first, and nothing is heard or said until it’s right', async () => {
+    const code = passcode();
+    const { phone, said } = line({}, {}, code.context);
+    const asked = await ring(phone, OWNER, 1, unvouched('TN-Validation-Passed-B'));
+    expect(asked.body).toMatch(/<Gather input="dtmf" action="[^"]+\?call=code"/);
+    expect(asked.body).toContain('Enter your call passcode');
+    expect(asked.body).not.toContain('speech');
+    expect(asked.body).not.toContain('Pearl');
+    expect(phone.take(OWNER, 'Your latest email says…', false)).toBe(false);
+    // Words before the passcode: nothing heard, and the call ends.
+    expect((await step(phone, 'heard', { SpeechResult: 'read my latest email' })).body).toContain(
+      '<Hangup/>',
+    );
+    expect(said).toEqual([]);
+  });
+
+  it('the right passcode gets your assistant', async () => {
+    const code = passcode();
+    const { phone, said } = line({}, {}, code.context);
+    await ring(phone, OWNER, 1, unvouched(undefined));
+    const hello = await step(phone, 'code', { Digits: PASSCODE });
+    expect(code.tried).toEqual([PASSCODE]);
+    expect(hello.body).toContain('Hi, it’s Pearl.');
+    expect(hello.body).toContain('call=heard');
+    await step(phone, 'heard', { SpeechResult: 'read my latest email' });
+    expect(said).toEqual([{ from: OWNER, text: 'read my latest email' }]);
+    expect(phone.take(OWNER, 'It says hello.', false)).toBe(true);
+  });
+
+  it('the passcode comes before the call’s own audio, too', async () => {
+    const code = passcode();
+    const v = { ready: async () => true, hear: async () => '', speak: async () => undefined };
+    const { phone } = line({}, { voice: v }, code.context);
+    const asked = await ring(phone, OWNER, 1, unvouched(undefined));
+    expect(asked.body).not.toContain('<Stream');
+    const hello = await step(phone, 'code', { Digits: PASSCODE });
+    expect(hello.body).toContain('<Connect><Stream');
+  });
+
+  it('three wrong passcodes end the call, and the day’s lock turns the next call away', async () => {
+    const code = passcode(5);
+    const { phone, said } = line({}, {}, code.context);
+    await ring(phone, OWNER, 1, unvouched(undefined));
+    expect((await step(phone, 'code', { Digits: '111222' })).body).toContain('isn’t right');
+    expect((await step(phone, 'code', { Digits: '9' })).body).toContain('isn’t right');
+    const ended = await step(phone, 'code', { Digits: '000000' });
+    expect(ended.body).toBe(twiml({ say: UNCONFIRMED_WORDS }, { hangup: true }));
+    expect(phone.busy).toBe(false);
+    // The right one, too late for this call.
+    expect((await step(phone, 'code', { Digits: PASSCODE })).body).toContain('<Hangup/>');
+    // Two more wrong ones on another call reach the day's lock.
+    await ring(phone, OWNER, 2, unvouched(undefined));
+    await step(phone, 'code', { Digits: '123123' }, 2);
+    expect((await step(phone, 'code', { Digits: '321321' }, 2)).body).toBe(
+      twiml({ say: UNCONFIRMED_WORDS }, { hangup: true }),
+    );
+    // Locked: not even asked, and the right passcode is never tried.
+    const third = await ring(phone, OWNER, 3, unvouched(undefined));
+    expect(third.body).toBe(twiml({ say: UNCONFIRMED_WORDS }, { hangup: true }));
+    expect(code.tried).not.toContain(PASSCODE);
+    expect(said).toEqual([]);
+  });
+
+  it('a silence isn’t a wrong passcode: asked once more, then the call ends', async () => {
+    const code = passcode();
+    const { phone } = line({}, {}, code.context);
+    await ring(phone, OWNER, 1, unvouched(undefined));
+    expect((await step(phone, 'code')).body).toContain('Enter your call passcode');
+    expect((await step(phone, 'code')).body).toContain('<Hangup/>');
+    expect(code.check).not.toHaveBeenCalled();
+  });
+
+  it('a failed check still turns the call away, and a stranger is never asked', async () => {
+    const code = passcode();
+    const { phone } = line({}, {}, code.context);
+    const failed = await ring(phone, OWNER, 1, { StirVerstat: 'TN-Validation-Failed-A' });
+    expect(failed.body).toContain('only takes calls from its owner');
+    const stranger = await ring(phone, STRANGER, 2, unvouched(undefined));
+    expect(stranger.body).toContain('only takes calls from its owner');
+    expect(code.check).not.toHaveBeenCalled();
   });
 });
 
@@ -597,5 +743,41 @@ describe('when Conch rings', () => {
     await gone.service.onEvent(requested());
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(gone.call).not.toHaveBeenCalled();
+  });
+});
+
+describe('Repair everything: phone calls (ADR 0138)', () => {
+  const number = (over: Partial<Channel> = {}) =>
+    ({
+      id: 'ch_1',
+      kind: 'sms',
+      enabled: true,
+      bot: { id: NUMBER, name: '(500) 555-0006' },
+      people: [{ id: 'p', name: 'You' }],
+      health: { state: 'online' },
+      settings: { calls: { ...CALLS_DEFAULT, answer: true } },
+      ...over,
+    }) as unknown as Channel;
+  const run = async (channel: Channel, lost = false) =>
+    phoneCallsCheck(
+      {
+        list: async () => ({ channels: [channel] }) as unknown as ChannelList,
+        callPasscodeLost: async () => lost,
+      },
+      () => ({ state: 'ready' }) as ChannelDoor,
+    ).run({ repair: false, signal: AbortSignal.timeout(5_000) });
+
+  it('says plainly that calls need a passcode without full caller verification', async () => {
+    const [item] = await run(number());
+    expect(item).toMatchObject({ state: 'warning', action: { label: 'Set one' } });
+    expect(item?.message).toContain(
+      'Without full caller verification from your carrier, Conch asks for your call passcode. Set one so calls always work.',
+    );
+  });
+
+  it('is ready with a passcode, and asks again for one that didn’t come back', async () => {
+    const set = number({ callPasscode: { setAt: 1 } });
+    expect((await run(set))[0]).toMatchObject({ state: 'ok' });
+    expect((await run(set, true))[0]).toMatchObject({ state: 'needs-you' });
   });
 });

@@ -2138,6 +2138,11 @@ export class Services {
       slack: (parts) => slackCheckFor(parts, endpoints),
       emit: (event) => this.broadcast.emit(event),
       onHeal: (message) => void this.healed.note('channels', message),
+      // A call passcode locked by wrong tries (ADR 0138): on every device that hears about security.
+      alert: (message) =>
+        void this.push
+          .notify('devices', { ...message, quiet: 'Open Conch: something about your calls.' })
+          .catch(() => undefined),
       routineTitle: async (id) =>
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
       // `/name` in a chat app runs your command or skill of that name, as in Conch (ADR 0098).

@@ -292,6 +292,12 @@ export const Channel = z.object({
   voiceNotes: ChannelVoiceNotes.optional(),
   /** SMS: what phone calls used today (ADR 0138). */
   calls: ChannelCallUsage.optional(),
+  /**
+   * SMS: the call passcode (ADR 0138), only whether there is one and since
+   * when. The passcode itself is never kept, and its hash never leaves the
+   * gateway.
+   */
+  callPasscode: z.object({ setAt: z.number() }).optional(),
   lastMessageAt: z.number().optional(),
   /** The agent that answers here (ADR 0101); unset, the default agent. `/agent` changes a chat's. */
   agentId: AgentId.optional(),

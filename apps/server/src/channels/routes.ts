@@ -5,6 +5,7 @@ import {
   Id,
   OpenImessageBody,
   ReplaceChannelTokenBody,
+  SetCallPasscodeBody,
   SetChannelDoorBody,
   SetChannelGroupBody,
   UpdateChannelBody,
@@ -203,6 +204,32 @@ export function registerChannelRoutes(
       return fail(reply, error);
     }
   });
+
+  // The call passcode (ADR 0138): what lets a call the carrier can't vouch for reach your
+  // assistant, so set or removed here, or right after confirming it's you. Only its hash is
+  // kept, and what comes back is the channel's page, which says only that there is one.
+  app.put<{ Params: { id: string } }>('/api/channels/:id/call-passcode', async (request, reply) => {
+    const body = parse(SetCallPasscodeBody, request.body, reply);
+    if (!body || !trusted(request, reply)) return reply;
+    try {
+      const channel = await channels.setCallPasscode(request.params.id, body);
+      return reply.header('cache-control', 'no-store').send(channel);
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/channels/:id/call-passcode',
+    async (request, reply) => {
+      if (!trusted(request, reply)) return reply;
+      try {
+        return await channels.clearCallPasscode(request.params.id);
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
 
   app.delete<{ Params: { id: string } }>('/api/channels/:id', async (request, reply) => {
     try {

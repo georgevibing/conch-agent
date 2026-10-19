@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  CALL_PASSCODE,
   isStaleKey,
   type AddressStatus,
   type CheckupItem,
@@ -195,6 +196,8 @@ export interface CheckupInput {
     fullTrust?: boolean;
     /** It answers calls from your number (ADR 0138). */
     calls?: boolean;
+    /** Those calls can get through with a call passcode, when the carrier doesn't vouch. */
+    callPasscode?: boolean;
   }[];
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
@@ -495,8 +498,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'phone-calls',
       level: 'info',
       title: `Your assistant answers calls from your number on ${calling.map((c) => c.bot).join(' and ')}`,
-      detail:
-        'Someone could fake your number to call it. Conch hangs up when the carrier says a number failed its check, reads what’s said on a call like a voice note, so steps that matter still ask you, and a call to it can’t allow anything. Turn calls off when you don’t use them.',
+      detail: `Someone could fake your number to call it. A call gets through only when your carrier fully vouches for your number${calling.some((c) => c.callPasscode) ? `, or the caller enters your call passcode: ${CALL_PASSCODE.tries} wrong ones end the call, and ${CALL_PASSCODE.lockAfter} in a day stop calls until tomorrow and tell you` : '. Without a call passcode, every other call hears it can’t confirm it’s you'}. What’s said on a call is read like a voice note, so steps that matter still ask you, and a call to it can’t allow anything. Keep the passcode to yourself, and turn calls off when you don’t use them.`,
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
 

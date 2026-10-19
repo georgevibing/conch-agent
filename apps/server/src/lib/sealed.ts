@@ -35,6 +35,8 @@ export const SEALED_FILES = new Set([
   // The cloud sandbox's key, for where chats' work runs (ADR 0106).
   'workplaces.secrets.json',
   'channels.secrets.json',
+  // The hash of each number's call passcode (ADR 0138).
+  'calls.secrets.json',
   'whatsapp.secrets.json',
   'push.secrets.json',
   'routines.secrets.json',

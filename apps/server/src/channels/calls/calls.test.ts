@@ -1,16 +1,24 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { CALLS_DEFAULT, type ChannelCalls } from '@conch/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import * as crypto from 'node:crypto';
+
+import { CALL_PASSCODE, CALLS_DEFAULT, type ChannelCalls } from '@conch/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Passed through, only watched: the passcode's hash must be compared in constant time.
+vi.mock('node:crypto', async (original) => {
+  const actual = await original<typeof crypto>();
+  return { ...actual, timingSafeEqual: vi.fn(actual.timingSafeEqual) };
+});
 
 import { loadConfig } from '../../config';
 import { Services } from '../../services';
 import { askFirst } from '../../test/modes';
 import { MockTwilio } from '../mock/twilio';
 import { personId } from '../types';
-import { STRANGER_WORDS } from './phone';
+import { STRANGER_WORDS, UNCONFIRMED_WORDS } from './phone';
 import { xml } from './twiml';
 
 let services: Services | undefined;
@@ -102,7 +110,7 @@ describe('phone calls on the SMS number (ADR 0138)', () => {
 
   it('you talk to your assistant: your words go to your chat, and its answer is said, not texted', async () => {
     const { s, twilio } = await paired();
-    const hello = await twilio.call();
+    const hello = await twilio.call(MockTwilio.OWNER, { StirVerstat: 'TN-Validation-Passed-A' });
     // No whisper.cpp here: Twilio's own hearing and voice.
     expect(hello.body).toContain('<Gather');
     expect(hello.next).toMatch(/\?call=heard$/);
@@ -195,5 +203,114 @@ describe('phone calls on the SMS number (ADR 0138)', () => {
     expect(await s.channels.callOwner(channel.id, ask)).toBe('unavailable');
     expect(await s.channels.phoneLines()).toEqual([]);
     expect(twilio.calls).toHaveLength(0);
+  });
+});
+
+describe('the call passcode (ADR 0138)', () => {
+  const PASSCODE = '482913';
+
+  it('without one, a call the carrier doesn’t fully vouch for hears it can’t confirm it’s you', async () => {
+    const { s, twilio } = await paired();
+    for (const verdict of ['TN-Validation-Passed-B', 'TN-Validation-Passed-C', undefined]) {
+      const answer = await twilio.call(MockTwilio.OWNER, verdict ? { StirVerstat: verdict } : {});
+      expect(answer.body).toContain(`<Say>${xml(UNCONFIRMED_WORDS)}</Say><Hangup/>`);
+    }
+    expect(await channelChats(s)).toHaveLength(0);
+  });
+
+  it('keeps only a slow hash, sealed, and never sends it (or the digits) to the page', async () => {
+    const { s, channel } = await paired();
+    const events: string[] = [];
+    s.broadcast.on((event) => events.push(JSON.stringify(event)));
+    const view = await s.channels.setCallPasscode(channel.id, { passcode: PASSCODE });
+    expect(view.callPasscode?.setAt).toBeTypeOf('number');
+    const wire = [
+      JSON.stringify(view),
+      JSON.stringify(await s.channels.get(channel.id)),
+      JSON.stringify(await s.channels.list()),
+      ...events,
+    ].join('\n');
+    expect(wire).not.toContain(PASSCODE);
+    expect(wire).not.toMatch(/scrypt|hash/i);
+    const home = s.config.CONCH_HOME;
+    const kept = await readFile(join(home, 'calls.secrets.json'), 'utf8');
+    expect(kept).not.toContain(PASSCODE);
+    expect(kept).not.toContain('scrypt');
+    const listed = await readFile(join(home, 'channels.json'), 'utf8');
+    expect(listed).not.toContain(PASSCODE);
+    expect(listed).not.toContain('scrypt');
+    expect(await s.channels.callPasscodeLost(channel.id)).toBe(false);
+    // Removing it is as plain.
+    expect((await s.channels.clearCallPasscode(channel.id)).callPasscode).toBeUndefined();
+  });
+
+  it('refuses one anyone would try first, or part of your number', async () => {
+    const { s, channel } = await paired();
+    for (const passcode of ['123456', '000000', '98765', 'abcdef'])
+      await expect(s.channels.setCallPasscode(channel.id, { passcode })).rejects.toThrow();
+    const owner = MockTwilio.OWNER.replace(/\D/g, '').slice(-7);
+    await expect(s.channels.setCallPasscode(channel.id, { passcode: owner })).rejects.toThrow(
+      /phone number/,
+    );
+  });
+
+  it('the right passcode gets your assistant, checked in constant time', async () => {
+    const { s, twilio, channel } = await paired();
+    await s.channels.setCallPasscode(channel.id, { passcode: PASSCODE });
+    const asked = await twilio.call(MockTwilio.OWNER, { StirVerstat: 'TN-Validation-Passed-B' });
+    expect(asked.body).toContain('<Gather input="dtmf"');
+    expect(asked.next).toMatch(/\?call=code$/);
+    const equal = vi.mocked(crypto.timingSafeEqual);
+    equal.mockClear();
+    const hello = await twilio.step(asked.next ?? '', asked.sid, { Digits: PASSCODE });
+    expect(hello.body).toContain('What can I do for you?');
+    // scrypt's 32-byte key against the kept one.
+    expect(
+      equal.mock.calls.some(([a, b]) => (a as Buffer).length === 32 && (b as Buffer).length === 32),
+    ).toBe(true);
+    const heard = await twilio.step(hello.next ?? '', asked.sid, { SpeechResult: 'Hello there' });
+    expect(heard.next).toMatch(/\?call=wait$/);
+    await until(async () => (await channelChats(s))[0], 'the chat');
+  });
+
+  it('three wrong ones end a call; five in a day lock calls and tell you', async () => {
+    const { s, twilio, channel } = await paired();
+    await s.channels.setCallPasscode(channel.id, { passcode: PASSCODE });
+    const texts = twilio.to().length;
+    const wrong = async (call: { next?: string; sid: string }, digits: string) =>
+      twilio.step(call.next ?? '', call.sid, { Digits: digits });
+    const first = await twilio.call();
+    let turn = await wrong(first, '111999');
+    expect(turn.body).toContain('isn’t right');
+    turn = await wrong({ ...first, next: turn.next ?? '' }, '222888');
+    turn = await wrong({ ...first, next: turn.next ?? '' }, '333777');
+    expect(turn.body).toContain(`<Say>${xml(UNCONFIRMED_WORDS)}</Say><Hangup/>`);
+    await twilio.ended(twilio.number.voice_url + '?call=status', first.sid, 30);
+    expect((await s.channels.get(channel.id)).calls?.passcodeFails).toBe(3);
+    const second = await twilio.call();
+    turn = await wrong(second, '444666');
+    turn = await wrong({ ...second, next: turn.next ?? '' }, '555444');
+    expect(turn.body).toContain(`<Say>${xml(UNCONFIRMED_WORDS)}</Say><Hangup/>`);
+    await twilio.ended(twilio.number.voice_url + '?call=status', second.sid, 30);
+    expect((await s.channels.get(channel.id)).calls?.passcodeFails).toBe(CALL_PASSCODE.lockAfter);
+    // You're told by text.
+    const told = await until(
+      () =>
+        twilio
+          .to()
+          .slice(texts)
+          .find((t) => /wrong call passcode/.test(t.body)),
+      'the lock, texted',
+    );
+    expect(told.body).not.toContain(PASSCODE);
+    // Locked: the next call isn't even asked, right passcode or not.
+    const third = await twilio.call();
+    expect(third.body).toContain(`<Say>${xml(UNCONFIRMED_WORDS)}</Say><Hangup/>`);
+    expect(await channelChats(s)).toHaveLength(0);
+    // A new passcode, set by you, lifts the day's lock.
+    await s.channels.setCallPasscode(channel.id, { passcode: '760241' });
+    expect((await s.channels.get(channel.id)).calls?.passcodeFails).toBe(0);
+    const fourth = await twilio.call();
+    expect(fourth.body).toContain('<Gather input="dtmf"');
   });
 });

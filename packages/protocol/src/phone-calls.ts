@@ -7,6 +7,9 @@
  *
  * - `ChannelCalls` is what you chose (never the assistant's: no tool changes it);
  * - `ChannelCallUsage` is what calls used today, shown beside the switches;
+ * - `SetCallPasscodeBody` sets the call passcode: the keys a caller enters
+ *   when the carrier can't vouch for the caller ID. Only a slow hash of it
+ *   is kept, on the gateway, and it's never sent back;
  * - `TwilioStreamMessage` is what Twilio's Media Streams send over the call's
  *   WebSocket, validated before anything is done with it.
  */
@@ -55,6 +58,8 @@ export const ChannelCallUsage = z.object({
   answered: z.number().int().nonnegative().default(0),
   /** Seconds on the phone, both ways. */
   seconds: z.number().int().nonnegative().default(0),
+  /** Wrong call passcodes entered today: at `CALL_PASSCODE.lockAfter`, no more tries until tomorrow. */
+  passcodeFails: z.number().int().nonnegative().default(0),
 });
 export type ChannelCallUsage = z.infer<typeof ChannelCallUsage>;
 
@@ -65,6 +70,50 @@ export function callUsageWords(usage: ChannelCallUsage | undefined, today: strin
   const minutes = Math.ceil(usage.seconds / 60);
   return `${calls === 1 ? 'One call' : `${calls} calls`} today, ${minutes === 1 ? 'a minute' : `${minutes} minutes`}.`;
 }
+
+// ── The call passcode ───────────────────────────────────────────────────────
+
+/**
+ * A call from your number gets your assistant only when the carrier fully
+ * vouches for the caller ID (SHAKEN/STIR attestation A,
+ * `TN-Validation-Passed-A`), or once the caller keys in this passcode.
+ * `tries` wrong ones end a call; `lockAfter` wrong ones in a day stop every
+ * try until tomorrow, and you're told.
+ */
+export const CALL_PASSCODE = { min: 6, max: 12, tries: 3, lockAfter: 5 } as const;
+
+/** The carrier's verdict that vouches for the caller ID by itself. */
+export const FULL_ATTESTATION = 'TN-Validation-Passed-A';
+
+/**
+ * What's wrong with a passcode, in plain words, or undefined when it's fine:
+ * digits only, 6 to 12 of them, and not one anyone would try first (a digit
+ * over and over, or a run like 123456).
+ */
+export function callPasscodeProblem(passcode: string): string | undefined {
+  const { min, max } = CALL_PASSCODE;
+  if (!/^\d*$/.test(passcode)) return 'Use digits only: it’s entered on a phone’s keypad.';
+  if (passcode.length < min || passcode.length > max) return `Use ${min} to ${max} digits.`;
+  if (/^(\d)\1+$/.test(passcode)) return 'That’s one digit over and over: anyone would try it.';
+  const steps = new Set(
+    [...passcode].slice(1).map((d, i) => (Number(d) - Number(passcode[i]) + 10) % 10),
+  );
+  if (steps.size === 1 && (steps.has(1) || steps.has(9)))
+    return 'That’s a run of digits: anyone would try it.';
+  return undefined;
+}
+
+/** `PUT /api/channels/:id/call-passcode`: a new passcode (it replaces the old one). */
+export const SetCallPasscodeBody = z.object({
+  passcode: z
+    .string()
+    .max(CALL_PASSCODE.max)
+    .superRefine((value, ctx) => {
+      const problem = callPasscodeProblem(value);
+      if (problem) ctx.addIssue({ code: 'custom', message: problem });
+    }),
+});
+export type SetCallPasscodeBody = z.infer<typeof SetCallPasscodeBody>;
 
 // ── Twilio Media Streams (the call's audio, both ways) ──────────────────────
 

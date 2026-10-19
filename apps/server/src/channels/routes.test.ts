@@ -146,6 +146,13 @@ describe('channel routes', () => {
         cookie,
         payload: { settings: { calls: { approvals: true } } },
       }),
+      // The call passcode lets a call the carrier can't vouch for reach it.
+      remote(app, `/api/channels/${id}/call-passcode`, {
+        method: 'PUT',
+        cookie,
+        payload: { passcode: '482913' },
+      }),
+      remote(app, `/api/channels/${id}/call-passcode`, { method: 'DELETE', cookie }),
     ];
     for (const res of await Promise.all(attempts)) {
       expect(res.statusCode).toBe(403);

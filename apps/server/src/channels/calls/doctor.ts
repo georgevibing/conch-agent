@@ -3,6 +3,10 @@
  * calls off it says nothing; on, the number must be reachable for them, and
  * Twilio must be able to reach Conch. Nothing here is fixed by itself: the
  * channel's own connection points the number, and the door repairs itself.
+ * Answering calls without a call passcode is worth a look (only calls the
+ * carrier fully vouches for get through), and a passcode the page knows of
+ * but whose hash didn't come back (a backup restored without its keys) needs
+ * setting again.
  */
 import { PHONE_CALL_CHANNELS, type ChannelDoor, type DoctorItem } from '@conch/protocol';
 
@@ -10,7 +14,7 @@ import type { DoctorCheck } from '../../doctor/service';
 import type { ChannelService } from '../service';
 
 export function phoneCallsCheck(
-  channels: Pick<ChannelService, 'list'>,
+  channels: Pick<ChannelService, 'list' | 'callPasscodeLost'>,
   door: () => ChannelDoor,
 ): DoctorCheck {
   const base = { id: 'phone-calls', group: 'Talk to me here', title: 'Phone calls' };
@@ -47,6 +51,20 @@ export function phoneCallsCheck(
             state: 'needs-you',
             message: channel.health.message ?? 'The number isn’t connected right now.',
             action: { kind: 'open', label: 'Open', place: 'channels', focus: channel.id },
+          });
+        else if (calls.answer && (await channels.callPasscodeLost(channel.id)))
+          item({
+            state: 'needs-you',
+            message:
+              'Your call passcode didn’t come back with this Conch’s keys, so calls your carrier can’t vouch for are turned away. Set it again.',
+            action: { kind: 'open', label: 'Set it', place: 'channels', focus: channel.id },
+          });
+        else if (calls.answer && !channel.callPasscode)
+          item({
+            state: 'warning',
+            message:
+              'Without full caller verification from your carrier, Conch asks for your call passcode. Set one so calls always work.',
+            action: { kind: 'open', label: 'Set one', place: 'channels', focus: channel.id },
           });
         else item({ state: 'ok', message: 'Ready for calls.' });
       }

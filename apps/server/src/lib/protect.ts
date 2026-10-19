@@ -45,6 +45,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'telemetry.json'),
     join(home, 'telemetry.secrets.json'),
     join(home, 'channels.secrets.json'),
+    // The call passcode's hash (ADR 0138): rewritten, it would let a faked caller ID in.
+    join(home, 'calls.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),
     // What starts a routine: the assistant drafts these through Conch, never by hand.

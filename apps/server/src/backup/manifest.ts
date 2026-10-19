@@ -667,6 +667,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your bots’ keys, and your email’s app password.',
   },
   {
+    match: 'calls.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The hash of your call passcode, for calls the carrier can’t vouch for (ADR 0138).',
+  },
+  {
     match: 'telemetry.secrets.json',
     class: 'secret',
     group: 'secrets',

@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import {
+  CALL_PASSCODE,
+  SetCallPasscodeBody,
   type ModelCatalog,
   type UpdateSettingsBody,
   type Channel,
@@ -49,6 +51,7 @@ import {
 } from '@conch/protocol';
 
 import type { AttachmentStore } from '../attachments/store';
+import { hashPassword, verifyPassword } from '../auth/secrets';
 import {
   ConversationError,
   type ConversationManager,
@@ -81,7 +84,7 @@ import {
   personId,
   type VoiceNote,
 } from './types';
-import type { CallAsk } from './calls/phone';
+import type { CallAsk, CallPasscodeCheck } from './calls/phone';
 import { normalizeLine } from './line';
 import { normalizeMattermost } from './mattermost';
 import { normalizeRocketChat } from './rocketchat';
@@ -423,6 +426,11 @@ export class ChannelService {
         custom(): Promise<CustomCommand[]>;
         skills(): Promise<string[]>;
       };
+      /**
+       * Something the owner must hear about now, on every device that takes
+       * notifications (a call passcode locked by wrong tries, ADR 0138).
+       */
+      alert?: (message: { title: string; body: string; url: string; tag: string }) => void;
       now?: () => number;
       log?: (message: string) => void;
     },
@@ -601,6 +609,8 @@ export class ChannelService {
         },
       }),
       ...(stored.callUsage && { calls: stored.callUsage }),
+      // Only that there is a passcode: its hash never leaves the gateway.
+      ...(stored.callPasscodeAt && { callPasscode: { setAt: stored.callPasscodeAt } }),
       ...(stored.lastMessageAt && { lastMessageAt: stored.lastMessageAt }),
     };
   }
@@ -659,6 +669,7 @@ export class ChannelService {
       groups: string[];
       fullTrust?: boolean;
       calls?: boolean;
+      callPasscode?: boolean;
     }[]
   > {
     return (await this.deps.store.all())
@@ -670,6 +681,7 @@ export class ChannelService {
         ...(c.chatOptions.permissionMode === 'bypassPermissions' && { fullTrust: true }),
         // It answers calls from your number (ADR 0138): a caller ID can be faked.
         ...(c.settings.calls?.answer && { calls: true }),
+        ...(c.settings.calls?.answer && c.callPasscodeAt && { callPasscode: true }),
         groups: c.groups.filter((g) => g.on).map((g) => g.name),
       }));
   }
@@ -1498,11 +1510,135 @@ export class ChannelService {
   async #phoneContext(id: string) {
     const now = await this.deps.store.get(id);
     const owner = now?.people[0];
+    const passcode = await this.deps.store.callPasscode(id).catch(() => undefined);
+    const fails = now?.callUsage?.day === (await this.#today()) ? now.callUsage.passcodeFails : 0;
     return {
       settings: now?.settings.calls ?? CALLS_DEFAULT,
       ...(owner && { owner: appId(owner.id) }),
       assistant: await this.#assistant({ channelId: id }),
+      ...(passcode && {
+        passcode: {
+          locked: fails >= CALL_PASSCODE.lockAfter,
+          check: (digits: string) => this.#checkPasscode(id, digits),
+        } satisfies CallPasscodeCheck,
+      }),
     };
+  }
+
+  /** Today's call usage, a new day's when it's another day. */
+  #usageOn(c: StoredChannel, today: string): ChannelCallUsage {
+    return c.callUsage?.day === today
+      ? c.callUsage
+      : { day: today, placed: 0, answered: 0, seconds: 0, passcodeFails: 0 };
+  }
+
+  /**
+   * Keys from a call, against the passcode's hash (scrypt, constant time,
+   * `auth/secrets.ts`). A wrong one is counted for today before it's said
+   * to be wrong, so a restart can't give free tries; the one that reaches
+   * the day's lock tells the owner, by text and on their devices.
+   */
+  async #checkPasscode(id: string, digits: string): Promise<'right' | 'wrong' | 'locked'> {
+    const today = await this.#today();
+    const before = await this.deps.store.get(id);
+    if (!before) return 'locked';
+    if (this.#usageOn(before, today).passcodeFails >= CALL_PASSCODE.lockAfter) return 'locked';
+    const kept = await this.deps.store.callPasscode(id);
+    if (!kept) return 'locked';
+    // Only the digits a passcode can be are hashed; anything else is wrong all the same.
+    const shaped = digits.length <= CALL_PASSCODE.max && /^\d+$/.test(digits);
+    if (shaped && (await verifyPassword(digits, kept.hash))) return 'right';
+    let fails = 0;
+    await this.deps.store.update(id, (c) => {
+      const day = this.#usageOn(c, today);
+      fails = day.passcodeFails + 1;
+      return { ...c, callUsage: { ...day, passcodeFails: fails } };
+    });
+    void this.#emit(id);
+    if (fails < CALL_PASSCODE.lockAfter) return 'wrong';
+    if (fails === CALL_PASSCODE.lockAfter) await this.#lockedOut(id).catch(() => undefined);
+    return 'locked';
+  }
+
+  /** Too many wrong passcodes today: the owner is told, wherever they'd hear it. */
+  async #lockedOut(id: string) {
+    const stored = await this.deps.store.get(id);
+    if (!stored) return;
+    const number = stored.bot.name;
+    const body = `Someone called ${number} from your number and entered a wrong call passcode ${CALL_PASSCODE.lockAfter} times today, so calls aren’t answered until tomorrow. If it wasn’t you, someone may be faking your number: keep the passcode to yourself, or change it on the number’s page in Conch.`;
+    this.deps.alert?.({
+      title: 'Calls locked for today',
+      body,
+      url: `/channels/${id}`,
+      tag: `call-passcode-${id}`,
+    });
+    const live = this.#live.get(id);
+    const owner = stored.people[0];
+    if (!live || !owner) return;
+    const chat = await live.connection.directChat(owner.id).catch(() => undefined);
+    if (chat)
+      await live.connection
+        .send(chat, body)
+        .catch((error: unknown) => this.#log(`call passcode: ${explain(error)}`));
+  }
+
+  /**
+   * Set the call passcode (ADR 0138): only its scrypt hash is kept, in the
+   * sealed `calls.secrets.json`, never the digits; a new one clears today's
+   * lock (the owner chose it). Your number's digits are refused too: a faker
+   * would try them first.
+   */
+  async setCallPasscode(id: string, body: SetCallPasscodeBody): Promise<Channel> {
+    const current = await this.#require(id);
+    if (current.kind !== 'sms')
+      throw new ChannelServiceError('invalid', 'Only a phone number takes calls.');
+    // Checked here too, whoever calls: a passcode anyone would try first is never kept.
+    const parsed = SetCallPasscodeBody.safeParse(body);
+    if (!parsed.success)
+      throw new ChannelServiceError(
+        'invalid',
+        parsed.error.issues[0]?.message ?? 'Use 6 to 12 digits.',
+      );
+    const numbers = [
+      ...current.people.slice(0, 1).map((p) => appId(p.id)),
+      current.bot.phone ?? '',
+    ].map((n) => n.replace(/\D/g, ''));
+    if (numbers.some((n) => n.length >= CALL_PASSCODE.min && n.includes(body.passcode)))
+      throw new ChannelServiceError(
+        'invalid',
+        'That’s part of a phone number: anyone faking yours would try it. Choose other digits.',
+      );
+    const setAt = this.#now;
+    await this.deps.store.setCallPasscode(id, { hash: await hashPassword(body.passcode), setAt });
+    const today = await this.#today();
+    const stored =
+      (await this.deps.store.update(id, (c) => ({
+        ...c,
+        callPasscodeAt: setAt,
+        ...(c.callUsage?.day === today && { callUsage: { ...c.callUsage, passcodeFails: 0 } }),
+      }))) ?? current;
+    await this.#emit(id);
+    return this.#view(stored);
+  }
+
+  /** No call passcode any more: a call the carrier doesn't vouch for is turned away. */
+  async clearCallPasscode(id: string): Promise<Channel> {
+    await this.#require(id);
+    await this.deps.store.setCallPasscode(id, undefined);
+    const stored = await this.deps.store.update(id, (c) => {
+      const { callPasscodeAt: _, ...rest } = c;
+      return rest;
+    });
+    if (!stored) throw new ChannelServiceError('not-found', 'That channel isn’t connected.');
+    await this.#emit(id);
+    return this.#view(stored);
+  }
+
+  /** The page says there's a passcode, but its hash isn't here (a backup without keys). */
+  async callPasscodeLost(id: string): Promise<boolean> {
+    const stored = await this.deps.store.get(id);
+    if (!stored?.callPasscodeAt) return false;
+    return !(await this.deps.store.callPasscode(id).catch(() => undefined));
   }
 
   /** Today on the person's clock (`2026-10-19`), for the day's calls. */
@@ -1519,10 +1655,7 @@ export class ChannelService {
   async #called(id: string, usage: { direction: 'in' | 'out'; seconds: number }) {
     const today = await this.#today();
     await this.deps.store.update(id, (c) => {
-      const day: ChannelCallUsage =
-        c.callUsage?.day === today
-          ? c.callUsage
-          : { day: today, placed: 0, answered: 0, seconds: 0 };
+      const day = this.#usageOn(c, today);
       return {
         ...c,
         callUsage: {
@@ -1570,10 +1703,7 @@ export class ChannelService {
     const today = await this.#today();
     let allowed = false;
     await this.deps.store.update(channelId, (c) => {
-      const day: ChannelCallUsage =
-        c.callUsage?.day === today
-          ? c.callUsage
-          : { day: today, placed: 0, answered: 0, seconds: 0 };
+      const day = this.#usageOn(c, today);
       const limit = c.settings.calls?.perDay ?? CALLS_DEFAULT.perDay;
       allowed = day.placed < limit;
       return allowed ? { ...c, callUsage: { ...day, placed: day.placed + 1 } } : c;

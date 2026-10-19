@@ -8,6 +8,12 @@
  * - **Only you get the assistant.** A call from any number but the owner's
  *   (or one the carrier says failed caller-ID checks) hears one sentence and
  *   ends: no model turn, nothing kept. A call while calls are off is refused.
+ * - **And only once it's surely you.** A caller ID is easy to fake, and most
+ *   calls carry no verdict at all, so the owner's number alone isn't enough:
+ *   the carrier must fully vouch for it (SHAKEN/STIR attestation A), or the
+ *   caller keys in the call passcode first, before a word is heard or said.
+ *   Three wrong ones end the call; the day's lock is the channel's. Without a
+ *   passcode, a call the carrier didn't vouch for hears one sentence and ends.
  * - **The call is the owner's SMS chat**, by voice: what's said becomes a
  *   message (read like a voice note's words, ADR 0077), and the answers are
  *   spoken back. Questions with buttons still go by text.
@@ -26,7 +32,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import type { ChannelCalls } from '@conch/protocol';
-import { speakable, TwilioStreamMessage } from '@conch/protocol';
+import { CALL_PASSCODE, FULL_ATTESTATION, speakable, TwilioStreamMessage } from '@conch/protocol';
 
 import type { DoorSocket, HookReply, HookRequest, HookStream } from '../door';
 import { StreamCall } from './stream';
@@ -47,6 +53,20 @@ export interface PhoneContext {
   owner?: string;
   /** The assistant's name, as it introduces itself. */
   assistant: string;
+  /** The call passcode, when the owner set one (ADR 0138). Unset, there's none. */
+  passcode?: CallPasscodeCheck;
+}
+
+/** The call passcode, checked where its hash is kept (never here). */
+export interface CallPasscodeCheck {
+  /** Too many wrong ones today: no tries until tomorrow. */
+  locked: boolean;
+  /**
+   * What was keyed, against the kept hash (scrypt, compared in constant
+   * time). A wrong one counts toward today's lock; `locked` is the one that
+   * reached it, or any try after.
+   */
+  check(digits: string): Promise<'right' | 'wrong' | 'locked'>;
 }
 
 /** A question Conch rings about (ADR 0108's rules decide `quick`). */
@@ -87,6 +107,11 @@ interface Call {
   peer: string;
   startedAt: number;
   mode: 'stream' | 'gather' | 'approval';
+  /**
+   * A call to Conch: it's surely the owner (the carrier vouched, or the
+   * passcode was right). Until then nothing is heard, said or claimed.
+   */
+  confirmed?: boolean;
   /** The stream's one-use ticket (its hash), until the socket brings it. */
   ticket?: string;
   ticketExpires?: number;
@@ -117,6 +142,11 @@ const OFF_WORDS = (assistant: string) =>
 const BUSY_WORDS = 'I’m on another call right now. Try again in a moment. Goodbye.';
 const TIME_WORDS =
   'That’s as long as a call can last. Anything else I say, I’ll text you. Goodbye.';
+/** A call from the owner's number that couldn't be shown to be them. */
+export const UNCONFIRMED_WORDS =
+  'Hello. I can’t confirm it’s you calling, so I can’t help on this call. Goodbye.';
+const PASSCODE_WORDS = 'Enter your call passcode, then press the pound key.';
+const AGAIN_WORDS = 'That passcode isn’t right. Enter it again, then press the pound key.';
 const NEEDS_YOU = (assistant: string) =>
   `This is ${assistant}. Something needs you in Conch. Open it when you can. Goodbye.`;
 
@@ -169,6 +199,12 @@ export function decisionOf(params: {
 
 /** A carrier's caller-ID check that failed (SHAKEN/STIR, `StirVerstat`). */
 const spoofed = (verstat: string | undefined) => Boolean(verstat && /Failed/i.test(verstat));
+/**
+ * The carrier fully vouches for the caller ID (attestation A): it knows the
+ * caller and that they may use the number. B, C, none, or anything else
+ * doesn't, and the passcode is asked.
+ */
+const vouched = (verstat: string | undefined) => verstat?.trim() === FULL_ATTESTATION;
 
 /** A number as Twilio writes it (E.164), or undefined. */
 const e164 = (raw: string | undefined) =>
@@ -198,7 +234,8 @@ export class PhoneLine {
   /** The live call with the owner at this number, if there is one. */
   #live(peer: string): Call | undefined {
     for (const call of this.#calls.values())
-      if (!call.ended && call.peer === peer && call.direction === 'in') return call;
+      if (!call.ended && call.confirmed && call.peer === peer && call.direction === 'in')
+        return call;
     return undefined;
   }
 
@@ -264,6 +301,7 @@ export class PhoneLine {
     }
     if (step === 'ok' || step === 'ok-answer')
       return reply(...(await this.#approval(step, params, query)));
+    if (step === 'code') return reply(...(await this.#code(params)));
     if (step === 'heard' || step === 'wait' || step === 'after')
       return reply(...(await this.#turn(step, params)));
     return reply(...(await this.#incoming(params)));
@@ -276,7 +314,12 @@ export class PhoneLine {
     if (params.get('Direction') && params.get('Direction') !== 'inbound') return [{ hangup: true }];
     if (params.get('To') !== (await this.deps.number())) return [{ reject: 'rejected' }];
     const known = this.#calls.get(sid);
-    if (known) return known.ended ? [{ hangup: true }] : this.#listen(known);
+    if (known)
+      return known.ended
+        ? [{ hangup: true }]
+        : known.confirmed
+          ? this.#listen(known)
+          : this.#askCode(known);
     const context = await this.deps.context();
     const from = e164(params.get('From'));
     const owner = Boolean(from && context.owner && from === context.owner);
@@ -287,6 +330,10 @@ export class PhoneLine {
         : [{ reject: 'rejected' }];
     if (!context.settings.answer) return [{ say: OFF_WORDS(context.assistant) }, { hangup: true }];
     if (this.busy) return [{ say: BUSY_WORDS }, { hangup: true }];
+    const confirmed = vouched(params.get('StirVerstat'));
+    // Not vouched for, and no passcode to ask (or none may be tried today): one sentence.
+    if (!confirmed && (!context.passcode || context.passcode.locked))
+      return [{ say: UNCONFIRMED_WORDS }, { hangup: true }];
     const call: Call = {
       sid,
       direction: 'in',
@@ -298,9 +345,60 @@ export class PhoneLine {
       tries: 0,
       assistant: context.assistant,
       maxMs: context.settings.maxMinutes * 60_000,
+      confirmed,
     };
     this.#remember(call);
-    const greeting = `Hi, it’s ${context.assistant}. What can I do for you?`;
+    // The passcode first, on the keypad, before anything is heard or said (or streamed).
+    if (!confirmed) return this.#askCode(call);
+    return this.#begin(call);
+  }
+
+  /** Ask for the call passcode (keys only: never Twilio's or anyone's hearing). */
+  #askCode(call: Call, again = false): Verb[] {
+    return [
+      {
+        gather: {
+          action: this.#url('code'),
+          input: 'dtmf',
+          // Seconds between keys; the pound key (Twilio's default) ends it.
+          timeout: 10,
+          numDigits: CALL_PASSCODE.max + 1,
+          say: [again ? AGAIN_WORDS : PASSCODE_WORDS],
+        },
+      },
+    ];
+  }
+
+  /** What was keyed for the passcode: the call goes on, is asked again, or ends. */
+  async #code(params: Params): Promise<Verb[]> {
+    const call = this.#calls.get(params.get('CallSid') ?? '');
+    if (!call || call.direction !== 'in' || call.ended) return [{ hangup: true }];
+    if (call.confirmed) return this.#listen(call);
+    const refuse = (): Verb[] => {
+      this.#end(call);
+      return [{ say: UNCONFIRMED_WORDS }, { hangup: true }];
+    };
+    const digits = (params.get('Digits') ?? '').replace(/#+$/, '');
+    // Nothing keyed: asked again, once; a silence isn't a wrong passcode.
+    if (!digits) return ++call.silent >= 2 ? refuse() : this.#askCode(call);
+    const context = await this.deps.context();
+    if (!context.passcode) return refuse();
+    const result = await context.passcode.check(digits).catch((error: unknown) => {
+      this.deps.log?.(`call: couldn’t check the passcode (${(error as Error).message})`);
+      return 'locked' as const;
+    });
+    if (result === 'right') {
+      call.confirmed = true;
+      call.silent = 0;
+      return this.#begin(call);
+    }
+    if (result === 'locked' || ++call.tries >= CALL_PASSCODE.tries) return refuse();
+    return this.#askCode(call, true);
+  }
+
+  /** It's surely the owner: greet them, on the call's own audio when it can. */
+  async #begin(call: Call): Promise<Verb[]> {
+    const greeting = `Hi, it’s ${call.assistant}. What can I do for you?`;
     const hook = this.deps.hookUrl();
     if (hook && (await this.deps.voice?.ready().catch(() => false))) {
       const ticket = randomBytes(24).toString('base64url');
@@ -345,7 +443,8 @@ export class PhoneLine {
   /** The next step of a call the owner made: what they said, waiting, or after the stream. */
   async #turn(step: 'heard' | 'wait' | 'after', params: Params): Promise<Verb[]> {
     const call = this.#calls.get(params.get('CallSid') ?? '');
-    if (!call || call.direction !== 'in' || call.ended) return [{ hangup: true }];
+    if (!call || call.direction !== 'in' || call.ended || !call.confirmed)
+      return [{ hangup: true }];
     if (step === 'after') {
       // The stream ended on purpose: so does the call.
       if (call.stream) {
@@ -535,7 +634,8 @@ export class PhoneLine {
   #claim(message: Extract<TwilioStreamMessage, { event: 'start' }>): Call | undefined {
     const call = this.#calls.get(message.start.callSid);
     const ticket = message.start.customParameters?.ticket;
-    if (!call || call.ended || call.mode !== 'stream' || !call.ticket || !ticket) return undefined;
+    if (!call || call.ended || !call.confirmed || call.mode !== 'stream' || !call.ticket || !ticket)
+      return undefined;
     const expected = Buffer.from(call.ticket);
     const given = Buffer.from(digest(ticket));
     const ok =

@@ -51,6 +51,11 @@ export const StoredChannel = z.object({
   voiceWaiting: z.array(WaitingNote).default([]),
   /** SMS: what phone calls used today (ADR 0138), so the day's limit holds across a restart. */
   callUsage: ChannelCallUsage.optional().catch(undefined),
+  /**
+   * SMS: when the call passcode was set (ADR 0138), for the page. Its hash is
+   * in `calls.secrets.json`; this is only that there is one.
+   */
+  callPasscodeAt: z.number().optional().catch(undefined),
   /** A chat app a Conch app brings (ADR 0122): which app, and what the chat app is called. */
   contributed: z
     .object({ app: z.string().max(24), name: z.string().max(40) })
@@ -66,10 +71,22 @@ const ChannelsFile = z.object({
 
 const SecretsFile = z.record(z.string(), ChannelSecrets);
 
+/** A call passcode as kept (ADR 0138): its scrypt hash (`auth/secrets.ts`), never the digits. */
+const CallPasscode = z.object({
+  hash: z
+    .string()
+    .max(300)
+    .regex(/^scrypt\$/),
+  setAt: z.number(),
+});
+export type CallPasscode = z.infer<typeof CallPasscode>;
+const CallsSecretsFile = z.record(z.string(), CallPasscode);
+
 /**
  * `~/.conch/channels.json` — which bots are connected and who may talk to
  * them; `~/.conch/channels.secrets.json` (0600) — their keys, never sent to the
- * browser or logged.
+ * browser or logged; `~/.conch/calls.secrets.json` (sealed, 0600) — the hash
+ * of each number's call passcode (ADR 0138), never sent to the browser either.
  *
  * A damaged file is kept aside and what still reads carries on. Losing a
  * channel is safe (nobody can reach Conch through it until it's added again);
@@ -92,6 +109,12 @@ export class ChannelStore {
   get #secretsPath() {
     return join(this.home, 'channels.secrets.json');
   }
+
+  get #callsPath() {
+    return join(this.home, 'calls.secrets.json');
+  }
+
+  #calls?: Promise<Record<string, CallPasscode>>;
 
   // Reads wait for writes already under way: what they return is what's on disk,
   // so a restart right after a change (someone just paired) never loses it.
@@ -145,6 +168,29 @@ export class ChannelStore {
       );
       this.#secrets = Promise.resolve(rest);
       await writeJson(this.#secretsPath, rest);
+      const calls = await this.#loadCalls();
+      if (calls[id]) {
+        const left = Object.fromEntries(Object.entries(calls).filter(([key]) => key !== id));
+        this.#calls = Promise.resolve(left);
+        await writeJson(this.#callsPath, left);
+      }
+    });
+  }
+
+  /** A number's call passcode, as kept (its hash), if it has one. */
+  callPasscode(id: string): Promise<CallPasscode | undefined> {
+    return this.#mutex.run(async () => (await this.#loadCalls())[id]);
+  }
+
+  /** Keep a new call passcode's hash, or none. */
+  setCallPasscode(id: string, passcode: CallPasscode | undefined): Promise<void> {
+    return this.#mutex.run(async () => {
+      const all = Object.fromEntries(
+        Object.entries(await this.#loadCalls()).filter(([key]) => key !== id),
+      );
+      if (passcode) all[id] = CallPasscode.parse(passcode);
+      this.#calls = Promise.resolve(all);
+      await writeJson(this.#callsPath, all);
     });
   }
 
@@ -181,6 +227,23 @@ export class ChannelStore {
       },
     );
     return this.#items;
+  }
+
+  #loadCalls(): Promise<Record<string, CallPasscode>> {
+    this.#calls ??= readStore(this.#callsPath, CallsSecretsFile, {
+      onRepair: () =>
+        this.heal?.(
+          'channels',
+          'Set aside a damaged call passcode. Set it again on the number’s page.',
+        ),
+    }).then(
+      (read) => read.value,
+      (error: unknown) => {
+        this.#calls = undefined;
+        throw error;
+      },
+    );
+    return this.#calls;
   }
 
   #loadSecrets(): Promise<Record<string, ChannelSecrets>> {
