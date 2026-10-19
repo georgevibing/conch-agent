@@ -31,6 +31,8 @@ const PKCS8_X25519 = Uint8Array.from([
 
 const text = new TextEncoder();
 const subtle = () => globalThis.crypto.subtle;
+/** A WebCrypto key, named the same in Node's types and the DOM's. */
+type Key = Awaited<ReturnType<ReturnType<typeof subtle>['importKey']>>;
 
 /** A copy backed by a plain ArrayBuffer, which every WebCrypto accepts. */
 const own = (bytes: Uint8Array): Uint8Array<ArrayBuffer> => {
@@ -130,7 +132,7 @@ export interface KeyPair {
 }
 
 export async function generateKeyPair(): Promise<KeyPair> {
-  const pair = (await subtle().generateKey(X25519, true, ['deriveBits'])) as CryptoKeyPair;
+  const pair = (await subtle().generateKey(X25519, true, ['deriveBits'])) as { privateKey: Key };
   const jwk = await subtle().exportKey('jwk', pair.privateKey);
   if (!jwk.d || !jwk.x) throw new Error('This runtime can’t export an X25519 key.');
   return { publicKey: b64url.decode(jwk.x), privateKey: b64url.decode(jwk.d) };
