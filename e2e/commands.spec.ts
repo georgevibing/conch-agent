@@ -29,8 +29,11 @@ test('/clear leaves a line in the chat, and Undo puts the memory back', async ({
   // The line in the chat, and the toast that says what happened.
   await expect(cleared(page)).toBeVisible();
   await expect(page.getByText('Context cleared').first()).toBeVisible();
-  // Nothing was deleted: what was said is still there for the person.
-  await expect(page.getByText('What is a monad?', { exact: true })).toBeVisible();
+  // Nothing was deleted: what was said is still there for the person. (In the chat: until
+  // the chat is named, the sidebar's title reads the same.)
+  await expect(
+    page.getByRole('log', { name: 'Conversation' }).getByText('What is a monad?', { exact: true }),
+  ).toBeVisible();
 
   // Undo, from the line itself: the chat is as it was.
   await page.getByRole('button', { name: 'Undo clearing the context' }).click();
