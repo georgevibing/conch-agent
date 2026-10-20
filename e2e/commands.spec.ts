@@ -66,9 +66,11 @@ test('/goal says what the chat is for, keeps it through a clear, and lets it go'
   await expect(cleared(page)).toBeVisible();
   await expect(goal).toBeVisible();
 
-  // And a reload.
+  // And a reload. What was sent doesn't come back as a draft, so no command menu covers it.
   await page.reload();
   await expect(goal).toBeVisible();
+  await expect(composer(page)).toHaveValue('');
+  await expect(page.getByRole('listbox', { name: 'Commands' })).toHaveCount(0);
 
   // Clear goal, from the line's own popover: it's gone, above and in the chat.
   await goal.click();

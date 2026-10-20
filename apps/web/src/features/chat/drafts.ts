@@ -48,6 +48,26 @@ export const draftsApi = {
   },
 };
 
+/**
+ * Each chat's draft goes to Conch one at a time, in the order it was written: a
+ * later one never overtakes an earlier one still on its way, so the last word
+ * (often the empty box after a send) is the one Conch keeps.
+ */
+const inTurn = new Map<string, Promise<unknown>>();
+function putInTurn(key: string, body: PutDraftBody): Promise<DraftReply> {
+  const before = inTurn.get(key) ?? Promise.resolve();
+  const sending = before.then(
+    () => draftsApi.put(key, body),
+    () => draftsApi.put(key, body),
+  );
+  inTurn.set(key, sending);
+  const done = () => {
+    if (inTurn.get(key) === sending) inTurn.delete(key);
+  };
+  sending.then(done, done);
+  return sending;
+}
+
 /** The chats with something unsent, here or on another device, by their list key. */
 export function useDraftKeys(): ReadonlySet<string> {
   const { data } = useQuery({
@@ -112,8 +132,13 @@ export function useKeptDraft(
   },
 ) {
   const client = useQueryClient();
-  /** What Conch has for this key, as far as this tab knows. */
+  /**
+   * What Conch has for this key, as far as this tab knows, counting what's on its
+   * way: once a draft is sent, a change back to what Conch had before has to go too.
+   */
   const synced = useRef<string | undefined>(undefined);
+  /** The last draft sent for each key: an earlier one's reply doesn't speak for Conch. */
+  const lastSent = useRef(new Map<string, PutDraftBody>());
   const pending = useRef<{
     key: string;
     body: PutDraftBody;
@@ -127,6 +152,9 @@ export function useKeptDraft(
   const signature = sign(now);
 
   const sent = useEffectEvent((at: string, body: PutDraftBody, reply: DraftReply) => {
+    // A later draft for this chat is on its way, and its reply says what Conch has.
+    if (lastSent.current.get(at) !== body) return;
+    lastSent.current.delete(at);
     const gone = new Set(reply.missing);
     const ids = (body.attachments ?? []).filter((id) => !gone.has(id));
     const theirs = JSON.stringify([body.text, ids]);
@@ -141,11 +169,17 @@ export function useKeptDraft(
   });
 
   const push = useEffectEvent((at: string, body: PutDraftBody) => {
-    draftsApi.put(at, body).then(
+    lastSent.current.set(at, body);
+    // As good as Conch's from now on: going back to what it had before is a change to send.
+    if (at === key) synced.current = JSON.stringify([body.text, body.attachments ?? []]);
+    putInTurn(at, body).then(
       (reply) => sent(at, body, reply),
       () => {
         // It stays here, unsent, and goes with the next change or when Conch is back. (A chat
         // deleted elsewhere refuses it: its copy here is never shown again, and soon pushed out.)
+        if (lastSent.current.get(at) !== body) return;
+        lastSent.current.delete(at);
+        if (at === key) synced.current = undefined;
       },
     );
   });
@@ -169,7 +203,8 @@ export function useKeptDraft(
   const load = useEffectEvent((signal: AbortSignal) => {
     draftsApi.get(key, signal).then(
       (reply) => {
-        if (signal.aborted) return;
+        // What's on its way is newer than what Conch said it had.
+        if (signal.aborted || lastSent.current.has(key)) return;
         const mine = latest.current;
         const dirty = synced.current === undefined || sign(mine) !== synced.current;
         if (dirty) {
@@ -214,7 +249,8 @@ export function useKeptDraft(
   useEffect(() => {
     const current = latest.current;
     const same = signature === synced.current;
-    saveLocalDraft(key, { ...current, synced: same });
+    // This device's copy counts as Conch's once Conch has said so.
+    saveLocalDraft(key, { ...current, synced: same && !lastSent.current.has(key) });
     if (same) {
       // Typed back to what Conch has: nothing to send.
       if (pending.current?.key === key) {

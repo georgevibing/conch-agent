@@ -158,6 +158,64 @@ describe('Drafts', () => {
     expect(loadLocalDraft('c-a')).toBeUndefined();
   });
 
+  it('never brings back what was sent while its draft was still on its way to Conch', async () => {
+    const world = conch();
+    // Conch is slow to answer the first draft: the message is sent meanwhile.
+    const put = world.routes['PUT /api/conversations/c-a/draft'];
+    if (!put) throw new Error('no draft route');
+    let answer: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    let first = true;
+    world.routes['PUT /api/conversations/c-a/draft'] = async (body) => {
+      if (!first) return put(body);
+      first = false;
+      const reply = put(body);
+      await held;
+      return reply;
+    };
+    const { box } = await open('c-a', world.routes);
+    await userEvent.type(box, 'hello');
+    await waitFor(() => expect(world.puts).toHaveLength(1), { timeout: 3000 });
+
+    await userEvent.type(box, '{Enter}');
+    expect(box).toHaveValue('');
+    // The empty box waits its turn, so it can't land before the words it replaces.
+    expect(world.puts).toHaveLength(1);
+    answer();
+    await waitFor(() =>
+      expect(world.puts.at(-1)).toEqual({ key: 'c-a', body: { text: '', attachments: [] } }),
+    );
+    await waitFor(() => expect(world.kept.get('c-a')).toBeNull());
+    await waitFor(() => expect(loadLocalDraft('c-a')).toBeUndefined());
+  });
+
+  it('brings back a command it was keeping without opening the command menu over the chat', async () => {
+    // From this device's copy, as the page opens…
+    localStorage.setItem(
+      'conch.drafts',
+      JSON.stringify({ 'c-a': { text: '/clear', attachments: [], at: 1, synced: true } }),
+    );
+    const here = await open(
+      'c-a',
+      conch({ 'c-a': { text: '/clear', attachments: [], updatedAt: 5 } }).routes,
+    );
+    expect(here.box).toHaveValue('/clear');
+    expect(screen.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    here.unmount();
+    localStorage.clear();
+
+    // …and from Conch's, written on another device.
+    const { box } = await open(
+      'c-b',
+      conch({ 'c-b': { text: '/goal', attachments: [], updatedAt: 5 } }).routes,
+    );
+    await waitFor(() => expect(box).toHaveValue('/goal'));
+    expect(screen.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    // Writing in it opens the menu as ever.
+    await userEvent.type(box, '{Backspace}');
+    expect(await screen.findByRole('listbox', { name: 'Commands' })).toBeInTheDocument();
+  });
+
   it('says so on the card when a file was let go, and offers to take it off', async () => {
     const world = conch({ 'c-a': { text: 'with a picture', attachments: [], updatedAt: 5 } }, [
       'att_gone',

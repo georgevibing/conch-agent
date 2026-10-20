@@ -341,6 +341,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       useUi.getState().setDraftOptions(kept.options);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
   }, []);
+  // Set once the slash menu is made, below: a draft taken from Conch doesn't open it.
+  const quietMenu = useRef<() => void>(undefined);
   useKeptDraft(
     key,
     {
@@ -351,6 +353,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     {
       adopt: (theirs, missing) => {
         setDraft(theirs.text);
+        quietMenu.current?.();
         attachments.adopt(theirs.attachments, missing);
         if (key === NEW && theirs.options) useUi.getState().setDraftOptions(theirs.options);
       },
@@ -744,6 +747,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     background: (text) => sendAway(text),
     chooseFolder: () => chooseFolder(),
   });
+  useEffect(() => {
+    quietMenu.current = slash.quiet;
+  });
   // `@` brings in another agent (ADR 0112): its list takes the slash menu's place while it's open.
   const mentions = useMentions({ draft, setDraft });
   const menu = mentions.open ? mentions.menu : slash.menu;
@@ -896,7 +902,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       <ChatGoal
         goal={slash.goal}
         onEdit={() => {
-          setDraft(`/goal ${slash.goal ?? ''}`);
+          slash.onDraftChange(`/goal ${slash.goal ?? ''}`);
           composerRef.current?.focus();
         }}
         onClear={() =>

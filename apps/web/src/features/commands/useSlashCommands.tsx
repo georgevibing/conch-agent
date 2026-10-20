@@ -186,7 +186,9 @@ export function useSlashCommands(options: {
     title = '',
     name = 'Conch',
   } = options;
-  const [dismissed, setDismissed] = useState(false);
+  // A draft that comes back already holding a command (a reload, another device) leaves the
+  // menu shut until the person writes in it: it isn't something they just asked for.
+  const [dismissed, setDismissed] = useState(() => draft.startsWith('/'));
   const { data: custom = [] } = useCommands();
   const { data: skillList } = useSkills();
   const skills = usableSkills(skillList);
@@ -838,6 +840,8 @@ export function useSlashCommands(options: {
     compact,
     /** The chat's goal, or the one waiting to go with a new chat's first message. */
     goal,
+    /** The draft was put back, not typed (Conch's copy from another device): the menu stays shut. */
+    quiet: () => setDismissed(true),
     onDraftChange: (value: string) => {
       setDismissed(false);
       setDraft(value);
