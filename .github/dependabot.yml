@@ -19,12 +19,16 @@ updates:
     commit-message:
       prefix: ci
   # The relay's Node image (apps/relay/Dockerfile, ADR 0140) is pinned to a
-  # digest; this moves the digest with its tag.
+  # digest; this moves the digest with its tag. Its Node line follows Conch's
+  # (an LTS, `engines.node`), changed on purpose, so a new major isn't offered.
   - package-ecosystem: docker
     directory: /apps/relay
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: ci
