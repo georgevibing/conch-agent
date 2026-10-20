@@ -13,14 +13,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@conch/eslint-config": "workspace:*",
     "@conch/tsconfig": "workspace:*",
-    "eslint": "^9.39.0",
+    "eslint": "^9.39.5",
     "fast-check": "^4.10.2",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   }
 }

@@ -22,10 +22,10 @@
   "devDependencies": {
     "@conch/eslint-config": "workspace:*",
     "@conch/tsconfig": "workspace:*",
-    "@types/node": "^24.0.0",
-    "eslint": "^9.39.0",
-    "globals": "^17.12.0",
+    "@types/node": "^24.19.2",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   }
 }
