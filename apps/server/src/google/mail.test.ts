@@ -102,7 +102,8 @@ describe('readable mail and verified follow-up drafts', () => {
       subject: 'Cafe ☕',
       from: ['alice@example.com'],
       replyTo: ['reply@example.com'],
-      text: 'Meet at the café.\n',
+      // postal-mime 4.0.11 drops the line break that ends a plain part.
+      text: 'Meet at the café.',
       source: 'https://mail.google.com/mail/?authuser=person%40example.com#all/source1',
     });
     expect(JSON.stringify(mail.view)).not.toContain('evil.example');
