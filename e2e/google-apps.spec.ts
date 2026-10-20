@@ -106,10 +106,12 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
     .toBeLessThanOrEqual(1);
-  const sendBounds = await review.getByRole('button', { name: 'Send', exact: true }).boundingBox();
+  // Measured once the card has settled at the phone's width (it eases into place).
+  const send = review.getByRole('button', { name: 'Send', exact: true });
+  await expect.poll(async () => (await send.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const sendBounds = await send.boundingBox();
   expect(sendBounds).not.toBeNull();
   expect(sendBounds!.x + sendBounds!.width).toBeLessThanOrEqual(390);
-  expect(sendBounds!.height).toBeGreaterThanOrEqual(44);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText('Sent it to sam@example.org.')).toBeVisible();
   const sent = (await (await request.post(`${MAIL}/__control/sent`)).json()) as {

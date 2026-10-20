@@ -36,7 +36,7 @@ test('offline: a message waits, then goes by itself when the internet is back', 
   await expect(page.locator('[data-from="assistant"]').first()).toBeVisible({ timeout: 15_000 });
 
   // And it says, quietly, that it took care of it.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   const settings = page.getByRole('dialog');
   await settings.getByRole('tab', { name: 'Health' }).click();
   // What Conch fixed by itself is reassurance, at the foot of the page.

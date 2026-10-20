@@ -103,7 +103,7 @@ test('what the provider set up comes in by itself; what only it can use is in Se
   await expect(page.getByText('From your providers')).toHaveCount(0);
 
   // What only the provider can use is folded away in Settings → Providers.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   await page.getByRole('tab', { name: 'Providers' }).click();
   await page.getByRole('button', { name: /3 servers/ }).click();
   await expect(page.getByText('filesystem')).toBeVisible();

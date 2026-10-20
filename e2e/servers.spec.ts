@@ -24,7 +24,7 @@ test('adds a server by its address, then chats with its model', async ({ page })
   test.setTimeout(120_000);
   await page.goto('/');
   await expect(page.getByRole('textbox', { name: /Message/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   await page.getByRole('tab', { name: 'Providers' }).click();
 
   // The gallery has it with the models on this computer.

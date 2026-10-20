@@ -67,7 +67,7 @@ test('search across chats and find within one', async ({ page, request }) => {
   await expect(page.getByRole('option')).toContainText('Find “zzzz-nothing-matches” in this chat');
   await expectSteady();
   await box.fill('settings');
-  await expect(page.getByRole('option', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: /^Settings(?:,|$)/ })).toBeVisible();
   await expectSteady();
   await box.fill('');
   await expect(page.getByRole('option').first()).toBeVisible();

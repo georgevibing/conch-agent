@@ -87,7 +87,7 @@ test('Settings opens on General: the working folder and starting over, not under
   page,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   const settings = page.getByRole('dialog');
   await expect(settings.getByRole('tab', { name: 'General' })).toHaveAttribute(
     'aria-selected',
@@ -150,7 +150,7 @@ test('every mode in the chat, and Auto stops only for something serious (ADR 010
   ).toEqual(['git push --force origin main']);
 
   // Where new chats start is the composer's own (Make this my default): Settings has no Models.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   const settings = page.getByRole('dialog');
   await expect(settings.getByRole('tab', { name: 'Models' })).toHaveCount(0);
   for (const colorScheme of ['light', 'dark'] as const) {

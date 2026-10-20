@@ -66,7 +66,7 @@ test('make a provider with Conch, test it, add it, and chat with it', async ({ p
 
   // Settings → Providers shows it among yours, made by you (with the mock pinned, the gallery and
   // Add your own wait: the unit tests cover them).
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   await page.getByRole('tab', { name: 'Providers' }).click();
   await expect(page.getByRole('article', { name: 'Pretend AI' })).toContainText('Made by you');
 });

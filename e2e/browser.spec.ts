@@ -181,7 +181,7 @@ test('upload a file you attached, after saying yes to it', async ({ page }) => {
 
 test('settings show the browser it found, and changes stick', async ({ page, request }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click();
   await page.getByRole('tab', { name: 'Browser' }).click();
   await expect(page.getByRole('heading', { name: 'Browser', level: 3 })).toBeVisible();
   const cookies = page.getByRole('switch', { name: 'Decline cookie banners for you' });
