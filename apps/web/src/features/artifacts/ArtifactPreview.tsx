@@ -49,8 +49,13 @@ export function Diagram({
           startOnLoad: false,
           securityLevel: 'strict',
           theme: resolvedMode === 'dark' ? 'dark' : 'neutral',
+          // Mermaid 12 lays out with ELK, draws the `neo` look and widens short
+          // nodes to 120px by default; keep diagrams as they have always looked.
+          look: 'classic',
+          layout: 'dagre',
           htmlLabels: false,
-          flowchart: { htmlLabels: false },
+          flowchart: { htmlLabels: false, minNodeWidth: 0 },
+          state: { minNodeWidth: 0 },
           fontFamily: 'system-ui, sans-serif',
         });
         const { svg } = await mermaid.render(id, code);
