@@ -4,47 +4,28 @@ Every release, newest first. Conch shows the same notes in Settings → Health �
 
 ## [0.1.0-alpha.16](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-21)
 
+### New
 
-### Features
+- Set up the always-on relay from Settings, in one press and one paste
+- Each errand gets its own browser session
+- Find chats by meaning, not just words
+- Pair the always-on relay and drain it through the same door handlers
+- The public door takes a hook's socket, once it accepts the upgrade
+- An always-on relay that keeps Conch's webhooks sealed while it's off
 
-* **browser:** each errand gets its own browser session ([0d8d55e](https://github.com/georgevibing/conch-agent/commit/0d8d55e285fe8dee40b81c811cbf8d9922354c6a))
-* **browser:** show a task's own browser in the live view, and give a chat one ([0f82e1c](https://github.com/georgevibing/conch-agent/commit/0f82e1ccb302ca651af958492802f06ae388c02e))
-* **channels:** backups and the security checkup name a number that takes calls ([f4dba03](https://github.com/georgevibing/conch-agent/commit/f4dba03c67b46e144ecc957bcbfcd72f36529b21))
-* **channels:** call your assistant on the SMS number, and it rings you when an OK waits ([0c48a54](https://github.com/georgevibing/conch-agent/commit/0c48a54f18432cd12bc170b36889818d3511d1fe))
-* **channels:** the public door takes a hook's socket, once it accepts the upgrade ([70d3944](https://github.com/georgevibing/conch-agent/commit/70d3944318f65d95c63c130dfef1fc94f14264bc))
-* **protocol:** a browser session of its own per errand ([f52b739](https://github.com/georgevibing/conch-agent/commit/f52b739c83f98cce3ed40626a19b3671bc4ce4c1))
-* **protocol:** mark search results found by meaning ([3856bb2](https://github.com/georgevibing/conch-agent/commit/3856bb22b7655beaf13cb74bf92f3f06d86d8397))
-* **protocol:** settings for phone calls on the SMS number, and Twilio's call audio messages ([1c8e6d0](https://github.com/georgevibing/conch-agent/commit/1c8e6d022fb3df15e314f2ffe43ee14168df84e2))
-* **protocol:** the always-on relay's wire, and the door's third way in ([435ad78](https://github.com/georgevibing/conch-agent/commit/435ad78c262439b09e1683d6a4d353569e6551cf))
-* **relay:** an always-on relay that keeps Conch's webhooks sealed while it's off ([1ffbc7a](https://github.com/georgevibing/conch-agent/commit/1ffbc7a164ba6782051202e834cc9d87c6e39944))
-* **search:** find chats by meaning, not just words ([faa035b](https://github.com/georgevibing/conch-agent/commit/faa035b18122e8ed24bff278d17b3878505058a2))
-* **search:** tell the assistant which earlier chats were found by meaning ([961f9d3](https://github.com/georgevibing/conch-agent/commit/961f9d38eaac567bd08257133e1f17bb7fab7966))
-* **server:** pair the always-on relay and drain it through the same door handlers ([b33b8cc](https://github.com/georgevibing/conch-agent/commit/b33b8cc5532bfef1ca9498b759420f9b7d6d7cf3))
-* **web:** set up the always-on relay from Settings, in one press and one paste ([7c4511a](https://github.com/georgevibing/conch-agent/commit/7c4511a8bf2f42e04b605ec4580353e6f11e400b))
-* **web:** turn phone calls on from the SMS number's page, and find them with ⌘K ([5fa7a79](https://github.com/georgevibing/conch-agent/commit/5fa7a79f8acdb22caf99b2f877fd0555792bac48))
+### Better
 
+- Review requested Gmail sends at the resolved connector boundary in Auto
+- Keep sandbox recovery guidance within every model prompt budget
+- Honor Full trust for Claude Code host commands before guarding execution
 
-### Bug Fixes
+### Fixed
 
-* **channels:** let a call from your number in only with full attestation or the call passcode ([06e29ff](https://github.com/georgevibing/conch-agent/commit/06e29ffb5363e85c2aa6ae2981149ecb172e15d0))
-* **nacre:** plain-text excerpts, a no-break clock and the avatar frame ([19a25da](https://github.com/georgevibing/conch-agent/commit/19a25da19ca90e24e83ac337b3b503ce6aad156d))
-* **nacre:** swap a typed path's last part and drop recipe asides by index ([fd3970c](https://github.com/georgevibing/conch-agent/commit/fd3970cb629db624c3bb1ef3d429a41b51c123de))
-* **protocol:** read failures, headlines, base64 and model names by index ([e6f394f](https://github.com/georgevibing/conch-agent/commit/e6f394f09c51b0440a2d57c15c0077074e23fb86))
-* **push:** keep a device quiet only while Conch is in front of someone there ([0487d35](https://github.com/georgevibing/conch-agent/commit/0487d3552be56669532026074794306020b44fea))
-* recover stuck app sign-ins and resume chats after question answers ([3f928c1](https://github.com/georgevibing/conch-agent/commit/3f928c1a390853448c28937e73f8059c2ae0f647))
-* **relay:** carry the raw query so a kept call step's Twilio signature still checks out ([cd4080b](https://github.com/georgevibing/conch-agent/commit/cd4080b50b2e2ed9de51bcf7744d40e7b3710143))
-* **relay:** name WebCrypto's key type the same way in Node's types and the DOM's ([5313349](https://github.com/georgevibing/conch-agent/commit/531334919942bd1bac81f83fe70e9f1896d0bcfa))
-* **routines:** catch up on mail after Conch was off, and fold a backlog instead of dropping it ([0f0eb63](https://github.com/georgevibing/conch-agent/commit/0f0eb639a7726f856137b5fa2ad1656f939ca749))
-* **server:** back every gateway route with @fastify/rate-limit ([bc16d3c](https://github.com/georgevibing/conch-agent/commit/bc16d3c3e736eeea06ddb36e4270a1902a765798))
-* **server:** give the pretend providers' shared budget to @fastify/rate-limit ([98b6d4b](https://github.com/georgevibing/conch-agent/commit/98b6d4b32280966a6e71989ca4a9e9d0af44d3c6))
-* **server:** hold QQ's heartbeat between five seconds and two minutes ([3950bcf](https://github.com/georgevibing/conch-agent/commit/3950bcf0f4fe7bdbb2e590772267e6046866dc1a))
-* **server:** name found cloud accounts with SHA-256, not SHA-1 ([fd6d2bb](https://github.com/georgevibing/conch-agent/commit/fd6d2bbf1b52b6f9ec3edcb5568731932cbf217e))
-* **server:** play the card's own address, checked before connecting ([aede872](https://github.com/georgevibing/conch-agent/commit/aede872876d30110c0bb3550b55f012c5d0824c4))
-* **server:** read timeout's options, time zones and bearer tokens without backtracking ([0434096](https://github.com/georgevibing/conch-agent/commit/0434096d007849481fdcdf65eef53ef9320c3c4b))
-* **server:** seal model HTML and SVG properly, and close the other CodeQL text-cleanup alerts ([bc8848f](https://github.com/georgevibing/conch-agent/commit/bc8848fc9741ff43164fbc68fb5c31f880131b28))
-* **tasks:** let background tasks keep browsing after a browser step fails ([b8f6839](https://github.com/georgevibing/conch-agent/commit/b8f683968c03da8aedbd44650e64c5630050ca9d))
-* **web:** a sent message never comes back as a draft, and a restored command doesn't open the menu ([6c73e2f](https://github.com/georgevibing/conch-agent/commit/6c73e2fc49f887313028d496d6d1129424c99652))
-* **web:** set a call passcode where calls are turned on ([359938d](https://github.com/georgevibing/conch-agent/commit/359938d4099ad2fb9d6a44d0832e31cca1e2a51e))
+- Read timeout's options, time zones and bearer tokens without backtracking
+- Seal model HTML and SVG properly, and close the other CodeQL text-cleanup alerts
+- Back every gateway route with @fastify/rate-limit
+- Recover stuck app sign-ins and resume chats after question answers
+- And 7 fixes
 
 ## [0.1.0-alpha.15](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-18)
 
