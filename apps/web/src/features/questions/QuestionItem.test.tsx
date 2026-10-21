@@ -77,6 +77,26 @@ describe('a question in the chat (ADR 0060)', () => {
     expect(screen.queryByRole('group', { name: /asks/ })).toBeNull();
   });
 
+  it('an unanswered card stays usable after inference ends', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      [`POST /api/conversations/${chat}/questions/q1/answer`]: () => ({ ok: true }),
+    });
+    await asked();
+    act(() => {
+      push(6, { type: 'turn.completed', outcome: 'success' });
+      push(7, { type: 'status', status: 'idle' });
+    });
+    await userEvent.click(screen.getByRole('radio', { name: 'Phone call' }));
+    await waitFor(() =>
+      expect(
+        calls.some((call) => call.method === 'POST' && call.path.endsWith('/questions/q1/answer')),
+      ).toBe(true),
+    );
+    expect(await screen.findByRole('note')).toHaveTextContent('Phone call');
+  });
+
   it('opens again with one next step when the answer doesn’t arrive', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

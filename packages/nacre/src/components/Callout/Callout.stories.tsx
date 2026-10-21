@@ -123,3 +123,30 @@ export const Live: Story = {
     children: 'Trying to reconnect…',
   },
 };
+
+/** A stuck OAuth renewal still offers a fresh sign-in, including on a phone. */
+export const AppSignInRecovery: Story = {
+  render: () => (
+    <Callout
+      tone="danger"
+      title="mcp.cloudflare.com couldn’t renew your sign-in right now. Conch will try again."
+      live="polite"
+      action={
+        <Stack direction="row" gap={2} wrap>
+          <Button size="sm">Try again</Button>
+          <Button size="sm" variant="surface">
+            Sign in again
+          </Button>
+        </Stack>
+      }
+    >
+      <Stack gap={2}>
+        <span>Conch keeps trying by itself.</span>
+        <details>
+          <summary>What the app said</summary>
+          <code>POST https://mcp.cloudflare.com returned HTTP 500.</code>
+        </details>
+      </Stack>
+    </Callout>
+  ),
+};

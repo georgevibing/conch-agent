@@ -127,6 +127,13 @@ Anything typed in the composer while a question waits answers it as free text,
 so the person never has to find the card. **Skip** answers `null`, and the
 assistant is told to carry on with its best judgement and say what it assumed.
 
+A reply that finishes normally detaches the question from its tool waiter and
+keeps the card answerable. An answer received later starts a reply automatically.
+If another reply is running, its next tool boundary receives the answer through
+the shared host-update hook. If it ends without taking that update, one new reply
+gets it. Answers are validated and logged once before being delivered; another
+device cannot start duplicate work. See [ADR 0143](./0143-question-answers-resume-the-chat.md).
+
 Stopping the reply also answers `null`. So does a restart: the pending answer
 is lost with the turn, and the log says it was skipped. Unattended runs get no
 `ask`: the tool tells the model nobody is there and to pick the sensible

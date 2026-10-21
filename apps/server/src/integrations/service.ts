@@ -1273,6 +1273,7 @@ export class IntegrationService {
       return {
         state: 'error',
         message: error.message,
+        detail: error.detail,
         action: 'retry',
         checkedAt: Date.now(),
         okAt: item.health.okAt,

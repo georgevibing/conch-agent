@@ -101,6 +101,8 @@ The switch at the top turns an app off; **Disconnect** forgets its sign-in. To r
 
 Conch keeps sign-ins fresh. One that needs you moves to the top of **Connected** with its fix (**Sign in again**, **Paste a new token**), and a chat that needed it says so.
 
+If renewal fails, Conch keeps your sign-in and retries. Open the app’s page for **What the app said**, including the HTTP status when available. **Try again** checks the connection now; **Sign in again** opens a fresh sign-in and looks up the service’s current sign-in addresses.
+
 ## The gallery
 
 <!-- conch:apps -->

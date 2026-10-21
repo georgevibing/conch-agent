@@ -155,7 +155,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   its limit or the internet goes, the next one carries on. [Providers](./apps/docs/content/providers)
 - **It says what it is doing, in plain words.** Each run of work is one line, like
   "Ran the tests · 241 passed", that opens into its steps. Ask **Why?** about any of
-  them. [Your chats](./apps/docs/content/features/chats.md)
+  them. Answers on question cards carry on the chat, even after a reply has ended.
+  [Your chats](./apps/docs/content/features/chats.md)
 - **It does not give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done.
   [Working on a problem](./apps/docs/content/features/working-on-a-problem.md)
@@ -222,7 +223,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   allow, one at a time, with Stop one press away.
   [Use your apps](./apps/docs/content/features/use-your-apps.md)
 - **One gallery for every model.** Gmail, Google Calendar and Drive, Slack, GitHub,
-  Notion, Linear and more. Choose Off, Read or Read & write for each.
+  Notion, Linear and more. Choose Off, Read or Read & write for each. If sign-in
+  renewal gets stuck, retry or start a fresh sign-in from the app’s page.
   [Apps](./apps/docs/content/features/apps.md)
 - **Your other tools.** Claude Desktop, Cursor and VS Code can use your memory,
   skills, apps and browser. [Other apps](./apps/docs/content/features/other-apps.md)

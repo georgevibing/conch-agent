@@ -12,26 +12,25 @@ export function useFix() {
   const check = useCheckIntegration();
   const update = useUpdateIntegration();
   const navigate = useNavigate();
+  const reconnect = (integration: Integration) =>
+    void signIn((display) => integrationsApi.connect(integration.id, display)).then((result) => {
+      const health = result?.integration.health;
+      if (health?.state === 'error' && health.message) toast.error(health.message);
+    });
   return {
+    reconnect,
     pending: check.isPending ? check.variables : undefined,
     fix(integration: Integration) {
       // Found and waiting: signing in is the fix, also when a sign-in was left
       // half-way (a window closed, a page that never came back) — start it again.
-      if (awaitsSignIn(integration) && integration.auth === 'oauth')
-        return void signIn((display) => integrationsApi.connect(integration.id, display)).then(
-          (result) => {
-            const health = result?.integration.health;
-            if (health?.state === 'error' && health.message) toast.error(health.message);
-          },
-        );
+      if (awaitsSignIn(integration) && integration.auth === 'oauth') return reconnect(integration);
       switch (integration.health.action) {
         case 'reconnect':
           // Gmail, Calendar, Drive, Slack: their page has the fix (a new app password,
           // Google's sign-in, Slack's dialog).
           if (integration.transport.type === 'host')
             return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });
-          if (integration.auth === 'oauth')
-            return void signIn((display) => integrationsApi.connect(integration.id, display));
+          if (integration.auth === 'oauth') return reconnect(integration);
           return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });
         case 'edit':
           return void navigate(`/apps/${integration.id}`, { state: { focus: 'token' } });

@@ -121,7 +121,7 @@ function Detail({
   const update = useUpdateIntegration();
   const check = useCheckIntegration();
   const remove = useRemoveIntegration();
-  const { fix } = useFix();
+  const { fix, reconnect: signInAgain } = useFix();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const assistant = useAssistantName();
@@ -197,15 +197,25 @@ function Detail({
           action={
             label &&
             !health.need && (
-              <Button
-                size="sm"
-                onClick={() =>
-                  slack && health.action === 'reconnect' ? setReconnect(true) : fix(integration)
-                }
-                loading={check.isPending}
-              >
-                {label}
-              </Button>
+              <Stack direction="row" gap={2} wrap>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    slack && health.action === 'reconnect' ? setReconnect(true) : fix(integration)
+                  }
+                  loading={check.isPending}
+                >
+                  {label}
+                </Button>
+                {integration.auth === 'oauth' &&
+                  integration.transport.type === 'http' &&
+                  integration.enabled &&
+                  health.action === 'retry' && (
+                    <Button size="sm" variant="surface" onClick={() => signInAgain(integration)}>
+                      Sign in again
+                    </Button>
+                  )}
+              </Stack>
             )
           }
         >
@@ -219,7 +229,7 @@ function Detail({
             <Stack gap={2}>
               {health.okAt && <span>It last worked {relativeTime(health.okAt)}.</span>}
               {health.retryAt && health.state === 'error' && (
-                <span>Conch keeps trying by itself — there’s nothing you need to do.</span>
+                <span>Conch keeps trying by itself.</span>
               )}
               {health.detail && (
                 <details className={styles.detail}>

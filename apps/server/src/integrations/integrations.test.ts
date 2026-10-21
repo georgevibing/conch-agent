@@ -185,7 +185,8 @@ describe('OAuth integrations', () => {
     try {
       const checked = await service.check(notion.id);
       expect(checked?.health).toMatchObject({ state: 'error', action: 'retry' });
-      expect(checked?.health.message).toMatch(/sign-in wasn’t renewed yet/);
+      expect(checked?.health.message).toMatch(/couldn’t renew your sign-in/);
+      expect(checked?.health.detail).toBe(`POST ${vendor.base} returned HTTP 503.`);
       await vi.waitFor(async () =>
         expect((await service.get(notion.id)).health.retryAt).toBeDefined(),
       );
@@ -199,6 +200,106 @@ describe('OAuth integrations', () => {
     // The note is written just after the health: wait for it, not for the state.
     await vi.waitFor(() => expect(notes).toContain('Notion is working again'));
     service.stop();
+  });
+
+  it('starts a fresh sign-in using current endpoints instead of stale discovery', async () => {
+    const { service } = await setup();
+    const notion = await connectNotion(service);
+    await service.store.updateSecrets(notion.id, (secrets) => {
+      const oauth = secrets.oauth;
+      if (!oauth?.discovery) throw new Error('Expected saved discovery after sign-in');
+      const discovery = oauth.discovery;
+      return {
+        ...secrets,
+        oauth: {
+          ...oauth,
+          discovery: {
+            ...discovery,
+            authorizationServerMetadata: {
+              ...(discovery.authorizationServerMetadata as Record<string, unknown>),
+              authorization_endpoint: `${vendor.base}/old-authorize`,
+              token_endpoint: `${vendor.base}/old-token`,
+            },
+          },
+        },
+      };
+    });
+    const restarted = await service.connect(notion.id, REDIRECT);
+    expect(new URL(restarted.authorizeUrl ?? '').pathname).toBe('/authorize');
+    const { state, code } = await approve(restarted.authorizeUrl ?? '');
+    await service.finishOAuth(state, code);
+    expect((await service.get(notion.id)).health.state).toBe('ok');
+  });
+
+  it.each(['AbortError', 'TimeoutError'])(
+    'keeps credentials and safe diagnostics on %s during renewal',
+    async (name) => {
+      let timeout = false;
+      const { service } = await setup({
+        fetchFor: () => async (input, init) => {
+          if (timeout && String(input).endsWith('/token'))
+            throw new DOMException('secret-from-network-error', name);
+          return fetch(input, init);
+        },
+      });
+      const notion = await connectNotion(service);
+      const before = await service.store.secrets(notion.id);
+      vendor.expireAll();
+      timeout = true;
+      const checked = await service.check(notion.id);
+      expect(checked?.health).toMatchObject({ state: 'error', action: 'retry' });
+      expect(checked?.health.detail).toBe(`POST ${vendor.base} did not complete.`);
+      expect(JSON.stringify(checked?.health)).not.toContain('secret-from-network-error');
+      expect((await service.store.secrets(notion.id)).oauth?.tokens).toEqual(before.oauth?.tokens);
+      timeout = false;
+      expect((await service.check(notion.id))?.health.state).toBe('ok');
+    },
+  );
+
+  it('retries rate-limited renewal without exposing response bodies or endpoint secrets', async () => {
+    let limited = false;
+    const { service } = await setup({
+      fetchFor: () => async (input, init) => {
+        if (limited && new URL(String(input)).pathname.startsWith('/token'))
+          return Response.json(
+            { error: 'temporarily_unavailable', error_description: 'secret-in-body' },
+            { status: 429 },
+          );
+        return fetch(input, init);
+      },
+    });
+    const notion = await connectNotion(service);
+    await service.store.updateSecrets(notion.id, (secrets) => {
+      const oauth = secrets.oauth;
+      if (!oauth?.discovery) throw new Error('Expected saved discovery after sign-in');
+      const discovery = oauth.discovery;
+      return {
+        ...secrets,
+        oauth: {
+          ...oauth,
+          discovery: {
+            ...discovery,
+            authorizationServerMetadata: {
+              ...(discovery.authorizationServerMetadata as Record<string, unknown>),
+              token_endpoint: `${vendor.base}/token/secret-path?key=secret-query#secret-fragment`,
+            },
+          },
+        },
+      };
+    });
+    const before = await service.store.secrets(notion.id);
+    vendor.expireAll();
+    limited = true;
+    const checked = await service.check(notion.id);
+    expect(checked?.health).toMatchObject({
+      state: 'error',
+      action: 'retry',
+      detail: `POST ${vendor.base} returned HTTP 429.`,
+    });
+    expect(JSON.stringify(checked?.health)).not.toMatch(
+      /secret-(body|path|query|fragment)|secret-in-body/,
+    );
+    expect((await service.store.secrets(notion.id)).oauth?.tokens).toEqual(before.oauth?.tokens);
   });
 
   it('notices a revoked sign-in, leaves it out of turns and tells the agent', async () => {

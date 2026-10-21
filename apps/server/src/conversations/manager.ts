@@ -584,6 +584,8 @@ export interface ToolContext {
   model?: string;
   /** The chat waits for the person (a question, ADR 0060), or carries on; saved, so a restart knows. */
   waitingForYou?: (waiting: boolean) => Promise<void>;
+  /** A late question answer resumes its chat or steers the reply now running there. */
+  questionTurn?: { active: () => boolean; resume: (words: string) => void };
   /** This turn's work folder (a task's own, or the chat's). */
   workspace?: () => Promise<string>;
   /**
@@ -676,6 +678,8 @@ interface Live {
    * ends well, the model switched to answers next, with these words.
    */
   carry?: { engine: EngineId; model?: string; prompt: string };
+  /** Answers whose original tool waiter has ended; consumed once at a boundary or next reply. */
+  questionAnswers?: string[];
   /**
    * The turn running now, for your other chats to know about (ADR 0134): its
    * folder, when it began, and where its events start. Gone when it ends.
@@ -1580,6 +1584,7 @@ export class ConversationManager {
     // Nothing saves it again, so a late card or a save loaded just before can't bring it back.
     this.#gone.add(id);
     live?.abort?.abort();
+    this.deps.questions?.close(id);
     live?.titling?.abort();
     this.#live.delete(id);
     // What was attached here goes too, unless another conversation sent it as well.
@@ -1664,7 +1669,7 @@ export class ConversationManager {
       await this.interrupt(existing.record.id);
     if (existing) await this.#afterStop(existing);
     // A question waits (ADR 0060): what's typed answers it, as a message of yours.
-    if (existing?.abort && this.deps.questions?.waiting(existing.record.id))
+    if (existing && this.deps.questions?.waiting(existing.record.id))
       return this.#answerTyped(existing, input);
     if (existing?.record.origin?.kind === 'task')
       throw new ConversationError(
@@ -2339,6 +2344,8 @@ export class ConversationManager {
   async interrupt(id: string) {
     this.deps.stopProcesses?.(id);
     const live = await this.#get(id);
+    this.deps.questions?.close(id);
+    live.questionAnswers = undefined;
     // Stop pressed right after sending, before the turn began (or while a
     // stopped one winds down): it stops as it starts.
     if (live.abort && !live.abort.signal.aborted) live.abort.abort();
@@ -2604,6 +2611,35 @@ export class ConversationManager {
     this.deps.questions?.typed(live.record.id, input.text);
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
     return summary(live.record);
+  }
+
+  /** The card's answer belongs to this chat, even if its original reply has ended. */
+  #questionAnswered(live: Live, words: string) {
+    (live.questionAnswers ??= []).push(words);
+    if (live.starting)
+      live.starting.push(() => {
+        if (!live.abort) this.#resumeQuestions(live);
+      });
+    else if (!live.abort) this.#resumeQuestions(live);
+  }
+
+  #takeQuestionAnswers(live: Live): string | undefined {
+    const words = live.questionAnswers?.join('\n\n');
+    live.questionAnswers = undefined;
+    return words;
+  }
+
+  #resumeQuestions(live: Live) {
+    const words = this.#takeQuestionAnswers(live);
+    if (!words) return;
+    void this.wake(live.record.id, words).catch(() => {
+      this.#append(live, {
+        type: 'notice',
+        code: 'question-resume-failed',
+        message: 'Your answer was saved, but the reply couldn’t start. Send a message to carry on.',
+      });
+      void this.#persist(live).catch(() => undefined);
+    });
   }
 
   /** A question waits for the person, or was answered: the chat's status says so. */
@@ -3173,6 +3209,7 @@ export class ConversationManager {
     model?: string,
   ): Promise<TurnResult> {
     const abort = live.abort ?? new AbortController();
+    let questionTurnOpen = true;
     const conversationId = live.record.id;
     const settings = await this.deps.settings.get();
     // Someone else in a group (ADR 0075): words only, and nothing of yours to tell.
@@ -3740,7 +3777,14 @@ export class ConversationManager {
             unattended: Boolean(extras || live.record.origin),
             ...(live.record.origin && { origin: live.record.origin }),
             ...(resolved.model && { model: resolved.model }),
-            waitingForYou: (waiting) => this.#waitingForYou(live, waiting),
+            waitingForYou: (waiting) =>
+              questionTurnOpen && live.abort === abort
+                ? this.#waitingForYou(live, waiting)
+                : this.#persist(live),
+            questionTurn: {
+              active: () => questionTurnOpen && live.abort === abort,
+              resume: (words) => this.#questionAnswered(live, words),
+            },
             untrusted: (besides) => {
               const tainted = settings.preferences.checkAfterReading
                 ? this.#tainted(live).filter(
@@ -4587,10 +4631,10 @@ export class ConversationManager {
         tools: pace.tools,
         budget: pace.budget,
         wrapTool: extras?.wrapTool,
-        resourceFeedback:
-          feedback || elsewhere
-            ? () => [feedback?.take(), elsewhere?.take()].filter(Boolean).join('\n\n') || undefined
-            : undefined,
+        resourceFeedback: () =>
+          [feedback?.take(), elsewhere?.take(), this.#takeQuestionAnswers(live)]
+            .filter(Boolean)
+            .join('\n\n') || undefined,
         options: resolved,
         onModeChange: (listener) => modeListeners.push(listener),
         mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
@@ -4827,8 +4871,11 @@ export class ConversationManager {
     } finally {
       narrator.close();
       if (live.setTurnMode === setTurnMode) live.setTurnMode = undefined;
-      // A question still waiting can't be answered now: it's skipped (ADR 0060).
-      this.deps.questions?.close(live.record.id);
+      questionTurnOpen = false;
+      // A natural finish can race a detached tool waiter. Keep the card answerable;
+      // Stop still skips it and never starts another reply.
+      if (abort.signal.aborted) this.deps.questions?.close(live.record.id);
+      else this.deps.questions?.detach(live.record.id, abort.signal);
       // Whatever else the turn changed, kept before the turn closes.
       await tracker?.end().catch(() => undefined);
       // The closing events are persisted before they're broadcast, so a client
@@ -4991,6 +5038,8 @@ export class ConversationManager {
       this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
       live.extras?.onStatus?.(status);
       live.extras = undefined;
+      if (abort.signal.aborted) live.questionAnswers = undefined;
+      else if (!handedOn && !capped) this.#resumeQuestions(live);
     }
     return {
       outcome,

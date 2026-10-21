@@ -10,7 +10,7 @@ import { ConversationStore } from '../conversations/store';
 import { hostToolText, type Engine, type EngineEvent, type TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { NOBODY, ONE_AT_A_TIME, QuestionDesk, QuestionError, SKIPPED } from './desk';
+import { NOBODY, ONE_AT_A_TIME, QuestionDesk, QuestionError, SKIPPED, STILL_WAITING } from './desk';
 import { questionTools } from './tools';
 
 const QUESTION = {
@@ -43,6 +43,10 @@ class AskingEngine implements Engine {
   readonly integrations = { mode: 'bridge' as const };
   readonly told: string[] = [];
   readonly turns: TurnInput[] = [];
+  detached = false;
+  hold?: Promise<void>;
+  takeFeedback = true;
+  readonly feedback: string[] = [];
 
   async detect(): Promise<EngineStatus> {
     return {
@@ -71,13 +75,25 @@ class AskingEngine implements Engine {
     const ask = input.tools.find((t) => t.name === 'ask');
     if (/book/.test(input.prompt) && ask) {
       yield { type: 'tool-start', toolUseId: 't1', name: 'mcp__conch__ask', input: QUESTION };
-      const said = hostToolText(await ask.run(QUESTION as never));
+      const pending = ask.run(QUESTION as never);
+      if (this.detached) {
+        void pending.then((said) => this.told.push(hostToolText(said)));
+        yield { type: 'text', messageId: 'early', delta: 'Answer the card when ready.' };
+        yield { type: 'done', outcome: 'success' };
+        return;
+      }
+      const said = hostToolText(await pending);
       this.told.push(said);
       yield { type: 'tool-end', toolUseId: 't1', status: 'success', output: said };
       if (input.signal.aborted) {
         yield { type: 'done', outcome: 'interrupted' };
         return;
       }
+    }
+    if (this.hold) await this.hold;
+    if (this.takeFeedback) {
+      const note = input.resourceFeedback?.();
+      if (note) this.feedback.push(note);
     }
     yield { type: 'text', messageId: `m${this.turns.length}`, delta: 'Done.' };
     yield { type: 'done', outcome: 'success' };
@@ -153,6 +169,112 @@ describe('ask: questions answered with a tap (ADR 0060)', () => {
     // The chat went back to running once answered, then finished.
     const statuses = events.flatMap((e) => (e.type === 'status' ? [e.status] : []));
     expect(statuses).toEqual(['running', 'awaiting-permission', 'running', 'idle']);
+  });
+
+  it('an answer after inference ends starts exactly one new reply with the chosen values', async () => {
+    const { manager, engine, questions } = await setup();
+    engine.detached = true;
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    expect(questions.waiting(id)?.questionId).toBe(question.questionId);
+    expect(engine.told).toEqual([STILL_WAITING]);
+    questions.answer(id, question.questionId, {
+      values: { when: '2026-10-09T10:00', how: 'phone' },
+      text: 'forged label',
+    });
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    await finished(manager, id);
+    expect(engine.turns[1]?.prompt).toContain('Phone call');
+    expect(engine.turns[1]?.prompt).toContain('"how":"phone"');
+    expect(engine.turns[1]?.prompt).not.toContain('forged label');
+    expect(() => questions.answer(id, question.questionId, null)).toThrow(/already been answered/);
+    expect(engine.turns).toHaveLength(2);
+  });
+
+  it('typed answers also resume an idle chat with an open question', async () => {
+    const { manager, engine } = await setup();
+    engine.detached = true;
+    const { id } = await asked(manager);
+    await finished(manager, id);
+    await manager.send({ conversationId: id, clientMessageId: 'u2', text: 'Thursday, by phone' });
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    await finished(manager, id);
+    expect(engine.turns[1]?.prompt).toContain('Thursday, by phone');
+    expect((await log(manager, id)).filter((e) => e.type === 'question.answered')).toHaveLength(1);
+  });
+
+  it.each([true, false])(
+    'a late answer during another reply is delivered once (boundary: %s)',
+    async (boundary) => {
+      const { manager, engine, questions } = await setup();
+      engine.detached = true;
+      const { id, question } = await asked(manager);
+      await finished(manager, id);
+      let release = () => {};
+      engine.hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      engine.takeFeedback = boundary;
+      await manager.wake(id, 'Keep planning while waiting');
+      await until(async () => (engine.turns.length === 2 ? true : undefined));
+      questions.answer(id, question.questionId, {
+        values: { when: '2026-10-09T10:00', how: 'video' },
+        text: 'x',
+      });
+      expect(engine.turns).toHaveLength(2);
+      release();
+      await until(async () => {
+        if (boundary)
+          return engine.feedback.some((text) => text.includes('Video call')) ? true : undefined;
+        return engine.turns.length === 3 ? true : undefined;
+      });
+      await finished(manager, id);
+      expect(engine.turns).toHaveLength(boundary ? 2 : 3);
+      if (!boundary) expect(engine.turns[2]?.prompt).toContain('Video call');
+      expect((await log(manager, id)).filter((e) => e.type === 'question.answered')).toHaveLength(
+        1,
+      );
+    },
+  );
+
+  it('skipping an idle question resumes with an explicit skipped result', async () => {
+    const { manager, engine, questions } = await setup();
+    engine.detached = true;
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    questions.answer(id, question.questionId, null);
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    await finished(manager, id);
+    expect(engine.turns[1]?.prompt).toContain(SKIPPED);
+  });
+
+  it('stopping an idle chat cancels its detached question without starting work', async () => {
+    const { manager, engine, questions } = await setup();
+    engine.detached = true;
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    await manager.interrupt(id);
+    expect(questions.waiting(id)).toBeUndefined();
+    expect(() => questions.answer(id, question.questionId, null)).toThrow(/already been answered/);
+    expect(engine.turns).toHaveLength(1);
+  });
+
+  it('a question tool that arrives after its turn closed can still wake the chat', async () => {
+    const { manager, engine, questions } = await setup();
+    const { id } = await manager.send({ clientMessageId: 'u1', text: 'hello' });
+    await finished(manager, id);
+    const ask = engine.turns[0]?.tools.find((tool) => tool.name === 'ask');
+    expect(ask).toBeDefined();
+    await expect(ask?.run(QUESTION as never)).resolves.toBe(STILL_WAITING);
+    const question = questions.waiting(id);
+    expect(question).toBeDefined();
+    questions.answer(id, question?.questionId ?? '', {
+      values: { when: '2026-10-09T10:00', how: 'phone' },
+      text: 'x',
+    });
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    await finished(manager, id);
+    expect(engine.turns[1]?.prompt).toContain('Phone call');
   });
 
   it('refuses an answer that doesn’t fit, and keeps waiting', async () => {

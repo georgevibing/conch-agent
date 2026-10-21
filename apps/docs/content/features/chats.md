@@ -162,7 +162,7 @@ When your assistant needs a choice, it asks with a card and the reply waits.
 - **Skip** lets your assistant carry on with its best guess and say what it assumed.
 - On a keyboard, <kbd>1</kbd> to <kbd>6</kbd> pick and <kbd>enter</kbd> sends.
 
-Once answered, the card folds to one line. Stopping the reply, or Conch restarting, skips the question.
+Once answered, the card folds to one line. If the reply has ended, your answer starts it again. If another reply is running, it reads your answer at its next step, or carries on with it once it finishes. Stopping the reply, or Conch restarting, skips a question still waiting.
 
 A waiting question shows in the sidebar and, with [notifications](../start/phone.md) on, on your phone. In **Talk**, your assistant reads it out and you answer aloud.
 

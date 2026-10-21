@@ -886,7 +886,7 @@ export const Transcript = memo(function Transcript({
           item={block.item}
           conversationId={conversationId}
           name={name}
-          waiting={running}
+          waiting={block.item.answer === undefined}
         />
       )}
       {block.item?.kind === 'permission' &&

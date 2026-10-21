@@ -160,6 +160,47 @@ describe('Integrations page', () => {
     expect(screen.getByText(/1 tool · not used yet/)).toBeInTheDocument();
   });
 
+  it('offers a fresh OAuth sign-in while renewal retries, and shows failures to start it', async () => {
+    const popup = { closed: false, location: { href: '' }, focus: vi.fn(), close: vi.fn() };
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => popup),
+    );
+    const broken = integration({
+      health: {
+        state: 'error',
+        action: 'retry',
+        okAt: 1,
+        retryAt: Date.now() + 60_000,
+        message: 'Sign-in renewal failed.',
+        detail: 'POST https://mcp.notion.com returned HTTP 500.',
+      },
+    });
+    const calls = mockFetch({
+      'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [broken] }),
+      'POST /api/integrations/int_1/connect': () => ({
+        integration: integration({
+          health: {
+            state: 'error',
+            action: 'reconnect',
+            message: 'Couldn’t start signing in to Notion.',
+          },
+        }),
+      }),
+    });
+    renderApp(<IntegrationDetailView integrationId="int_1" />, { route: '/apps/int_1' });
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByText('POST https://mcp.notion.com returned HTTP 500.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+    await waitFor(() => expect(popup.close).toHaveBeenCalled());
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual([
+      '/api/integrations/int_1/connect?display=popup',
+    ]);
+    expect(
+      (await screen.findAllByText('Couldn’t start signing in to Notion.')).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('connects with a token, checking its shape first', async () => {
     const calls = mockFetch({
       'GET /api/integrations': () => ({ catalog, providers: [provider], integrations: [] }),

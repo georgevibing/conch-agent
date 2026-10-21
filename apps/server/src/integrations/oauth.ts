@@ -27,7 +27,14 @@ export class NeedsAuthError extends Error {}
  * a timeout, a 5xx) — not because the sign-in is bad. Nobody needs to sign in
  * again: Conch tries later by itself.
  */
-export class TransientAuthError extends Error {}
+export class TransientAuthError extends Error {
+  constructor(
+    message: string,
+    readonly detail: string,
+  ) {
+    super(message);
+  }
+}
 
 type Fetch = typeof fetch;
 
@@ -36,22 +43,34 @@ type Fetch = typeof fetch;
  * a refresh that failed for any reason as "start a new sign-in", so without
  * this a moment offline would log you out.
  */
-function watchedFetch(base: Fetch): { fetch: Fetch; trouble: () => string | undefined } {
-  let trouble: string | undefined;
-  const host = (input: Parameters<Fetch>[0]) => {
-    try {
-      return new URL(input instanceof Request ? input.url : String(input)).host;
-    } catch {
-      return 'the service';
-    }
-  };
+function watchedFetch(base: Fetch): {
+  fetch: Fetch;
+  trouble: () => { message: string; detail: string } | undefined;
+} {
+  let trouble: { message: string; detail: string } | undefined;
   const watched: Fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    // Only origin and a known method: paths, queries, bodies and remote error
+    // messages can contain credentials. Never copy them into health details.
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
+    const verb = method.toUpperCase() === 'POST' ? 'POST' : 'GET';
+    const request = `${verb} ${url.origin}`;
     try {
       const response = await base(input, init);
-      if (response.status >= 500) trouble ??= `${host(input)} is having problems right now`;
+      if (response.status >= 500 || response.status === 429)
+        trouble ??= {
+          message:
+            response.status === 429
+              ? `${url.host} is asking Conch to slow down`
+              : `${url.host} couldn’t renew your sign-in right now`,
+          detail: `${request} returned HTTP ${response.status}.`,
+        };
       return response;
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') trouble ??= `Couldn’t reach ${host(input)}`;
+      trouble ??= {
+        message: `Couldn’t reach ${url.host}`,
+        detail: `${request} did not complete.`,
+      };
       throw error;
     }
   };
@@ -229,6 +248,9 @@ export class OAuthFlows {
     // A fresh sign-in replaces old tokens; the SDK would otherwise try to refresh them.
     delete oauth.tokens;
     delete oauth.expiresAt;
+    // An explicit sign-in is also the recovery path for stale discovery. The
+    // SDK still binds saved clients to the discovered authorization server.
+    delete oauth.discovery;
     const provider = new StoredProvider(
       this.store,
       input.integrationId,
@@ -337,7 +359,8 @@ export class OAuthFlows {
       result = await auth(provider, { serverUrl, fetchFn: watched.fetch });
     } catch (error) {
       const trouble = watched.trouble();
-      if (trouble) throw new TransientAuthError(`${trouble}, so your sign-in wasn’t renewed yet.`);
+      if (trouble)
+        throw new TransientAuthError(trouble.message + '. Conch will try again.', trouble.detail);
       throw new NeedsAuthError(`Couldn’t renew your sign-in: ${(error as Error).message}`);
     }
     const renewed = provider.tokens()?.access_token;
@@ -345,7 +368,8 @@ export class OAuthFlows {
     // The SDK gave up and wanted a fresh sign-in; if that's only because the
     // service was unreachable, the sign-in itself is still good.
     const trouble = watched.trouble();
-    if (trouble) throw new TransientAuthError(`${trouble}, so your sign-in wasn’t renewed yet.`);
+    if (trouble)
+      throw new TransientAuthError(trouble.message + '. Conch will try again.', trouble.detail);
     throw new NeedsAuthError('Your sign-in has expired.');
   }
 

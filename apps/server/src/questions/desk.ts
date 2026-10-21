@@ -3,8 +3,8 @@
  * `ask` tool; the chat shows a `Question` card and waits for you. The answer
  * comes from the card (`POST …/questions/:questionId/answer`), or from
  * whatever you type in the message box while it waits. Skipping, stopping
- * the reply and restarting Conch all answer `null`, and the assistant carries
- * on with its best judgement.
+ * the reply and restarting Conch all answer `null`. A normal finish leaves
+ * the card answerable; a late answer resumes the chat through its turn callback.
  *
  * One question waits per chat at a time. Nobody is asked anything in a chat
  * nobody is watching (a routine, a task, a chat app's conversation).
@@ -46,12 +46,16 @@ export const SKIPPED =
   'They skipped the question. Carry on with your best judgement, and say in a few words what you assumed.';
 export const NOBODY =
   'Nobody is here to answer questions in this chat. Choose the sensible default, carry on, and say which you chose.';
+export const STILL_WAITING =
+  'The question is still waiting for the user. Do not assume an answer; Conch will carry on when they answer.';
 export const ONE_AT_A_TIME =
   'A question is already waiting for an answer in this chat. Wait for that answer before asking another.';
 
 interface Pending {
   question: Question;
-  settle: (answer: QuestionAnswer | null) => void;
+  settle: (answer: QuestionAnswer | null, cancelled?: boolean) => void;
+  signal: AbortSignal;
+  detach: () => void;
 }
 
 /** Remembered answers per chat, so a second device pressing late is told it's done. */
@@ -81,7 +85,8 @@ export class QuestionDesk {
       fields: asked.fields,
     };
     return new Promise<string>((resolve) => {
-      const settle = (answer: QuestionAnswer | null) => {
+      let detached = ctx.questionTurn?.active() === false;
+      const settle = (answer: QuestionAnswer | null, cancelled = false) => {
         if (this.#pending.get(ctx.conversationId) !== entry) return;
         this.#pending.delete(ctx.conversationId);
         ctx.signal.removeEventListener('abort', stop);
@@ -89,15 +94,29 @@ export class QuestionDesk {
         this.#answered.set(ctx.conversationId, [...seen, question.questionId].slice(-REMEMBER));
         ctx.append({ type: 'question.answered', questionId: question.questionId, answer });
         // Stopped: the turn is ending, so it isn't "running" again for a moment.
-        if (!ctx.signal.aborted) void ctx.waitingForYou?.(false);
-        resolve(answer ? answeredWords(question, answer) : SKIPPED);
+        const words = answer ? answeredWords(question, answer) : SKIPPED;
+        if (!cancelled && !ctx.signal.aborted) {
+          if (detached || ctx.questionTurn?.active() === false) ctx.questionTurn?.resume(words);
+          else void ctx.waitingForYou?.(false);
+        }
+        resolve(words);
       };
-      const entry: Pending = { question, settle };
-      const stop = () => settle(null);
+      const stop = () => settle(null, true);
+      const entry: Pending = {
+        question,
+        settle,
+        signal: ctx.signal,
+        detach: () => {
+          detached = true;
+          ctx.signal.removeEventListener('abort', stop);
+          resolve(STILL_WAITING);
+        },
+      };
       this.#pending.set(ctx.conversationId, entry);
       ctx.signal.addEventListener('abort', stop, { once: true });
       ctx.append({ type: 'question', question });
       void ctx.waitingForYou?.(true);
+      if (detached) entry.detach();
     });
   }
 
@@ -135,9 +154,15 @@ export class QuestionDesk {
     return true;
   }
 
-  /** The reply ended with a question still waiting: nobody can answer it now. */
+  /** A reply finished naturally: the card still accepts an answer for the next reply. */
+  detach(conversationId: string, signal: AbortSignal): void {
+    const pending = this.#pending.get(conversationId);
+    if (pending?.signal === signal) pending.detach();
+  }
+
+  /** Stop or explicit cancellation skips the pending question. */
   close(conversationId: string): void {
-    this.#pending.get(conversationId)?.settle(null);
+    this.#pending.get(conversationId)?.settle(null, true);
   }
 }
 
