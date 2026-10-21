@@ -2,6 +2,31 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.16](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-21)
+
+### New
+
+- Set up the always-on relay from Settings, in one press and one paste
+- Each errand gets its own browser session
+- Find chats by meaning, not just words
+- Pair the always-on relay and drain it through the same door handlers
+- The public door takes a hook's socket, once it accepts the upgrade
+- An always-on relay that keeps Conch's webhooks sealed while it's off
+
+### Better
+
+- Review requested Gmail sends at the resolved connector boundary in Auto
+- Keep sandbox recovery guidance within every model prompt budget
+- Honor Full trust for Claude Code host commands before guarding execution
+
+### Fixed
+
+- Read timeout's options, time zones and bearer tokens without backtracking
+- Seal model HTML and SVG properly, and close the other CodeQL text-cleanup alerts
+- Back every gateway route with @fastify/rate-limit
+- Recover stuck app sign-ins and resume chats after question answers
+- And 7 fixes
+
 ## [0.1.0-alpha.15](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-18)
 
 ### Fixed
