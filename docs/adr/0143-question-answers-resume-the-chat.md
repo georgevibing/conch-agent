@@ -1,6 +1,7 @@
 # 0143: Question answers resume the chat
 
-Status: accepted
+- Status: accepted
+- Date: 2026-10-21
 
 ## Problem
 

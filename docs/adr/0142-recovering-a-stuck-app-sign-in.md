@@ -1,6 +1,7 @@
 # 0142: Recovering a stuck app sign-in
 
-Status: accepted
+- Status: accepted
+- Date: 2026-10-21
 
 ## Problem
 
