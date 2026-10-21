@@ -91,9 +91,26 @@ try {
       await tab.locator('#content').waitFor();
       assert.equal(await tab.locator('h1').count(), 1, path);
       await tab.addScriptTag({ content: axe });
+      // axe's experimental label-in-name rule counts the decorative shortcut
+      // as label text (Search Ctrl K). Check the real label ourselves before
+      // accepting that one finding, including sites built from older releases.
+      const search = tab.locator('.nc-Layout-search');
+      assert.equal(await search.getAttribute('aria-label'), 'Search');
+      assert.equal(await search.locator('.nc-Layout-searchLabel').innerText(), 'Search');
+      assert.equal(await search.locator('kbd[aria-hidden="true"]').count(), 1);
+      assert.equal(await tab.getByRole('button', { name: 'Search', exact: true }).count(), 1);
       const violations = await tab.evaluate(async () =>
-        (await window.axe.run(document)).violations.map(
-          (item) => `${item.id}: ${item.nodes.map((node) => node.target).join(', ')}`,
+        (await window.axe.run(document)).violations.flatMap((item) =>
+          item.nodes
+            .filter(
+              (node) =>
+                !(
+                  item.id === 'label-content-name-mismatch' &&
+                  node.target.length === 1 &&
+                  node.target[0] === '.nc-Layout-search'
+                ),
+            )
+            .map((node) => `${item.id}: ${node.target.join(', ')}`),
         ),
       );
       assert.deepEqual(violations, [], `${path} in ${mode}`);
