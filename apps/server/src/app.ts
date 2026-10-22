@@ -71,6 +71,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { registerAttachmentRoutes } from './attachments/routes';
+import { AttachmentViews } from './attachments/view';
 import { registerDraftRoutes } from './drafts/routes';
 import { carriedIn, registerListenRoutes } from './research/listen';
 import { secretPlaces } from './conversations/sandbox';
@@ -283,7 +284,11 @@ export async function buildApp(services: Services) {
   registerComputerRoutes(app, services.computer);
   registerCloudRoutes(app, services.clouds);
   registerComputerUseRoutes(app, services.computerUse, gate);
-  registerAttachmentRoutes(app, services.attachments);
+  registerAttachmentRoutes(
+    app,
+    services.attachments,
+    new AttachmentViews(services.attachments, () => services.readerDeps),
+  );
   registerDraftRoutes(app, services.drafts);
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);

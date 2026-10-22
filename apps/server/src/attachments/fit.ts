@@ -166,8 +166,13 @@ export async function toJpeg(
   /** Its extension (`heic`), for converters that go by the name. */
   ext: string,
   converters: readonly PictureConverter[] = systemConverters,
+  /**
+   * Off for a camera's RAW file: sharp reads only the small preview inside
+   * one, while the computer's converters develop the whole picture.
+   */
+  sharpFirst = true,
 ): Promise<Buffer | undefined> {
-  const sharp = await loadSharp();
+  const sharp = sharpFirst ? await loadSharp() : undefined;
   if (sharp) {
     const done = await sharp(bytes, { failOn: 'none', limitInputPixels: PICTURE_PIXELS })
       .rotate()

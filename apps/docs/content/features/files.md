@@ -24,8 +24,22 @@ skip the card, paste with <kbd>mod+shift+v</kbd>.
 ## Look before you send
 
 Click a card: pictures show large, PDFs open in the browser's viewer, CSVs become
-tables, code is coloured, sound and video play, the rest offers **Download**. A phone's
-browser shows only a PDF's first page there: **Open** shows all of it in a new tab.
+tables, code is coloured, and sound and video play. A phone's browser shows only a
+PDF's first page there: **Open** shows all of it in a new tab.
+
+Everything else shows what's in it, read on your computer:
+
+- Documents (Word, OpenDocument, RTF, e-books) show their words.
+- Spreadsheets show a tab for each sheet, and a database shows a tab for each table.
+- An archive shows its folders and files. Press a folder to open it.
+- An email shows who sent it, to whom, when, its words and the names of its attachments.
+- Under a recording or a video you see what's said in it. Press a time to play from
+  there. A long one fills in while Conch listens.
+- A notebook shows its notes, its code and what the code printed.
+- A program, a font or a file Conch doesn't know says what it is, with **Download**.
+
+Each kind has its own icon and colour on its card, so you can tell an email from an
+e-book before you open it.
 
 - <kbd>left</kbd> and <kbd>right</kbd> move between cards; the cross takes one off.
 - A card that didn't upload says why and offers to try again.
@@ -37,16 +51,57 @@ browser shows only a PDF's first page there: **Open** shows all of it in a new t
 - Text goes with your words.
 - Pictures go to models that can see. Others get a description written by one of your
   models that can.
-- PDF, DOCX, XLSX and PPTX text works with any provider. A model reached by an API key
-  gets the text with your message; one that opens files itself gets the file. Tool-using
-  models can read on through pages, sheets and slides. Scanned pages without text are
-  flagged; they need visual or OCR reading.
+- Documents work with any provider: PDF; Word, Excel and PowerPoint, new or old (DOCX,
+  DOC and the rest); OpenDocument (ODT, ODS, ODP); EPUB books; RTF; emails (EML, MBOX
+  and Outlook's MSG); and Jupyter notebooks. A model reached by an API key gets the
+  words with your message; one that opens files itself gets the file, and Conch reads
+  it for it on request. Tool-using models can read on through pages, sheets, slides,
+  chapters and messages.
+- Spreadsheets arrive as tables with their sheet names, column letters and row numbers,
+  up to 5,000 rows a sheet. Dates read as dates.
+- An email arrives as who sent it, to whom, when, its words and the names and sizes of
+  its attachments. Attachments inside an email aren't opened: attach any that matter
+  on their own.
+- PDFs keep their charts, layout and scans. Claude, OpenAI's models that see, Gemini and
+  OpenRouter models that take files get the whole PDF, up to 100 pages and 4 MB, with
+  the start of its text. Other models get the text, and pages with little or no text
+  (a scan, a chart, a photo) are drawn on your computer and shown as pictures, up to 8,
+  or described for a model that can't see. Codex gets the text and pictures too; Claude
+  Code opens the PDF itself. A PDF only goes to the provider your chat is with: on
+  OpenRouter, only models that read files themselves get one, so it's never passed on
+  to another company to read. After six more of your messages the whole PDF stops being
+  sent, so a long chat doesn't pay for it every time; its text stays. A PDF locked with
+  a password can't be read: send one without.
+- Recordings and videos work with any model. Conch listens to them on your computer
+  and gives your assistant what's said, with times, up to the first hour. A video
+  also sends up to eight pictures from it to models that can see, with its length
+  and size. Nothing goes to a new service. It needs FFmpeg and private dictation,
+  which Conch gets in **Settings → Voice**. A long one is still being heard after you
+  send; your next message has the rest.
+- Pictures no model takes, like Photoshop files, icons and cameras' RAW photos, are
+  shown to it as a JPEG made on your computer; your file stays as it was. An SVG goes
+  as its source and as a picture.
+- A SQLite database (an app's saved data, a `.db` or `.sqlite` file) works with any
+  model: Conch opens it read-only on your computer and gives your assistant its tables,
+  how many rows each has, and the first rows.
+- Any other file is named from what's inside it: a program, a font, a 3D model, a disk
+  image, a data file. A model that opens files itself is told which tools on your
+  computer read it; any other model gets what it is, its size and the readable text
+  inside. Nothing in it is run. Files that hold passwords or keys, like a keychain,
+  are named but never shown.
+- Archives work with any model: ZIP (and JAR, APK and other ZIPs by another name), tar,
+  tar.gz and other compressed tars, one compressed file, and 7-Zip, RAR and CAB when your
+  computer has `bsdtar` (Macs and Windows do). Conch looks inside without unpacking it and
+  gives your assistant the list of files, the text of the useful small ones (a README
+  first), and up to two documents inside. It says what it left out. Links inside are never
+  followed, and names that point outside the archive are never read.
 - A ZIP can be unpacked into the chat: up to 50 files, 30 MB each.
-- Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and
-  external links never run.
+- Office files from before 1997 (Word 95, Excel 95) need LibreOffice on your computer,
+  or saving as DOCX, XLSX or PPTX first. Formulas, macros, scripts and external links
+  never run. A locked document or a book with DRM can't be read: send one without.
 
 When the model you picked can't use something, its card shows a dot with the reason,
-and a file it can't open sends only its name. Choose another model in the **Model ·
+and a file it can't open sends what Conch could tell about it. Choose another model in the **Model ·
 Mode** chip, or send anyway. [Compare providers](../providers/index.md).
 
 Your assistant treats attachments as material, not instructions.

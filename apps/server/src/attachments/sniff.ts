@@ -24,7 +24,12 @@ export function sniff(bytes: Buffer, name: string, claimed: string | undefined):
   const image = sniffImage(bytes);
   if (image) return { kind: 'image', ...image };
   const picture = sniffOtherPicture(bytes);
+  // A camera's RAW file is a TIFF inside: kept as it is, never swapped for a JPEG.
+  if (picture === 'image/tiff' && RAW_EXTENSIONS.has(extension(name)))
+    return { kind: 'file', mimeType: 'image/x-dcraw' };
   if (picture) return { kind: 'file', mimeType: picture };
+  if (bytes.subarray(0, 16).toString('latin1') === 'SQLite format 3\0')
+    return { kind: 'file', mimeType: 'application/vnd.sqlite3' };
   if (bytes.subarray(0, 5).toString('latin1') === '%PDF-')
     return { kind: 'file', mimeType: 'application/pdf' };
   const text = decodeText(bytes);
@@ -32,8 +37,56 @@ export function sniff(bytes: Buffer, name: string, claimed: string | undefined):
   const legacy = decodeLegacyText(bytes, name);
   if (legacy !== undefined)
     return { kind: 'text', mimeType: textType(name, claimed), text: legacy, transcoded: true };
-  return { kind: 'file', mimeType: fileType(name, claimed) };
+  const typed = fileType(name, claimed);
+  // An archive with a name that says nothing (`download`, `backup.bin`): its signature does.
+  return {
+    kind: 'file',
+    mimeType:
+      typed === 'application/octet-stream'
+        ? (zippedDocumentType(bytes) ?? archiveType(bytes) ?? typed)
+        : typed,
+  };
 }
+
+/** An archive's type from its signature (`readers/archives.ts` reads them). */
+/**
+ * An EPUB or OpenDocument file, from the `mimetype` entry both keep first
+ * and unpacked in their zip (`readers/documents.ts` reads them).
+ */
+const ZIPPED_DOCUMENTS = new Set([
+  'application/epub+zip',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.oasis.opendocument.graphics',
+]);
+function zippedDocumentType(b: Buffer): string | undefined {
+  if (b.length < 38 || b.readUInt32LE(0) !== 0x04034b50) return undefined;
+  if (b.subarray(30, 38).toString('latin1') !== 'mimetype') return undefined;
+  const start = 38 + b.readUInt16LE(28);
+  const type = b.subarray(start, start + Math.min(100, b.readUInt32LE(18))).toString('latin1');
+  return ZIPPED_DOCUMENTS.has(type) ? type : undefined;
+}
+
+function archiveType(b: Buffer): string | undefined {
+  const head = b.subarray(0, 8).toString('latin1');
+  if (head.startsWith('PK\x03\x04') || head.startsWith('PK\x05\x06')) return 'application/zip';
+  if (head.startsWith('\x1f\x8b')) return 'application/gzip';
+  if (head.startsWith('\x28\xb5\x2f\xfd')) return 'application/zstd';
+  if (head.startsWith('\xfd7zXZ\0')) return 'application/x-xz';
+  if (/^BZh[1-9]/.test(head)) return 'application/x-bzip2';
+  if (head.startsWith('7z\xbc\xaf\x27\x1c')) return 'application/x-7z-compressed';
+  if (head.startsWith('Rar!\x1a\x07')) return 'application/vnd.rar';
+  if (head.startsWith('MSCF')) return 'application/vnd.ms-cab-compressed';
+  if (head.startsWith('xar!')) return 'application/x-xar';
+  if (b.subarray(257, 262).toString('latin1') === 'ustar') return 'application/x-tar';
+  return undefined;
+}
+
+/** Camera RAW files, by extension: most are TIFF inside, so their bytes don't tell them apart. */
+export const RAW_EXTENSIONS = new Set(
+  'cr2 cr3 crw nef nrw arw srf sr2 dng raf orf rw2 pef srw x3f 3fr erf kdc mrw iiq'.split(' '),
+);
 
 /** Text files whose name says so, which Windows programs still save in other encodings. */
 const LEGACY_TEXT = new Set(['csv', 'tsv', 'txt', 'text', 'log', 'md', 'markdown', 'ini']);
@@ -84,6 +137,11 @@ const TEXT_TYPES: Record<string, string> = {
   svg: 'image/svg+xml',
   yaml: 'application/yaml',
   yml: 'application/yaml',
+  // Documents that are text inside, read for their words (`readers/documents.ts`).
+  rtf: 'application/rtf',
+  eml: 'message/rfc822',
+  mbox: 'application/mbox',
+  ipynb: 'application/x-ipynb+json',
 };
 
 const FILE_TYPES: Record<string, string> = {
@@ -93,15 +151,34 @@ const FILE_TYPES: Record<string, string> = {
   doc: 'application/msword',
   xls: 'application/vnd.ms-excel',
   ppt: 'application/vnd.ms-powerpoint',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  odg: 'application/vnd.oasis.opendocument.graphics',
+  epub: 'application/epub+zip',
+  rtf: 'application/rtf',
+  eml: 'message/rfc822',
+  mbox: 'application/mbox',
+  msg: 'application/vnd.ms-outlook',
   zip: 'application/zip',
   gz: 'application/gzip',
   tar: 'application/x-tar',
+  tgz: 'application/gzip',
+  zst: 'application/zstd',
+  bz2: 'application/x-bzip2',
+  xz: 'application/x-xz',
+  '7z': 'application/x-7z-compressed',
+  rar: 'application/vnd.rar',
+  jar: 'application/java-archive',
+  apk: 'application/vnd.android.package-archive',
   heic: 'image/heic',
   heif: 'image/heif',
   avif: 'image/avif',
   tiff: 'image/tiff',
   tif: 'image/tiff',
   bmp: 'image/bmp',
+  psd: 'image/vnd.adobe.photoshop',
+  ico: 'image/vnd.microsoft.icon',
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
   m4a: 'audio/mp4',
@@ -109,6 +186,18 @@ const FILE_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
   webm: 'video/webm',
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  opus: 'audio/ogg',
+  oga: 'audio/ogg',
+  amr: 'audio/amr',
+  caf: 'audio/x-caf',
+  weba: 'audio/webm',
+  mka: 'audio/x-matroska',
+  m4v: 'video/mp4',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  '3gp': 'video/3gpp',
 };
 
 /** A MIME type shaped like one; anything else is dropped rather than echoed back. */

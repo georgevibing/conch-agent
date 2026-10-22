@@ -349,8 +349,15 @@ archives grey). In the composer every card is the same small size, in one row
 that scrolls sideways; in the transcript pictures show their true shape. Cards
 lift on hover, breathe while uploading (a ring in the corner, or the middle of a
 picture), turn red with a Retry when they fail, and wear a small amber dot when
-the chosen model can't use them. `AttachmentPreview` is the closer look;
-`DropOverlay` dims the chat and gathers a pearl halo while files are dragged over.
+the chosen model can't use them. The newer families take hues of their own
+(email cyan, e-books brown, databases teal, fonts violet, 3D models lime,
+notebooks orange, programs a cool grey), and a notebook, an email or an RTF
+shows its glyph, not its source. `AttachmentPreview` is the closer look: what
+the browser can't show is drawn from plain data by `AttachmentViewBody` (a
+document's lines, a tab per sheet, an archive's folders as native disclosures,
+an email, a transcript whose times play from there, a calm "what it is" panel
+of facts); never a file's own HTML. `DropOverlay` dims the chat and gathers a
+pearl halo while files are dragged over.
 
 ### Who is speaking (chat)
 

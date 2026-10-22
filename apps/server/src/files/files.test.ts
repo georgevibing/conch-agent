@@ -104,7 +104,9 @@ describe('document parser in a separate process', () => {
         '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><f>1+2</f><v>3</v></c></row></sheetData></worksheet>',
     });
     const result = await extractDocument(bytes, 'book.xlsx', 0, 5, signal());
-    expect(result.sections[0]?.text).toBe('A1: Tea | B1: 3 [formula: 1+2; cached value]');
+    expect(result.sections[0]?.text).toBe(
+      '| # | A | B |\n| --- | --- | --- |\n| 1 | Tea | 3 (=1+2) |',
+    );
   });
   it('paginates slide references', async () => {
     const bytes = archive({

@@ -56,8 +56,10 @@ import {
   send,
   text,
   type Effort,
+  type PdfLimits,
   type ToolResult,
   type Wire,
+  type WireDocument,
 } from './wire';
 
 /** One address a provider answers on, and what to call it when there are several. */
@@ -126,6 +128,13 @@ export interface ChatPreset {
    * Conch heals), a pattern for the ids that do, unset where it never does.
    */
   sees?: boolean | RegExp;
+  /**
+   * What its models that see take of a PDF sent whole as a `file` part
+   * (ADR 0017), from the provider's documentation. Unset: it gets the PDF's
+   * text and pictures of its pages instead. A model that refuses one is
+   * remembered, and gets the text.
+   */
+  pdfs?: PdfLimits;
   /** Refuses a user message straight after a tool's (Mistral): a blank assistant turn goes between. */
   toolThenUser?: 'bridge';
   /** Thinking levels a model takes, when the list doesn't say. */
@@ -709,8 +718,21 @@ export class OpenAiWire implements Wire {
     return sees instanceof RegExp ? sees.test(model) : sees === true;
   }
 
-  userMessage(content: string, images?: Parameters<typeof chatUserMessage>[1]): WireMessage {
-    return chatUserMessage(content, images);
+  /** Its models that see read PDFs, where the preset says (ADR 0017). */
+  get takesPdfs(): boolean {
+    return this.preset.pdfs !== undefined;
+  }
+
+  pdfsFor(model: string): PdfLimits | undefined {
+    return this.preset.pdfs && this.seesFor(model) ? this.preset.pdfs : undefined;
+  }
+
+  userMessage(
+    content: string,
+    images?: Parameters<typeof chatUserMessage>[1],
+    documents?: readonly WireDocument[],
+  ): WireMessage {
+    return chatUserMessage(content, images, documents);
   }
 
   toolResults(results: ToolResult[]): WireMessage[] {

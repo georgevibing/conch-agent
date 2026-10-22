@@ -70,6 +70,15 @@ const every: (AttachmentInfo & { excerpt?: string; src?: string })[] = [
   },
   { name: 'Voice memo.m4a', kind: 'file', mimeType: 'audio/mp4', size: 1_200_000 },
   { name: 'Screen recording.mov', kind: 'file', mimeType: 'video/quicktime', size: 18_000_000 },
+  { name: 'Re: launch.eml', kind: 'text', mimeType: 'message/rfc822', size: 24_000 },
+  { name: 'Middlemarch.epub', kind: 'file', mimeType: 'application/epub+zip', size: 1_400_000 },
+  { name: 'orders.sqlite', kind: 'file', mimeType: 'application/vnd.sqlite3', size: 3_200_000 },
+  { name: 'Inter.woff2', kind: 'file', mimeType: 'font/woff2', size: 98_000 },
+  { name: 'Bracket.stl', kind: 'file', mimeType: 'model/stl', size: 760_000 },
+  { name: 'Setup.exe', kind: 'file', size: 8_400_000 },
+  { name: 'analysis.ipynb', kind: 'text', lines: 412, excerpt: '{"cells": []}' },
+  { name: 'Board pack.odt', kind: 'file', size: 88_000 },
+  { name: 'Letter.rtf', kind: 'text', lines: 40, excerpt: '{\\rtf1\\ansi Dear Ada,' },
   { name: 'backup.bin', kind: 'file', size: 5_000 },
 ];
 

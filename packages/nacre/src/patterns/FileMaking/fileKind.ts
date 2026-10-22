@@ -1,4 +1,4 @@
-import { extensionOf, formatBytes } from '../Attachments/fileType';
+import { extensionOf, familyOf, formatBytes, specialFamilyOf } from '../Attachments/fileType';
 import { META_SEP } from '../../components/MetaList';
 
 /**
@@ -20,6 +20,13 @@ export type FileType =
   | 'image'
   | 'audio'
   | 'video'
+  | 'email'
+  | 'ebook'
+  | 'database'
+  | 'font'
+  | 'model'
+  | 'binary'
+  | 'notebook'
   | 'file';
 
 /** The shape drawn while it's made (and at rest, when there's no picture of it). */
@@ -32,7 +39,6 @@ const BY_EXT: Record<string, FileType> = {
   odt: 'doc',
   rtf: 'doc',
   pages: 'doc',
-  epub: 'doc',
   xls: 'sheet',
   xlsx: 'sheet',
   ods: 'sheet',
@@ -106,6 +112,8 @@ const BY_MIME: [RegExp, FileType][] = [
   [/^video\//, 'video'],
 ];
 
+const FROM_FAMILY = new Set<string>(['doc', 'sheet', 'slides', 'archive', 'audio', 'video']);
+
 /** A file's type from its name first (what people read), then its type, then its kind. */
 export function fileTypeOf(info: {
   name: string;
@@ -113,12 +121,17 @@ export function fileTypeOf(info: {
   kind?: 'text' | 'image' | 'file';
 }): FileType {
   if (info.kind === 'image') return 'image';
+  const special = specialFamilyOf(info);
+  if (special) return special;
   const ext = extensionOf(info.name);
   const named = BY_EXT[ext];
   if (named) return named;
   if (CODE.has(ext)) return 'code';
   const mime = info.mimeType ?? '';
   for (const [pattern, type] of BY_MIME) if (pattern.test(mime)) return type;
+  // The families the attachment cards know by more names (ODF, legacy Office, more archives).
+  const family = familyOf({ name: info.name, mimeType: mime, kind: info.kind ?? 'file' });
+  if (FROM_FAMILY.has(family)) return family as FileType;
   return info.kind === 'text' || mime.startsWith('text/') ? 'text' : 'file';
 }
 
@@ -139,6 +152,13 @@ export const SHAPE: Record<FileType, FileShape> = {
   image: 'film',
   video: 'film',
   audio: 'wave',
+  email: 'page',
+  ebook: 'page',
+  database: 'grid',
+  font: 'page',
+  model: 'box',
+  binary: 'box',
+  notebook: 'code',
 };
 
 /** What a type is called, for people: "PDF", "Word document", "Spreadsheet". */
@@ -157,6 +177,13 @@ export const TYPE_WORDS: Record<FileType, string> = {
   image: 'Picture',
   audio: 'Audio',
   video: 'Video',
+  email: 'Email',
+  ebook: 'E-book',
+  database: 'Database',
+  font: 'Font',
+  model: '3D model',
+  binary: 'Program',
+  notebook: 'Notebook',
   file: 'File',
 };
 

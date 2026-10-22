@@ -15,7 +15,7 @@ import type { EffortChoice } from '@conch/protocol';
 import type { z } from 'zod';
 
 import { isLoopbackUrl, isPrivateUrl } from '../../local/host';
-import type { Completion, EngineUsage, Picture, ToolImage } from '../types';
+import type { Completion, EngineUsage, Picture, ToolImage, TurnDocument } from '../types';
 import type { SchemaFamily } from './schemas';
 import {
   ApiError,
@@ -38,6 +38,19 @@ export interface ToolResult {
   images?: readonly ToolImage[];
 }
 
+/** A PDF sent whole, as a wire takes it (ADR 0017). */
+export type WireDocument = Pick<TurnDocument, 'name' | 'mimeType' | 'data'>;
+
+/** What one model takes of PDFs sent whole, from the provider's documentation (ADR 0017). */
+export interface PdfLimits {
+  /** Most pages in one request. */
+  maxPages: number;
+  /** Most bytes of PDFs in one request. */
+  maxBytes: number;
+  /** About what one page costs in tokens, for fitting the window. */
+  pageTokens: number;
+}
+
 export interface Wire {
   /** Who meters you, for the usage card: "OpenRouter", "Anthropic API". */
   readonly source: string;
@@ -53,8 +66,16 @@ export interface Wire {
   complete(request: WireCompletion): Promise<Completion>;
   /** Limits the provider publishes. Omitted where it publishes none. */
   usage?(input: { key: string; signal?: AbortSignal }): Promise<EngineUsage>;
-  /** The user's prompt (and any images sent with it), in this provider's message shape. */
-  userMessage(text: string, images?: readonly Picture[]): WireMessage;
+  /**
+   * The user's prompt (and any images and PDFs sent with it), in this
+   * provider's message shape. `documents` only ever comes for a model whose
+   * `pdfsFor` said yes.
+   */
+  userMessage(
+    text: string,
+    images?: readonly Picture[],
+    documents?: readonly WireDocument[],
+  ): WireMessage;
   /** Tool answers (and their pictures), in this provider's message shape. */
   toolResults(results: ToolResult[]): WireMessage[];
   /** A small, cheap model from the last list the provider gave us, if it has one. */
@@ -71,6 +92,13 @@ export interface Wire {
    * means no.
    */
   seesFor?(model: string): boolean | undefined;
+  /**
+   * Whether this model reads a PDF sent whole, and how much of one (ADR 0017).
+   * Undefined means no: it gets the PDF's text and pictures of its pages.
+   */
+  pdfsFor?(model: string): PdfLimits | undefined;
+  /** Some of its models read PDFs sent whole (`pdfsFor`): the engine's `attachments.pdfs`. */
+  readonly takesPdfs?: boolean;
   /**
    * Whether this model can be sent tools that load only when it searches for
    * them (`WireRequest.deferred`, ADR 0072): Anthropic's tool search. Unset or

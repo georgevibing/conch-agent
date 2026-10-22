@@ -45,6 +45,8 @@ import {
   type HostTool,
   type Picture,
   type ToolImage,
+  type TurnDocument,
+  type TurnImage,
   type TurnInput,
 } from '../types';
 import { checkBridgedArgs, checkHostArgs, readArgs, withNotes } from '../tools/args';
@@ -78,6 +80,14 @@ import {
   UNSEEN_PICTURE,
   wordsForPictures,
 } from './pictures';
+import {
+  ageDocuments,
+  hasDocuments,
+  refusesDocuments,
+  rememberPages,
+  unreadDocument,
+  wordsForDocuments,
+} from './documents';
 import { describeOrSay, withSight } from './sight';
 import { UNREADABLE, UNREADABLE_MESSAGE } from './prompted';
 import {
@@ -93,7 +103,7 @@ import {
 } from './lean';
 import { chatCacheKey, jobCacheKey } from './cachekey';
 import { collapseStalePages } from './pages';
-import { sessionsDir, TranscriptStore, type Session } from './session';
+import { sessionsDir, startsTurn, TranscriptStore, type Session } from './session';
 import { ToolPlan, type ToolLessons } from './toolplan';
 import {
   ApiError,
@@ -508,8 +518,14 @@ export class ApiEngine implements Engine {
   readonly places = true;
   /** Host notes at a tool boundary go in this turn's system prompt, not the saved transcript. */
   readonly boundaryNotes = 'turn' as const;
-  /** Models that can see get images; none of these can open files on this computer. */
-  readonly attachments = { images: true, files: false };
+  /**
+   * Models that can see get images; none of these can open files on this
+   * computer. PDFs go whole to the models that read them, where the wire can
+   * send one (ADR 0017).
+   */
+  get attachments() {
+    return { images: true, files: false, pdfs: this.variant.wire.takesPdfs === true };
+  }
   /** A model that sees can describe a screenshot for one that can't (ADR 0070). */
   readonly completeSees = true;
   /** Only for providers that publish limits; Conch tracks spend for the rest. */
@@ -529,6 +545,8 @@ export class ApiEngine implements Engine {
   #learned = new Map<string, number>();
   /** Models that refused a picture though nothing said they would: blind from then on (ADR 0070). */
   #blind = new Set<string>();
+  /** Models that refused a PDF sent whole: they get its text from now on (ADR 0017). */
+  #unread = new Set<string>();
   /** Models that refused a schema, or tools, and how they take them now (ADR 0072). */
   #toolLessons: ToolLessons = new Map();
   /** A `/compact` in progress, by session: a turn waits for it rather than racing it. */
@@ -887,8 +905,13 @@ export class ApiEngine implements Engine {
       const listed = (await this.capabilities()).models.find((m) => m.id === model);
       /** Asked on every picture: a model can turn out blind halfway through a turn. */
       const sees = () => this.#sight(model, listed?.images);
+      // PDFs go whole to a model that reads them, as many as fit; the rest stand on their
+      // text, with pictures of their pages that have little (ADR 0017).
+      const pdfs = this.#pdfs(model, input.documents, await this.#window(model));
+      const images = [...(input.images ?? []), ...pdfs.pictures];
+      const prompt = pdfs.note ? `${input.prompt}\n\n${pdfs.note}` : input.prompt;
       // A model that can't see gets the person's pictures in words, by one that can (ADR 0070).
-      const attached = input.images?.length && !sees() ? input.images : undefined;
+      const attached = images.length && !sees() ? images : undefined;
       const seen = attached
         ? await describeOrSay(attached, {
             ...(input.describe && { describe: input.describe }),
@@ -901,9 +924,11 @@ export class ApiEngine implements Engine {
       session.messages.push(
         seen
           ? this.variant.wire.userMessage(
-              `${input.prompt}\n\n[The pictures named above can’t be shown to this model. ${seen} If the message depends on them and this isn’t enough, say so.]`,
+              `${prompt}\n\n[The pictures named above can’t be shown to this model. ${seen} If the message depends on them and this isn’t enough, say so.]`,
+              undefined,
+              pdfs.whole,
             )
-          : this.variant.wire.userMessage(input.prompt, input.images),
+          : this.variant.wire.userMessage(prompt, images, pdfs.whole),
       );
       // Every model gets its tools: natively, else in words; chat-only only when
       // even the shortest list won't fit (ADR 0072). Unknown counts as able (ADR 0050).
@@ -1004,6 +1029,8 @@ export class ApiEngine implements Engine {
       let pauses = 0;
       /** Asked again once without pictures, after the model refused them (ADR 0070). */
       let unseen = false;
+      /** Asked again once without PDFs sent whole, after the model refused them (ADR 0017). */
+      let unread = false;
       /** How much this turn may do before it checks in (ADR 0085). */
       const watch = new TurnWatch(input.budget ?? turnBudget({ local: this.local }));
       const pause = async (paused: TurnPause): Promise<EngineEvent> => {
@@ -1035,6 +1062,8 @@ export class ApiEngine implements Engine {
         // Only the newest screenshots stay pictures: each is paid for on every request.
         // They go in batches, so the cached prefix holds between (ADR 0085).
         session.messages = ageToolPictures(session.messages);
+        // A PDF stays whole for a few messages, then its text carries it (ADR 0017).
+        session.messages = ageDocuments(session.messages, startsTurn);
         // The chat fits the window before every request: tool results grow it mid-turn too.
         yield* this.#fit(fitting);
         // Summarising is spending too: say so before the next request (ADR 0057).
@@ -1087,6 +1116,29 @@ export class ApiEngine implements Engine {
               message: `${fitting.label} can’t see pictures, so Conch asked again with words in their place.`,
             };
             session.messages = await this.#unpicture(session.messages, input, spent);
+            await save();
+            continue;
+          }
+          // Refused a PDF sent whole before a word was said: it reads their text from now on.
+          if (
+            !unread &&
+            !said &&
+            !input.signal.aborted &&
+            error instanceof ApiError &&
+            !['auth', 'payment', 'rate-limit', 'overloaded', 'network', 'timeout'].includes(
+              error.kind,
+            ) &&
+            request.messages.some(hasDocuments) &&
+            refusesDocuments(error.message)
+          ) {
+            unread = true;
+            this.#unread.add(model);
+            yield {
+              type: 'notice',
+              code: 'no-pdfs',
+              message: `${fitting.label} can’t read PDFs whole, so Conch asked again with their text.`,
+            };
+            session.messages = session.messages.map((m) => wordsForDocuments(m, unreadDocument));
             await save();
             continue;
           }
@@ -1261,6 +1313,57 @@ export class ApiEngine implements Engine {
         usage: usage(),
       };
     }
+  }
+
+  // ── PDFs (ADR 0017) ───────────────────────────────────────────────────────
+
+  /**
+   * Which of this message's PDFs go whole: to a model whose wire says it reads
+   * them, within its pages and bytes, and together at most half its window.
+   * The rest bring pictures of their thin pages instead. `note` tells the
+   * model which it got, after the message.
+   */
+  #pdfs(
+    model: string,
+    documents: readonly TurnDocument[] = [],
+    window: number,
+  ): { whole: TurnDocument[]; pictures: TurnImage[]; note: string } {
+    if (!documents.length) return { whole: [], pictures: [], note: '' };
+    const limits = this.#unread.has(model) ? undefined : this.variant.wire.pdfsFor?.(model);
+    const whole: TurnDocument[] = [];
+    const rest: TurnDocument[] = [];
+    let pages = 0;
+    let bytes = 0;
+    for (const document of documents) {
+      const fits =
+        limits &&
+        pages + document.pages <= limits.maxPages &&
+        bytes + document.bytes <= limits.maxBytes &&
+        (pages + document.pages) * limits.pageTokens <= window / 2;
+      if (!fits) {
+        rest.push(document);
+        continue;
+      }
+      whole.push(document);
+      pages += document.pages;
+      bytes += document.bytes;
+      rememberPages(document.data, document.pages);
+    }
+    const names = (list: readonly TurnDocument[]) =>
+      list.map((d) => `"${d.name.replace(/["\n]/g, ' ')}"`).join(', ');
+    const lines: string[] = [];
+    if (whole.length)
+      lines.push(`[Sent with this message whole, for you to read as PDFs: ${names(whole)}.]`);
+    if (rest.length) {
+      const why = limits
+        ? 'too long to send whole to this model'
+        : 'not sent whole: this model doesn’t read PDFs';
+      const pictured = rest.some((d) => d.pictures?.length);
+      lines.push(
+        `[${names(rest)}: ${why}. Work from the text above${pictured ? ', and the pictures of its pages that have little text' : ''}.]`,
+      );
+    }
+    return { whole, pictures: rest.flatMap((d) => d.pictures ?? []), note: lines.join('\n') };
   }
 
   // ── Pictures (ADR 0070) ───────────────────────────────────────────────────

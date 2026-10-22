@@ -22,6 +22,7 @@
  * of the first user message at request time, and only Conch's own text (what
  * the person sent, what a tool returned) is ever shortened.
  */
+import { documentTokens } from './documents';
 import { isToolPictures } from './pictures';
 import { startsTurn } from './session';
 import type { WireMessage } from './types';
@@ -87,6 +88,9 @@ export function estimateTokens(value: unknown, key?: string): number {
     return sum;
   }
   if (isRecord(value)) {
+    // A PDF sent whole costs its pages, not its base64 (`documents.ts`).
+    const pdf = documentTokens(value);
+    if (pdf !== undefined) return pdf;
     // Every message has a few tokens of framing on top of what's in it.
     let sum = 3;
     for (const [name, item] of Object.entries(value))
@@ -344,7 +348,9 @@ function blocksText(content: unknown): string {
         ? b.text
         : isRecord(b) && (b.type === 'image' || b.type === 'image_url')
           ? '[a picture]'
-          : '',
+          : documentTokens(b) !== undefined
+            ? '[a PDF]'
+            : '',
     )
     .filter(Boolean)
     .join('\n');

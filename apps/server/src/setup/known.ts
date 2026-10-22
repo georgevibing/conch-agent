@@ -9,6 +9,7 @@ import { findClaude } from '../engines/claude-code/detect';
 import { ACP_AGENTS, findAgent } from '../engines/acp/agents';
 import { lmStudioInstall } from '../engines/api/lmstudio';
 import { findCodex } from '../engines/codex/detect';
+import { findOffice } from '../files/office';
 import { findExecutable, presentSync, run } from '../lib/proc';
 import { parseVersion } from '../updates/version';
 import { findContainerProgram } from '../workplaces/container';
@@ -662,6 +663,25 @@ list.push(
       win32: 'https://ffmpeg.org/download.html#build-windows',
       darwin: 'https://ffmpeg.org/download.html#build-mac',
       linux: 'https://ffmpeg.org/download.html#build-linux',
+    },
+  },
+  {
+    // Office files older than 97 (Word 95, Excel 95), which Conch's own reader
+    // doesn't take, are converted on this computer by LibreOffice (ADR 0017,
+    // `files/office.ts`). Everything newer Conch reads without it.
+    id: 'libreoffice',
+    name: 'LibreOffice (for older Office files)',
+    short: 'LibreOffice',
+    find: (platform) => findOffice(platform),
+    install: {
+      win32: winget('TheDocumentFoundation.LibreOffice'),
+      darwin: { manager: 'brew', args: ['install', '--cask', 'libreoffice'] },
+    },
+    ...updatable({ winget: 'TheDocumentFoundation.LibreOffice', brew: 'libreoffice', cask: true }),
+    download: {
+      win32: 'https://www.libreoffice.org/download/download-libreoffice/',
+      darwin: 'https://www.libreoffice.org/download/download-libreoffice/',
+      linux: 'https://www.libreoffice.org/download/download-libreoffice/',
     },
   },
   {

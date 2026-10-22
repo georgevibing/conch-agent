@@ -195,7 +195,7 @@ export class ClaudeCodeEngine implements Engine {
    */
   readonly places = true;
   /** Claude sees images, and Claude Code opens files (PDFs, spreadsheets…) with its own tools. */
-  readonly attachments = { images: true, files: true };
+  readonly attachments = { images: true, files: true, opensPdfs: true };
   #cache?: { status: EngineStatus; at: number };
   #inflight?: Promise<EngineStatus>;
   #capabilities?: { value: Capabilities; at: number };

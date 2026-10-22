@@ -1,6 +1,9 @@
-import type { Attachment } from '@conch/protocol';
+import type { Attachment, AttachmentView } from '@conch/protocol';
 
-import type { EngineAttachments, TurnImage } from '../../engines/types';
+import type { EngineAttachments, TurnDocument, TurnImage } from '../../engines/types';
+import type { ArchiveDeps } from './archives';
+import type { MediaDeps } from './media';
+import type { PdfDeps } from './pdf';
 
 /**
  * What one turn's engine can do with what was attached. `files`: its own
@@ -21,6 +24,12 @@ export interface AttachmentAbilities extends EngineAttachments {
 export interface ReaderDeps {
   /** Placeholder so the interface is never empty; readers add their own fields. */
   readonly home?: string;
+  /** FFmpeg and whisper.cpp, for recordings and videos (`media.ts`). */
+  readonly media?: MediaDeps;
+  /** How a PDF's pages are looked at and drawn (`pdf.ts`); tests give their own. */
+  readonly pdf?: PdfDeps;
+  /** The programs that open 7-Zip, RAR, bzip2 and xz files (`archives.ts`); tests give their own. */
+  readonly archives?: ArchiveDeps;
 }
 
 export interface ReaderInput {
@@ -46,8 +55,16 @@ export interface ReaderResult {
   text?: string;
   /** Pictures for engines that see (a video's frames, a scanned page). Fitted for models. */
   images?: TurnImage[];
+  /** PDFs sent whole, for engines with `pdfs` (`pdf.ts`). The text above stands beside them. */
+  documents?: TurnDocument[];
   /** There's more than fits: said with how to get the rest. */
   more?: boolean;
+  /**
+   * What the person's preview shows (`attachments/view.ts`): sheets as tables,
+   * an archive's tree, an email's headers, a transcript's times, what a file is.
+   * Optional: without it the preview is drawn from `text`. Plain data, never HTML.
+   */
+  view?: AttachmentView;
 }
 
 /**
@@ -63,5 +80,11 @@ export interface Reader {
    * their own (Claude Code opens a PDF); on for what they can't (hearing audio).
    */
   readonly everywhere?: boolean;
+  /**
+   * Also takes attachments that arrived as text (an email, RTF, a notebook):
+   * tried before the raw text goes in (`prompt.ts`), which still does when
+   * this reader declines or fails. Off for every other reader.
+   */
+  readonly text?: boolean;
   read(input: ReaderInput): Promise<ReaderResult | undefined>;
 }

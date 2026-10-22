@@ -1,6 +1,10 @@
 import {
   AppWindow,
+  Binary,
+  BookOpen,
+  Box,
   Check,
+  Database,
   Download,
   File,
   FileArchive,
@@ -16,10 +20,13 @@ import {
   FileX,
   Info,
   Link2,
+  Mail,
   Maximize2,
+  NotebookPen,
   Presentation,
   Send,
   Sheet,
+  Type,
 } from 'lucide-react';
 import {
   useEffect,
@@ -136,6 +143,13 @@ const GLYPHS: Record<FileType, typeof File> = {
   image: FileImage,
   audio: FileAudio,
   video: FileVideo,
+  email: Mail,
+  ebook: BookOpen,
+  database: Database,
+  font: Type,
+  model: Box,
+  binary: Binary,
+  notebook: NotebookPen,
   file: File,
 };
 

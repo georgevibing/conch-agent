@@ -4446,6 +4446,9 @@ export class ConversationManager {
       images: engine.attachments?.images ?? false,
       files: engine.attachments?.files === true,
       tools: engine.hostTools !== false,
+      // A PDF whole for the models that read one; Claude Code's own Read for it (`readers/pdf.ts`).
+      pdfs: engine.attachments?.pdfs === true,
+      opensPdfs: engine.attachments?.opensPdfs === true,
     };
     const store = this.deps.attachments;
     const attached =
@@ -4610,6 +4613,7 @@ export class ConversationManager {
         conversationId,
         prompt: missed ? `${missed}\n\n${withLead}` : withLead,
         ...(attached?.images.length && { images: attached.images }),
+        ...(attached?.documents?.length && { documents: attached.documents }),
         ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
         ...(readableDirs.length && { readableDirs }),
         ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),

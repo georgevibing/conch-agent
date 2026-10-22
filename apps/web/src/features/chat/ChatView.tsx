@@ -1,7 +1,6 @@
 import {
   ATTACHMENT_LIMITS,
   MESSAGE_MAX,
-  READABLE_DOCUMENT_TYPES,
   shouldFoldPaste,
   waitHeadline,
   type Attachment,
@@ -768,10 +767,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     if (!provider) return undefined;
     if (d.kind === 'image' && !sees && !can?.files)
       return 'This model can’t see pictures, so Conch describes it in words when another of your models can.';
-    // Conch reads a PDF's or an Office file's words itself, for every provider (ADR 0017).
-    const readable = READABLE_DOCUMENT_TYPES.has(d.attachment?.mimeType ?? d.mimeType ?? '');
-    if (d.kind === 'file' && !can?.files && !readable)
-      return `${provider.label} can’t open this kind of file. It will only get the name.`;
+    // Every other file reaches every provider: Conch's readers turn it into words, pictures
+    // or a plain account of what it is (ADR 0017), so there's nothing to warn about.
     return undefined;
   };
 

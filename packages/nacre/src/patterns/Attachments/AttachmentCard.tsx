@@ -1,28 +1,12 @@
-import {
-  AlertCircle,
-  Archive,
-  AudioLines,
-  Braces,
-  ClipboardPaste,
-  Clapperboard,
-  File,
-  FileCode2,
-  FileX2,
-  FileSpreadsheet,
-  FileText,
-  Image as ImageIcon,
-  Presentation,
-  RotateCcw,
-  Sheet,
-  X,
-} from 'lucide-react';
+import { AlertCircle, FileX2, RotateCcw, Sheet, X } from 'lucide-react';
 import type { ComponentProps, KeyboardEvent, ReactNode } from 'react';
 
 import { IconButton } from '../../components/IconButton';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../utils/cx';
 import styles from './Attachments.module.css';
-import { type AttachmentInfo, badgeOf, familyOf, type FileFamily, metaOf } from './fileType';
+import { type AttachmentInfo, badgeOf, familyOf, metaOf } from './fileType';
+import { GLYPHS } from './glyphs';
 
 /**
  * `lost`: it was on a message kept from before (a draft) and is no longer on
@@ -55,21 +39,8 @@ export interface AttachmentCardProps
   density?: 'compact' | 'comfortable';
 }
 
-const GLYPHS: Record<FileFamily, typeof File> = {
-  pasted: ClipboardPaste,
-  text: FileText,
-  code: FileCode2,
-  data: Braces,
-  pdf: FileText,
-  doc: FileText,
-  sheet: FileSpreadsheet,
-  slides: Presentation,
-  archive: Archive,
-  image: ImageIcon,
-  audio: AudioLines,
-  video: Clapperboard,
-  file: File,
-};
+/** Text whose source says little at a glance (a notebook's JSON, an email's headers, RTF): drawn by its glyph. */
+const SOURCE_HIDDEN = new Set(['notebook', 'email', 'doc']);
 
 /** Moves focus to a neighbouring card (or out) before this one disappears. */
 function focusNeighbour(from: HTMLElement) {
@@ -161,7 +132,7 @@ export function AttachmentCard({
     );
   } else if (photo) {
     face = <img className={styles.photo} src={src} alt="" draggable={false} decoding="async" />;
-  } else if (kind === 'text' && excerpt !== undefined) {
+  } else if (kind === 'text' && excerpt !== undefined && !SOURCE_HIDDEN.has(family)) {
     face = (
       <>
         {!pasted && <span className={styles.name}>{name}</span>}

@@ -321,11 +321,17 @@ describe('forTurn', () => {
     expect(api.block).not.toContain('path=');
     expect(api.dirs).toEqual([]);
 
-    // An engine that opens files itself gets the path, and Conch's reader by id.
+    // An engine that opens files but reads PDFs poorly (Codex) gets the path and the words too.
     const agent = await forTurn(store, [pdf], { images: true, files: true, tools: true });
     expect(agent.block).toContain(`path="${(await store.get(pdf.id))?.path}"`);
-    expect(agent.block).toContain(`read_document with file_path "${pdf.id}"`);
-    expect(agent.block).not.toContain('taken out by Conch');
+    expect(agent.block).toContain('Revenue grew 12 percent');
+
+    // One whose own tools read PDFs well (Claude Code) gets the path, and Conch's reader by id.
+    const reads = { images: true, files: true, tools: true, opensPdfs: true };
+    const claude = await forTurn(store, [pdf], reads);
+    expect(claude.block).toContain(`path="${(await store.get(pdf.id))?.path}"`);
+    expect(claude.block).toContain(`read_document with file_path "${pdf.id}"`);
+    expect(claude.block).not.toContain('taken out by Conch');
   });
 
   it('points a provider with Conch’s tools at the rest of a long text by id', async () => {
@@ -343,8 +349,9 @@ describe('forTurn', () => {
     const store = await tempStore();
     const zip = await store.save({ name: 'a.zip', bytes: Buffer.from([0x50, 0x4b, 3, 4, 0, 0]) });
     const turn = await forTurn(store, [zip], { images: false, files: false, tools: false });
-    expect(turn.block).toContain("this provider can't open");
-    expect(turn.block).not.toContain('read_document');
+    // A broken ZIP (`readers/archives.ts`): said plainly, with no tool to call.
+    expect(turn.block).toContain("A ZIP archive Conch couldn't look inside");
+    expect(turn.block).not.toMatch(/read_document|file_unzip/);
   });
 
   it('still names what was attached when preparing it failed', () => {

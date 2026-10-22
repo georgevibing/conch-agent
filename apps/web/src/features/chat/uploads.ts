@@ -1,4 +1,9 @@
-import { type Attachment, UploadedAttachment } from '@conch/protocol';
+import {
+  type Attachment,
+  type AttachmentView,
+  AttachmentViewResponse,
+  UploadedAttachment,
+} from '@conch/protocol';
 
 import { ApiError, SIGNED_OUT_EVENT } from '../../api/client';
 
@@ -63,6 +68,19 @@ export async function attachmentText(id: string, signal?: AbortSignal): Promise<
   const response = await fetch(attachmentUrl(id), { signal });
   if (!response.ok) throw new ApiError(response.status, 'error', 'That attachment is gone.');
   return response.text();
+}
+
+/**
+ * What the gateway's readers made of a file the browser can't show by itself
+ * (ADR 0017): plain data, checked here too, drawn by Nacre. Null when nothing reads it.
+ */
+export async function attachmentView(
+  id: string,
+  signal?: AbortSignal,
+): Promise<AttachmentView | null> {
+  const response = await fetch(`${attachmentUrl(id)}/view`, { signal });
+  if (!response.ok) throw new ApiError(response.status, 'error', 'That attachment is gone.');
+  return AttachmentViewResponse.parse(await response.json()).view;
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);

@@ -38,7 +38,7 @@ import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
-import { withSight } from '../api/sight';
+import { describeOrSay, withSight } from '../api/sight';
 import { isAtLeast, parseVersion } from '../codex/detect';
 import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
 import { findAgent, signedInBefore, type AcpAgent } from './agents';
@@ -985,6 +985,15 @@ export class AcpEngine implements Engine {
             ? preamble(input.systemAppend, Boolean(door), { updated: true })
             : undefined;
       const words = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
+      // An agent that can't see gets the person's pictures in words, by a model that can (ADR 0070).
+      const seen =
+        !canSee && input.images?.length
+          ? await describeOrSay(input.images, {
+              ...(input.describe && { describe: input.describe }),
+              what: 'pictures the person attached to their message',
+              signal: input.signal,
+            })
+          : undefined;
       const prompt = [
         ...(lead ? [{ type: 'text', text: lead }] : []),
         ...(canSee ? (input.images ?? []) : []).map((image) => ({
@@ -994,10 +1003,9 @@ export class AcpEngine implements Engine {
         })),
         {
           type: 'text',
-          text:
-            !canSee && input.images?.length
-              ? `${words}\n\n[The images named above couldn't be shown: ${this.label} can't see images here. If the message depends on them, say so.]`
-              : words,
+          text: seen
+            ? `${words}\n\n[The images named above can't be shown to ${this.label}. ${seen} If the message depends on them and this isn't enough, say so.]`
+            : words,
         },
       ];
       const cancel = () => running.conn.notify('session/cancel', { sessionId });

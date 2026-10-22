@@ -276,6 +276,35 @@ export interface EngineAttachments {
   images: boolean;
   /** It can open files on this computer by path, with its own tools. */
   files: boolean;
+  /**
+   * It can be sent a PDF whole (`TurnInput.documents`), for the models that
+   * read PDFs themselves: pages, pictures, layout and scans (ADR 0017). The
+   * engine decides per model; the rest get its text and pictures of its pages.
+   */
+  pdfs?: boolean;
+  /**
+   * Its own tools read a PDF by path well, pictures and scans included (Claude
+   * Code's Read): Conch adds nothing. Without it, an engine that opens files
+   * still gets a PDF's text and pictures of its scanned pages from Conch.
+   */
+  opensPdfs?: boolean;
+}
+
+/** A PDF sent whole, for engines with `attachments.pdfs` (ADR 0017). */
+export interface TurnDocument {
+  name: string;
+  mimeType: 'application/pdf';
+  /** Base64, no data-URL prefix. */
+  data: string;
+  /** How many pages it has. */
+  pages: number;
+  /** Its size in bytes. */
+  bytes: number;
+  /**
+   * Its pages with little or no text, drawn as pictures on this computer: for
+   * a model that can't read the PDF whole (shown, or put into words, ADR 0070).
+   */
+  pictures?: TurnImage[];
 }
 
 /** An image sent with the message, for engines that can see. */
@@ -296,6 +325,8 @@ export interface TurnInput {
   prompt: string;
   /** Images attached to this message, only for engines with `attachments.images`. */
   images?: TurnImage[];
+  /** PDFs attached to this message, sent whole, only for engines with `attachments.pdfs`. */
+  documents?: TurnDocument[];
   /** Folders holding this conversation's attachments, for engines with `attachments.files`. */
   readableDirs?: string[];
   /** Files and folders the engine's own tools must never touch (Passwords and Conch's keys). */

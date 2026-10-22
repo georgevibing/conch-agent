@@ -77,13 +77,28 @@ export const PASTE_FOLD = { chars: 1000, lines: 20 } as const;
 
 /**
  * Documents whose words Conch takes out itself (`files/documents.ts`), so a
- * provider that can't open files still reads them (ADR 0017).
+ * provider that can't open files still reads them (ADR 0017): PDF; Word, Excel
+ * and PowerPoint, current and 97–2003; OpenDocument; EPUB; RTF; email; notebooks.
  */
 export const READABLE_DOCUMENT_TYPES: ReadonlySet<string> = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/msword',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.oasis.opendocument.graphics',
+  'application/epub+zip',
+  'application/rtf',
+  'text/rtf',
+  'message/rfc822',
+  'application/mbox',
+  'application/vnd.ms-outlook',
+  'application/x-ipynb+json',
 ]);
 
 /** Whether pasted text is long enough to become a card. */

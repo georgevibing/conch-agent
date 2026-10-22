@@ -53,6 +53,7 @@ import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { scriptTools } from './scripts/tool';
 import { DraftStore } from './drafts/store';
 import { AttachmentStore } from './attachments/store';
+import type { ReaderDeps } from './attachments/readers';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
 import { knowledgeTools } from './research/knowledge';
@@ -379,6 +380,8 @@ export class Services {
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
+  /** What attachment readers lean on, for turns and for previews (ADR 0017). */
+  readonly readerDeps: ReaderDeps;
   readonly processes: ProcessService;
   readonly images: ImageService;
   /** Documents, spreadsheets, slides and charts made for any provider; a browser prints them. */
@@ -1544,7 +1547,18 @@ export class Services {
       offers: this.offers,
       attachments: this.attachments,
       // Attachment readers' helpers (ADR 0017); each reader adds what it needs.
-      readers: { home: config.CONCH_HOME },
+      readers: (this.readerDeps = {
+        home: config.CONCH_HOME,
+        // Recordings and videos are heard with the voice service's whisper.cpp (`media.ts`).
+        media: {
+          ffmpeg: async () => {
+            const spec = KNOWN_NEEDS.get('ffmpeg');
+            return config.CONCH_ENGINE === 'mock' || !spec ? undefined : this.setup.path(spec);
+          },
+          hearing: () => this.voice.hearing(),
+          transcribe: (wav, maxBytes) => this.voice.transcribe(wav, 'auto', maxBytes),
+        },
+      }),
       stopProcesses: (id) => this.processes.stopAll(id),
       // Another chat changing files in this one's folder (ADR 0134).
       elsewhere: (id, turn) => this.together.reader(id, turn),

@@ -1,0 +1,46 @@
+import {
+  Archive,
+  AudioLines,
+  Binary,
+  BookOpen,
+  Box,
+  Braces,
+  ClipboardPaste,
+  Clapperboard,
+  Database,
+  File,
+  FileCode2,
+  FileSpreadsheet,
+  FileText,
+  Image as ImageIcon,
+  Mail,
+  NotebookPen,
+  Presentation,
+  Type,
+} from 'lucide-react';
+
+import type { FileFamily } from './fileType';
+
+/** Each family's glyph, on its card and in its preview. */
+export const GLYPHS: Record<FileFamily, typeof File> = {
+  pasted: ClipboardPaste,
+  text: FileText,
+  code: FileCode2,
+  data: Braces,
+  pdf: FileText,
+  doc: FileText,
+  sheet: FileSpreadsheet,
+  slides: Presentation,
+  archive: Archive,
+  image: ImageIcon,
+  audio: AudioLines,
+  video: Clapperboard,
+  email: Mail,
+  ebook: BookOpen,
+  database: Database,
+  font: Type,
+  model: Box,
+  binary: Binary,
+  notebook: NotebookPen,
+  file: File,
+};

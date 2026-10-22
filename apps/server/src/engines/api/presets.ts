@@ -139,6 +139,9 @@ export const PRESETS: readonly Preset[] = [
     noTools: /^gpt-6(\.1)?-(astra|sol)\b/,
     // The list says nothing about sight; its chat models look at pictures.
     sees: true,
+    // "File inputs": a PDF's text and a picture of each page, for models that see; 50 MB a
+    // request (developers.openai.com/api/docs/guides/pdf-files). No page limit is published.
+    pdfs: { maxPages: 100, maxBytes: 50 * 1024 * 1024, pageTokens: 1_500 },
     efforts: (model) => (/^(o\d|gpt-5|gpt-6)/.test(model.id) ? ['low', 'medium', 'high'] : []),
     maxTokens: 'max_completion_tokens',
     // Routes a chat's requests to the same cache (before GPT-5.6; after, it keeps the
@@ -160,6 +163,10 @@ export const PRESETS: readonly Preset[] = [
     // Gemma on the Gemini API has no function calling: its tools go in the prompt (ADR 0072).
     noTools: /^gemma/,
     sees: true,
+    // "PDF files up to 50MB or 1000 pages", 258 tokens a page (ai.google.dev/gemini-api/docs/
+    // document-processing). Its OpenAI endpoint documents no PDFs, so a `file` part is tried,
+    // and a model that refuses one gets the text from then on.
+    pdfs: { maxPages: 1_000, maxBytes: 50 * 1024 * 1024, pageTokens: 258 },
     // The OpenAI endpoint reads only Gemini's OpenAPI subset of JSON Schema.
     schemas: 'gemini',
     efforts: (model) => (model.thinking ? ['low', 'medium', 'high'] : []),

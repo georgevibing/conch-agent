@@ -37,7 +37,7 @@ import type {
   WireToolCall,
   WireUsage,
 } from './types';
-import { frame, type ToolResult } from './wire';
+import { frame, type ToolResult, type WireDocument } from './wire';
 
 /** A provider's error object, as it arrives in a frame or an error body. */
 export const ChatError = z.object({
@@ -361,12 +361,35 @@ function imagePart(image: Picture): Record<string, unknown> {
   return { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } };
 }
 
-/** The user's words, with any pictures first, as every chat API takes them. */
-export function chatUserMessage(content: string, images?: readonly Picture[]): WireMessage {
-  if (!images?.length) return { role: 'user', content };
+/**
+ * A PDF as a chat API takes it: a `file` part with the file's name and a
+ * base64 data URL (OpenAI's `ChatCompletionContentPart.File`, which
+ * OpenRouter and Gemini's OpenAI endpoint read too).
+ */
+function filePart(document: WireDocument): Record<string, unknown> {
+  return {
+    type: 'file',
+    file: {
+      filename: document.name,
+      file_data: `data:${document.mimeType};base64,${document.data}`,
+    },
+  };
+}
+
+/** The user's words, with any PDFs and pictures first, as every chat API takes them. */
+export function chatUserMessage(
+  content: string,
+  images?: readonly Picture[],
+  documents?: readonly WireDocument[],
+): WireMessage {
+  if (!images?.length && !documents?.length) return { role: 'user', content };
   return {
     role: 'user',
-    content: [...images.map(imagePart), { type: 'text', text: content }],
+    content: [
+      ...(documents ?? []).map(filePart),
+      ...(images ?? []).map(imagePart),
+      { type: 'text', text: content },
+    ],
   };
 }
 

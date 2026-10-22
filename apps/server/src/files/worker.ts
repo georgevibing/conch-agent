@@ -29,6 +29,13 @@ export interface WorkerOptions {
   timeoutMs?: number;
   maxOutput?: number;
   heapMb?: number;
+  /**
+   * Lets it load native addons: only for drawing a PDF's pages (pdf.js on
+   * `@napi-rs/canvas`, `attachments/readers/pdf.ts`). Node warns this can
+   * step around the permission model, so nothing else asks for it; the
+   * worker still can't write, spawn or see the environment.
+   */
+  addons?: boolean;
 }
 
 /** The worker's whole stdout, or a `WorkerFailed` saying why there is none. */
@@ -56,6 +63,7 @@ export async function runWorker(options: WorkerOptions): Promise<string> {
           ...roots,
         ]),
       ].map((path) => `--allow-fs-read=${path}`),
+      ...(options.addons ? ['--allow-addons'] : []),
       `--max-old-space-size=${options.heapMb ?? 256}`,
       worker,
     ],

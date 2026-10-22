@@ -4,6 +4,7 @@ import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import type { FileAccess } from '../engines/host';
 import { namedBytes, type ChatFiles } from './read';
+import { convertLegacy, legacyKind } from './office';
 import { runWorker, WorkerFailed } from './worker';
 
 export const DocumentResult = z.object({
@@ -24,13 +25,13 @@ export const DocumentResult = z.object({
 });
 
 /** Only module code is readable; document bytes enter on stdin, never by a caller-supplied path. */
-export async function extractDocument(
+async function readSealed(
   bytes: Buffer,
   name: string,
   offset: number,
   limit: number,
   signal: AbortSignal,
-  textOffset = 0,
+  textOffset: number,
 ) {
   const output = await runWorker({
     worker: './document-worker.mjs',
@@ -56,6 +57,36 @@ export async function extractDocument(
   return value.result;
 }
 
+/**
+ * A document's words, section by section, read in the sealed worker: PDF,
+ * Word, Excel and PowerPoint (current and 97–2003), OpenDocument, EPUB, RTF,
+ * email (.eml, .mbox, .msg) and Jupyter notebooks. An older Office file the
+ * worker can't read itself (Word 95, say) is converted first when this
+ * computer has a converter (`office.ts`), then read the same way.
+ */
+export async function extractDocument(
+  bytes: Buffer,
+  name: string,
+  offset: number,
+  limit: number,
+  signal: AbortSignal,
+  textOffset = 0,
+) {
+  try {
+    return await readSealed(bytes, name, offset, limit, signal, textOffset);
+  } catch (error) {
+    const kind = legacyKind(bytes, name);
+    if (!kind || signal.aborted || /locked/i.test(String(error))) throw error;
+    const converted = await convertLegacy(bytes, kind, signal);
+    if (!converted) throw error;
+    const read = await readSealed(converted, name, offset, limit, signal, textOffset);
+    return {
+      ...read,
+      warnings: ['Converted from an older Office file on this computer first.', ...read.warnings],
+    };
+  }
+}
+
 export function documentTools(
   ctx: ToolContext,
   access: () => Promise<FileAccess>,
@@ -67,7 +98,7 @@ export function documentTools(
       effect: 'read',
       row: true,
       description:
-        'Read text from PDF, DOCX, XLSX or PPTX files in the work folder or this chat’s attachments (by path, or by its id: att_…; up to 30 MB). Returns page, paragraph-block, sheet or slide references. Use nextOffset for more sections; if a section has nextTextOffset, read its offset with limit=1 and text_offset=nextTextOffset to continue within it. Reports truncation and pages needing visual/OCR reading. Does not execute macros, formulas or external links.',
+        'Read text from documents in the work folder or this chat’s attachments (by path, or by its id: att_…; up to 30 MB): PDF; Word, Excel and PowerPoint, current or 97–2003 (DOC, XLS, PPT); OpenDocument (ODT, ODS, ODP); EPUB; RTF; email (EML, MBOX, Outlook MSG); Jupyter notebooks. Returns page, paragraph-block, sheet (as a table), slide, chapter, message or cell references. Use nextOffset for more sections; if a section has nextTextOffset, read its offset with limit=1 and text_offset=nextTextOffset to continue within it. Reports truncation and pages needing visual/OCR reading. Does not execute macros, formulas or external links.',
       input: {
         file_path: z.string().min(1).max(4096),
         offset: z.number().int().min(0).max(100_000).default(0),

@@ -4,10 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 import type { Attachment } from '@conch/protocol';
 
-import type { EngineAttachments, TurnImage } from '../engines/types';
+import type { TurnDocument, TurnImage } from '../engines/types';
 import { CONVERTIBLE } from './fit';
 import { decodeText } from './sniff';
 import { READERS, type AttachmentAbilities, type ReaderDeps, type ReaderResult } from './readers';
+import { svgPicture } from './readers/pictures';
 import type { AttachmentStore } from './store';
 
 /** Most of one text attachment given to the model inline. Past it, the start and a note. */
@@ -22,6 +23,8 @@ export interface TurnAttachments {
   block?: string;
   /** Images for engines that can see them, in order. */
   images: TurnImage[];
+  /** PDFs sent whole, for engines with `pdfs` (`readers/pdf.ts`). */
+  documents?: TurnDocument[];
   /** Folders an engine that opens files may read (this message's attachments). */
   dirs: string[];
 }
@@ -46,8 +49,10 @@ async function readWith(
   can: AttachmentAbilities,
   budget: number,
   deps: ReaderDeps,
+  /** Only readers that take text (`Reader.text`): for an attachment that arrived as text. */
+  text = false,
 ): Promise<ReaderResult | undefined> {
-  const readers = READERS.filter((r) => !can.files || r.everywhere);
+  const readers = READERS.filter((r) => (!can.files || r.everywhere) && (!text || r.text));
   if (!readers.length) return undefined;
   const bytes = await readFile(path).catch(() => undefined);
   if (!bytes) return undefined;
@@ -121,6 +126,7 @@ export async function forTurn(
   const reads = can.files || can.tools === true;
   const parts: string[] = [];
   const images: TurnImage[] = [];
+  const documents: TurnDocument[] = [];
   const dirs: string[] = [];
   let budget = TEXT_TOTAL_MAX;
 
@@ -150,7 +156,13 @@ export async function forTurn(
       continue;
     }
 
-    if (attachment.kind === 'text') {
+    // An email, RTF or notebook that arrived as text is read like a document (`Reader.text`,
+    // `readers/documents.ts`); when no reader takes it, its text goes in as it is, below.
+    const asDocument =
+      attachment.kind === 'text' && budget > 1000
+        ? await readWith(found.path, attachment, can, budget, deps, true)
+        : undefined;
+    if (attachment.kind === 'text' && !asDocument) {
       const text = decodeText((await store.bytes(attachment.id)) ?? Buffer.alloc(0)) ?? '';
       const room = Math.min(TEXT_INLINE_MAX, budget);
       const lines = attachment.lines === undefined ? '' : ` lines="${attachment.lines}"`;
@@ -168,6 +180,11 @@ export async function forTurn(
         parts.push(
           `<attachment name="${name}" type="${type}"${lines}${path}>\n${fenced(text.slice(0, head))}\n${rest}\n</attachment>`,
         );
+      }
+      // An SVG is also drawn as a picture for engines that see (`readers/pictures.ts`).
+      if (can.images && attachment.mimeType === 'image/svg+xml') {
+        const drawn = await svgPicture(Buffer.from(text), attachment.name);
+        if (drawn) images.push(drawn);
       }
       continue;
     }
@@ -194,11 +211,13 @@ export async function forTurn(
     // An API model with Conch's tools gets them too, so it needn't ask for a tool first
     // (one taking its tools in words may never ask, and a chat-only one can't).
     const read =
-      budget > 1000 ? await readWith(found.path, attachment, can, budget, deps) : undefined;
+      asDocument ??
+      (budget > 1000 ? await readWith(found.path, attachment, can, budget, deps) : undefined);
     if (read) {
       const text = read.text?.slice(0, budget);
       if (text) budget -= text.length;
       if (can.images) images.push(...(read.images ?? []));
+      if (can.pdfs) documents.push(...(read.documents ?? []));
       parts.push(
         `<attachment name="${name}" type="${type}"${path}>\n${read.note}${text ? `\n${fenced(text)}` : ''}\n</attachment>`,
       );
@@ -214,12 +233,17 @@ export async function forTurn(
     }
     const what = attachment.kind === 'image' ? 'an image' : `a ${bytesLabel(attachment.size)} file`;
     const note = reads
-      ? `(${what[0]?.toUpperCase()}${what.slice(1)}. Use read_document with file_path "${attr(attachment.id)}" for PDF, DOCX, XLSX or PPTX text, or read_file for text. Other formats need an appropriate tool.)`
+      ? `(${what[0]?.toUpperCase()}${what.slice(1)}. Use read_document with file_path "${attr(attachment.id)}" for the text of a document (PDF, Office old or new, OpenDocument, EPUB, RTF, email), or read_file for text. Other formats need an appropriate tool.)`
       : attachment.kind === 'image'
         ? "(An image this model can't see. If the message depends on it, say so.)"
         : `(${what[0]?.toUpperCase()}${what.slice(1)} this provider can't open. If the message depends on it, say so.)`;
     parts.push(`<attachment name="${name}" type="${type}"${path}>${note}</attachment>`);
   }
 
-  return { block: wrap(parts), images, dirs: [...new Set(dirs)] };
+  return {
+    block: wrap(parts),
+    images,
+    ...(documents.length && { documents }),
+    dirs: [...new Set(dirs)],
+  };
 }

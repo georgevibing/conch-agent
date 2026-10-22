@@ -218,10 +218,9 @@ describe('file_make', () => {
     const { bytes } = await bytesOf(store, xlsx.id);
     const read = await extractDocument(bytes, 'Budget.xlsx', 0, 5, signal());
     expect(read.totalSections).toBe(2);
-    expect(read.sections[0]?.text).toContain('B2: 1200');
-    expect(read.sections[0]?.text).toContain('[formula: SUM(B2:B3)');
-    // A date is a date cell (an Excel day number), not text.
-    expect(read.sections[0]?.text).toMatch(/C2: 46023\b/);
+    // A table with the file's column letters and row numbers; a date cell reads as a date.
+    expect(read.sections[0]?.text).toContain('| 2 | Rent | 1200 | 2026-01-01 |');
+    expect(read.sections[0]?.text).toContain('(=SUM(B2:B3))');
     const sheetXml = strFromU8(
       unzipSync(new Uint8Array(bytes))['xl/worksheets/sheet1.xml'] ?? new Uint8Array(),
     );
@@ -497,12 +496,13 @@ describe('reading what the person sends', () => {
     const attachments = (await store.forConversation('chat-1')).filter((a) =>
       [docx.id, pdf.id].includes(a.id),
     );
-    const chat = await forTurn(store, attachments, { images: true, files: false });
+    const chat = await forTurn(store, attachments, { images: true, files: false, tools: true });
     expect(chat.block).toContain('taken out by Conch');
     expect(chat.block).toContain('Revenue grew 12% in Q3');
     expect(chat.block).toContain(`id="${docx.id}"`);
     expect(chat.block).not.toContain('path=');
-    const agent = await forTurn(store, attachments, { images: true, files: true });
+    // One whose own tools read PDFs well (Claude Code); Codex gets a PDF's words too (`readers/pdf.ts`).
+    const agent = await forTurn(store, attachments, { images: true, files: true, opensPdfs: true });
     expect(agent.block).toContain('read_document');
     expect(agent.block).not.toContain('taken out by Conch');
   });

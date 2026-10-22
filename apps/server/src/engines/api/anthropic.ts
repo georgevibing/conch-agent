@@ -62,8 +62,10 @@ import {
   send,
   text,
   validate,
+  type PdfLimits,
   type ToolResult,
   type Wire,
+  type WireDocument,
 } from './wire';
 
 const BASE = 'https://api.anthropic.com';
@@ -500,6 +502,27 @@ function imageBlock(image: Picture): Record<string, unknown> {
   };
 }
 
+/**
+ * A PDF as the Messages API takes it: a base64 `document` block, named by its
+ * title (https://platform.claude.com/docs/en/build-with-claude/pdf-support).
+ */
+function documentBlock(document: WireDocument): Record<string, unknown> {
+  return {
+    type: 'document',
+    source: { type: 'base64', media_type: document.mimeType, data: document.data },
+    title: document.name,
+  };
+}
+
+/**
+ * What Claude takes of PDFs, from Anthropic's PDF support page: 32 MB a
+ * request, 100 pages under a 1M window (600 at 1M; Conch keeps to 100),
+ * "1,500–3,000 tokens per page" of text, and each page's picture besides.
+ * Bedrock and Vertex take it the same way: both are the Messages API here,
+ * not Bedrock's Converse (which reads a PDF's pictures only with citations).
+ */
+const CLAUDE_PDFS: PdfLimits = { maxPages: 100, maxBytes: 32 * 1024 * 1024, pageTokens: 3_000 };
+
 export class AnthropicWire implements Wire {
   readonly source: string;
   /** Its thinking updates come as `narration` (ADR 0103). */
@@ -675,6 +698,13 @@ export class AnthropicWire implements Wire {
     return true;
   }
 
+  /** Every Claude model reads PDFs, on Anthropic's API, Bedrock and Vertex (ADR 0017). */
+  readonly takesPdfs = true;
+
+  pdfsFor(): PdfLimits {
+    return CLAUDE_PDFS;
+  }
+
   /**
    * Tool search, on Anthropic's own API (ADR 0072), for a model from after it
    * came and that hasn't refused it. Not through a route to Bedrock or Vertex,
@@ -689,9 +719,21 @@ export class AnthropicWire implements Wire {
     return 'anthropic';
   }
 
-  userMessage(content: string, images?: readonly Picture[]): WireMessage {
-    if (!images?.length) return { role: 'user', content };
-    return { role: 'user', content: [...images.map(imageBlock), { type: 'text', text: content }] };
+  userMessage(
+    content: string,
+    images?: readonly Picture[],
+    documents?: readonly WireDocument[],
+  ): WireMessage {
+    if (!images?.length && !documents?.length) return { role: 'user', content };
+    // PDFs first, then pictures, then the words: the order Anthropic recommends.
+    return {
+      role: 'user',
+      content: [
+        ...(documents ?? []).map(documentBlock),
+        ...(images ?? []).map(imageBlock),
+        { type: 'text', text: content },
+      ],
+    };
   }
 
   /**

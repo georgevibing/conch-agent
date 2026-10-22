@@ -30,6 +30,7 @@ import {
   type ChatError,
 } from './chat';
 import { tooLong, windowIn } from './context';
+import { hasDocuments } from './documents';
 import { refusesImages } from './pictures';
 import {
   ApiError,
@@ -56,8 +57,10 @@ import {
   send,
   text,
   validate,
+  type PdfLimits,
   type ToolResult,
   type Wire,
+  type WireDocument,
 } from './wire';
 
 const BASE = 'https://openrouter.ai/api/v1';
@@ -193,6 +196,12 @@ export function mapError(
 const EPHEMERAL = { type: 'ephemeral' } as const;
 
 /**
+ * PDFs for a model that reads them, through OpenRouter (openrouter.ai/docs/guides/overview/
+ * multimodal/pdfs): what the strictest provider behind it takes, Anthropic's 100 pages.
+ */
+const OPENROUTER_PDFS: PdfLimits = { maxPages: 100, maxBytes: 20 * 1024 * 1024, pageTokens: 3_000 };
+
+/**
  * Which models want to be asked to cache (ADR 0085), as OpenRouter documents
  * it: Claude takes breakpoints — the system prompt, then the conversation by
  * itself with the request's own `cache_control`; Gemini takes one, so it goes
@@ -223,6 +232,8 @@ export class OpenRouterWire implements Wire {
   #now: () => number;
   /** What the last model list said, so a turn only sends options the model takes. */
   #models = new Map<string, WireModel>();
+  /** Which models OpenRouter lists as taking files (`input_modalities`), from every list seen. */
+  #reads = new Map<string, boolean>();
   /** Whether each model in the whole catalogue calls tools, and when that was read. */
   #catalogue = new Map<string, boolean>();
   #catalogueAt = 0;
@@ -340,6 +351,8 @@ export class OpenRouterWire implements Wire {
   }
 
   #model(entry: z.infer<typeof ModelEntry>): WireModel {
+    const modalities = entry.architecture?.input_modalities;
+    if (modalities) this.#reads.set(entry.id, modalities.includes('file'));
     const supported = entry.supported_parameters ?? [];
     const tools = supported.includes('tools');
     const input = price(entry.pricing?.prompt);
@@ -440,8 +453,24 @@ export class OpenRouterWire implements Wire {
     return 'permissive';
   }
 
-  userMessage(content: string, images?: readonly Picture[]): WireMessage {
-    return chatUserMessage(content, images);
+  /**
+   * A PDF goes whole only to a model OpenRouter lists as taking files, read
+   * by the model itself (its `native` engine). OpenRouter would otherwise
+   * parse it for the rest with Mistral's OCR, a company the person didn't
+   * choose, at a price per page: those get Conch's text and pictures instead.
+   */
+  readonly takesPdfs = true;
+
+  pdfsFor(model: string): PdfLimits | undefined {
+    return this.#reads.get(model) ? OPENROUTER_PDFS : undefined;
+  }
+
+  userMessage(
+    content: string,
+    images?: readonly Picture[],
+    documents?: readonly WireDocument[],
+  ): WireMessage {
+    return chatUserMessage(content, images, documents);
   }
 
   toolResults(results: ToolResult[]): WireMessage[] {
@@ -465,6 +494,10 @@ export class OpenRouterWire implements Wire {
       ],
       // Claude's cache moves along the conversation by itself (OpenRouter's automatic caching).
       ...(cache === 'anthropic' && { cache_control: EPHEMERAL }),
+      // A PDF is read by the model itself, never parsed by another company (`pdfsFor`).
+      ...(request.messages.some(hasDocuments) && {
+        plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }],
+      }),
       ...chatTools(request.tools),
       // Only ask for reasoning where the model said which levels it takes.
       ...(request.effort !== 'auto' &&

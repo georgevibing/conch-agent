@@ -497,3 +497,42 @@ export const Tiles: S = {
     </AttachmentList>
   ),
 };
+
+/** Every kind a message can carry, small: each with its glyph, tint and words. */
+export const TilesEveryKind: S = {
+  render: () => (
+    <AttachmentList label="Attached" style={{ maxInlineSize: 760 }}>
+      {(
+        [
+          ['Board pack.odt', 'application/vnd.oasis.opendocument.text', 88_000],
+          ['Forecast.ods', 'application/vnd.oasis.opendocument.spreadsheet', 64_000],
+          ['Pitch.odp', 'application/vnd.oasis.opendocument.presentation', 2_100_000],
+          ['Letter.rtf', 'application/rtf', 12_000],
+          ['Old budget.xls', 'application/vnd.ms-excel', 140_000],
+          ['Re: launch.eml', 'message/rfc822', 24_000],
+          ['Middlemarch.epub', 'application/epub+zip', 1_400_000],
+          ['orders.sqlite', 'application/vnd.sqlite3', 3_200_000],
+          ['Inter.woff2', 'font/woff2', 98_000],
+          ['Bracket.stl', 'model/stl', 760_000],
+          ['Setup.exe', 'application/vnd.microsoft.portable-executable', 8_400_000],
+          ['analysis.ipynb', 'application/x-ipynb+json', 48_000],
+          ['Interview.m4a', 'audio/mp4', 6_200_000],
+          ['Demo.mov', 'video/quicktime', 18_000_000],
+          ['sources.tar.gz', 'application/gzip', 4_800_000],
+          ['blob', 'application/octet-stream', 2_048],
+        ] as const
+      ).map(([name, mimeType, size]) => (
+        <FileTile
+          key={name}
+          role="listitem"
+          name={name}
+          mimeType={mimeType}
+          kind="file"
+          size={size}
+          onOpen={() => {}}
+          downloadHref="#"
+        />
+      ))}
+    </AttachmentList>
+  ),
+};

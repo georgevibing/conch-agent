@@ -3,13 +3,15 @@ import {
   AttachmentCard,
   AttachmentList,
   AttachmentPreview,
+  familyOf,
+  wantsView,
   type AttachmentInfo,
 } from '@conch/nacre';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { SentFileTile } from './FileCard';
-import { attachmentText, attachmentUrl } from './uploads';
+import { attachmentText, attachmentUrl, attachmentView } from './uploads';
 
 /** Something the preview can show: a sent attachment, or a card on the draft. */
 export interface Viewable {
@@ -43,6 +45,23 @@ function useText(item: Viewable | undefined, enabled: boolean) {
   });
 }
 
+/** A recording still being heard comes back with the rest: asked again this often. */
+const HEARING_POLL_MS = 15_000;
+
+/** What the gateway's readers made of it, for kinds the browser can't show itself. */
+function useView(item: Viewable | undefined, enabled: boolean) {
+  const id = item?.id;
+  const media = item ? ['audio', 'video'].includes(familyOf(item.info)) : false;
+  return useQuery({
+    queryKey: ['attachment-view', id],
+    queryFn: ({ signal }) => attachmentView(id ?? '', signal),
+    enabled: enabled && Boolean(id) && item !== undefined && wantsView(item.info),
+    staleTime: Infinity,
+    retry: 1,
+    refetchInterval: (query) => (media && query.state.data?.more ? HEARING_POLL_MS : false),
+  });
+}
+
 /** The preview for a set of attachments, with ← and → between them. */
 export function AttachmentViewer({
   items,
@@ -55,6 +74,7 @@ export function AttachmentViewer({
 }) {
   const item = index === undefined ? undefined : items[index];
   const text = useText(item, index !== undefined);
+  const view = useView(item, index !== undefined);
   const tooBig =
     item?.info.kind === 'text' &&
     item.text === undefined &&
@@ -67,6 +87,9 @@ export function AttachmentViewer({
       src={item?.src ?? (item?.id ? attachmentUrl(item.id) : undefined)}
       text={item?.text ?? text.data}
       loading={text.isLoading}
+      // A view that couldn't load falls back to what the browser can show (or the download).
+      view={view.isError ? null : view.data}
+      viewLoading={view.isLoading}
       error={
         tooBig
           ? 'This one is too long to show here. Download it to read it all.'

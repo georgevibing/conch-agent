@@ -36,6 +36,13 @@
     --fm-h-markdown: calc(var(--nc-info-h) + 50);
     --fm-h-audio: calc(var(--nc-info-h) + 85);
     --fm-h-video: calc(var(--nc-danger-h) + 330);
+    --fm-h-email: calc(var(--nc-info-h) - 30);
+    --fm-h-ebook: calc(var(--nc-warning-h) - 25);
+    --fm-h-database: calc(var(--nc-success-h) + 40);
+    --fm-h-font: calc(var(--nc-info-h) + 50);
+    --fm-h-model: calc(var(--nc-success-h) - 40);
+    --fm-h-notebook: calc(var(--nc-warning-h) - 15);
+    --fm-h-binary: var(--nc-info-h);
     --fm-h-text: var(--nc-neutral-h);
     --fm-h-file: var(--nc-neutral-h);
     --fm-h: var(--fm-h-file);
@@ -73,6 +80,27 @@
   }
   :is(.root, .fileTile)[data-type='markdown'] {
     --fm-c: 0.12;
+  }
+  :is(.root, .fileTile)[data-type='email'] {
+    --fm-c: 0.12;
+  }
+  :is(.root, .fileTile)[data-type='ebook'] {
+    --fm-c: 0.08;
+  }
+  :is(.root, .fileTile)[data-type='database'] {
+    --fm-c: 0.1;
+  }
+  :is(.root, .fileTile)[data-type='font'] {
+    --fm-c: 0.12;
+  }
+  :is(.root, .fileTile)[data-type='model'] {
+    --fm-c: 0.12;
+  }
+  :is(.root, .fileTile)[data-type='notebook'] {
+    --fm-c: 0.15;
+  }
+  :is(.root, .fileTile)[data-type='binary'] {
+    --fm-c: 0.025;
   }
   :is(.root, .fileTile):is([data-type='text'], [data-type='file']) {
     --fm-c: var(--nc-neutral-c);

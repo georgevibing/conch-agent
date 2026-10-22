@@ -1,9 +1,15 @@
 import { createReadStream } from 'node:fs';
 
-import { ATTACHMENT_LIMITS, UploadedAttachment, type Attachment } from '@conch/protocol';
+import {
+  ATTACHMENT_LIMITS,
+  AttachmentViewResponse,
+  UploadedAttachment,
+  type Attachment,
+} from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { AttachmentError, type AttachmentStore } from './store';
+import type { AttachmentViews } from './view';
 
 /** Types a browser may show in place. Everything else downloads. */
 const MEDIA = new Set([
@@ -77,7 +83,11 @@ function sendError(reply: FastifyReply, error: unknown) {
  * `x-conch-name` (URI-encoded), the browser's guess at the type in
  * `x-conch-type`, and `x-conch-pasted: 1` marks a long paste.
  */
-export function registerAttachmentRoutes(app: FastifyInstance, store: AttachmentStore): void {
+export function registerAttachmentRoutes(
+  app: FastifyInstance,
+  store: AttachmentStore,
+  views?: AttachmentViews,
+): void {
   void app.register(async (scope) => {
     scope.addContentTypeParser(
       'application/octet-stream',
@@ -142,6 +152,20 @@ export function registerAttachmentRoutes(app: FastifyInstance, store: Attachment
       return reply.send(createReadStream(found.path));
     },
   );
+
+  // A closer look at what the browser can't show by itself: plain data from the readers
+  // (`view.ts`), drawn by the app, never HTML. Same sign-in, Host, Origin and
+  // Fetch-Metadata checks as every /api route; JSON, nosniff, no-store, sandboxed.
+  app.get<{ Params: { id: string } }>('/api/attachments/:id/view', async (request, reply) => {
+    const view = views ? await views.get(request.params.id) : null;
+    if (view === undefined)
+      return reply.code(404).send({ error: 'not-found', message: 'Not found.' });
+    reply.headers({
+      'cache-control': 'no-store',
+      'content-security-policy': "sandbox; default-src 'none'; frame-ancestors 'none'",
+    });
+    return AttachmentViewResponse.parse({ view });
+  });
 
   // Taking something off a draft frees it at once; sent attachments stay with their chat.
   app.delete<{ Params: { id: string } }>('/api/attachments/:id', async (request) => ({
