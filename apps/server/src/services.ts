@@ -1543,6 +1543,8 @@ export class Services {
       integrations: this.integrations,
       offers: this.offers,
       attachments: this.attachments,
+      // Attachment readers' helpers (ADR 0017); each reader adds what it needs.
+      readers: { home: config.CONCH_HOME },
       stopProcesses: (id) => this.processes.stopAll(id),
       // Another chat changing files in this one's folder (ADR 0134).
       elsewhere: (id, turn) => this.together.reader(id, turn),

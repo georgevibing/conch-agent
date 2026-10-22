@@ -1,11 +1,13 @@
 import { dirname } from 'node:path';
 
-import { type Attachment, READABLE_DOCUMENT_TYPES } from '@conch/protocol';
+import { readFile } from 'node:fs/promises';
+
+import type { Attachment } from '@conch/protocol';
 
 import type { EngineAttachments, TurnImage } from '../engines/types';
-import { extractDocument } from '../files/documents';
 import { CONVERTIBLE } from './fit';
 import { decodeText } from './sniff';
+import { READERS, type AttachmentAbilities, type ReaderDeps, type ReaderResult } from './readers';
 import type { AttachmentStore } from './store';
 
 /** Most of one text attachment given to the model inline. Past it, the start and a note. */
@@ -26,46 +28,40 @@ export interface TurnAttachments {
 
 const IMAGE_TYPES = new Set<string>(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
-/**
- * What one turn's engine can do with what was attached. `files`: its own
- * tools open a file by path (Claude Code, Codex, ACP agents). `tools`: it can
- * call Conch's `read_document` and `read_file`, which take an attachment by
- * id. An HTTP API model has Conch's tools (natively or in words, ADR 0072)
- * but no file system of its own, so it's `tools` without `files`.
- */
-export interface AttachmentAbilities extends EngineAttachments {
-  tools?: boolean;
-}
+export type { AttachmentAbilities } from './readers';
 
 /** Most of one document's words given inline to a provider that can't open files. */
 export const DOCUMENT_INLINE_MAX = 60_000;
+/** Longest one reader may take: past it, the plain note stands. */
+const READ_TIMEOUT_MS = 120_000;
 
 /**
- * A document's words for a provider that can't open files itself, so every
- * provider can read a PDF or an Office file it was sent. Undefined when there
- * are none (a scanned PDF, a locked file): the plain note stands.
+ * The first reader that takes this attachment, and what it made of it. Engines
+ * that open files read most families themselves; readers marked `everywhere`
+ * run for them too. A reader that fails or times out is skipped, never the turn.
  */
-async function documentWords(
-  bytes: Buffer,
-  name: string,
-  room: number,
-): Promise<{ text: string; more: boolean; warnings: string[] } | undefined> {
-  const signal = AbortSignal.timeout(30_000);
-  const read = await extractDocument(bytes, name, 0, 20, signal).catch(() => undefined);
-  if (!read) return undefined;
-  let text = '';
-  let more = read.nextOffset !== null;
-  for (const section of read.sections) {
-    const part = `[${section.label}]\n${section.text}\n`;
-    if (text.length + part.length > room) {
-      text += part.slice(0, Math.max(0, room - text.length));
-      more = true;
-      break;
-    }
-    text += part;
-    if (section.truncated) more = true;
+async function readWith(
+  path: string,
+  attachment: Attachment,
+  can: AttachmentAbilities,
+  budget: number,
+  deps: ReaderDeps,
+): Promise<ReaderResult | undefined> {
+  const readers = READERS.filter((r) => !can.files || r.everywhere);
+  if (!readers.length) return undefined;
+  const bytes = await readFile(path).catch(() => undefined);
+  if (!bytes) return undefined;
+  const head = bytes.subarray(0, 4096);
+  const signal = AbortSignal.timeout(READ_TIMEOUT_MS);
+  const room = Math.min(DOCUMENT_INLINE_MAX, budget);
+  for (const reader of readers) {
+    if (!reader.matches(attachment, head)) continue;
+    const result = await reader
+      .read({ attachment, bytes, path, room, can, deps, signal })
+      .catch(() => undefined);
+    if (result) return result;
   }
-  return text.trim() ? { text: text.trim(), more, warnings: read.warnings.slice(0, 3) } : undefined;
+  return undefined;
 }
 
 /** An attribute value that can't close its tag or open another. */
@@ -118,6 +114,7 @@ export async function forTurn(
   store: AttachmentStore,
   attachments: readonly Attachment[],
   can: AttachmentAbilities,
+  deps: ReaderDeps = {},
 ): Promise<TurnAttachments> {
   if (!attachments.length) return { images: [], dirs: [] };
   /** It can read an attachment again later: by path itself, or by id with Conch's tools. */
@@ -192,39 +189,18 @@ export async function forTurn(
       }
     }
 
-    // A PDF or an Office file, for a provider that can't open it itself: its words, read
-    // here. An API model with Conch's tools gets them too, so it needn't ask for a tool
-    // first (one taking its tools in words may never ask, and a chat-only one can't).
-    if (
-      !can.files &&
-      attachment.kind === 'file' &&
-      READABLE_DOCUMENT_TYPES.has(attachment.mimeType) &&
-      budget > 1000
-    ) {
-      const bytes = await store.bytes(attachment.id);
-      const words =
-        bytes &&
-        (await documentWords(bytes, attachment.name, Math.min(DOCUMENT_INLINE_MAX, budget)));
-      if (!words) {
-        // A scan, a locked file or a broken one: said plainly, with what would work instead.
-        parts.push(
-          `<attachment name="${name}" type="${type}"${path}>(A ${bytesLabel(attachment.size)} document with no text Conch could take out: it may be scanned, locked or damaged. If the message depends on it, say so, and ask for screenshots of its pages or a copy with text.)</attachment>`,
-        );
-        continue;
-      }
-      budget -= words.text.length;
-      const notes = [
-        ...words.warnings,
-        ...(words.more
-          ? [
-              can.tools
-                ? `Only the start is here. For the rest, use read_document with file_path "${attachment.id}" and the next offset.`
-                : "Only the start is here; the rest didn't fit. If the message depends on the rest, say so.",
-            ]
-          : []),
-      ];
+    // A family a reader knows (`readers/`): PDFs, Office files and the rest, turned into
+    // words (and pictures, for engines that see) here, so every provider can use them.
+    // An API model with Conch's tools gets them too, so it needn't ask for a tool first
+    // (one taking its tools in words may never ask, and a chat-only one can't).
+    const read =
+      budget > 1000 ? await readWith(found.path, attachment, can, budget, deps) : undefined;
+    if (read) {
+      const text = read.text?.slice(0, budget);
+      if (text) budget -= text.length;
+      if (can.images) images.push(...(read.images ?? []));
       parts.push(
-        `<attachment name="${name}" type="${type}" id="${attr(attachment.id)}">\n(The text of this document, taken out by Conch. Pictures and layout are not included.)\n${fenced(words.text)}${notes.length ? `\n[${notes.join(' ')}]` : ''}\n</attachment>`,
+        `<attachment name="${name}" type="${type}"${path}>\n${read.note}${text ? `\n${fenced(text)}` : ''}\n</attachment>`,
       );
       continue;
     }

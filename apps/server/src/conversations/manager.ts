@@ -76,6 +76,7 @@ import {
   forTurn as attachmentsForTurn,
   unprepared as attachmentsUnprepared,
 } from '../attachments/prompt';
+import type { ReaderDeps } from '../attachments/readers';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
@@ -1184,6 +1185,8 @@ export class ConversationManager {
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
+      /** What attachment readers lean on: whisper.cpp, ffmpeg, a model that sees (ADR 0017). */
+      readers?: ReaderDeps;
       /** Stop managed command trees when the person stops or deletes this chat. */
       stopProcesses?: (conversationId: string) => void;
       /**
@@ -4447,7 +4450,7 @@ export class ConversationManager {
     const store = this.deps.attachments;
     const attached =
       store && attachments.length
-        ? await attachmentsForTurn(store, attachments, can).catch(() =>
+        ? await attachmentsForTurn(store, attachments, can, this.deps.readers).catch(() =>
             attachmentsUnprepared(attachments),
           )
         : undefined;
