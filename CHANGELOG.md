@@ -2,6 +2,20 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.17](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-22)
+
+
+### Features
+
+* every kind of file you attach reaches every model, and opens in a preview ([692fa6b](https://github.com/georgevibing/conch-agent/commit/692fa6b12187bb1446f48011a8da46fcd801646f))
+
+
+### Bug Fixes
+
+* a question card's answer stays in the chat for every model ([4dce2a9](https://github.com/georgevibing/conch-agent/commit/4dce2a93ffa523dd5c47b77cb47255ee57eeb45a))
+* PDFs and Office files reach every model, and open on a phone ([980f442](https://github.com/georgevibing/conch-agent/commit/980f4424c6fea98d2d66317205942aeb6db82f21))
+* **web:** an answered question's tick stays beside its first line ([d952487](https://github.com/georgevibing/conch-agent/commit/d952487c8cb3233424f07cd2b629969ceb75d6fc))
+
 ## [0.1.0-alpha.16](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-21)
 
 ### New
