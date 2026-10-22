@@ -360,6 +360,38 @@ export const PreviewImage: Story = {
   ),
 };
 
+/** A one-page PDF, small enough to keep in the story. */
+const pdf = `data:application/pdf;base64,${btoa(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 400 200]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+    '4 0 obj<</Length 52>>stream',
+    'BT /F1 24 Tf 40 100 Td (Q3 board update) Tj ET',
+    'endstream endobj',
+    '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+  ].join('\n'),
+)}`;
+
+/** A PDF in the browser's own viewer, with **Open** for a phone, whose frame shows one page at most. */
+export const PreviewPdf: Story = {
+  render: () => (
+    <PreviewDemo
+      attachment={{
+        name: 'Q3 board update.pdf',
+        kind: 'file',
+        mimeType: 'application/pdf',
+        size: 2_400_000,
+      }}
+      src={pdf}
+      downloadHref="#"
+    />
+  ),
+};
+
 export const PreviewNoPreview: Story = {
   render: () => (
     <PreviewDemo

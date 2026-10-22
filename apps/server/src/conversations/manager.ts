@@ -72,7 +72,10 @@ import { hostToolText } from '../engines/types';
 import { authorizeTool, DECLINED, hostComputerTools } from '../engines/host';
 import type { ScriptTool } from '../scripts/runner';
 import type { ScriptTurn } from '../scripts/tool';
-import { forTurn as attachmentsForTurn } from '../attachments/prompt';
+import {
+  forTurn as attachmentsForTurn,
+  unprepared as attachmentsUnprepared,
+} from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
@@ -4434,14 +4437,19 @@ export class ConversationManager {
     };
 
     // Attachments go in front of the words, as each provider can take them (ADR 0017).
+    // Opening files by path is the engine's own; reading them by id is Conch's tools'.
+    // An API model has only the second, so its documents' words come with the message.
     const can = {
       images: engine.attachments?.images ?? false,
-      files: engine.attachments?.files === true || engine.hostTools !== false,
+      files: engine.attachments?.files === true,
+      tools: engine.hostTools !== false,
     };
     const store = this.deps.attachments;
     const attached =
       store && attachments.length
-        ? await attachmentsForTurn(store, attachments, can).catch(() => undefined)
+        ? await attachmentsForTurn(store, attachments, can).catch(() =>
+            attachmentsUnprepared(attachments),
+          )
         : undefined;
     // Preferences near the question go between what was attached and your words; never in the log.
     const words = near ? `${near}\n\n${said}` : said;
@@ -4452,7 +4460,7 @@ export class ConversationManager {
       : words;
     // Files sent earlier in the chat stay readable to engines that open files.
     const readableDirs =
-      store && can.files
+      store && (can.files || can.tools)
         ? (await store.forConversation(conversationId)).map((a) => store.folder(a.id))
         : [];
 

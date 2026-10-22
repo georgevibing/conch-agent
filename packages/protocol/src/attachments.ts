@@ -75,6 +75,17 @@ export const ATTACHMENT_LIMITS = {
  */
 export const PASTE_FOLD = { chars: 1000, lines: 20 } as const;
 
+/**
+ * Documents whose words Conch takes out itself (`files/documents.ts`), so a
+ * provider that can't open files still reads them (ADR 0017).
+ */
+export const READABLE_DOCUMENT_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+
 /** Whether pasted text is long enough to become a card. */
 export function shouldFoldPaste(text: string): boolean {
   return text.length > PASTE_FOLD.chars || countLines(text) > PASTE_FOLD.lines;

@@ -24,7 +24,8 @@ skip the card, paste with <kbd>mod+shift+v</kbd>.
 ## Look before you send
 
 Click a card: pictures show large, PDFs open in the browser's viewer, CSVs become
-tables, code is coloured, sound and video play, the rest offers **Download**.
+tables, code is coloured, sound and video play, the rest offers **Download**. A phone's
+browser shows only a PDF's first page there: **Open** shows all of it in a new tab.
 
 - <kbd>left</kbd> and <kbd>right</kbd> move between cards; the cross takes one off.
 - A card that didn't upload says why and offers to try again.
@@ -36,9 +37,10 @@ tables, code is coloured, sound and video play, the rest offers **Download**.
 - Text goes with your words.
 - Pictures go to models that can see. Others get a description written by one of your
   models that can.
-- PDF, DOCX, XLSX and PPTX text works with any provider. Tool-using models can read on
-  through pages, sheets and slides. Scanned pages without text are flagged; they need
-  visual or OCR reading.
+- PDF, DOCX, XLSX and PPTX text works with any provider. A model reached by an API key
+  gets the text with your message; one that opens files itself gets the file. Tool-using
+  models can read on through pages, sheets and slides. Scanned pages without text are
+  flagged; they need visual or OCR reading.
 - A ZIP can be unpacked into the chat: up to 50 files, 30 MB each.
 - Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and
   external links never run.

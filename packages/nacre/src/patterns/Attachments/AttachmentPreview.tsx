@@ -1,4 +1,11 @@
-import { ChevronLeft, ChevronRight, File, FileText, TextCursorInput } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  File,
+  FileText,
+  TextCursorInput,
+} from 'lucide-react';
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Button } from '../../components/Button';
@@ -324,6 +331,14 @@ export function AttachmentPreview({
             </>
           )}
           <span className={styles.spacer} />
+          {/* A phone's browser shows a framed PDF's first page at most; its own viewer shows all. */}
+          {mode === 'pdf' && src && !error && (
+            <Button asChild variant="ghost" size="sm" leadingIcon={<ExternalLink />}>
+              <a href={src} target="_blank" rel="noopener noreferrer">
+                Open
+              </a>
+            </Button>
+          )}
           {downloadHref && (
             <Button asChild variant="ghost" size="sm">
               <a href={downloadHref} download={attachment.name}>

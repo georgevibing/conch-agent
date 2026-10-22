@@ -9,7 +9,7 @@ import { buildApp } from '../app';
 import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { forTurn, TEXT_INLINE_MAX } from './prompt';
+import { forTurn, TEXT_INLINE_MAX, unprepared } from './prompt';
 import { cleanName, sniff } from './sniff';
 import { AttachmentStore, HELD_MAX_AGE_MS, UNSENT_MAX_AGE_MS } from './store';
 
@@ -24,6 +24,22 @@ const GIF = Buffer.concat([
   Buffer.alloc(8),
 ]);
 const PDF = Buffer.from('%PDF-1.7\n%âãÏÓ\n1 0 obj\n', 'latin1');
+/** A one-page PDF with words on it, as a phone's Files app would hand over. */
+const TEXT_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 400 200]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+    '4 0 obj<</Length 55>>stream',
+    'BT /F1 18 Tf 20 100 Td (Revenue grew 12 percent) Tj ET',
+    'endstream endobj',
+    '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+  ].join('\n'),
+  'latin1',
+);
 
 async function tempStore() {
   const dir = await mkdtemp(join(tmpdir(), 'conch-att-'));
@@ -267,7 +283,8 @@ describe('forTurn', () => {
         data: PNG.toString('base64'),
       }),
     ]);
-    expect(seeing.block).toContain("this provider can't open");
+    // Not a readable PDF: said plainly, not passed off as read.
+    expect(seeing.block).toContain('no text Conch could take out');
     expect(seeing.block).not.toContain('path=');
     expect(seeing.dirs).toEqual([]);
 
@@ -289,6 +306,60 @@ describe('forTurn', () => {
     const turn = await forTurn(store, [big], { images: false, files: true });
     expect(turn.block).toContain(`Read the rest with read_file and file_path "${big.id}"`);
     expect((turn.block ?? '').length).toBeLessThan(TEXT_INLINE_MAX);
+  });
+
+  it('gives a PDF’s words to a provider with Conch’s tools but no files of its own (an API model)', async () => {
+    // The bug: an API model (OpenAI's GPT-6.1 Sol, whose tools go in words) got only a
+    // path it couldn't open and a hint to call read_document, so the PDF never reached it.
+    const store = await tempStore();
+    const pdf = await store.save({ name: 'report.pdf', bytes: TEXT_PDF, claimedType: '' });
+    expect(pdf).toMatchObject({ kind: 'file', mimeType: 'application/pdf' });
+    const api = await forTurn(store, [pdf], { images: true, files: false, tools: true });
+    expect(api.block).toContain('taken out by Conch');
+    expect(api.block).toContain('Revenue grew 12 percent');
+    expect(api.block).toContain(`id="${pdf.id}"`);
+    expect(api.block).not.toContain('path=');
+    expect(api.dirs).toEqual([]);
+
+    // An engine that opens files itself gets the path, and Conch's reader by id.
+    const agent = await forTurn(store, [pdf], { images: true, files: true, tools: true });
+    expect(agent.block).toContain(`path="${(await store.get(pdf.id))?.path}"`);
+    expect(agent.block).toContain(`read_document with file_path "${pdf.id}"`);
+    expect(agent.block).not.toContain('taken out by Conch');
+  });
+
+  it('points a provider with Conch’s tools at the rest of a long text by id', async () => {
+    const store = await tempStore();
+    const big = await store.save({
+      name: 'log.txt',
+      bytes: Buffer.from('x'.repeat(TEXT_INLINE_MAX + 10)),
+    });
+    const turn = await forTurn(store, [big], { images: false, files: false, tools: true });
+    expect(turn.block).toContain(`Read the rest with read_file and file_path "${big.id}"`);
+    expect(turn.block).not.toContain('path=');
+  });
+
+  it('never tells a provider without tools to call one', async () => {
+    const store = await tempStore();
+    const zip = await store.save({ name: 'a.zip', bytes: Buffer.from([0x50, 0x4b, 3, 4, 0, 0]) });
+    const turn = await forTurn(store, [zip], { images: false, files: false, tools: false });
+    expect(turn.block).toContain("this provider can't open");
+    expect(turn.block).not.toContain('read_document');
+  });
+
+  it('still names what was attached when preparing it failed', () => {
+    const turn = unprepared([
+      {
+        id: 'att_1',
+        name: 'report.pdf',
+        mimeType: 'application/pdf',
+        size: 1,
+        kind: 'file',
+        createdAt: 0,
+      },
+    ]);
+    expect(turn.block).toContain('<attachment name="report.pdf" type="application/pdf">');
+    expect(turn.block).toContain("Conch couldn't prepare this attachment");
   });
 
   it('tells every engine a voice note’s words are the message, so none tries to hear it', async () => {

@@ -56,18 +56,33 @@ are cleaned (no folders, control or bidi characters, Windows-reserved names).
 **Each provider gets what it can use** (`Engine.attachments`, surfaced as
 `Capabilities.attachments`, and `ModelInfo.images` per model):
 
-| Provider      | images                               | files (by path)                     |
-| ------------- | ------------------------------------ | ----------------------------------- |
-| Claude Code   | content blocks                       | yes (`additionalDirectories`)       |
-| Codex CLI     | by path (`localImage`)               | yes                                 |
-| Anthropic API | content blocks                       | no                                  |
-| OpenRouter    | data URLs, if the model says it sees | no                                  |
-| Mock          | yes                                  | no (keeps the degraded path tested) |
+| Provider    | images                              | files (by path)                     | documents                               |
+| ----------- | ----------------------------------- | ----------------------------------- | --------------------------------------- |
+| Claude Code | content blocks                      | yes (`additionalDirectories`)       | by path, or `read_document`             |
+| Codex CLI   | by path (`localImage`)              | yes                                 | `read_document` by id or path           |
+| ACP agents  | yes                                 | yes                                 | `read_document` by id or path           |
+| API engines | content blocks / data URLs, if seen | no                                  | text inline, then `read_document` by id |
+| Mock        | yes                                 | no (keeps the degraded path tested) | text inline                             |
 
 Text always goes inline, fenced in `<attachment>` tags inside an
 `<attachments>` block before the person's words, up to 150 000 characters
 each and 400 000 in all. Past that, engines that open files get the start and
-the path, the rest get the start and a note. What a provider can't use is
+the path, the rest get the start and a note.
+
+**Documents reach every provider** (amended October 2026). "Opens files" is
+the engine's own (`Engine.attachments.files`: Claude Code, Codex, ACP
+agents); reading by id with Conch's `read_document` and `read_file` is a
+separate ability (`hostTools`). An API engine has only the second, so a PDF,
+DOCX, XLSX or PPTX sent to it carries its text, taken out by Conch's sealed
+reader (up to 60 000 characters), with the attachment's `id` and, when more
+remains, how to read on with `read_document`. Before, any engine with Conch's
+tools counted as opening files, so an API model got only a path and a hint to
+call `read_document`; one taking its tools in words (OpenAI's GPT-6.1 Sol and
+GPT-6 Astra have no function calling on Chat Completions) or a chat-only one
+often never did, and answered without the document. A document with no text
+to take out (a scan, a locked file) says so, with what to ask for instead;
+a model without Conch's tools is never told to call one. If preparing the
+attachments fails outright, the model still hears what was attached. What a provider can't use is
 named with a plain note so the model can say so. The composer warns first:
 a card whose provider can't use it gets a dot and a sentence.
 
@@ -124,7 +139,8 @@ prompt injection; path tricks in names and ids.
   is shown as source), unknown types download, and only images, PDFs and a
   short list of audio/video types show inline. PDFs are the only thing the
   app may frame (`frame-ancestors 'self'`), because browsers won't render one
-  in a sandbox. Following OWASP File Upload Cheat Sheet: allowlisted types by
+  in a sandbox. iOS Safari draws only a framed PDF's first page, so the
+  preview also offers **Open** (the same URL in a new tab, `noopener`). Following OWASP File Upload Cheat Sheet: allowlisted types by
   content, generated storage names, size limits, no execution.
 - Ids pass `Id` and `safeJoin`; names pass `cleanName`; attribute values in the
   prompt are escaped and bodies can't close their fence.

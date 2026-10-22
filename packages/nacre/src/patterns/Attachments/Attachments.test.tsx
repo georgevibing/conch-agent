@@ -170,6 +170,23 @@ describe('AttachmentPreview', () => {
     await expectAccessible(baseElement);
   });
 
+  it('shows a PDF in a frame, with Open for a browser that frames only its first page', () => {
+    renderNacre(
+      <AttachmentPreview
+        open
+        onOpenChange={() => {}}
+        attachment={{ name: 'report.pdf', kind: 'file', mimeType: 'application/pdf' }}
+        src="/api/attachments/att_1"
+        downloadHref="/api/attachments/att_1?download=1"
+      />,
+    );
+    expect(screen.getByTitle('report.pdf')).toHaveAttribute('src', '/api/attachments/att_1');
+    const open = screen.getByRole('link', { name: 'Open' });
+    expect(open).toHaveAttribute('href', '/api/attachments/att_1');
+    expect(open).toHaveAttribute('target', '_blank');
+    expect(open).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('says plainly when there is no preview', () => {
     renderNacre(
       <AttachmentPreview
