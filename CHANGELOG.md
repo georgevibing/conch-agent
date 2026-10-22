@@ -2,6 +2,16 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.17](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-22)
+
+### New
+
+- Every kind of file you attach reaches every model, and opens in a preview
+
+### Fixed
+
+- An answered question's tick stays beside its first line
+
 ## [0.1.0-alpha.16](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-21)
 
 ### New
