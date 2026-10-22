@@ -164,6 +164,8 @@ When your assistant needs a choice, it asks with a card and the reply waits.
 
 Once answered, the card folds to one line. If the reply has ended, your answer starts it again. If another reply is running, it reads your answer at its next step, or carries on with it once it finishes. Stopping the reply, or Conch restarting, skips a question still waiting.
 
+Your answer stays part of the chat: later replies know it, whichever model answers them.
+
 A waiting question shows in the sidebar and, with [notifications](../start/phone.md) on, on your phone. In **Talk**, your assistant reads it out and you answer aloud.
 
 Routines, background tasks and [chat apps](../channels/index.md) never stop to ask; your assistant picks the sensible choice and says which.

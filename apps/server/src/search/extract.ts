@@ -1,6 +1,8 @@
 import type { ConversationEvent, SearchRole } from '@conch/protocol';
 
-/** One searchable unit: a user message, an assistant reply, or a tool call. */
+import { questionLine } from '../questions/desk';
+
+/** One searchable unit: a user message, an assistant reply, a tool call, or a question card. */
 export interface SearchDoc {
   anchor: string;
   role: SearchRole;
@@ -58,6 +60,8 @@ export function extractDocs(events: ConversationEvent[]): SearchDoc[] {
   // Assistant text arrives in deltas; collect the markdown, convert at the end.
   const assistant = new Map<string, SearchDoc>();
   const raw = new Map<SearchDoc, string>();
+  /** A question card's document, by its id, for its answer to join. */
+  const questions = new Map<string, SearchDoc>();
   for (const event of events) {
     switch (event.type) {
       case 'user.message':
@@ -89,6 +93,29 @@ export function extractDocs(events: ConversationEvent[]): SearchDoc[] {
           assistant.set(event.messageId, next);
           docs.push(next);
         }
+        break;
+      }
+      case 'question': {
+        // What the assistant asked on a card, and (below) what the person answered on it.
+        const doc: SearchDoc = {
+          anchor: event.question.questionId,
+          role: 'assistant',
+          seq: event.seq,
+          lastSeq: event.seq,
+          at: event.at,
+          text: questionLine(event.question),
+        };
+        questions.set(doc.anchor, doc);
+        docs.push(doc);
+        break;
+      }
+      case 'question.answered': {
+        const doc = questions.get(event.questionId);
+        if (!doc || !event.answer) break;
+        // The person's words: theirs, found as they'd find a message of theirs.
+        doc.role = 'user';
+        doc.lastSeq = event.seq;
+        doc.text = `${doc.text}\n${event.answer.text}`;
         break;
       }
       case 'tool.started':

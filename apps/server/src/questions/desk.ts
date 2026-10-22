@@ -42,6 +42,24 @@ export function answeredWords(question: Question, answer: QuestionAnswer): strin
   ].join('\n');
 }
 
+/** What a question asked, in one short line: its title, or its fields' labels. */
+export function questionLine(question: Pick<Question, 'title' | 'fields'>): string {
+  const said = (question.title ?? question.fields.map((f) => f.label).join(' · '))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return said.length > 200 ? `${said.slice(0, 199)}…` : said;
+}
+
+/**
+ * An answer that arrives after the reply that asked has ended (ADR 0143): it
+ * reaches the model as a turn of its own, maybe in a session that never saw
+ * the call, so it says which question it answers. Still only the person's
+ * words: it grants nothing.
+ */
+export function lateWords(question: Question, words: string): string {
+  return `About your earlier question “${questionLine(question)}”:\n${words}`;
+}
+
 export const SKIPPED =
   'They skipped the question. Carry on with your best judgement, and say in a few words what you assumed.';
 export const NOBODY =
@@ -96,7 +114,8 @@ export class QuestionDesk {
         // Stopped: the turn is ending, so it isn't "running" again for a moment.
         const words = answer ? answeredWords(question, answer) : SKIPPED;
         if (!cancelled && !ctx.signal.aborted) {
-          if (detached || ctx.questionTurn?.active() === false) ctx.questionTurn?.resume(words);
+          if (detached || ctx.questionTurn?.active() === false)
+            ctx.questionTurn?.resume(lateWords(question, words));
           else void ctx.waitingForYou?.(false);
         }
         resolve(words);

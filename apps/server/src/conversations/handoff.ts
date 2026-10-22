@@ -196,6 +196,18 @@ function transcript(events: readonly ConversationEvent[], afterSeq: number, befo
       }
       case 'question.answered': {
         const asked = questions.get(event.questionId);
+        // A card's answer is the person's words, as a message is: its own line, never one
+        // step folded away in a long stretch of work. A typed answer is its message already.
+        if (event.answer && Object.keys(event.answer.values).length) {
+          lines.push({
+            speaker: `User (answering the question${asked ? ` “${asked}”` : ''} on its card)`,
+            text: event.answer.text,
+          });
+          steps = [];
+          done = undefined;
+          replies.clear();
+          break;
+        }
         step(
           event.answer
             ? `The user answered${asked ? ` “${asked}”` : ''}: ${oneLine(event.answer.text, 200)}`

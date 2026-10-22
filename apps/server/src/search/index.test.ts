@@ -46,6 +46,55 @@ describe('extractDocs', () => {
     ]);
   });
 
+  it('finds a question card and the answer given on it (ADR 0143)', () => {
+    seq = 0;
+    const question = {
+      questionId: 'q1',
+      fields: [
+        {
+          id: 'pockets',
+          kind: 'choice' as const,
+          label: 'Did the pitta have pockets?',
+          options: [
+            { id: 'yes', label: 'Yes, pockets' },
+            { id: 'no', label: 'No, flat' },
+          ],
+          multiple: false,
+          other: true,
+          optional: false,
+        },
+      ],
+    };
+    const asked: ConversationEvent[] = [
+      ...turn('c1', 'log my lunch', 'One question first.'),
+      { ...base('c1'), type: 'question', question },
+    ];
+    const answered: ConversationEvent[] = [
+      ...asked,
+      { ...base('c1'), type: 'turn.completed', outcome: 'success' } as ConversationEvent,
+      {
+        ...base('c1'),
+        type: 'question.answered',
+        questionId: 'q1',
+        answer: { values: { pockets: 'yes' }, text: 'Yes, pockets' },
+      },
+    ];
+    expect(extractDocs(answered).at(-1)).toMatchObject({
+      anchor: 'q1',
+      role: 'user',
+      text: 'Did the pitta have pockets?\nYes, pockets',
+    });
+
+    // Indexed while it waited, then again once answered after its reply ended.
+    const index = new SearchIndex(':memory:');
+    index.index(convo('c1', 'Lunch'), asked);
+    index.index(convo('c1', 'Lunch', 2), answered);
+    const hit = index.search('pockets').groups[0]?.hits.find((h) => h.anchor === 'q1');
+    expect(hit).toMatchObject({ role: 'user' });
+    expect(hit?.snippet).toContain('Yes, pockets');
+    index.close();
+  });
+
   it('keeps code but drops fences and list markers', () => {
     expect(plainText('# Title\n\n- one\n- two\n\n```ts\nconst x = 1;\n```')).toBe(
       'Title\n\none\ntwo\n\n\nconst x = 1;',

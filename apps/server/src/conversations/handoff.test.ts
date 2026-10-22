@@ -238,6 +238,50 @@ describe('what was done, handed over too', () => {
     expect(text).toContain('Still waiting for the user to answer: Which day?');
   });
 
+  it('keeps a card’s answer as the user’s own line, even in a long run of steps (ADR 0143)', () => {
+    seq = 0;
+    const events: ConversationEvent[] = [user('Log my lunch and dinner')];
+    for (let i = 0; i < 8; i++)
+      events.push(...tool(`a${i}`, 'mcp__conch__web_search', { query: `q${i}` }, 'success', 'ok'));
+    events.push(
+      {
+        ...at(),
+        type: 'question',
+        question: {
+          questionId: 'q1',
+          fields: [
+            {
+              id: 'pockets',
+              kind: 'choice',
+              label: 'Did the pitta have pockets?',
+              options: [
+                { id: 'yes', label: 'Yes, pockets' },
+                { id: 'no', label: 'No, flat' },
+              ],
+            },
+          ],
+        },
+      } as unknown as ConversationEvent,
+      {
+        ...at(),
+        type: 'question.answered',
+        questionId: 'q1',
+        answer: { values: { pockets: 'yes' }, text: 'Yes, pockets' },
+      } as unknown as ConversationEvent,
+    );
+    for (let i = 8; i < 30; i++)
+      events.push(...tool(`a${i}`, 'mcp__conch__web_search', { query: `q${i}` }, 'success', 'ok'));
+    events.push(...reply('r1', 'Logged lunch.'), user('I answered about pockets'));
+    const text =
+      handoff(events, { afterSeq: -1, beforeSeq: events.at(-1)?.seq ?? 0, restart: true }) ?? '';
+    // The steps around it are folded, but never the answer.
+    expect(text).toMatch(/more steps\)/);
+    expect(text).toContain(
+      'User (answering the question “Did the pitta have pockets?” on its card): Yes, pockets',
+    );
+    expect(text).not.toContain('Still waiting for the user');
+  });
+
   it('says so when it’s everything again because the provider’s own session was lost', () => {
     seq = 0;
     const events = [user('hello'), ...reply('a1', 'hi'), user('again')];

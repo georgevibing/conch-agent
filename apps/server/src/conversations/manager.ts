@@ -4640,7 +4640,13 @@ export class ConversationManager {
         budget: pace.budget,
         wrapTool: extras?.wrapTool,
         resourceFeedback: () =>
-          [feedback?.take(), elsewhere?.take(), this.#takeQuestionAnswers(live)]
+          [
+            feedback?.take(),
+            elsewhere?.take(),
+            // A late answer must stay in the conversation: where a note lasts only this
+            // turn, it waits for the reply to end and starts one of its own (ADR 0143).
+            engine.boundaryNotes === 'turn' ? undefined : this.#takeQuestionAnswers(live),
+          ]
             .filter(Boolean)
             .join('\n\n') || undefined,
         options: resolved,
@@ -5849,7 +5855,15 @@ export class ConversationManager {
   #evict() {
     for (const [id, live] of this.#live) {
       if (this.#live.size <= MAX_LIVE) break;
-      const busy = live.abort || live.extras || live.titling || live.permissions.size > 0;
+      // A card still waiting holds this object: read back from disk, the chat would say it
+      // was skipped, and the answer would go to a copy nobody saves (ADR 0143).
+      const busy =
+        live.abort ||
+        live.extras ||
+        live.titling ||
+        live.permissions.size > 0 ||
+        live.questionAnswers?.length ||
+        this.deps.questions?.waiting(id);
       if (!busy) this.#live.delete(id);
     }
   }

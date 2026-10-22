@@ -232,8 +232,8 @@ export class SearchIndex {
       );
       const upsert = this.#stmt(
         `INSERT INTO docs (conversation_id, anchor, role, seq, at, text) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (conversation_id, anchor) DO UPDATE SET text = excluded.text
-         WHERE docs.text <> excluded.text`,
+         ON CONFLICT (conversation_id, anchor) DO UPDATE SET text = excluded.text, role = excluded.role
+         WHERE docs.text <> excluded.text OR docs.role <> excluded.role`,
       );
       for (const doc of docs) {
         upsert.run(conversation.id, doc.anchor, doc.role, doc.seq, doc.at, doc.text);

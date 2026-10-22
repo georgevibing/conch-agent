@@ -46,7 +46,13 @@ export class SearchIndexer {
       this.#run(event.conversationId, () => this.index.remove(event.conversationId));
     } else if (event.type === 'conversation.event') {
       const { conversationId, type } = event.event;
-      if (type === 'user.message' || type === 'turn.completed' || type === 'title') {
+      // A card answered after its reply ended is in the chat before any reply says so.
+      if (
+        type === 'user.message' ||
+        type === 'turn.completed' ||
+        type === 'title' ||
+        type === 'question.answered'
+      ) {
         this.#run(conversationId, async () => {
           const { conversation, events } = await this.source.detail(conversationId);
           this.index.index(conversation, events);

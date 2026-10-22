@@ -30,6 +30,29 @@ answers retain the person's message.
 Open unanswered cards stay enabled independently of turn activity. The server
 remains authoritative for validation and duplicate rejection.
 
+## Amendment: the answer stays in the conversation (22 October 2026)
+
+An answered card was sometimes missing from what the model saw on later turns,
+and chat search couldn't find it either. Now:
+
+- A late answer's words name the question they answer ("About your earlier
+  question …"), because the reply that hears them may run in a session that
+  never saw the `ask` call (a provider that started a fresh thread, or another model).
+- The handover between providers (`handoff.ts`) gives a card's answer its own
+  `User (answering the question “…” on its card)` line. It was one step among
+  the tool calls, and a long run of steps folded it away as "(N more steps)".
+- An engine declares `boundaryNotes: 'turn'` when a `resourceFeedback` note
+  lasts only that turn (the API engines put it in that turn's system prompt).
+  There, a late answer isn't spent on that note: it waits for the running reply
+  to end and starts a reply of its own. Engines that keep the note with the tool
+  result (Claude Code, Codex, ACP) still read it at the next boundary.
+- A chat whose card waits is never dropped from memory. Read back from disk, it
+  looked like a restart, so the card read as skipped and the answer went to a
+  copy that was never saved.
+- Search indexes each card with its question and its answer, so ⌘K finds them.
+
+None of this changes who may answer or what an answer can do.
+
 ## Boundaries and verification
 
 The existing authenticated, same-origin answer route validates field values and

@@ -613,6 +613,14 @@ export interface Engine {
    */
   readonly hostTools?: boolean;
   /**
+   * How long a `resourceFeedback` note stays with the model. Absent or `'kept'`:
+   * it goes into the provider's own conversation with the tool result, and is
+   * there on later turns. `'turn'`: only for the rest of the turn it came in, so
+   * Conch gives it nothing there that the conversation must keep (a late question
+   * answer waits for a turn of its own, ADR 0143).
+   */
+  readonly boundaryNotes?: 'kept' | 'turn';
+  /**
    * Its commands can run where the person chooses (ADR 0106): it runs them with
    * Conch's tools, or hands Conch each one. Absent: they run on this computer,
    * whatever the chat chose, and the picker says so.

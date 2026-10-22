@@ -506,6 +506,8 @@ export class ApiEngine implements Engine {
   };
   /** Its commands are Conch's, so they run where the chat's work runs (ADR 0106). */
   readonly places = true;
+  /** Host notes at a tool boundary go in this turn's system prompt, not the saved transcript. */
+  readonly boundaryNotes = 'turn' as const;
   /** Models that can see get images; none of these can open files on this computer. */
   readonly attachments = { images: true, files: false };
   /** A model that sees can describe a screenshot for one that can't (ADR 0070). */

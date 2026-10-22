@@ -47,6 +47,10 @@ class AskingEngine implements Engine {
   hold?: Promise<void>;
   takeFeedback = true;
   readonly feedback: string[] = [];
+  /** Like the API engines: a boundary note lasts only its turn. */
+  boundaryNotes?: 'kept' | 'turn';
+  /** Says it keeps a session, so a turn that can't carry it on gets the chat so far. */
+  sessions = false;
 
   async detect(): Promise<EngineStatus> {
     return {
@@ -72,8 +76,11 @@ class AskingEngine implements Engine {
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     this.turns.push(input);
+    if (this.sessions) yield { type: 'session', resumeId: `r${this.turns.length}` };
     const ask = input.tools.find((t) => t.name === 'ask');
-    if (/book/.test(input.prompt) && ask) {
+    // What it's asked now, not the earlier conversation it may be handed.
+    const now = input.prompt.replace(/<earlier-conversation>[\s\S]*<\/earlier-conversation>/, '');
+    if (/book/.test(now) && ask) {
       yield { type: 'tool-start', toolUseId: 't1', name: 'mcp__conch__ask', input: QUESTION };
       const pending = ask.run(QUESTION as never);
       if (this.detached) {
@@ -187,6 +194,8 @@ describe('ask: questions answered with a tap (ADR 0060)', () => {
     expect(engine.turns[1]?.prompt).toContain('Phone call');
     expect(engine.turns[1]?.prompt).toContain('"how":"phone"');
     expect(engine.turns[1]?.prompt).not.toContain('forged label');
+    // The reply that hears it may be in a session that never saw the call: it says what it answers.
+    expect(engine.turns[1]?.prompt).toContain('About your earlier question “Your call with Ada”');
     expect(() => questions.answer(id, question.questionId, null)).toThrow(/already been answered/);
     expect(engine.turns).toHaveLength(2);
   });
@@ -236,6 +245,81 @@ describe('ask: questions answered with a tap (ADR 0060)', () => {
       );
     },
   );
+
+  it('where a boundary note lasts one turn, a late answer waits for a reply of its own', async () => {
+    const { manager, engine, questions } = await setup();
+    engine.detached = true;
+    engine.boundaryNotes = 'turn';
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    let release = () => {};
+    engine.hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await manager.wake(id, 'Keep planning while waiting');
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    questions.answer(id, question.questionId, {
+      values: { when: '2026-10-09T10:00', how: 'video' },
+      text: 'x',
+    });
+    release();
+    await until(async () => (engine.turns.length === 3 ? true : undefined));
+    await finished(manager, id);
+    // Never only in a note the provider forgets after this turn: in a prompt it keeps.
+    expect(engine.feedback.join('\n')).not.toContain('Video call');
+    expect(engine.turns[2]?.prompt).toContain('Video call');
+    expect(engine.turns[2]?.prompt).toContain('Your call with Ada');
+    expect(engine.turns).toHaveLength(3);
+  });
+
+  it('a provider that must start afresh for a late answer still hears what it answers', async () => {
+    const { manager, engine, questions } = await setup();
+    engine.detached = true;
+    engine.sessions = true;
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    questions.answer(id, question.questionId, {
+      values: { when: '2026-10-09T10:00', how: 'phone' },
+      text: 'x',
+    });
+    await until(async () => (engine.turns.length === 2 ? true : undefined));
+    await finished(manager, id);
+    // A fresh session never saw the call: the answer comes with its question.
+    const fresh = engine.turns[1]?.freshPrompt ?? '';
+    expect(fresh).toContain('About your earlier question “Your call with Ada”');
+    expect(fresh).toContain('Phone call');
+    // The next message hands a fresh session the card's answer as the user's own line.
+    await manager.send({ conversationId: id, clientMessageId: 'u2', text: 'what did I pick?' });
+    await until(async () => (engine.turns.length === 3 ? true : undefined));
+    await finished(manager, id);
+    expect(engine.turns[2]?.freshPrompt).toContain(
+      'User (answering the question “Your call with Ada” on its card): Friday 9 Oct, 10:00 · Phone call',
+    );
+  });
+
+  it('a chat whose card waits stays loaded, so the answer is saved in its log', async () => {
+    const { manager, make, engine, questions, store } = await setup();
+    engine.detached = true;
+    const { id, question } = await asked(manager);
+    await finished(manager, id);
+    // More chats than Conch keeps in memory, read from disk after this one (opened, searched).
+    const elsewhere = make();
+    for (let i = 0; i < 52; i++) {
+      const other = await elsewhere.send({ clientMessageId: `o${i}`, text: `hello ${i}` });
+      await finished(elsewhere, other.id);
+      await manager.detail(other.id);
+    }
+    questions.answer(id, question.questionId, {
+      values: { when: '2026-10-09T10:00', how: 'video' },
+      text: 'x',
+    });
+    await until(async () => (engine.turns.length === 54 ? true : undefined));
+    // Saved as it is, and never also marked skipped by a reload.
+    await finished(manager, id);
+    const answers = (await store.events(id)).filter((e) => e.type === 'question.answered');
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({ answer: { text: 'Friday 9 Oct, 10:00 · Video call' } });
+  });
 
   it('skipping an idle question resumes with an explicit skipped result', async () => {
     const { manager, engine, questions } = await setup();

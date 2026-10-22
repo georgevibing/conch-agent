@@ -13,8 +13,8 @@ Results arrive in groups:
 
 - **Chats**, by title: "pmw" finds "Plan my week". [Archived](./chats.md#archive) ones
   too, marked.
-- **Messages** from any chat: your words, the answers, and the commands and files your
-  assistant worked with.
+- **Messages** from any chat: your words, the answers, the questions your assistant asked
+  on a card with what you chose, and the commands and files your assistant worked with.
 - **Agents**, **Skills**, **Skills people share**, **Models**, **Apps** (or
   "integrations"), **Talk to me here** (or "channels"), **Folders**, **Routines**,
   **Passwords**, **Tasks** and **Made for you**, by name.
