@@ -213,6 +213,15 @@ describe('QuestionCard', () => {
     expect(screen.getByRole('note')).toHaveTextContent('Skipped');
   });
 
+  it('keeps the mark beside the words, so a wrapping question never leaves it alone', () => {
+    card(callType, { state: 'answered', answer: 'Video call' });
+    const note = screen.getByRole('note');
+    // Two children: the mark and one column of words that wraps on its own.
+    expect(note.children).toHaveLength(2);
+    expect(note.children[0]?.tagName.toLowerCase()).toBe('svg');
+    expect(note.children[1]).toHaveTextContent('How would you like to talk?Video call');
+  });
+
   it('an open card folds in place when the answer comes, and focus follows it', async () => {
     const { rerender } = card(callType);
     screen.getByRole('radio', { name: 'Phone' }).focus();

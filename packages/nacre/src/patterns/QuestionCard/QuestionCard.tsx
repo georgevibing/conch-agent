@@ -427,21 +427,26 @@ export function QuestionCard({
           {state === 'answered' ? (
             <>
               <Check aria-hidden className={styles.lineIcon} />
-              <span className={styles.lineQuestion}>{heading}</span>
-              <span
-                className={styles.lineAnswer}
-                data-in-message={answeredInMessage || !answer ? '' : undefined}
-              >
-                {answeredInMessage || !answer ? 'Answered in your message' : answer}
+              {/* One column beside the mark, so a long question never leaves it on a line alone. */}
+              <span className={styles.lineText}>
+                <span className={styles.lineQuestion}>{heading}</span>
+                <span
+                  className={styles.lineAnswer}
+                  data-in-message={answeredInMessage || !answer ? '' : undefined}
+                >
+                  {answeredInMessage || !answer ? 'Answered in your message' : answer}
+                </span>
               </span>
             </>
           ) : (
             <>
               <SkipForward aria-hidden className={styles.lineIcon} />
-              <span className={styles.lineAnswer} data-in-message="">
-                Skipped
+              <span className={styles.lineText}>
+                <span className={styles.lineAnswer} data-in-message="">
+                  Skipped
+                </span>
+                <span className={styles.lineQuestion}>{heading}</span>
               </span>
-              <span className={styles.lineQuestion}>{heading}</span>
             </>
           )}
         </p>

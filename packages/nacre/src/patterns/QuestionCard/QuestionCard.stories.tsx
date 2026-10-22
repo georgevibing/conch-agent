@@ -234,6 +234,28 @@ export const Answered: Story = {
   args: { question: when, state: 'answered', answer: 'Thursday 8 Oct, 10:00' },
 };
 
+/** A question long enough to wrap on a phone: the mark stays beside its first line. */
+export const AnsweredLongQuestion: Story = {
+  args: {
+    question: {
+      questionId: 'q-publish',
+      fields: [
+        {
+          id: 'publish',
+          kind: 'choice',
+          label: 'Publish this fix directly to main, using CI for the full test suite?',
+          options: [
+            { id: 'push', label: 'Push and monitor CI' },
+            { id: 'pr', label: 'Open a pull request' },
+          ],
+        },
+      ],
+    },
+    state: 'answered',
+    answer: 'Push and monitor CI',
+  },
+};
+
 export const AnsweredInYourMessage: Story = {
   args: { question: callType, state: 'answered', answeredInMessage: true },
 };

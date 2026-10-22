@@ -556,10 +556,8 @@
   /* ── Folded: the question, and what you said ───────────────────── */
   .line {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
+    align-items: flex-start;
     column-gap: var(--nc-space-2);
-    row-gap: 0.125rem;
     margin: 0;
     padding-inline: var(--nc-space-1);
     font-size: var(--nc-chat-note-size);
@@ -580,10 +578,20 @@
 
   .lineIcon {
     flex: none;
-    align-self: center;
     inline-size: var(--nc-chat-note-icon);
     block-size: var(--nc-chat-note-icon);
+    /* Centred on the first line of words, however many lines they wrap to. */
+    margin-block-start: calc((1lh - var(--nc-chat-note-icon)) / 2);
     color: var(--nc-text-subtle);
+  }
+
+  .lineText {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    min-inline-size: 0;
+    column-gap: var(--nc-space-2);
+    row-gap: 0.125rem;
   }
 
   .line[data-state='answered'] .lineIcon {
