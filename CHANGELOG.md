@@ -4,20 +4,14 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.17](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-25)
 
+### New
 
-### Features
+- Review Auto actions against the authorized task
+- Every kind of file you attach reaches every model, and opens in a preview
 
-* every kind of file you attach reaches every model, and opens in a preview ([692fa6b](https://github.com/georgevibing/conch-agent/commit/692fa6b12187bb1446f48011a8da46fcd801646f))
-* **server:** review Auto actions against the authorized task ([9afbba5](https://github.com/georgevibing/conch-agent/commit/9afbba5f3fb89df87c82fd14dffbdfceab702693))
+### Fixed
 
-
-### Bug Fixes
-
-* a question card's answer stays in the chat for every model ([4dce2a9](https://github.com/georgevibing/conch-agent/commit/4dce2a93ffa523dd5c47b77cb47255ee57eeb45a))
-* PDFs and Office files reach every model, and open on a phone ([980f442](https://github.com/georgevibing/conch-agent/commit/980f4424c6fea98d2d66317205942aeb6db82f21))
-* **server:** bind Auto review to the action that executes ([8c79848](https://github.com/georgevibing/conch-agent/commit/8c798488b9f3694486c4f7e177e6c2ba06eab032))
-* **server:** bound permission reviews and reject ambiguous verdicts ([fd9677b](https://github.com/georgevibing/conch-agent/commit/fd9677b84567acb37ca2ac8645b93d0da0ef65ce))
-* **web:** an answered question's tick stays beside its first line ([d952487](https://github.com/georgevibing/conch-agent/commit/d952487c8cb3233424f07cd2b629969ceb75d6fc))
+- An answered question's tick stays beside its first line
 
 ## [0.1.0-alpha.16](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-21)
 
