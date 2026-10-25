@@ -1120,8 +1120,8 @@ export class ConversationManager {
       /** A cheap model for the memory check's second look (ADR 0087); it can only raise a flag. */
       memoryLook?: () => Promise<LookModel | undefined>;
       /**
-       * A cheap model for Auto's second look at an unusual command after reading
-       * (ADR 0100, `risk-look.ts`); it can only add a question.
+       * This turn's model for the legacy second look (ADR 0100, `risk-look.ts`).
+       * Its clear verdict can lift only an eligible contextual question.
        */
       riskLook?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
       /** Task-aware review uses this turn's provider and selected model, never a price-name heuristic. */

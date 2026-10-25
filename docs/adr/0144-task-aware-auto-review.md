@@ -38,3 +38,11 @@ The authorization adapter now detects changes to both original and normalized ar
 A resolved communication click in Conch's isolated browser can supply a complete, redacted page to the same reviewer. The host re-reads it and checks exact equality immediately before proceeding. Long/failed snapshots, uploads, coordinate clicks, typed-but-unapplied payloads, shared personal browsers and non-communication controls retain their existing checks. Page state is untrusted evidence, not permission. This is a best-effort state check, not a transaction with the remote service. Tests exercise both the real snapshot boundary and changed-page refusal.
 
 The older second-look path also uses the current turn's provider/model. It no longer consults the default provider's cheapest name match. Permission review never silently falls over to an unrelated provider.
+
+## Third audit pass
+
+Both review paths now share a deadline covering model acquisition and completion. Cancellation wins even if a provider ignores its signal; late acquisition cannot start another model call. The legacy parser also rejects duplicate JSON keys and contradictory clear verdicts. Tests cover Off and Read only changes while review is pending.
+
+Focused local validation includes the existing Auto corpus, native/bridge/host paths, real browser page redaction and state changes, and authorization mutation cases. The sealed-process cleanup test also fails against main's unchanged host implementation on this machine; CI must independently establish its outcome. No full local suite was run.
+
+Compared with the inspected Hermes source, Conch now has richer task authority and an enforced internal rejection budget. Compared with OpenClaw, it applies a shared task reviewer to more assistant-tool surfaces and permits ordinary authorized outcomes, but does not claim stronger arbitrary executable binding or measured model accuracy. Small local reviewer qualification and real-model attack evaluation remain necessary before claims about market leadership or a particular model's reliability.

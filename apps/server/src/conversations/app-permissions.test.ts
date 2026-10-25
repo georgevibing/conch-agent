@@ -925,3 +925,56 @@ describe('browser evidence at the host boundary', () => {
     expect(reviewer).not.toHaveBeenCalled();
   });
 });
+
+describe('policy changes during Auto review', () => {
+  const allowed = JSON.stringify({
+    decision: 'allow',
+    risk: 'moderate',
+    reason: 'authorized',
+    evidence: [0],
+  });
+
+  it('rechecks an Off switch after the model answers', async () => {
+    const { manager, reviewer, integrations, call } = await setup({
+      mode: 'auto',
+      destructive: true,
+      review: allowed,
+    });
+    reviewer.mockImplementation(async () => {
+      integrations.decide = async () => 'off';
+      return { text: allowed };
+    });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'Make the requested issue change',
+    });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+  });
+
+  it('does not grant an allowance after the person changes to Read only', async () => {
+    const { manager, reviewer, call } = await setup({
+      mode: 'auto',
+      destructive: true,
+      review: allowed,
+    });
+    let release: ((value: { text: string }) => void) | undefined;
+    reviewer.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'Make the requested issue change',
+    });
+    await vi.waitFor(() => expect(reviewer).toHaveBeenCalled());
+    await manager.configure(convo.id, { permissionMode: 'plan' });
+    release?.({ text: allowed });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+  });
+});

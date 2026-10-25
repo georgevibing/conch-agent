@@ -173,3 +173,29 @@ describe('reviews cover the whole proposed action', () => {
     expect(complete).not.toHaveBeenCalled();
   });
 });
+
+it('bounds both acquisition and completion when a second-look provider ignores cancellation', async () => {
+  expect(
+    await judgeCommand('./sync', read, () => new Promise(() => {}), { timeoutMs: 10 }),
+  ).toBeUndefined();
+  expect(
+    await judgeCommand('./sync', read, async () => ({ complete: () => new Promise(() => {}) }), {
+      timeoutMs: 10,
+    }),
+  ).toBeUndefined();
+});
+
+it.each([
+  '{"risky":true,"risky":false,"kind":"none"}',
+  '{"risky":true,"risk\\u0079":false,"kind":"none"}',
+  '{"risky":false,"kind":"send-out"}',
+])('never clears a risk from ambiguous second-look JSON: %s', async (text) => {
+  expect(await judgeCommand('./sync', read, model(text).look)).toBeUndefined();
+  expect(
+    await lookAtAppStep(
+      { app: 'Notes', tool: 'save', access: 'write', args: {} },
+      read,
+      model(text).look,
+    ),
+  ).toBeUndefined();
+});

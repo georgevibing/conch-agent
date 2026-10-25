@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { datamark, type LookModel } from '../memory/guard';
 import { NEVER, type Risk } from './risk';
+import { completeReview, reviewJson } from './review-completion';
 
 const Reply = z
   .object({
@@ -85,55 +86,31 @@ export async function reviewAutoAction(
     return undefined;
   }
   if (payload.length > 48_000) return undefined;
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? 8_000)]);
-  if (signal.aborted) return undefined;
-  let onAbort: (() => void) | undefined;
-  try {
-    const work = async () => {
-      const found = await model();
-      if (!found || signal.aborted) return undefined;
-      const fence = randomBytes(12).toString('hex');
-      const answer = await found.complete({
-        system: AUTO_REVIEW_SYSTEM,
-        prompt: `Evaluate the data between the two ${fence} lines. Spaces in data are marked.\n${fence}\n${datamark(payload)}\n${fence}`,
-        ...(found.model && { model: found.model }),
-        maxTokens: 512,
-        signal,
-      });
-      if (signal.aborted || answer.text.length > 4_096) return undefined;
-      // The schema is flat apart from numeric evidence. Count decoded keys before JSON.parse
-      // can discard duplicates, including escaped spellings. No prose or code-fence salvage.
-      const keys = [...answer.text.matchAll(/("(?:[^"\\]|\\.)*")\s*:/g)].map(
-        (m) => JSON.parse(m[1] ?? '""') as string,
-      );
-      if (new Set(keys).size !== keys.length) return undefined;
-      const parsed = Reply.safeParse(JSON.parse(answer.text));
-      if (!parsed.success) return undefined;
-      const verdict = parsed.data;
-      if (verdict.evidence.some((id) => id >= action.ownerMessages.length)) return undefined;
-      if (
-        verdict.decision === 'allow' &&
-        (verdict.risk === 'severe' ||
-          verdict.risk === 'unknown' ||
-          !verdict.evidence.length ||
-          !['routine', 'authorized'].includes(verdict.reason))
-      )
-        return undefined;
-      return verdict;
-    };
-    return await Promise.race([
-      work(),
-      new Promise<undefined>((resolve) => {
-        onAbort = () => resolve(undefined);
-        signal.addEventListener('abort', onAbort, { once: true });
-        if (signal.aborted) onAbort();
-      }),
-    ]);
-  } catch {
+  const fence = randomBytes(12).toString('hex');
+  const answer = await completeReview(
+    model,
+    {
+      system: AUTO_REVIEW_SYSTEM,
+      prompt: `Evaluate the data between the two ${fence} lines. Spaces in data are marked.\n${fence}\n${datamark(payload)}\n${fence}`,
+      maxTokens: 512,
+    },
+    options,
+  );
+  if (!answer) return undefined;
+  // No prose or code-fence salvage for an authorization decision.
+  const parsed = Reply.safeParse(reviewJson(answer.text));
+  if (!parsed.success) return undefined;
+  const verdict = parsed.data;
+  if (verdict.evidence.some((id) => id >= action.ownerMessages.length)) return undefined;
+  if (
+    verdict.decision === 'allow' &&
+    (verdict.risk === 'severe' ||
+      verdict.risk === 'unknown' ||
+      !verdict.evidence.length ||
+      !['routine', 'authorized'].includes(verdict.reason))
+  )
     return undefined;
-  } finally {
-    if (onAbort) signal.removeEventListener('abort', onAbort);
-  }
+  return verdict;
 }
 
 const REASONS: Record<AutoVerdict['reason'], string> = {

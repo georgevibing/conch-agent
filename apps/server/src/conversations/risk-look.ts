@@ -25,6 +25,7 @@ import type { TaintSource } from '@conch/protocol';
 import { z } from 'zod';
 
 import { datamark, DATAMARK, type LookModel } from '../memory/guard';
+import { completeReview, reviewJson } from './review-completion';
 
 const Reply = z.object({
   risky: z.boolean(),
@@ -109,8 +110,6 @@ export async function judgeCommand(
   // A verdict about a prefix must never clear a risk elsewhere in the command.
   if (!model || command.length > 12_000 || (options.asked?.length ?? 0) > 12_000) return undefined;
   try {
-    const found = await model();
-    if (!found) return undefined;
     const fence = randomBytes(9).toString('base64url');
     const sources = read
       .slice(0, 4)
@@ -125,20 +124,19 @@ export async function judgeCommand(
       fence,
       'Is this command risky? JSON only.',
     ].join('\n');
-    const signal = AbortSignal.any([
-      AbortSignal.timeout(options.timeoutMs ?? 6_000),
-      ...(options.signal ? [options.signal] : []),
-    ]);
-    const answer = await found.complete({
-      system: SYSTEM,
-      prompt,
-      ...(found.model && { model: found.model }),
-      signal,
-    });
+    const answer = await completeReview(
+      model,
+      { system: SYSTEM, prompt, maxTokens: 256 },
+      {
+        ...options,
+        timeoutMs: options.timeoutMs ?? 6_000,
+      },
+    );
+    if (!answer || answer.text.length > 4_096) return undefined;
     const json = /\{[\s\S]*\}/.exec(answer.text)?.[0];
     if (!json) return undefined;
-    const reply = Reply.safeParse(JSON.parse(json));
-    if (!reply.success) return undefined;
+    const reply = Reply.safeParse(reviewJson(json));
+    if (!reply.success || (!reply.data.risky && reply.data.kind !== 'none')) return undefined;
     return reply.data.risky ? { risky: true, words: WORDS[reply.data.kind] } : { risky: false };
   } catch {
     return undefined;
@@ -198,8 +196,6 @@ export async function lookAtAppStep(
 ): Promise<string | null | undefined> {
   if (!model) return undefined;
   try {
-    const found = await model();
-    if (!found) return undefined;
     const fence = randomBytes(9).toString('base64url');
     const sources = read
       .slice(0, 4)
@@ -226,20 +222,19 @@ export async function lookAtAppStep(
       fence,
       'Is this step risky? JSON only.',
     ].join('\n');
-    const signal = AbortSignal.any([
-      AbortSignal.timeout(options.timeoutMs ?? 6_000),
-      ...(options.signal ? [options.signal] : []),
-    ]);
-    const answer = await found.complete({
-      system: STEP_SYSTEM,
-      prompt,
-      ...(found.model && { model: found.model }),
-      signal,
-    });
+    const answer = await completeReview(
+      model,
+      { system: STEP_SYSTEM, prompt, maxTokens: 256 },
+      {
+        ...options,
+        timeoutMs: options.timeoutMs ?? 6_000,
+      },
+    );
+    if (!answer || answer.text.length > 4_096) return undefined;
     const json = /\{[\s\S]*\}/.exec(answer.text)?.[0];
     if (!json) return undefined;
-    const reply = StepReply.safeParse(JSON.parse(json));
-    if (!reply.success) return undefined;
+    const reply = StepReply.safeParse(reviewJson(json));
+    if (!reply.success || (!reply.data.risky && reply.data.kind !== 'none')) return undefined;
     return reply.data.risky ? STEP_WORDS[reply.data.kind] : null;
   } catch {
     return undefined;
