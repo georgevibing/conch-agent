@@ -1376,6 +1376,10 @@ export class Services {
       memoryLook: () => cheapModel(this.providers.engine()),
       // Auto's second look at an unusual command after reading (ADR 0100): the same model.
       riskLook: () => cheapModel(this.providers.engine()),
+      autoReview: async (engine, model) =>
+        engine.complete
+          ? { complete: engine.complete.bind(engine), ...(model && { model }) }
+          : undefined,
       // Which chats lifted each kind of step with Always allow (ADR 0128): the card offers it for every chat.
       lifts: new AutoLifts(config.CONCH_HOME),
       // A new chat's title (ADR 0103): its own provider, else another with room, else this computer.

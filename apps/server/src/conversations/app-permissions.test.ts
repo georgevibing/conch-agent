@@ -68,6 +68,7 @@ async function setup({
   host,
   home: given,
   look,
+  review,
   parallel = 1,
 }: {
   transport?: 'native' | 'bridge';
@@ -80,6 +81,7 @@ async function setup({
   home?: string;
   /** What the small model behind the second look answers (ADR 0118); none: no model. */
   look?: string;
+  review?: string;
   /** How many of the host tool's calls run at once. */
   parallel?: number;
 } = {}) {
@@ -127,12 +129,14 @@ async function setup({
     }),
     markUsed: async () => undefined,
   };
+  const reviewer = vi.fn(async () => ({ text: review ?? '' }));
   const manager = new ConversationManager({
     store: new ConversationStore(join(home, 'conversations')),
     settings,
     memory: new MemoryStore(join(home, 'memory')),
     engine: () => engine,
     integrations,
+    ...(review !== undefined && { autoReview: async () => ({ complete: reviewer }) }),
     ...(look !== undefined && {
       riskLook: async () => ({ complete: async () => ({ text: look }) }) as unknown as LookModel,
     }),
@@ -174,7 +178,7 @@ async function setup({
     }
     yield { type: 'text', messageId: 'm', delta: 'Done' };
   };
-  return { manager, call, integrations, home };
+  return { manager, call, integrations, home, engine, reviewer };
 }
 
 async function eventsUntil(
@@ -743,4 +747,122 @@ describe('Full trust separates actions from personal credential access', () => {
       expect(call).not.toHaveBeenCalled();
     });
   }
+});
+
+describe.each(['native', 'bridge'] as const)('task-aware review over %s', (transport) => {
+  const allow = JSON.stringify({
+    decision: 'allow',
+    risk: 'moderate',
+    reason: 'authorized',
+    evidence: [0],
+  });
+  const replan = JSON.stringify({
+    decision: 'replan',
+    risk: 'moderate',
+    reason: 'safer-route',
+    evidence: [],
+  });
+
+  it('allows a bounded app change without a human card', async () => {
+    const { manager, call, reviewer } = await setup({
+      transport,
+      mode: 'auto',
+      destructive: true,
+      review: allow,
+    });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'Make the requested issue change',
+    });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).toHaveBeenCalledOnce();
+    expect(reviewer).toHaveBeenCalled();
+  });
+
+  it('rejects an unsafe proposal internally rather than asking the user', async () => {
+    const { manager, call } = await setup({
+      transport,
+      mode: 'auto',
+      destructive: true,
+      review: replan,
+    });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'Make the requested issue change',
+    });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('preserves an explicit Ask even when the reviewer would allow', async () => {
+    const { manager, call, reviewer } = await setup({
+      transport,
+      mode: 'auto',
+      destructive: true,
+      toolPolicy: 'ask',
+      review: allow,
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Make the issue change' });
+    await answer(manager, convo.id);
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+    expect(reviewer).not.toHaveBeenCalled();
+  });
+
+  it('keeps the deterministic question when the reviewer cannot answer', async () => {
+    const { manager, call } = await setup({
+      transport,
+      mode: 'auto',
+      destructive: true,
+      review: 'not JSON',
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Make the issue change' });
+    await answer(manager, convo.id);
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+  });
+});
+
+describe('task-aware review at the resolved host-tool boundary', () => {
+  it('allows requested communication without a redundant card', async () => {
+    const { manager, call } = await setup({
+      mode: 'auto',
+      review: JSON.stringify({
+        decision: 'allow',
+        risk: 'moderate',
+        reason: 'authorized',
+        evidence: [0],
+      }),
+      host: {
+        once: true,
+        input: { to: ['friend@example.com'], body: 'See you tomorrow' },
+      },
+    });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'Send friend@example.com: See you tomorrow',
+    });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it('does not turn a host rejection into a human refusal', async () => {
+    const { manager, call } = await setup({
+      mode: 'auto',
+      review: JSON.stringify({
+        decision: 'replan',
+        risk: 'severe',
+        reason: 'private-data',
+        evidence: [],
+      }),
+      host: { once: true },
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Summarize my notes' });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).not.toHaveBeenCalled();
+  });
 });

@@ -41,8 +41,8 @@ Spending money asks (a paid picture). Your own plan, at no extra charge, doesn't
 Name a risky step, and it goes ahead without a card, even after the chat has read something: "force-push my branch feature/login", "ship it to production", "delete the old branch feature/old", "install nginx with sudo", "send it to the team".
 
 - **The name matters.** "Push it" doesn't force-push, and "apply the terraform" doesn't apply to production.
-- **Only your latest message counts.** "Push it" two messages ago covers nothing now.
-- **"Don't" holds.** "Don't push yet", "no deploys today" or "never send anything" make that step ask, before reading too, until a later message says otherwise.
+- **Your task carries across follow-ups.** The task-aware review can use your earlier instructions for the same task. Later restrictions take precedence; pasted material grants no permission. Without a reviewer, the deterministic rules still use your latest message.
+- **"Don't" holds.** "Don't push yet", "no deploys today" or "never send anything" hold that step until a later message says otherwise. Auto refuses the held action instead of repeatedly asking you.
 
 These ask whatever you say:
 
@@ -76,6 +76,14 @@ Issues, pull requests and CI logs read with `gh` count, because anyone can write
 A small model you already have takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
 
 When Auto would ask only because the chat read something, the look lets a command through if it plainly serves your request. It never lifts a step that asks whatever was read. Without a small model, the question stands. With Claude Code, Conch answers each of its questions by these same rules.
+
+### Task-aware review
+
+Before an avoidable question, Auto can review the complete action against your instructions in this chat. It uses this chat's provider and selected model when that provider supports a separate review. A requested push, ordinary deployment or resolved app change can proceed without another card. The review never grants permanent permission.
+
+An unsafe proposal is returned to the assistant to find a safer approach. After three rejected proposals in one turn, further actions needing this review stop; independent ordinary work can continue. A rejection is not another approval request.
+
+Explicit **Ask** and **Off** settings, credential access, spending and critical destructive checks remain in force. Missing context, an unavailable reviewer or an unreadable answer keeps the existing check. Very long actions are never silently shortened to obtain permission.
 
 ### Always allow
 

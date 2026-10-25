@@ -1,3 +1,4 @@
+import { AutoReplans, reviewAutoAction } from './auto-review';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -104,7 +105,7 @@ import {
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
-import { type CommandVerdict, judgeCommand, lookAtAppStep } from './risk-look';
+import { judgeCommand, lookAtAppStep } from './risk-look';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
 import { knownRemotes } from './git-remotes';
@@ -1121,6 +1122,8 @@ export class ConversationManager {
        * (ADR 0100, `risk-look.ts`); it can only add a question.
        */
       riskLook?: () => Promise<LookModel | undefined>;
+      /** Task-aware review uses this turn's provider and selected model, never a price-name heuristic. */
+      autoReview?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
       /**
        * Who names a new chat (`providers/small.ts`): its own provider when it can and
        * its plan has room, else another, else one on this computer. Undefined: nobody
@@ -3491,6 +3494,57 @@ export class ConversationManager {
       resolved.permissionMode === 'auto' &&
       personTrusts &&
       this.#tainted(live).every((source) => source.kind !== 'person');
+    const replans = new AutoReplans();
+    const autoDecision = async (
+      request: { toolName: string; input: Record<string, unknown> },
+      reason: string,
+      risk?: Risk,
+    ): Promise<{ decision: 'allow' | 'deny' | 'ask'; reason: string } | undefined> => {
+      if (resolved.permissionMode !== 'auto') return undefined;
+      // A later model may not override an explicit owner boundary.
+      if (risk?.held)
+        return {
+          decision: 'deny',
+          reason:
+            'The person explicitly held this action. Continue other work; do not retry it or ask for the same approval.',
+        };
+      const ownerMessages = this.#yourWords(live);
+      const model = this.deps.autoReview;
+      if (!ownerMessages.length || !model) return undefined;
+      if (replans.exhausted) return { decision: 'deny', reason: replans.reject() };
+      const mode = resolved.permissionMode;
+      const inputAtReview = JSON.stringify(request.input);
+      const verdict = await reviewAutoAction(
+        {
+          tool: request.toolName,
+          input: request.input,
+          workspace,
+          reason,
+          risk,
+          ownerMessages,
+          sources: this.#tainted(live),
+        },
+        () => model(engine, resolved.model),
+        { signal: abort.signal },
+      );
+      // A review never carries permission across Stop, a new owner instruction or mode change.
+      if (
+        abort.signal.aborted ||
+        resolved.permissionMode !== mode ||
+        JSON.stringify(ownerMessages) !== JSON.stringify(this.#yourWords(live)) ||
+        inputAtReview !== JSON.stringify(request.input)
+      )
+        return {
+          decision: 'deny',
+          reason:
+            'The action or its authority changed during review. Inspect the current target and propose the action again.',
+        };
+      if (!verdict) return undefined;
+      if (verdict.decision === 'replan')
+        return { decision: 'deny', reason: replans.reject(verdict) };
+      this.deps.judged?.(verdict.decision === 'allow' ? 'lifted' : 'asked', 'task-review');
+      return { decision: verdict.decision, reason };
+    };
 
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
       if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
@@ -3510,6 +3564,21 @@ export class ConversationManager {
         ...(toolUseId && { toolUseId }),
         ...(read.length && { sources: read }),
       };
+      // The tool has resolved its actual payload/account before asking here. Explicit
+      // policy and monetary consent stay outside model authority.
+      if (resolved.permissionMode === 'auto' && !request.explicit && !request.cost) {
+        const risk = assessRisk(request.toolName, request.input, {
+          workspace,
+          ...access,
+          said: this.#yourWords(live),
+          treeClean: await cleanFor(request.input),
+        });
+        if (risk?.held || request.once || request.taint || riskAsks(risk, false)) {
+          const review = await autoDecision(request, request.taint ?? riskWords(risk), risk);
+          if (review?.decision === 'allow') return 'allow';
+          if (review?.decision === 'deny') throw new Error(review.reason);
+        }
+      }
       // Words going to other people, after reading or with someone else's words in the chat:
       // shown each time, in every mode.
       if (
@@ -3963,22 +4032,12 @@ export class ConversationManager {
       return answer;
     };
 
-    /** Each command's second look, once a turn (ADR 0100): it can only add a question. */
-    const looked = new Map<string, Promise<CommandVerdict | undefined>>();
-    /** The second look's verdict on a command, once per command per turn. */
-    const judge = (command: string, read: readonly TaintSource[]) => {
-      if (!this.deps.riskLook) return Promise.resolve(undefined);
-      let look = looked.get(command);
-      if (!look) {
-        // Judged against what the person asked this turn, never against what was read.
-        look = judgeCommand(command, read, this.deps.riskLook, {
-          signal: abort.signal,
-          asked: this.#yourWords(live).join('\n'),
-        });
-        looked.set(command, look);
-      }
-      return look;
-    };
+    /** No cross-call verdict cache: scripts, targets and authority can change in a turn. */
+    const judge = (command: string, read: readonly TaintSource[]) =>
+      judgeCommand(command, read, this.deps.riskLook, {
+        signal: abort.signal,
+        asked: this.#yourWords(live).join('\n'),
+      });
     const secondLook = async (
       command: string,
       unsealed: boolean,
@@ -4014,7 +4073,6 @@ export class ConversationManager {
      * person set that tool to Allow. The card's words when it should ask; `null` when it goes;
      * undefined when nothing could judge it, so the question it came with stands.
      */
-    const lookedSteps = new Map<string, Promise<string | null | undefined>>();
     const judgeStep = async (
       step: {
         app: string;
@@ -4030,18 +4088,13 @@ export class ConversationManager {
       if (step.allowed) return null;
       if (step.access === 'read' && !sendsMoreThanALookup(args)) return null;
       if (!this.deps.riskLook) return undefined;
-      const key = `${toolName}\n${JSON.stringify(args)}`;
-      let look = lookedSteps.get(key);
-      if (!look) {
-        look = lookAtAppStep(
-          { ...step, args, asked: this.#yourWords(live).join('\n') },
-          read,
-          this.deps.riskLook,
-          { signal: abort.signal },
-        );
-        lookedSteps.set(key, look);
-      }
-      return look;
+      void toolName;
+      return lookAtAppStep(
+        { ...step, args, asked: this.#yourWords(live).join('\n') },
+        read,
+        this.deps.riskLook,
+        { signal: abort.signal },
+      );
     };
 
     /**
@@ -4133,7 +4186,7 @@ export class ConversationManager {
         : undefined;
     };
 
-    const mustAsk = async (request: {
+    const legacyMustAsk = async (request: {
       toolName: string;
       toolUseId?: string;
       input: Record<string, unknown>;
@@ -4309,6 +4362,41 @@ export class ConversationManager {
         : undefined;
     };
 
+    const mustAsk = async (request: {
+      toolName: string;
+      toolUseId?: string;
+      input: Record<string, unknown>;
+    }): Promise<
+      { reason: string; waive?: string; sources?: TaintSource[]; decision?: 'deny' } | undefined
+    > => {
+      const question = await legacyMustAsk(request);
+      if (!question || resolved.permissionMode !== 'auto') return question;
+      const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
+      if (
+        described?.asks ||
+        watchStep(request, false) ||
+        breaksCircuit(request.toolName, request.input, { workspace })
+      )
+        return question;
+      const risk = assessRisk(request.toolName, request.input, {
+        workspace,
+        said: this.#yourWords(live),
+        ...(described?.destructive && { destructive: true }),
+        ...(described?.access && { access: described.access }),
+        treeClean: await cleanFor(request.input),
+      });
+      const review = await autoDecision(request, question.reason, risk);
+      // Policy may change during the asynchronous review. Off and explicit Ask still win.
+      const policy = await integrations?.decide(request.toolName).catch(() => undefined);
+      const latest = await integrations?.describeTool(request.toolName).catch(() => undefined);
+      if (policy === 'off')
+        return { decision: 'deny', reason: 'The user turned this tool off in Apps.' };
+      if (latest?.asks) return question;
+      if (review?.decision === 'allow') return undefined;
+      if (review?.decision === 'deny') return { decision: 'deny', reason: review.reason };
+      return question;
+    };
+
     const requestPermission = async (
       request: {
         toolName: string;
@@ -4331,6 +4419,7 @@ export class ConversationManager {
       if (policy === 'off') return refuse();
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
       const asked = await mustAsk(request);
+      if (asked?.decision === 'deny') return refuse();
       const taint = asked?.reason;
       if (!asked) {
         if (policy === 'allow') return 'allow';
@@ -4436,6 +4525,7 @@ export class ConversationManager {
       const asked = await mustAsk(request);
       if (this.#draining)
         return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
+      if (asked?.decision === 'deny') return refuse(asked.reason);
       return asked ? { decision: 'ask', reason: asked.reason } : undefined;
     };
 

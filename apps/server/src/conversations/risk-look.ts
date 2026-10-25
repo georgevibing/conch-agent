@@ -209,7 +209,7 @@ export async function lookAtAppStep(
     try {
       args = JSON.stringify(step.args);
     } catch {
-      args = '(arguments that can’t be shown)';
+      return undefined;
     }
     if (args.length > 12_000 || (step.asked?.length ?? 0) > 12_000) return undefined;
     const prompt = [
