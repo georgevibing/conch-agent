@@ -135,6 +135,7 @@ async function run(
     read,
     tools,
     look,
+    review,
     text = 'Pull the latest conch codebase',
     answer = 'deny',
     lifts,
@@ -144,6 +145,7 @@ async function run(
     read?: TaintSource;
     tools?: ToolProvider;
     look?: LookModel['complete'];
+    review?: LookModel['complete'];
     /** What the person asked, in their own words. */
     text?: string;
     /** How every question is answered. */
@@ -177,6 +179,7 @@ async function run(
     engine: () => engine,
     ...(tools && { tools }),
     ...(complete && { riskLook: async () => ({ complete }) }),
+    ...(review && { autoReview: async () => ({ complete: review }) }),
     ...(lifts && { lifts }),
   });
   const convo = await manager.send({
@@ -357,7 +360,7 @@ describe('the second look (ADR 0100)', () => {
       ],
       { read: web, look: risky },
     );
-    expect(looks).toHaveBeenCalledTimes(2);
+    expect(looks).toHaveBeenCalledTimes(4);
     expect(outcomes).toEqual(['ran', 'ran', 'declined', 'declined']);
     expect(asked[0]?.taint).toBe(
       'This chat read evil.example, which could be trying to steer me. So I’m checking before I send something from this computer to another one.',
@@ -636,7 +639,7 @@ describe('“make me a PDF” in Auto, after reading (ADR 0117, 2026-10-09)', ()
       text,
       look: async () => ({ text: '{"risky": true, "kind": "unasked"}' }),
     });
-    expect(looks).toHaveBeenCalledTimes(1);
+    expect(looks).toHaveBeenCalledTimes(2);
     expect(looks?.mock.calls[0]?.[0]?.prompt).toMatch(/Make.a.PDF.of.my.notes/);
     expect(asked[0]?.taint).toContain(
       'do something you didn’t ask for, that what it read could have suggested',
@@ -734,14 +737,14 @@ describe('what the person asked for, in Auto (ADR 0128)', () => {
     expect(after.outcomes).toEqual(['ran', 'ran', 'ran']);
   });
 
-  it('a boundary the person stated asks before reading, through every way of asking', async () => {
+  it('a boundary the person stated refuses without asking, through every way of asking', async () => {
     const { asked, outcomes } = await run(
       'auto',
       [unsealed('git push origin HEAD'), native('git push origin HEAD')],
       { text: 'Fix the bug, but don’t push yet' },
     );
     expect(outcomes).toEqual(['declined', 'declined']);
-    expect(asked[0]?.taint).toContain('push code to a remote');
+    expect(asked).toHaveLength(0);
   });
 
   it('the second look lifts a question asked only for what was read, when the step serves the request', async () => {
@@ -755,8 +758,8 @@ describe('what the person asked for, in Auto (ADR 0128)', () => {
     });
     expect(lifted.asked).toEqual([]);
     expect(lifted.outcomes).toEqual(['ran', 'ran']);
-    // Once per command per turn, for both ways of asking.
-    expect(lifted.looks).toHaveBeenCalledTimes(1);
+    // Distinct calls are reviewed afresh even when the command text is identical.
+    expect(lifted.looks).toHaveBeenCalledTimes(2);
     const kept = await run('auto', steps, { read: page, text: 'Set up the project', look: risky });
     expect(kept.outcomes).toEqual(['declined', 'declined']);
     expect(kept.asked[0]?.taint).toContain('install right-pad');
@@ -934,5 +937,85 @@ describe('requested mail after reading uses Auto review at the resolved send bou
     expect(asked).toEqual([]);
     expect(outcomes).toEqual(['ran']);
     expect(looks).not.toHaveBeenCalled();
+  });
+});
+
+describe('task-aware Auto review through provider authorization paths', () => {
+  const allow = async () => ({
+    text: JSON.stringify({
+      decision: 'allow',
+      risk: 'moderate',
+      reason: 'authorized',
+      evidence: [0],
+    }),
+  });
+  const replan = async () => ({
+    text: JSON.stringify({
+      decision: 'replan',
+      risk: 'moderate',
+      reason: 'safer-route',
+      evidence: [],
+    }),
+  });
+
+  it('can clear a contextual question through native guards and host authorization', async () => {
+    const result = await run(
+      'auto',
+      [unsealed('git push origin main'), native('git push origin main')],
+      { read: web, text: 'Complete the repository maintenance', review: allow },
+    );
+    expect(result.outcomes).toEqual(['ran', 'ran']);
+    expect(result.asked).toHaveLength(0);
+  });
+
+  it('rejects and stops repeated reviewed proposals while allowing independent ordinary work', async () => {
+    const reviewer = vi.fn(replan);
+    const result = await run(
+      'auto',
+      [
+        unsealed('git push origin one'),
+        unsealed('git push origin two'),
+        unsealed('git push origin three'),
+        unsealed('git push origin four'),
+        sealed('git status --short'),
+      ],
+      { read: web, text: 'Inspect repository health', review: reviewer },
+    );
+    expect(result.outcomes).toEqual(['declined', 'declined', 'declined', 'declined', 'ran']);
+    expect(result.asked).toHaveLength(0);
+    expect(reviewer).toHaveBeenCalledTimes(3);
+  });
+
+  it('never lifts critical deletion, even with a permissive reviewer', async () => {
+    const reviewer = vi.fn(allow);
+    const result = await run('auto', [unsealed('rm -rf /')], { review: reviewer });
+    expect(result.outcomes).toEqual(['declined']);
+    expect(result.asked).toHaveLength(1);
+    expect(reviewer).not.toHaveBeenCalled();
+  });
+
+  it('invalidates a review when arguments change while the model is answering', async () => {
+    const proposal = unsealed('git push origin main');
+    const result = await run('auto', [proposal], {
+      read: web,
+      text: 'Maintain the repository',
+      review: async () => {
+        proposal.input.command = 'git push --force origin main';
+        return allow();
+      },
+    });
+    expect(result.outcomes).toEqual(['declined']);
+    expect(result.asked).toHaveLength(0);
+  });
+
+  it('never gives a reviewer authority over another speaker', async () => {
+    const reviewer = vi.fn(allow);
+    const result = await run('auto', [unsealed('git push origin main')], {
+      read: { kind: 'person', label: 'A forwarded message' },
+      review: reviewer,
+    });
+    expect(result.outcomes).toEqual(['declined']);
+    expect(result.asked).toHaveLength(1);
+    expect(reviewer).not.toHaveBeenCalled();
   });
 });

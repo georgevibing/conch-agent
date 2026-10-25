@@ -41,7 +41,7 @@ Spending money asks (a paid picture). Your own plan, at no extra charge, doesn't
 Name a risky step, and it goes ahead without a card, even after the chat has read something: "force-push my branch feature/login", "ship it to production", "delete the old branch feature/old", "install nginx with sudo", "send it to the team".
 
 - **The name matters.** "Push it" doesn't force-push, and "apply the terraform" doesn't apply to production.
-- **Your task carries across follow-ups.** The task-aware review can use your earlier instructions for the same task. Later restrictions take precedence; pasted material grants no permission. Without a reviewer, the deterministic rules still use your latest message.
+- **Your task carries across follow-ups.** The task-aware review can use your earlier instructions for the same task. Later restrictions take precedence; pasted material grants no permission. Routine follow-ups do not revoke an earlier instruction.
 - **"Don't" holds.** "Don't push yet", "no deploys today" or "never send anything" hold that step until a later message says otherwise. Auto refuses the held action instead of repeatedly asking you.
 
 These ask whatever you say:
@@ -73,9 +73,9 @@ Issues, pull requests and CI logs read with `gh` count, because anyone can write
 
 ### The second look
 
-A small model you already have takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
+Your chat's model takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
 
-When Auto would ask only because the chat read something, the look lets a command through if it plainly serves your request. It never lifts a step that asks whatever was read. Without a small model, the question stands. With Claude Code, Conch answers each of its questions by these same rules.
+When Auto would ask only because the chat read something, the look lets a command through if it plainly serves your request. It never lifts a step that asks whatever was read. If the provider cannot make a separate review, the question stands. With Claude Code, Conch answers each of its questions by these same rules.
 
 ### Task-aware review
 
@@ -103,7 +103,8 @@ If you allowed that kind in another chat, or a card asks for the third time in o
 - **Apps from someone else.** In Auto, a lookup that sends only a date, an id or a city goes ahead. A bigger lookup or any change gets the second look, unless the tool is set to **Allow**. Paying, deleting, giving access, running code, or sending something like a key always asks.
 - **Lookups asked at once** for the same reason get one question.
 - **Reading and shopping** in [the browser](../features/browser.md): searching, reading pages, filtering a shop, filling a basket. These ask, in German, French, Spanish, Portuguese, Italian and Dutch shops too:
-  - buying, sending or deleting on a site;
+  - buying or deleting on a site;
+  - sending when the complete page cannot establish the requested recipient and content;
   - an address that looks like it carries data;
   - a long text typed into a page;
   - an upload or a download.

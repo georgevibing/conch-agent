@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CompletionInput } from '../engines/types';
 import { DATAMARK } from '../memory/guard';
+import { NEVER } from './risk';
 import { AutoReplans, reviewAutoAction, type AutoAction } from './auto-review';
 
 const action: AutoAction = {
@@ -163,4 +164,25 @@ describe('task-aware Auto reviewer', () => {
     expect(budget.reject()).toContain('Do not retry');
     expect(budget.exhausted).toBe(true);
   });
+});
+
+it('does not waive a non-liftable effect even when its broad category is reviewable', async () => {
+  const found = model(JSON.stringify(allowed));
+  expect(
+    await reviewAutoAction(
+      {
+        ...action,
+        risk: {
+          kind: 'egress',
+          harm: 'moderate',
+          lasting: true,
+          reason: 'send command output',
+          wish: NEVER,
+        },
+      },
+      found.get,
+      options(),
+    ),
+  ).toBeUndefined();
+  expect(found.complete).not.toHaveBeenCalled();
 });

@@ -5,7 +5,7 @@ import type { TaintSource } from '@conch/protocol';
 import { z } from 'zod';
 
 import { datamark, type LookModel } from '../memory/guard';
-import type { Risk } from './risk';
+import { NEVER, type Risk } from './risk';
 
 const Reply = z
   .object({
@@ -42,6 +42,7 @@ export function reviewableRisk(risk: Risk | undefined): boolean {
   return (
     !risk.critical &&
     !risk.held &&
+    risk.wish !== NEVER &&
     ['install', 'egress', 'publish', 'infra', 'app-delete', 'history', 'wipe', 'disrupt'].includes(
       risk.kind,
     )

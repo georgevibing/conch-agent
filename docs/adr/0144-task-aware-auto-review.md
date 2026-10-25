@@ -28,3 +28,13 @@ Sources inspected 2026-10-25:
 - https://github.com/openclaw/openclaw/blob/c9db73543a42d3e53e23c8b70c3997bc5d4a0fff/src/agents/exec-auto-reviewer.ts
 - https://github.com/openclaw/openclaw/blob/c9db73543a42d3e53e23c8b70c3997bc5d4a0fff/src/infra/exec-approvals-authorization.kernel.ts
 - Hermes installed source bf0203a794a07aac3ff764972ab9087baa4e4f4e, tools/approval.py and tools/approval_smart.py.
+
+## Second audit pass
+
+Rebased onto main 692fa6b1 before validation. Main already preserved follow-up authority, fresh Git-tree state and complete second-look inputs (ADR 0137); those changes are retained, not reintroduced as new features here. The new work removes cross-call model verdict caching and introduces structured task review across eligible native, bridged and host-tool questions.
+
+The authorization adapter now detects changes to both original and normalized arguments while awaiting a guard or permission. This closes the mismatch exposed by an executable regression test. A valid task-review ask cannot be cleared by an older fallback reviewer. Non-liftable risk rules remain non-liftable even within an otherwise eligible category.
+
+A resolved communication click in Conch's isolated browser can supply a complete, redacted page to the same reviewer. The host re-reads it and checks exact equality immediately before proceeding. Long/failed snapshots, uploads, coordinate clicks, typed-but-unapplied payloads, shared personal browsers and non-communication controls retain their existing checks. Page state is untrusted evidence, not permission. This is a best-effort state check, not a transaction with the remote service. Tests exercise both the real snapshot boundary and changed-page refusal.
+
+The older second-look path also uses the current turn's provider/model. It no longer consults the default provider's cheapest name match. Permission review never silently falls over to an unrelated provider.

@@ -13,7 +13,7 @@ import type { Engine, HostTool, PermissionDecision } from '../engines/types';
 import { hostToolText } from '../engines/types';
 import { findBrowsers } from './locate';
 import { BrowserService } from './service';
-import { pageParts } from './snapshot';
+import { pageParts, reviewPage } from './snapshot';
 import type { Watcher } from './tab';
 
 /**
@@ -31,6 +31,9 @@ const longList = Array.from(
 ).join('');
 
 const pages: Record<string, { status?: number; body: string }> = {
+  '/compose': {
+    body: '<title>Compose</title><p>Account: me@example.com</p><label>To <input value="friend@example.com"></label><label>Message <textarea>Hello</textarea></label><label>Password <input type="password" value="secret-fixture"></label><button onclick="document.title=\'Sent\'">Send</button>',
+  },
   '/basket': {
     body: `<title>Basket</title><h1>Your basket</h1>
     <button onclick="document.title = confirm('Remove the mug from your basket?') ? 'Removed' : 'Kept'">Remove</button>
@@ -474,5 +477,28 @@ describe.skipIf(!hasBrowser)('find on page, for you, for real', () => {
     } finally {
       unwatch();
     }
+  });
+});
+
+describe.skipIf(!hasBrowser)('complete browser evidence for Auto review', () => {
+  it('supplies redacted page evidence and detects changes before the click', async () => {
+    const { call, asked, tab } = harness('conv_auto_evidence', ['deny'], 'auto');
+    const page = await call('browser_open', { url: `${origin}/compose` });
+    await call('browser_click', { ref: refOf(page, /button "Send"/), element: 'Send' });
+    const request = asked.at(-1);
+    expect(request?.input.page).toContain('friend@example.com');
+    expect(request?.input.page).not.toContain('secret-fixture');
+    expect(await request?.revalidate?.()).toBe(true);
+    await tab()?.page.locator('textarea').fill('Changed payload');
+    expect(await request?.revalidate?.()).toBe(false);
+    expect(await tab()?.page.title()).toBe('Compose');
+  });
+
+  it('does not turn a truncated page into review evidence', async () => {
+    const { call, tab } = harness('conv_auto_long', [], 'auto');
+    await call('browser_open', { url: `${origin}/long` });
+    const current = tab();
+    expect(current).toBeDefined();
+    if (current) expect(await reviewPage(current.page)).toBeUndefined();
   });
 });

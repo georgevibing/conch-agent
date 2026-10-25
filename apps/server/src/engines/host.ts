@@ -515,7 +515,13 @@ export async function authorizeTool(
     input:
       name === 'Bash' && !sealable(input) ? { ...args, dangerouslyDisableSandbox: true } : args,
   };
+  const original = JSON.stringify(args);
+  const prepared = JSON.stringify(request.input);
+  const changed = () =>
+    JSON.stringify(args) !== original || JSON.stringify(request.input) !== prepared;
   const guard = await input.guard?.(request);
+  if (changed())
+    return 'The action changed during authorization. Nothing was executed; propose the current action again.';
   if (guard?.decision === 'deny') return guard.message;
   if (
     HOST_NAMES.has(name) &&
@@ -532,5 +538,7 @@ export async function authorizeTool(
       input.options.permissionMode !== 'auto');
   if (ask && (await input.requestPermission(request, input.signal)) === 'deny') return DECLINED;
   input.signal.throwIfAborted();
+  if (changed())
+    return 'The action changed during authorization. Nothing was executed; propose the current action again.';
   return undefined;
 }

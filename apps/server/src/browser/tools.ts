@@ -22,7 +22,7 @@ import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
 import { armCreate, armSignIn } from './passkeys';
 import { keptIn, passkeyHandoffReason, signInSteps } from './signin';
-import { markSecrets, readChanges, readPage } from './snapshot';
+import { markSecrets, readChanges, readPage, reviewPage } from './snapshot';
 import { MAX_TABS, quoteDialog, type DialogAnswer, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
 import { watchHandoff } from './handoff';
@@ -366,6 +366,8 @@ export function browserTools(
       carries?: boolean;
       /** No thumbnail: a page with a dialog showing is frozen, and can't be pictured. */
       picture?: false;
+      /** A resolved click: its full page is review evidence, not permission. */
+      reviewClick?: boolean;
     },
   ): Promise<void> => {
     check();
@@ -415,9 +417,22 @@ export function browserTools(
     const picture = request.picture === false ? undefined : await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
     const title = await tab.page.title().catch(() => '');
+    // Only a resolved communication click is eligible here. Payment, access changes,
+    // upload contents and typed-but-not-yet-applied payloads keep their own consent.
+    const review =
+      ctx.permissionMode === 'auto' &&
+      !own &&
+      !someone &&
+      request.reviewClick &&
+      /\b(?:send|post|publish|reply|comment|submit)\b/i.test(request.action)
+        ? await reviewPage(tab.page)
+        : undefined;
     const decision = await ctx.ask({
       toolName: `browser_${kind}`,
-      input: { site, action: request.action, url },
+      input: { site, action: request.action, url, ...(review && { page: review }) },
+      ...(review && {
+        revalidate: async () => !ctx.signal.aborted && (await reviewPage(tab.page)) === review,
+      }),
       summary:
         kind === 'site'
           ? `use ${site}`
@@ -802,6 +817,13 @@ export function browserTools(
               how === 'drag'
                 ? `Drag “${own || element}” onto “${dropWords || 'another element'}”`
                 : `${how === 'double' ? 'Double-click' : how === 'right' ? 'Right-click' : 'Click'} “${own || element}”`,
+            // Exact resolved communication labels only; 'Send payment' and 'Publish
+            // access key' are not ordinary communication candidates.
+            reviewClick:
+              how === 'click' &&
+              /^(?:send(?: message| email)?|post(?: comment)?|publish(?: post)?|reply|comment)$/i.test(
+                own.trim(),
+              ),
             highStakes:
               isHighStakes(own) ||
               isHighStakes(element) ||

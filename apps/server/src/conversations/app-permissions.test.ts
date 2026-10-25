@@ -866,3 +866,62 @@ describe('task-aware review at the resolved host-tool boundary', () => {
     expect(call).not.toHaveBeenCalled();
   });
 });
+
+describe('browser evidence at the host boundary', () => {
+  const review = JSON.stringify({
+    decision: 'allow',
+    risk: 'moderate',
+    reason: 'authorized',
+    evidence: [0],
+  });
+  it.each([true, false])(
+    'checks the resolved page again before acting (unchanged=%s)',
+    async (unchanged) => {
+      const revalidate = vi.fn(async () => unchanged);
+      const { manager, call } = await setup({
+        mode: 'auto',
+        review,
+        host: {
+          browser: {
+            kind: 'high-stakes',
+            site: 'example.com',
+            url: 'https://example.com/compose',
+            title: 'Compose',
+            action: 'Click Send',
+          },
+          input: { page: 'To friend@example.com; hello', action: 'Click Send' },
+          revalidate,
+        },
+      });
+      const convo = await manager.send({
+        clientMessageId: 'u1',
+        text: 'Send hello to friend@example.com',
+      });
+      const events = await eventsUntil(manager, convo.id, 'turn.completed');
+      expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+      expect(revalidate).toHaveBeenCalledOnce();
+      expect(call).toHaveBeenCalledTimes(unchanged ? 1 : 0);
+    },
+  );
+
+  it('does not trust a browser label without resolved page evidence', async () => {
+    const { manager, call, reviewer } = await setup({
+      mode: 'auto',
+      review,
+      host: {
+        browser: {
+          kind: 'high-stakes',
+          site: 'example.com',
+          url: 'https://example.com',
+          title: 'Checkout',
+          action: 'Click Buy',
+        },
+      },
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Look at this shop' });
+    await answer(manager, convo.id);
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+    expect(reviewer).not.toHaveBeenCalled();
+  });
+});

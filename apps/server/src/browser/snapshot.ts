@@ -160,6 +160,15 @@ export async function readPage(
   return { url, title, text: framed(title, url, PAGE_OPEN, body, PAGE_CLOSE) };
 }
 
+/** Complete, redacted evidence for a one-shot action review. Never approve a clipped page. */
+export async function reviewPage(page: Page): Promise<string | undefined> {
+  const url = page.url();
+  const title = await page.title().catch(() => '');
+  const snapshot = await snapshotOf(page);
+  if (snapshot === LOADING || snapshot.length > MAX_CHARS || page.url() !== url) return undefined;
+  return JSON.stringify({ url, title, snapshot });
+}
+
 /**
  * The page after an action: only what changed since the agent last read it,
  * so a click doesn't send the same sixteen thousand characters again. The

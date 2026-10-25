@@ -1,4 +1,3 @@
-import { AutoReplans, reviewAutoAction } from './auto-review';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -105,6 +104,7 @@ import {
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
+import { AutoReplans, reviewAutoAction } from './auto-review';
 import { judgeCommand, lookAtAppStep } from './risk-look';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
@@ -271,6 +271,8 @@ export interface AskRequest {
   /** What it costs, when it costs money: "Paid". */
   cost?: string;
   browser?: BrowserPermission;
+  /** Trusted host callback: the resolved target and payload still match after review. */
+  revalidate?: () => Promise<boolean>;
   /** Reading or filling something from Passwords (ADR 0025). */
   vault?: VaultPermission;
   /** Asked because the chat read something untrusted (ADR 0028): why. */
@@ -1121,7 +1123,7 @@ export class ConversationManager {
        * A cheap model for Auto's second look at an unusual command after reading
        * (ADR 0100, `risk-look.ts`); it can only add a question.
        */
-      riskLook?: () => Promise<LookModel | undefined>;
+      riskLook?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
       /** Task-aware review uses this turn's provider and selected model, never a price-name heuristic. */
       autoReview?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
       /**
@@ -3547,7 +3549,27 @@ export class ConversationManager {
     };
 
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
-      if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
+      if (asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
+      if (asked.browser) {
+        if (asked.revalidate && !asked.browser.ownChrome && !asked.explicit && !asked.cost) {
+          const owner = JSON.stringify(this.#yourWords(live));
+          const review = await autoDecision(asked, asked.summary);
+          if (review?.decision === 'deny') throw new Error(review.reason);
+          if (review?.decision === 'allow') {
+            if (
+              (await asked.revalidate()) &&
+              resolved.permissionMode === 'auto' &&
+              !abort.signal.aborted &&
+              owner === JSON.stringify(this.#yourWords(live))
+            )
+              return 'allow';
+            throw new Error(
+              'The browser page changed during Auto review. Read it again and check the target before retrying. Nothing was clicked.',
+            );
+          }
+        }
+        return askUser({ ...asked, remember: false }, abort.signal);
+      }
       // The call asking, so its row can carry the answer; and what it read, as the tools see it.
       const toolUseId = hostRows.running(asked.toolName);
       // What the app itself brought in doesn't hold its own next step (ADR 0117).
@@ -3577,6 +3599,8 @@ export class ConversationManager {
           const review = await autoDecision(request, request.taint ?? riskWords(risk), risk);
           if (review?.decision === 'allow') return 'allow';
           if (review?.decision === 'deny') throw new Error(review.reason);
+          if (review?.decision === 'ask')
+            return askUser({ ...request, remember: false }, abort.signal);
         }
       }
       // Words going to other people, after reading or with someone else's words in the chat:
@@ -4032,9 +4056,11 @@ export class ConversationManager {
       return answer;
     };
 
+    const legacyReview = this.deps.riskLook;
+    const legacyModel = legacyReview ? () => legacyReview(engine, resolved.model) : undefined;
     /** No cross-call verdict cache: scripts, targets and authority can change in a turn. */
     const judge = (command: string, read: readonly TaintSource[]) =>
-      judgeCommand(command, read, this.deps.riskLook, {
+      judgeCommand(command, read, legacyModel, {
         signal: abort.signal,
         asked: this.#yourWords(live).join('\n'),
       });
@@ -4092,7 +4118,7 @@ export class ConversationManager {
       return lookAtAppStep(
         { ...step, args, asked: this.#yourWords(live).join('\n') },
         read,
-        this.deps.riskLook,
+        legacyModel,
         { signal: abort.signal },
       );
     };

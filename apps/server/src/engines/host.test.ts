@@ -54,6 +54,29 @@ describe('shared Conch host tools', () => {
     expect(await readFile(join(input.cwd, 'note.txt'), 'utf8')).toBe('original');
     expect(ask).toHaveBeenCalledOnce();
   });
+  it.each(['guard', 'permission'] as const)(
+    'refuses arguments changed during %s, including normalized shell copies',
+    async (phase) => {
+      const args = { command: 'echo hello', dangerouslyDisableSandbox: true };
+      const mutate = () => {
+        args.command = 'echo different';
+      };
+      const input = await turn({
+        guard: async () => {
+          if (phase === 'guard') mutate();
+          return { decision: 'ask', reason: 'Review' };
+        },
+        requestPermission: async () => {
+          if (phase === 'permission') mutate();
+          return 'allow';
+        },
+      });
+      expect(await authorizeTool(input, 'Bash', args, 'changed')).toContain(
+        'changed during authorization',
+      );
+    },
+  );
+
   it('validates host arguments before guard or execution', async () => {
     const run = vi.fn(async () => 'sent');
     const guard = vi.fn(async () => undefined);

@@ -72,6 +72,25 @@ const access = (patch: Partial<AccessFile> = {}): AccessFile => ({
 });
 
 describe('checkup findings', () => {
+  it('explains task-aware Auto authority and offers Ask first', () => {
+    const items = checkup({
+      config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-x') }),
+      access: access({}),
+      permissionMode: 'auto',
+      secure: true,
+      homeProblems: [],
+      workspaceRules: [],
+      trustedIntegrations: [],
+    });
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        id: 'auto-task-review',
+        level: 'info',
+        fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
+      }),
+    );
+  });
+
   it('warns about a channel’s saved Full trust even when global defaults ask first', () => {
     const items = checkup({
       config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-x') }),

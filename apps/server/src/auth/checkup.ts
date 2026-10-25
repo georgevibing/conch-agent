@@ -420,6 +420,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     );
   }
 
+  if (input.permissionMode === 'auto') {
+    items.push({
+      id: 'auto-task-review',
+      level: 'info',
+      title: 'Auto can approve actions that serve your task',
+      detail:
+        'Auto can use your chat’s model to review requested pushes, deployments and app changes without another question. Reviews can make mistakes. Explicit Ask settings, credential access and critical destructive checks still apply. Choose Ask first to review each change yourself.',
+      fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
+    });
+  }
+
   if (input.permissionMode === 'bypassPermissions') {
     items.push({
       id: 'full-trust',

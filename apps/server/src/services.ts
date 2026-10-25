@@ -1374,8 +1374,12 @@ export class Services {
       memoryIndex: this.memoryIndex,
       // The memory check's second look (ADR 0087): the default provider's cheapest model.
       memoryLook: () => cheapModel(this.providers.engine()),
-      // Auto's second look at an unusual command after reading (ADR 0100): the same model.
-      riskLook: () => cheapModel(this.providers.engine()),
+      // Security reviews use the current turn's provider/model, never the default
+      // provider's cheapest name match. No separate completion: keep the rules.
+      riskLook: async (engine, model) =>
+        engine.complete
+          ? { complete: engine.complete.bind(engine), ...(model && { model }) }
+          : undefined,
       autoReview: async (engine, model) =>
         engine.complete
           ? { complete: engine.complete.bind(engine), ...(model && { model }) }
