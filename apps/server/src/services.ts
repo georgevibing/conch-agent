@@ -188,10 +188,11 @@ import { computerUseCheck } from './computer-use/routes';
 import { pretendComputer } from './computer-use/pretend';
 import { ComputerUseService } from './computer-use/service';
 import { computerPrompt, computerTools } from './computer-use/tools';
+import { Clis } from './setup/clis';
 import { KNOWN_NEEDS, findGh } from './setup/known';
 import { WaitService } from './waits/service';
 import { waitNotifications } from './waits/notifications';
-import { fetchClient, ghClient, realRun } from './waits/github';
+import { fetchClient, firstThatSees, ghClient, realRun } from './waits/github';
 import { Setup } from './setup/needs';
 import { setToolsHome } from './setup/release';
 import { ProviderKeys } from './providers/keys';
@@ -484,6 +485,8 @@ export class Services {
   readonly tasks: TaskService;
   /** Waiting for CI, a command, a page or a time without calling a model (ADR 0125). */
   readonly waits: WaitService;
+  /** The programs here that reach a service, and as whom: the prompt's map of them (ADR 0016). */
+  readonly clis: Clis;
   /** Your chats knowing about each other (ADR 0134). */
   readonly together: TogetherService;
   /** Other apps using Conch through its MCP door (ADR 0073). */
@@ -1218,12 +1221,15 @@ export class Services {
     });
     this.doctor.register(this.telemetry.doctorCheck());
     // Waiting for something until it changes (ADR 0125): Conch watches; the model sleeps.
+    // The mock engine's Conch asks no real program who it is (e2e, the tests).
+    this.clis = new Clis(config.CONCH_ENGINE === 'mock' ? { probes: [] } : {});
     let ghSignedIn: { at: number; path?: string } | undefined;
     this.waits = new WaitService({
       home: config.CONCH_HOME,
       processes: this.processes,
       fetcher: fetchPublicWeb,
-      // GitHub's own program when it's signed in, else the GitHub app's token, else nobody's.
+      // GitHub's own program when it's signed in, then each GitHub app's token, then nobody's:
+      // the first that can see the repository (`gh` as one account 404s on another's).
       github: async (owner) => {
         if (!ghSignedIn || Date.now() - ghSignedIn.at > 5 * 60_000) {
           const path = await findGh().catch(() => undefined);
@@ -1235,9 +1241,12 @@ export class Services {
             : false;
           ghSignedIn = { at: Date.now(), ...(ok && path && { path }) };
         }
-        if (ghSignedIn.path) return ghClient(ghSignedIn.path);
-        const token = await this.integrations.tokenOf('github').catch(() => undefined);
-        return fetchClient(fetchPublicWeb, owner, token);
+        const tokens = await this.integrations.tokensOf('github').catch(() => []);
+        return firstThatSees([
+          ...(ghSignedIn.path ? [ghClient(ghSignedIn.path)] : []),
+          ...tokens.map((token) => fetchClient(fetchPublicWeb, owner, token)),
+          fetchClient(fetchPublicWeb, owner),
+        ]);
       },
       git: (cwd, args) => realRun('git', ['-C', cwd, ...args], {}),
       chat: {
@@ -1511,6 +1520,7 @@ export class Services {
             ? ''
             : computerPrompt(this.computerUse),
           await this.integrations.promptSection(),
+          engine.hostTools === false ? '' : await this.clis.promptSection(),
           // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
           engine.hostTools === false
             ? ''
