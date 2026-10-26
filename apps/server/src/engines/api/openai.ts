@@ -118,6 +118,12 @@ export interface ChatPreset {
   rank?: readonly RegExp[];
   /** A small, cheap model among the listed ones, for naming chats. */
   small?: RegExp;
+  /**
+   * The provider's fast tier for Auto's reviews (ADR 0147): the first listed
+   * model it matches, newest first. Set only where the provider has a clear fast
+   * model that can judge an action; unset, and the turn's model reviews.
+   */
+  review?: RegExp;
   /** The schema dialect its models read (ADR 0072). Default . */
   schemas?: SchemaFamily;
   /** Models that can't call tools in this API, whatever the list says. */
@@ -695,6 +701,12 @@ export class OpenAiWire implements Wire {
     const small = this.preset.small;
     if (!small) return undefined;
     return [...this.#models.values()].find((m) => small.test(m.id) && (m.tools ?? true))?.id;
+  }
+
+  reviewModel(): string | undefined {
+    const review = this.preset.review;
+    if (!review) return undefined;
+    return [...this.#models.keys()].find((id) => review.test(id));
   }
 
   schemaFamily(model: string): SchemaFamily {

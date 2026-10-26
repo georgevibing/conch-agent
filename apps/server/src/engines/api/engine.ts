@@ -588,6 +588,18 @@ export class ApiEngine implements Engine {
     return this.variant.wire.smallModel();
   }
 
+  /**
+   * The provider's own fast model for Auto's reviews (ADR 0147), from its own
+   * list, as its wire declares it. None on this computer: the turn's model is
+   * already here, and costs nothing.
+   */
+  async reviewModel(): Promise<string | undefined> {
+    if (this.local || !this.variant.wire.reviewModel) return undefined;
+    const listed = (await this.capabilities().catch(() => undefined))?.models ?? [];
+    const model = this.variant.wire.reviewModel();
+    return model && listed.some((m) => m.id === model) ? model : undefined;
+  }
+
   // ── Keys ──────────────────────────────────────────────────────────────────
 
   /**

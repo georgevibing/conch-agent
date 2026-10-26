@@ -469,6 +469,11 @@ class AzureWire implements Wire {
     return this.#inner.smallModel();
   }
 
+  /** None: a deployment's name is yours, not a tier Microsoft declares (ADR 0147). */
+  reviewModel(): string | undefined {
+    return undefined;
+  }
+
   toolsFor(model: string): boolean | undefined {
     return this.#inner.toolsFor(model);
   }

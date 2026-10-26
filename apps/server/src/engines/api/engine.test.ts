@@ -1216,6 +1216,17 @@ describe('when a turn is interrupted or retried', () => {
 
 // ── Small jobs ──────────────────────────────────────────────────────────────
 
+describe('the fast reviewer (ADR 0147)', () => {
+  it('is the wire’s declared model, only once the provider has listed it', async () => {
+    const { engine } = await engineFor(stubWire({ reviewModel: () => 'stub/model' }));
+    expect(await engine.reviewModel()).toBe('stub/model');
+    const unlisted = await engineFor(stubWire({ reviewModel: () => 'stub/elsewhere' }));
+    expect(await unlisted.engine.reviewModel()).toBeUndefined();
+    const none = await engineFor(stubWire());
+    expect(await none.engine.reviewModel()).toBeUndefined();
+  });
+});
+
 describe('naming a chat', () => {
   it('uses the provider’s own small model when it has one', async () => {
     const asked: string[] = [];

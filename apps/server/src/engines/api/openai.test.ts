@@ -322,6 +322,54 @@ describe('a key and its company’s regions', () => {
   });
 });
 
+describe('each provider’s fast reviewer (ADR 0147)', () => {
+  const listed = (ids: string[]) =>
+    fakeFetch(() => jsonResponse({ data: ids.map((id, i) => ({ id, created: 100 - i })) })).fetch;
+
+  it.each([
+    [
+      'openai',
+      ['gpt-6.1-sol', 'gpt-6.1-sol-mini', 'gpt-6-luna', 'gpt-5-mini', 'gpt-4.1-mini'],
+      'gpt-6-luna',
+    ],
+    ['openai', ['gpt-6.1-sol', 'gpt-4o-mini', 'gpt-4.1-mini'], undefined],
+    [
+      'xai',
+      ['grok-5', 'grok-4-1-fast-reasoning', 'grok-4-1-fast-non-reasoning'],
+      'grok-4-1-fast-non-reasoning',
+    ],
+    ['deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash'], 'deepseek-v4-flash'],
+    [
+      'mistral',
+      ['mistral-large-latest', 'ministral-8b-latest', 'mistral-small-latest'],
+      'mistral-small-latest',
+    ],
+    // Every model there is fast already, or none is declared: the turn's model reviews.
+    ['groq', ['openai/gpt-oss-120b', 'llama-3.1-8b-instant'], undefined],
+    ['zai', ['glm-5', 'glm-4.5-air', 'glm-4.5-flash'], undefined],
+  ])('%s declares its own fast tier, from its own list: %j', async (id, ids, expected) => {
+    const wire = new OpenAiWire(preset(id), listed(ids));
+    expect(wire.reviewModel()).toBeUndefined();
+    await wire.models({ key: 'k' });
+    expect(wire.reviewModel()).toBe(expected);
+  });
+
+  it('takes Gemini’s Flash, never Flash-Lite', async () => {
+    const fetch = fakeFetch(() =>
+      jsonResponse({
+        models: ['gemini-3-pro', 'gemini-3-flash-lite', 'gemini-3-flash'].map((id) => ({
+          name: `models/${id}`,
+          displayName: id,
+          supportedGenerationMethods: ['generateContent'],
+        })),
+      }),
+    );
+    const wire = new OpenAiWire(preset('gemini'), fetch.fetch);
+    await wire.models({ key: 'AIza-test' });
+    expect(wire.reviewModel()).toBe('gemini-3-flash');
+  });
+});
+
 describe('a turn with a preset provider', () => {
   it('streams an answer and asks for usage in the last frame', async () => {
     const fetch = fakeFetch(() => answer());

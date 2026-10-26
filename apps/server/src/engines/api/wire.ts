@@ -81,6 +81,12 @@ export interface Wire {
   /** A small, cheap model from the last list the provider gave us, if it has one. */
   smallModel(): string | undefined;
   /**
+   * The provider's own fast model for Auto's reviews (ADR 0147), from the last
+   * list it gave us: declared per provider, only where it has a clear fast tier
+   * that can judge an action. Absent or undefined: the turn's model reviews.
+   */
+  reviewModel?(): string | undefined;
+  /**
    * Whether this model can call tools natively, from the provider's list (a
    * lookup in its full catalogue may be needed). `false` means its tools go
    * in the prompt instead (ADR 0072); unset means yes (ADR 0050).

@@ -135,6 +135,8 @@ export const PRESETS: readonly Preset[] = [
     hide: /(deep-research|codex|search|-instruct|o1-pro|-pro$|gpt-3\.5)/i,
     rank: [/^gpt-6/, /^gpt-5/, /^o\d/, /^gpt-4\.1/, /^gpt-4o/],
     small: /(luna|nano|mini)/,
+    // Luna, and mini before it: OpenAI's fast tier from GPT-5 on.
+    review: /^gpt-([5-9]|\d{2,})(\.\d+)?-(luna|mini)$/,
     // OpenAI: "Chat Completions does not support function calling with GPT-6 Astra or GPT-6.1 Sol."
     noTools: /^gpt-6(\.1)?-(astra|sol)\b/,
     // The list says nothing about sight; its chat models look at pictures.
@@ -160,6 +162,8 @@ export const PRESETS: readonly Preset[] = [
     hide: /(embedding|aqa|imagen|veo|tts|native-audio|live|image|robotics|computer-use|learnlm)/i,
     rank: [/^gemini-\d/, /^gemma/],
     small: /flash-lite|flash/,
+    // Flash, never Flash-Lite: Google's fast tier for real work.
+    review: /^gemini-[\d.]+-flash(-preview)?$/,
     // Gemma on the Gemini API has no function calling: its tools go in the prompt (ADR 0072).
     noTools: /^gemma/,
     sees: true,
@@ -181,6 +185,8 @@ export const PRESETS: readonly Preset[] = [
     rank: [/^grok-\d/],
     sees: /^grok-([4-9]|\d{2})/,
     small: /(fast|mini|non-reasoning)/,
+    // Grok's fast models, without reasoning: the same family, answering at once.
+    review: /^grok-[\d.-]+-fast-non-reasoning$/,
     // "Routes requests with the same conversation ID to the same server" (Chat Completions).
     cacheKey: { header: 'x-grok-conv-id' },
   },
@@ -192,6 +198,8 @@ export const PRESETS: readonly Preset[] = [
     endpoints: [{ id: 'global', base: 'https://api.deepseek.com' }],
     rank: [/pro/, /flash/],
     small: /flash/,
+    // DeepSeek's two tiers are Pro and Flash.
+    review: /flash/,
     // With tools, DeepSeek refuses a request that leaves out the earlier thinking.
     replayReasoning: 'reasoning_content',
   },
@@ -204,6 +212,8 @@ export const PRESETS: readonly Preset[] = [
     hide: /(ocr|moderation|embed|voxtral|saba)/i,
     rank: [/^mistral-(medium|large)/, /^(devstral|codestral)/, /^mistral-small/, /^ministral/],
     small: /(small|ministral|tiny)/,
+    // Mistral Small, never Ministral or Tiny.
+    review: /^mistral-small/,
     // Its list says which models see (`capabilities.vision`). A tool's
     // pictures follow its results, and Mistral wants a turn between.
     toolThenUser: 'bridge',

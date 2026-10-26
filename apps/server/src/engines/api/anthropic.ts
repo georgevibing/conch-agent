@@ -693,6 +693,11 @@ export class AnthropicWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
+  /** Anthropic's fast tier is Haiku: the newest one listed, on the API, Bedrock and Vertex (ADR 0147). */
+  reviewModel(): string | undefined {
+    return pickSmallModel([...this.#models.keys()]);
+  }
+
   /** Every Claude model sees (ADR 0070). */
   seesFor(): boolean {
     return true;

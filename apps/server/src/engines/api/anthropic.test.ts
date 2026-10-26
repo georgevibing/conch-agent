@@ -147,6 +147,13 @@ describe('Anthropic models', () => {
     await api.models({ key: KEY });
     expect(api.smallModel()).toBe('claude-haiku-4-5-20251001');
   });
+
+  it('reviews on Haiku from the list, and on nothing it doesn’t list (ADR 0147)', async () => {
+    const { wire: api } = wire(() => jsonResponse(MODELS));
+    expect(api.reviewModel()).toBeUndefined();
+    await api.models({ key: KEY });
+    expect(api.reviewModel()).toBe('claude-haiku-4-5-20251001');
+  });
 });
 
 describe('an Anthropic turn', () => {
