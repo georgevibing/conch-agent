@@ -34,9 +34,10 @@ export function signInWords(raw: unknown): string | undefined {
  * - `passwords_request`: ask the person for a credential. They type it into a
  *   card in the chat and it goes straight into the vault; the agent only
  *   learns it was saved. There's no tool that saves a value the agent writes.
- * - `passwords_read`: read one field (a PIN, a note, a key for a command),
+ * - `passwords_read`: read one field (a PIN, a note) the model must know,
  *   after the person says yes in the chat. Logins are better filled by
- *   `browser_type`, which never shows the model the password.
+ *   `browser_type`, and a key a command needs goes in the command's
+ *   `secrets` (`vault/secrets.ts`, ADR 0151): neither shows the model the value.
  *
  * Anything needing Passwords open shows an Unlock card while it's locked,
  * and carries on once the person unlocks it.
@@ -52,7 +53,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
     name: 'passwords_find',
     effect: 'read',
     description:
-      'List the user’s saved passwords, cards, notes and keys by name and website (never their values), and how a login signs in when it isn’t a password (with Google, a company’s single sign-on, a passkey, an emailed link). Use it to pick the item to fill with browser_type, or to read with passwords_read.',
+      'List the user’s saved passwords, cards, notes and keys by name and website (never their values), and how a login signs in when it isn’t a password (with Google, a company’s single sign-on, a passkey, an emailed link). Use it to pick the item to fill with browser_type, to put into a command’s secrets, or to read with passwords_read.',
     searchHint: 'password login sign in credentials saved account card note key secret',
     input: {
       query: z
@@ -67,7 +68,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
       const items = await vault.forAgent(query);
       if (!items.length)
         return query
-          ? `Nothing saved matches “${query}”. If you need it, ask the user with passwords_request.`
+          ? `Nothing saved matches “${query}”. Look again with other words first: the site or service (“github”), a short form (“gh”), the account name, or what it is (“token”, “pat”, “key”); or call passwords_find with no query to see everything. Only when it really isn’t there, ask the user with passwords_request.`
           : 'The user has no saved passwords yet.';
       let other = false;
       const lines = items.map((i) => {
@@ -144,9 +145,9 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
         ctx.signal,
       );
       if (outcome.itemId)
-        return `The user saved it to Passwords as “${title}” (id=${outcome.itemId}). You don’t see its value. To sign in, use browser_type on the field (pass item=${outcome.itemId}); to use another field, passwords_read. Don’t ask again this turn.`;
+        return `The user saved it to Passwords as “${title}” (id=${outcome.itemId}). You don’t see its value. To sign in, use browser_type on the field (pass item=${outcome.itemId}); for a command, pass it in the command’s secrets ({"name":"…","item":"${outcome.itemId}"}); to know a field yourself, passwords_read. Don’t ask again this turn.`;
       if (outcome.declined)
-        return 'The user chose not to give it. Don’t ask for it again in the chat; carry on without it or ask how they’d like to continue.';
+        return 'The user chose not to give it. Don’t ask for it again in the chat. Look for another way that needs no key from them (an app that’s connected, a command-line tool already signed in on this computer, a public source), or ask how they’d like to continue.';
       return 'Nobody filled in the card. Don’t ask for the value in the chat; tell the user what you were waiting for.';
     },
   };
@@ -158,7 +159,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
   }> = {
     name: 'passwords_read',
     description:
-      'Read one field of a saved item (a note, a PIN, an account number, a key you must use in a command), after the user agrees in the chat. The value enters your context, so only ask when you must use it yourself; to sign in on a website use browser_type instead, which fills it without you seeing it. Never repeat a value back in your reply.',
+      'Read one field of a saved item (a note, a PIN, an account number) when you must know the value itself, after the user agrees in the chat. The value enters your context. A key a command needs doesn’t: pass it in the command’s secrets (process_start, or Bash where it takes secrets), which puts it in the environment without you seeing it. To sign in on a website use browser_type, which fills it without you seeing it. Never repeat a value back in your reply.',
     searchHint: 'read secure note pin account number api key token secret value use',
     input: {
       item: z.string().min(1).max(300).describe('The item id from passwords_find.'),
@@ -197,7 +198,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
           },
         });
         if (decision === 'deny')
-          return 'The user said no. Don’t ask for it in the chat; carry on without it or ask how they’d like to continue.';
+          return 'The user said no. Don’t ask for it in the chat. Look for another way that needs no value from them (an app that’s connected, a command-line tool already signed in, a public source), or ask how they’d like to continue.';
         if (decision === 'allow-always') await vault.allowRead(item).catch(() => undefined);
       }
       try {
