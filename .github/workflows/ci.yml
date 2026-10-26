@@ -42,9 +42,8 @@ jobs:
   unit:
     name: Unit / ${{ matrix.suite }}
     runs-on: ubuntu-24.04
-    # Room for Playwright's system packages: on a slow Ubuntu mirror they alone took
-    # 10-12 minutes (2026-10-26), and the tests were cancelled, not failed.
-    timeout-minutes: 25
+    # Headroom for a slow package mirror (see the mirror step below).
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +67,16 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Playwright's system packages come from GitHub's Azure mirror of Ubuntu. When it
+      # stalls (2026-10-26: 10-25 minutes for a few fonts), apt waits minutes per file.
+      # More than one mirror and a short timeout move a stuck download on in seconds.
+      - name: Ubuntu packages from more than one mirror
+        if: startsWith(matrix.suite, 'server ')
+        run: |
+          printf '%s\n' http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/ | sudo tee /etc/apt/mirrors.txt
+          sudo sed -i -E 's#https?://azure\.archive\.ubuntu\.com/ubuntu/?#mirror+file:/etc/apt/mirrors.txt#' /etc/apt/sources.list.d/ubuntu.sources
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-mirrors
+          grep -h '^URIs' /etc/apt/sources.list.d/ubuntu.sources
       # Bound concurrency on each runner; scale out instead of competing with axe,
       # real sockets and child processes on the same machine. Run every suite even
       # if another fails, so one cleanup error doesn't hide the rest of the results.
@@ -78,8 +87,8 @@ jobs:
   e2e:
     name: Browser journeys / ${{ matrix.shard }} of 4
     runs-on: ubuntu-24.04
-    # As for Unit: a slow mirror for Playwright's system packages, not the journeys.
-    timeout-minutes: 25
+    # Headroom for a slow package mirror, as for Unit.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +105,15 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Playwright's system packages come from GitHub's Azure mirror of Ubuntu. When it
+      # stalls (2026-10-26: 10-25 minutes for a few fonts), apt waits minutes per file.
+      # More than one mirror and a short timeout move a stuck download on in seconds.
+      - name: Ubuntu packages from more than one mirror
+        run: |
+          printf '%s\n' http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/ | sudo tee /etc/apt/mirrors.txt
+          sudo sed -i -E 's#https?://azure\.archive\.ubuntu\.com/ubuntu/?#mirror+file:/etc/apt/mirrors.txt#' /etc/apt/sources.list.d/ubuntu.sources
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\n' | sudo tee /etc/apt/apt.conf.d/99-ci-mirrors
+          grep -h '^URIs' /etc/apt/sources.list.d/ubuntu.sources
       # Full Chromium in new headless mode; Headless Shell crashes on these pages.
       # The config's chromium channel and this install must stay in agreement.
       - run: pnpm exec playwright install --with-deps --no-shell chromium
