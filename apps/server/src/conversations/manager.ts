@@ -166,6 +166,7 @@ import { HostToolRows } from './views';
 import { cleanNarration, NarrationPacer } from './stories/narration';
 import { redactLabel, toolLabel } from './stories/labels';
 import type { BillingInfo } from '../usage/billing';
+import type { CommandSecrets, SecretRef } from '../vault/secrets';
 import {
   addTurn,
   allowance,
@@ -1255,6 +1256,8 @@ export class ConversationManager {
         | undefined;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
+      /** Saved keys put into Conch's own Bash's environment, unseen (ADR 0151). */
+      secrets?: CommandSecrets;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
       protectedPaths?: string[];
       /**
@@ -4105,6 +4108,15 @@ export class ConversationManager {
       },
     });
 
+    // The chat has read something untrusted (ADR 0028): why, in a sentence.
+    const untrusted = (besides?: (source: TaintSource) => boolean) => {
+      const tainted = settings.preferences.checkAfterReading
+        ? this.#tainted(live).filter(
+            (source) => (!trusting() || source.kind === 'person') && !besides?.(source),
+          )
+        : [];
+      return tainted.length ? describeTaint(tainted) : undefined;
+    };
     tools.push(
       // A scoped run gets only its own tools, unless it asks for Conch's. A
       // routine run does, without the routine tools (`RoutineService.tools`):
@@ -4138,14 +4150,7 @@ export class ConversationManager {
               active: () => questionTurnOpen && live.abort === abort,
               resume: (words) => this.#questionAnswered(live, words),
             },
-            untrusted: (besides) => {
-              const tainted = settings.preferences.checkAfterReading
-                ? this.#tainted(live).filter(
-                    (source) => (!trusting() || source.kind === 'person') && !besides?.(source),
-                  )
-                : [];
-              return tainted.length ? describeTaint(tainted) : undefined;
-            },
+            untrusted,
             taints: () => this.#tainted(live),
             taint: (source) => this.#taint(live, source),
             workspace: () =>
@@ -4970,6 +4975,7 @@ export class ConversationManager {
       const aheadFresh = told ? lead(told.fresh, told.freshMemories) : '';
       let sessionSeen = false;
       const withLead = ahead ? `${ahead}\n\n${prompt}` : prompt;
+      const secrets = this.deps.secrets;
       const turnInput: TurnInput = {
         conversationId,
         prompt: missed ? `${missed}\n\n${withLead}` : withLead,
@@ -5007,6 +5013,23 @@ export class ConversationManager {
         tools: pace.tools,
         budget: pace.budget,
         wrapTool: extras?.wrapTool,
+        // A saved key into Conch's own Bash, asked as Passwords asks (ADR 0151).
+        ...(!guest &&
+          secrets && {
+            secretEnv: (wanted: readonly SecretRef[], command: string) =>
+              secrets.environment(
+                {
+                  conversationId,
+                  ask: hostAsk,
+                  append: (event) => this.#append(live, event),
+                  signal: abort.signal,
+                  unattended: Boolean(extras || live.record.origin),
+                  untrusted,
+                },
+                wanted,
+                { command, tool: 'Bash' },
+              ),
+          }),
         resourceFeedback: () =>
           [
             feedback?.take(),
