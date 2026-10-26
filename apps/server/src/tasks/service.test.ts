@@ -1735,6 +1735,33 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
     await tasks.stop(elsewhere.id);
   });
 
+  it('carries what the person said in its chat, frozen, and shows it to nobody else (ADR 0149)', async () => {
+    const { tasks, conversations, events } = await setup();
+    const chat = await conversations.send({ clientMessageId: 'u1', text: 'tidy the README' });
+    await idle(conversations, chat.id);
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'tidy it',
+      parentConversationId: chat.id,
+    });
+    expect((await tasks.get(task.id)).ownerWords).toEqual(['tidy the README']);
+    // The page, other chats and the routes see the task without them.
+    expect((await tasks.list()).tasks.every((t) => t.ownerWords === undefined)).toBe(true);
+    expect(events.some((e) => e.type === 'task.changed' && e.task.ownerWords !== undefined)).toBe(
+      false,
+    );
+    // A scoped task takes no grants, so none of their words either; one from no chat has none.
+    const scoped = await tasks.create({
+      kind: 'background',
+      text: 'save the draft',
+      parentConversationId: chat.id,
+      toolScope: { names: ['report_result'] },
+    });
+    expect((await tasks.get(scoped.id)).ownerWords).toBeUndefined();
+    const alone = await tasks.create({ kind: 'background', text: 'tidy it' });
+    expect((await tasks.get(alone.id)).ownerWords).toBeUndefined();
+  });
+
   it('follows its chat: Full trust picked there lets a waiting task carry on', async () => {
     const { tasks, conversations, engines } = await setup();
     (engines.get('mock') as Scripted).modes = ALL;

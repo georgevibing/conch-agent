@@ -20,6 +20,7 @@ A task uses its chat's [agent](./agents.md), provider, model and [mode](../refer
 
 - If the chat asks first, so does the task. In **Full trust**, neither does.
 - **Always allow** answers from the chat count for its tasks, and nothing more.
+- In **Auto**, what you asked for in the chat counts for its tasks too, so a task doesn't stop to ask about work you already asked for. It's what you'd said when you handed it off: say "stop" later and tell the task too, or stop it. Nothing carries from a routine, or from a chat with someone else's messages in it.
 - Change the chat's mode and its tasks follow, even one waiting for your OK.
 - If the chat had read something from outside, the task starts as careful, and says so at the top: **The chat it came from had read 3 sites and one of your chats**. Press it to see each one. What a task reads comes back to its chat the same way.
 

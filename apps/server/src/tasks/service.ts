@@ -102,6 +102,16 @@ export function noMoreThan(
   if (!wanted || wanted === chat) return chat;
   return POWER[wanted] < POWER[chat] ? wanted : chat;
 }
+/**
+ * A task as the page and other chats see it: without the words it carries from its chat
+ * (ADR 0149), which only its own review reads.
+ */
+export function taskShown(task: Task): Task {
+  if (!task.ownerWords) return task;
+  const { ownerWords: _kept, ...rest } = task;
+  return rest;
+}
+
 const FINISHED: readonly TaskStatus[] = ['done', 'unverified', 'failed', 'stopped', 'interrupted'];
 
 export class TaskError extends Error {
@@ -331,7 +341,8 @@ export class TaskService {
   async list(): Promise<TaskList> {
     const tasks = [...(await this.deps.store.list())]
       .filter((task) => task.archivedAt === undefined)
-      .sort((a, b) => b.createdAt - a.createdAt);
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(taskShown);
     const capacity = this.#capacity ?? {
       atOnce: 1,
       working: tasks.filter((t) => RUNNING.includes(t.status)).length,
@@ -407,6 +418,14 @@ export class TaskService {
         input.options,
         input.ceiling,
       );
+      // What the person said in the chat it came from, as they said it now (ADR 0149): a
+      // scoped task takes no grants, so none of their words either.
+      const ownerWords =
+        input.parentConversationId && !input.toolScope
+          ? await this.deps.conversations
+              .ownerWordsOf(input.parentConversationId)
+              .catch(() => undefined)
+          : undefined;
       const task: Task = {
         id: newId('task'),
         kind: input.kind,
@@ -428,6 +447,7 @@ export class TaskService {
         steps: [],
         rev: 0,
         ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
+        ...(ownerWords?.length && { ownerWords }),
         ...(input.group && { group: input.group }),
         ...(input.by && { by: input.by.slice(0, 80) }),
         estimate:
@@ -1110,6 +1130,7 @@ export class TaskService {
           hostTools: true,
           ...(attended && { attended }),
           ...(grants && !task.toolScope && { grants }),
+          ...(task.ownerWords?.length && !task.toolScope && { ownerWords: task.ownerWords }),
           taint,
           skills,
           ...((task.worktree?.path ?? task.cwd) && { cwd: task.worktree?.path ?? task.cwd }),
@@ -1300,7 +1321,7 @@ export class TaskService {
 
   async #save(task: Task): Promise<Task> {
     const saved = await this.deps.store.save({ ...task, rev: task.rev + 1 });
-    this.deps.emit({ type: 'task.changed', task: saved });
+    this.deps.emit({ type: 'task.changed', task: taskShown(saved) });
     return saved;
   }
 

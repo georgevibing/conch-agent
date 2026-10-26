@@ -170,6 +170,9 @@ export const TaskWaiting = z.object({
 });
 export type TaskWaiting = z.infer<typeof TaskWaiting>;
 
+/** The most of the person's words a task carries from its chat (ADR 0149): what a review can read. */
+export const OWNER_WORDS_MAX = 40_000;
+
 export const Task = z.object({
   id: z.string(),
   kind: TaskKind,
@@ -214,6 +217,12 @@ export const Task = z.object({
   pausedFor: z.enum(['update', 'restart']).optional(),
   /** The chat it was sent from, where its result comes back. */
   parentConversationId: z.string().optional(),
+  /**
+   * The person's own words in the chat it was sent from, frozen when it was
+   * (ADR 0149): Auto's review reads them as theirs. Only from a chat a person
+   * is in with nobody else's words in it; never the task's own prompt.
+   */
+  ownerWords: z.array(z.string().max(OWNER_WORDS_MAX)).max(200).optional(),
   /**
    * Tasks started together share a group: one batch, shown as one card in the
    * chat they came from. Helpers from one `delegate`, background tasks started

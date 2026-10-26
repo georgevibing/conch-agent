@@ -41,6 +41,7 @@ import type {
 import {
   FIRST_AGENT_ID,
   MODE_WORDS,
+  OWNER_WORDS_MAX,
   OutsideAgentId,
   approvalOf,
   chatGoal,
@@ -378,6 +379,12 @@ export interface TurnExtras {
    * (ADR 0033): the same answer holds here, and nothing more.
    */
   grants?: { tools: readonly string[]; waived: readonly string[] };
+  /**
+   * The person's own words in the chat this was handed off from, as they were
+   * then (ADR 0149, `ownerWordsOf`): Auto's review reads them as theirs, marked
+   * as from that chat. The task's own prompt is never among them (ADR 0144).
+   */
+  ownerWords?: readonly string[];
   onStatus?: (status: ConversationStatus) => void;
   /** Works in this folder instead of the usual one (a helper's own git worktree, ADR 0033). */
   cwd?: string;
@@ -960,6 +967,12 @@ function grant(live: Live, grants: TurnExtras['grants']) {
   for (const tool of grants?.tools ?? []) live.alwaysAllow.add(tool);
   for (const key of grants?.waived ?? []) live.waived.add(key);
 }
+
+/**
+ * How a task's review tells the person's words in the chat it came from from
+ * anything said in the task itself (ADR 0149): each one starts with this.
+ */
+export const FROM_PARENT_CHAT = '[Said in the chat this task came from]';
 
 /**
  * Someone other than you, in a group chat (ADR 0075): the chat answers in
@@ -5958,11 +5971,15 @@ export class ConversationManager {
   /**
    * The person's own words in this chat (ADR 0087). None where they could be
    * someone else's: a routine's run carries what happened, and a chat app
-   * with other people in it carries theirs.
+   * with other people in it carries theirs. Work handed off (a task, a helper)
+   * has what the person said in the chat it came from, frozen when it was and
+   * marked as from there (ADR 0149); its own prompt is Conch's, never theirs.
    */
   #yourWords(live: Live): string[] {
-    if (live.extras || live.record.origin?.kind === 'routine') return [];
     if (this.#tainted(live).some((source) => source.kind === 'person')) return [];
+    if (live.extras)
+      return (live.extras.ownerWords ?? []).map((text) => `${FROM_PARENT_CHAT} ${text}`);
+    if (live.record.origin?.kind === 'routine') return [];
     const start = contextStart(live.events);
     return live.events.flatMap((e) =>
       e.type === 'user.message' && e.seq >= start ? [e.text] : [],
@@ -5994,6 +6011,23 @@ export class ConversationManager {
   async grantsOf(id: string): Promise<{ tools: string[]; waived: string[] }> {
     const live = await this.#get(id);
     return { tools: [...live.alwaysAllow], waived: [...live.waived] };
+  }
+
+  /**
+   * The person's own words in this chat, frozen for work handed off from it
+   * (ADR 0149): what `#yourWords` reads here, only where a person is in it (Conch
+   * itself, or their own chat app) and nobody else's words are. None from a
+   * routine, a task, another app or a guest, and none when there's more than a
+   * review could read whole: a missing middle could hide where they said stop.
+   */
+  async ownerWordsOf(id: string): Promise<string[] | undefined> {
+    const live = await this.#get(id);
+    const origin = live.record.origin;
+    if (live.extras || (origin && (origin.kind !== 'channel' || isGuest(origin)))) return undefined;
+    const words = this.#yourWords(live);
+    const size = words.reduce((n, text) => n + text.length, 0);
+    if (!words.length || words.length > 200 || size > OWNER_WORDS_MAX) return undefined;
+    return words;
   }
 
   /**

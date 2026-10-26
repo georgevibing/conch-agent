@@ -1,7 +1,7 @@
 import { ContinueTaskBody, CreateTaskBody } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
-import { TaskError, taskExpectations, type TaskService } from './service';
+import { TaskError, taskExpectations, taskShown, type TaskService } from './service';
 
 const STATUS = { 'not-found': 404, invalid: 400, busy: 409 } as const;
 
@@ -24,22 +24,24 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
     try {
-      return await tasks.create({
-        kind: 'background',
-        text: body.data.text,
-        expectations: body.data.checks && taskExpectations(body.data.checks),
-        requestKey: body.data.requestKey,
-        ...(body.data.title && { title: body.data.title }),
-        ...(body.data.conversationId && { parentConversationId: body.data.conversationId }),
-        ...(body.data.options && { options: body.data.options }),
-      });
+      return taskShown(
+        await tasks.create({
+          kind: 'background',
+          text: body.data.text,
+          expectations: body.data.checks && taskExpectations(body.data.checks),
+          requestKey: body.data.requestKey,
+          ...(body.data.title && { title: body.data.title }),
+          ...(body.data.conversationId && { parentConversationId: body.data.conversationId }),
+          ...(body.data.options && { options: body.data.options }),
+        }),
+      );
     } catch (error) {
       return fail(reply, error);
     }
   });
   app.post<{ Params: { id: string } }>('/api/tasks/:id/stop', async (request, reply) => {
     try {
-      return await tasks.stop(request.params.id);
+      return taskShown(await tasks.stop(request.params.id));
     } catch (error) {
       return fail(reply, error);
     }
@@ -47,14 +49,14 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
   // "Start now": only a task that waits for room, and only while this computer can take it (ADR 0129).
   app.post<{ Params: { id: string } }>('/api/tasks/:id/start-now', async (request, reply) => {
     try {
-      return await tasks.startNow(request.params.id);
+      return taskShown(await tasks.startNow(request.params.id));
     } catch (error) {
       return fail(reply, error);
     }
   });
   app.post<{ Params: { id: string } }>('/api/tasks/:id/retry', async (request, reply) => {
     try {
-      return await tasks.retry(request.params.id);
+      return taskShown(await tasks.retry(request.params.id));
     } catch (error) {
       return fail(reply, error);
     }
@@ -66,7 +68,9 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
         .code(400)
         .send({ error: 'bad-request', message: 'Write an instruction for this task.' });
     try {
-      return await tasks.continue(request.params.id, body.data.text, body.data.requestKey);
+      return taskShown(
+        await tasks.continue(request.params.id, body.data.text, body.data.requestKey),
+      );
     } catch (error) {
       return fail(reply, error);
     }
