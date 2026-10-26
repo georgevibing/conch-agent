@@ -116,6 +116,18 @@ their own, services that take no new apps — only works with that provider, so 
 with every model** (`POST /api/integrations/adopt`, still looked up by name on the gateway, so
 a forged request can only bring in what the provider really has).
 
+**An app call never holds a turn, and a broken app is looked at before anyone hears of it**
+(2026-10-26). Every app call is bounded the same way on every engine (`integrations/limits.ts`):
+three minutes without a word from the app ends it, progress the app reports keeps it alive, and
+ten minutes is the cap. The bridge passes these to the MCP client with the turn's signal, so
+Stop cancels a call in flight; Claude Code gets them as `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` and
+`MCP_TOOL_TIMEOUT` (a value the person set wins). A slow call comes back with what to try next:
+ask for less, split it, or reach it another way. An app that doesn't open at the start of a
+bridged turn is checked once more (renewing a refused sign-in) and, if it works, opened for that
+turn with a quiet note. Mid-turn, `apps_check` lets the model have Conch run the same check on
+one app or every broken one and get back, in words, whether it works, what it offers and what
+to do next. It never connects, turns on or changes an app.
+
 ## Threat model
 
 - **The agent** may be steered by what it reads in Slack (Greshake et al., 2023; OWASP LLM01

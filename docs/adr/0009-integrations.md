@@ -137,3 +137,5 @@ Icons to remove their mark get a meaningful glyph or a monogram on their colour.
   Conch in the service's settings.
 - Codex and API engines need an `integrations` declaration to compile, which is the
   point.
+- An app call is bounded (three minutes silent, ten at most) and the model can re-check an
+  app itself with `apps_check` (ADR 0049).
