@@ -1354,6 +1354,11 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     };
   },
   current_time: () => ({ family: 'other', words: say('check', 'the time') }),
+  // A connected app looked at again mid-turn (ADR 0049).
+  apps_check: (input) => {
+    const app = str(input, 'app');
+    return { family: 'other', words: say('check', app ? clip(oneLine(app), 40) : 'your apps') };
+  },
   // Using the computer's apps (ADR 0110): what it did, never what it typed.
   computer: (input) => {
     const app = str(input, 'app');
