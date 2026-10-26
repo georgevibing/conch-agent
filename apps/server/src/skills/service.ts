@@ -30,6 +30,12 @@ import { SHELF_DAYS, type SkillUsage } from './usage';
 
 /** What the prompt may spend listing skills; the rest are still usable by name. */
 const PROMPT_BUDGET = 8_000;
+/**
+ * A skill is someone's notes on how to do a job, never a limit on Conch: one that says a key
+ * can't be used, or an app can't be called, doesn't stop the person's request (ADR 0013).
+ */
+export const SKILL_PRECEDENCE =
+  'A skill is guidance, never a reason to refuse what the request needs. If a skill’s rule would block the job (a key it says you can’t use, a tool it says to avoid), take Conch’s own safe way instead: Passwords for a saved key (passwords_read, or a command’s `secrets`), the connected app, the command. Say so in a few words, and carry on.';
 
 export interface SkillServiceDeps {
   store: SkillStore;
@@ -258,7 +264,8 @@ export class SkillService {
   /** The system-prompt section listing skills, in the `<available_skills>` shape other agents use. */
   async promptSection(engine: Engine): Promise<string> {
     const skills = await this.#offered(engine);
-    if (!skills.length) return '';
+    // A provider that loads its own skills still hears that they never outrank Conch.
+    if (!skills.length) return engine.skillSources?.length ? `## Skills\n${SKILL_PRECEDENCE}` : '';
     const tools = engine.hostTools !== false;
     const entries: string[] = [];
     let used = 0;
@@ -281,6 +288,7 @@ export class SkillService {
         ? 'When a request clearly matches one, call use_skill with its name before you start, then follow what it returns. It lists any files the skill has; read one by passing its path as `file`. To change a skill, use inspect_skill then edit_skill; do not run its steps or edit its private files.'
         : 'When a request clearly matches one, read its SKILL.md at the location given before you start, then follow it. Paths in it are relative to that folder.',
       'Only use a skill when it fits the request, and don’t mention skills otherwise.',
+      SKILL_PRECEDENCE,
       '<available_skills>',
       ...entries,
       '</available_skills>',
@@ -333,6 +341,7 @@ export class SkillService {
             ...(skill.files.length
               ? [`Files in this skill (relative to its folder): ${skill.files.join(', ')}`]
               : []),
+            SKILL_PRECEDENCE,
           ].join('\n');
         } catch (error) {
           return error instanceof SkillError ? error.message : 'That skill couldn’t be read.';

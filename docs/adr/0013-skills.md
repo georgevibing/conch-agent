@@ -86,6 +86,14 @@ matches), **When I ask** (only by name), or **Off**.
 - Either way the chat shows a quiet "Used skill" pill (`skill.used`).
 - A provider that loads a folder natively (Claude Code reads `~/.claude/skills`)
   isn't told about those skills twice.
+- **A skill never outranks Conch.** It is guidance for a job, not a limit on
+  it. A skill that says a saved key can't be used, or an app mustn't be called,
+  doesn't stop the request: the model takes Conch's own safe way (Passwords,
+  the connected app, a command's `secrets`) and says so in a few words. The
+  line (`SKILL_PRECEDENCE`) is in the skills section and after every
+  `use_skill`, and reaches a provider that loads its own folder too. A
+  skill that claimed a key "needs a host-owned path" once stopped a chat
+  from cloning a repository with the token the person had saved for it.
 
 ## Security
 

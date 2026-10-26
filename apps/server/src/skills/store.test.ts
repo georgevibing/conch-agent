@@ -6,7 +6,7 @@ import type { Capabilities, ConversationEventInput, EngineStatus } from '@conch/
 import { describe, expect, it } from 'vitest';
 
 import type { Engine } from '../engines/types';
-import { SkillService } from './service';
+import { SKILL_PRECEDENCE, SkillService } from './service';
 import { externalRoots, SkillError, SkillStore } from './store';
 
 async function write(path: string, text: string) {
@@ -218,6 +218,8 @@ describe('SkillService', () => {
     expect(section).toContain('<name>weekly-review</name>');
     expect(section).toContain('<name>gh-triage</name>');
     expect(section).toContain('use_skill');
+    // A skill's rule never stands between the person and Conch's own safe way.
+    expect(section).toContain(SKILL_PRECEDENCE);
     // Off skills (Hermes, by default) aren't offered.
     expect(section).not.toContain('release-notes');
 
@@ -228,7 +230,9 @@ describe('SkillService', () => {
 
     // One that reads a folder itself isn't told about it twice.
     await store.setMode('openclaw_gh-triage', 'off');
-    expect(await skills.promptSection(fakeEngine({ skillSources: ['conch'] }))).toBe('');
+    expect(await skills.promptSection(fakeEngine({ skillSources: ['conch'] }))).toBe(
+      `## Skills\n${SKILL_PRECEDENCE}`,
+    );
   });
 
   it('expands /name into the skill and what was typed, and ignores everything else', async () => {
@@ -266,6 +270,7 @@ describe('SkillService', () => {
     const text = await run({ name: 'release-notes' });
     expect(text).toContain('See references/style.md in');
     expect(text).toContain('Files in this skill (relative to its folder): references/style.md');
+    expect(text.endsWith(SKILL_PRECEDENCE)).toBe(true);
     expect(await run({ name: 'release-notes', file: 'references/style.md' })).toBe('Be brief.');
     await run({ name: 'release-notes' });
     expect(appended).toEqual([
