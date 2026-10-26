@@ -56,10 +56,15 @@ to read them (`gh run view <id> --log-failed`). GitHub is read the cheapest way 
 
 1. GitHub's own program, `gh api -i`, when it's installed and signed in. That's the person's
    sign-in, and Conch never sees the token.
-2. Otherwise the token of the GitHub app connected in Apps (`IntegrationService.tokenOf`). It
+2. Then the token of each GitHub app connected in Apps (`IntegrationService.tokensOf`). It
    goes only to `api.github.com`, through the guarded fetch, and is never shown to the model
    or a log.
-3. Otherwise nobody's sign-in, for a public repository, with a slow pace (60 an hour).
+3. Then nobody's sign-in, for a public repository, with a slow pace (60 an hour).
+
+These are tried in turn until one can see the repository (`firstThatSees`): `gh` signed in as
+one account gets a 404 for another account's private repository, and the app's token may be
+the account that can. A 404, a 401 or a 403 without a wait moves on; a limit is an answer.
+The first way that answers is kept for the rest of the wait.
 
 Every look sends the last `ETag`, so an unchanged answer is a free 304. A server's hint
 (`x-poll-interval`, `retry-after`, or the limit's reset) always wins over Conch's own pace.

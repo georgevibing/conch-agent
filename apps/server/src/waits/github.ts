@@ -3,11 +3,14 @@
  *
  * - GitHub's own program (`gh api`), when it's installed and signed in: the
  *   person's own sign-in, which Conch never sees;
- * - else the token of the GitHub app the person connected in Apps, with
+ * - then the token of each GitHub app the person connected in Apps, with
  *   conditional requests (an unchanged answer is a 304, which GitHub doesn't
  *   count against the hourly limit);
- * - else GitHub's public API, for a public repository, looked at slowly
+ * - then GitHub's public API, for a public repository, looked at slowly
  *   (60 requests an hour per address).
+ *
+ * Each is tried until one can see the repository (`firstThatSees`): `gh`
+ * signed in as one account gets a 404 for another account's private one.
  *
  * The answers are only states and names: no logs, no code. The model reads
  * those itself, when it wakes, with the tools it already has.
@@ -187,6 +190,42 @@ export function ghClient(
         ...(headers.etag && { etag: headers.etag }),
         ...(waitMs !== undefined && { waitMs }),
       };
+    },
+  };
+}
+
+/**
+ * Several ways in, tried in order until one can see the repository: `gh`
+ * signed in as one account gets a 404 for another's private repository, and
+ * the GitHub app's token (or a second one) may be the account that can. A
+ * refusal moves on to the next way; the first that answers is kept, so later
+ * looks go straight to it. A limit (a 403 with a wait) is an answer, not a
+ * refusal: the next way would only be refused the same.
+ */
+export function firstThatSees(clients: readonly GitHubClient[]): GitHubClient {
+  if (clients.length === 1 && clients[0]) return clients[0];
+  let at = 0;
+  return {
+    get via() {
+      return clients[at]?.via ?? 'public';
+    },
+    async get(path, etag, signal) {
+      let answer: GitHubAnswer | undefined;
+      for (let i = at; i < clients.length; i++) {
+        const client = clients[i];
+        if (!client) continue;
+        // An etag belongs to the way that gave it.
+        answer = await client.get(path, i === at ? etag : undefined, signal);
+        const refused =
+          answer.status === 404 ||
+          answer.status === 401 ||
+          (answer.status === 403 && answer.waitMs === undefined);
+        if (!refused) {
+          at = i;
+          return answer;
+        }
+      }
+      return answer ?? { status: 404 };
     },
   };
 }
