@@ -143,6 +143,7 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
 import { AutoLifts } from './conversations/lifts';
+import { fastReviewer, FastRefusals } from './conversations/review-completion';
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
@@ -471,6 +472,8 @@ export class Services {
   readonly approvalCalls: ApprovalCalls;
   /** Revoked devices must be forgotten before shutdown releases their storage. */
   readonly #pushRevocations = new Set<Promise<void>>();
+  /** Fast review models that failed lately, left alone for a while (ADR 0147). */
+  readonly #fastRefusals = new FastRefusals();
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
   /** Natural voices: Piper on this computer, or a connected provider's (ADR 0077). */
@@ -1386,6 +1389,10 @@ export class Services {
         engine.complete
           ? { complete: engine.complete.bind(engine), ...(model && { model }) }
           : undefined,
+      // The same provider's own declared fast model, when it has one (ADR 0147). Never
+      // another provider's: a model that failed lately is left alone, and the turn's reviews.
+      fastReview: (engine) => fastReviewer(engine, this.#fastRefusals),
+      reviewed: (stage, outcome, ms) => this.telemetry.review(stage, outcome, ms),
       // Which chats lifted each kind of step with Always allow (ADR 0128): the card offers it for every chat.
       lifts: new AutoLifts(config.CONCH_HOME),
       // A new chat's title (ADR 0103): its own provider, else another with room, else this computer.

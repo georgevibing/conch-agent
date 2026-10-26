@@ -1131,6 +1131,10 @@ export class ConversationManager {
       riskLook?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
       /** Task-aware review uses this turn's provider and selected model, never a price-name heuristic. */
       autoReview?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
+      /** The turn's provider's declared fast reviewer (ADR 0147); absent or undefined: `autoReview`. */
+      fastReview?: (engine: Engine) => Promise<LookModel | undefined>;
+      /** One of Auto's reviews ended (ADR 0147): its stage, outcome and time, for the dashboards. */
+      reviewed?: (stage: string, outcome: string, ms: number) => void;
       /**
        * Who names a new chat (`providers/small.ts`): its own provider when it can and
        * its plan has room, else another, else one on this computer. Undefined: nobody

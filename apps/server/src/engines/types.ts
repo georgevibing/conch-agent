@@ -529,6 +529,12 @@ export interface CompletionInput {
   maxTokens?: number;
   /** Pictures to look at with the prompt, for engines with `completeSees` (ADR 0070). */
   images?: readonly Picture[];
+  /**
+   * More requests like this one are likely soon (Auto's reviews, ADR 0147): an
+   * engine may keep a fresh process ready for the next one. Each answer still
+   * starts clean: nothing is shared between two of them.
+   */
+  warm?: boolean;
   signal: AbortSignal;
 }
 
@@ -624,6 +630,12 @@ export interface Engine {
   readonly smallModel?: string;
   /** Answer a single prompt with plain text: no tools, no session, no thinking. */
   complete?(input: CompletionInput): Promise<Completion>;
+  /**
+   * The provider's own fast model for Auto's reviews (ADR 0147), declared here
+   * by the engine, never guessed from names elsewhere (ADR 0144). Only a model
+   * the account offers; undefined when it has none, and the turn's model reviews.
+   */
+  reviewModel?(): Promise<string | undefined>;
   /**
    * `complete` looks at `CompletionInput.images` when its model can see (its
    * `ModelInfo.images` isn't false), so it can describe a screenshot to a
