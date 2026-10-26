@@ -1,11 +1,16 @@
+import { createHash } from 'node:crypto';
+
 import {
   createSdkMcpServer,
   query,
+  startup,
   tool,
   type FastModeDisabledReason,
   type McpServerConfig,
+  type Options,
   type Query,
   type SDKUserMessage,
+  type WarmQuery,
 } from '@anthropic-ai/claude-agent-sdk';
 import { ALL_MODES } from '@conch/protocol';
 import type {
@@ -43,6 +48,7 @@ import { forbiddenPlaces } from '../host';
 import { sealedHosts } from '../../conversations/sandbox';
 import { childEnv, settingsEnv } from './env';
 import { startClaudeLogin } from './login';
+import { Spares } from './spares';
 import { Translator } from './translate';
 import { limitSignal, usageFromResponse, usageFromStatus } from './usage';
 
@@ -99,6 +105,17 @@ function sourceOf(source?: string): EngineMcpStatus['source'] {
     default:
       return 'other';
   }
+}
+
+/**
+ * Which spare fits a short answer: every option Claude Code reads at start
+ * (its program, folder, environment, system prompt, model), digested, so the
+ * key itself never holds a secret from the environment.
+ */
+export function spareKey(options: Options): string {
+  const { abortController: _, ...rest } = options;
+  void _;
+  return createHash('sha256').update(JSON.stringify(rest)).digest('hex');
 }
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
@@ -165,6 +182,14 @@ export class ClaudeCodeEngine implements Engine {
   readonly label = 'Claude Code';
   /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
   readonly smallModel = 'haiku';
+  /**
+   * Auto's reviews run on Haiku (ADR 0147): Claude Code takes the `haiku` alias on
+   * every sign-in, Bedrock and Vertex included (`ANTHROPIC_DEFAULT_HAIKU_MODEL` when
+   * set). An account or managed setting without it fails, and the turn's model reviews.
+   */
+  async reviewModel(): Promise<string | undefined> {
+    return 'haiku';
+  }
   /** Every Claude model sees, so it can describe a screenshot for a model that can't (ADR 0070). */
   readonly completeSees = true;
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
@@ -208,6 +233,11 @@ export class ClaudeCodeEngine implements Engine {
   #mcpProbe?: Promise<EngineMcpStatus[]>;
 
   #healed = new Set<string>();
+  /** Processes started ahead of the next short answer, each for one (`spares.ts`). */
+  #spares = new Spares<{ warm: WarmQuery; abort: AbortController }>(({ warm, abort }) => {
+    warm.close();
+    abort.abort();
+  });
   /** Where it runs, as its environment says: empty on Anthropic's own sign-in (ADR 0109). */
   #cloud: Record<string, string> = {};
 
@@ -544,6 +574,7 @@ export class ClaudeCodeEngine implements Engine {
     this.#cache = undefined;
     this.#capabilities = undefined;
     this.#usage = undefined;
+    this.#spares.clear();
   }
 
   /**
@@ -558,6 +589,10 @@ export class ClaudeCodeEngine implements Engine {
    * credentials, so a subscription reads no settings at all instead (its
    * sign-in isn't one), only their `env`, so a proxy still applies. Any other
    * sign-in, and any failure of the lighter way, runs normally.
+   *
+   * A `warm` request (Auto's reviews, ADR 0147) takes a process started ahead
+   * for exactly these options, when one waits, and starts the next: starting
+   * Claude Code is most of a fast answer's time. Each process answers once.
    */
   async complete(input: CompletionInput): Promise<Completion> {
     const status = await this.detect();
@@ -572,12 +607,12 @@ export class ClaudeCodeEngine implements Engine {
     // The lighter way first, where there is one; the usual way if it fails.
     if (bare || method === 'subscription') {
       try {
-        return await this.#complete(input, status, anthropicApiKey, bare, !bare);
+        return await this.#complete(input, status, anthropicApiKey, bare, !bare, input.warm);
       } catch (error) {
         if (input.signal.aborted) throw error;
       }
     }
-    return this.#complete(input, status, anthropicApiKey, false);
+    return this.#complete(input, status, anthropicApiKey, false, false, input.warm);
   }
 
   async #complete(
@@ -587,6 +622,8 @@ export class ClaudeCodeEngine implements Engine {
     bare: boolean,
     /** Without the person's settings (CLAUDE.md, rules, plugins, hooks): their `env` only. */
     plain = false,
+    /** Take a process started ahead for these options, and start the next. */
+    warm = false,
   ): Promise<Completion> {
     const abort = new AbortController();
     const onAbort = () => abort.abort();
@@ -612,42 +649,75 @@ export class ClaudeCodeEngine implements Engine {
           parent_tool_use_id: null,
         } as SDKUserMessage;
       }
-      const q = query({
-        prompt: images.length ? withPictures() : input.prompt,
-        options: {
-          cwd: await this.settings.workspace(),
-          pathToClaudeCodeExecutable: programFile(status.executablePath),
-          env: plain
-            ? { ...this.#env(anthropicApiKey), ...(await settingsEnv()) }
-            : this.#env(anthropicApiKey),
-          abortController: abort,
-          systemPrompt: input.system,
-          ...(input.model && input.model !== 'default' && { model: input.model }),
-          tools: [],
-          mcpServers: {},
-          strictMcpConfig: true,
-          settingSources: plain ? [] : ['user'],
-          thinking: { type: 'disabled' },
-          maxTurns: 1,
-          persistSession: false,
-          ...(bare && { extraArgs: { bare: null } }),
-        },
-      });
-      for await (const message of q) {
-        if (message.type !== 'result') continue;
-        if (message.subtype !== 'success' || message.is_error) {
-          throw new Error(`${this.label} couldn't answer (${message.subtype}).`);
+      const options: Options = {
+        cwd: await this.settings.workspace(),
+        pathToClaudeCodeExecutable: programFile(status.executablePath),
+        env: plain
+          ? { ...this.#env(anthropicApiKey), ...(await settingsEnv()) }
+          : this.#env(anthropicApiKey),
+        systemPrompt: input.system,
+        ...(input.model && input.model !== 'default' && { model: input.model }),
+        tools: [],
+        mcpServers: {},
+        strictMcpConfig: true,
+        settingSources: plain ? [] : ['user'],
+        thinking: { type: 'disabled' },
+        maxTurns: 1,
+        persistSession: false,
+        ...(bare && { extraArgs: { bare: null } }),
+      };
+      const prompt = () => (images.length ? withPictures() : input.prompt);
+      const answer = async (q: Query): Promise<Completion> => {
+        for await (const message of q) {
+          if (message.type !== 'result') continue;
+          if (message.subtype !== 'success' || message.is_error) {
+            throw new Error(`${this.label} couldn't answer (${message.subtype}).`);
+          }
+          return {
+            text: message.result,
+            usage: {
+              inputTokens: message.usage.input_tokens ?? 0,
+              outputTokens: message.usage.output_tokens ?? 0,
+              costUsd: message.total_cost_usd,
+            },
+          };
         }
-        return {
-          text: message.result,
-          usage: {
-            inputTokens: message.usage.input_tokens ?? 0,
-            outputTokens: message.usage.output_tokens ?? 0,
-            costUsd: message.total_cost_usd,
-          },
-        };
+        throw new Error(`${this.label} ended without an answer.`);
+      };
+      // The next one finds a process ready: started beside a spare that's answering,
+      // or after a cold answer, so two starts never compete for the same review.
+      const keepNext = () => {
+        if (!warm) return;
+        this.#spares.keep(spareKey(options), async () => {
+          const spareAbort = new AbortController();
+          const started = await startup({ options: { ...options, abortController: spareAbort } });
+          return { warm: started, abort: spareAbort };
+        });
+      };
+      const spare = warm
+        ? await this.#spares.take(spareKey(options))?.catch(() => undefined)
+        : undefined;
+      if (spare && input.signal.aborted) spare.warm.close();
+      else if (spare) {
+        keepNext();
+        const stop = () => spare.abort.abort();
+        input.signal.addEventListener('abort', stop, { once: true });
+        try {
+          return await answer(spare.warm.query(prompt()));
+        } catch (error) {
+          // A spare that died while it waited says nothing about the sign-in: start one now.
+          spare.warm.close();
+          if (input.signal.aborted) throw error;
+        } finally {
+          input.signal.removeEventListener('abort', stop);
+        }
       }
-      throw new Error(`${this.label} ended without an answer.`);
+      const answered = await answer(
+        query({ prompt: prompt(), options: { ...options, abortController: abort } }),
+      );
+      // Only after an answer: options that fail would fail the same way next time.
+      if (!spare) keepNext();
+      return answered;
     } finally {
       input.signal.removeEventListener('abort', onAbort);
     }
