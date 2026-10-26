@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto';
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * Passwords (ADR 0024), the way a person uses them: add one with a generated
  * password, find it, see and copy it, import from a browser, delete and bring
@@ -9,6 +11,10 @@ import { expect, test, type Page } from '@playwright/test';
  */
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+});
+
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
 });
 
 const snap = (page: Page, name: string) =>
@@ -163,7 +169,11 @@ test('the assistant asks for a login in the chat, and never sees it', async ({ p
   );
 });
 
-test('reading a PIN asks first, and the PIN never shows in the chat', async ({ page, request }) => {
+test('Ask first still asks before reading a named PIN, and never shows it in the chat', async ({
+  page,
+  request,
+}) => {
+  await askFirst(request);
   await request.post('/api/vault/items', {
     data: {
       type: 'card',
@@ -183,6 +193,31 @@ test('reading a PIN asks first, and the PIN never shows in the chat', async ({ p
   await expect(page.getByText(/I have the pin now/)).toBeVisible();
   await expect(page.getByText(/read the PIN of “Travel Visa”/)).toBeVisible();
   expect(await page.content()).not.toContain('4821');
+});
+
+test('Auto reads an explicitly named PIN without another approval and keeps it out of the chat', async ({
+  page,
+  request,
+}) => {
+  await autoAgain(request);
+  const saved = await request.post('/api/vault/items', {
+    data: {
+      type: 'card',
+      title: 'Holiday Visa',
+      fields: [{ label: 'PIN', kind: 'pin', role: 'cardPin', value: '7392' }],
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: /Message/ });
+  await composer.fill('Please read the PIN of Holiday Visa');
+  await composer.press('Enter');
+  await expect(page.getByText(/I have the pin now/)).toBeVisible();
+  await expect(page.getByRole('group', { name: /read the PIN of “Holiday Visa”/ })).toHaveCount(0);
+  expect(await page.content()).not.toContain('7392');
+  const id = page.url().split('/c/')[1];
+  const log = await (await request.get(`/api/conversations/${id}`)).text();
+  expect(log).not.toContain('7392');
 });
 
 test('a locked Passwords opens with its password, here and from the chat', async ({
@@ -215,7 +250,9 @@ test('a locked Passwords opens with its password, here and from the chat', async
   await unlock.getByLabel('Password for Passwords').fill('tide pool seven');
   await unlock.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.getByText('Passwords unlocked')).toBeVisible();
-  await expect(page.getByRole('group', { name: /read the PIN of “Travel Visa”/ })).toBeVisible();
+  await expect(page.getByText(/I have the pin now/)).toBeVisible();
+  await expect(page.getByRole('group', { name: /read the PIN of “Travel Visa”/ })).toHaveCount(0);
+  expect(await page.content()).not.toContain('4821');
   await request.patch('/api/vault/lock', { data: { enabled: false } });
 });
 

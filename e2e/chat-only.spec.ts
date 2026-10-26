@@ -19,7 +19,7 @@ const composer = (page: Page) => page.getByRole('textbox', { name: 'Message Conc
 
 async function ask(page: Page, text: string) {
   await composer(page).fill(text);
-  await page.keyboard.press('Enter');
+  await composer(page).press('Enter');
 }
 
 /** Connect the pretend Linear from the chat's offer: real OAuth, in a popup. */
@@ -53,6 +53,7 @@ test('a chat-only model offers one that can use the app, switches, and sends it 
   await expect(page.getByRole('radio', { name: /^Opus 5\.5/ })).not.toContainText('Chat only');
   await lite.click();
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Model and mode' })).toBeHidden();
   await expect(page.getByRole('button', { name: /^Model: Chat Lite/ })).toBeVisible();
 
   // Asking about Linear: it waits, with the switch right there.
@@ -89,6 +90,7 @@ test('“Answer without it” keeps the model, and it isn’t asked again in tha
   await page.getByRole('button', { name: /^Model:/ }).click();
   await page.getByRole('radio', { name: /^Chat Lite/ }).click();
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Model and mode' })).toBeHidden();
   // The choice has landed before the message goes: on a slow runner it can lag the press.
   await expect(page.getByRole('button', { name: /^Model: Chat Lite/ })).toBeVisible();
 
