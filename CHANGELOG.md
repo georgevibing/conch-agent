@@ -2,6 +2,27 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.18](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-26)
+
+### New
+
+- Put a saved key into a command's environment without the model seeing it
+- Replay your own chats to see how often Auto's rules would ask
+- Count Auto's reviews and how long they take
+- Always allow one command, not a whole kind of step
+- The assistant can have Conch look at an app again
+- Auto checks each step once, quickly, and reuses the answer
+- Every chat knows which programs here reach a service, and as whom
+- And 3 new things
+
+### Fixed
+
+- Tools past one list's room wait behind find_tools instead of vanishing
+- The apps prompt names tools as the engine gets them, and a missing app's tools are said
+- An app call never holds a turn, and Stop cancels it
+- An app that isn't connected doesn't hide the way in this computer already has
+- And 2 fixes
+
 ## [0.1.0-alpha.17](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-25)
 
 ### New
