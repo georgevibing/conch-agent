@@ -222,7 +222,9 @@ describe('what gets suggested', () => {
     const offered = notConnectedPrompt(['Linear'], ['Linear']);
     expect(offered).toMatch(/Linear isn’t connected/);
     expect(offered).toMatch(/a button in the chat to connect Linear/);
-    expect(offered).toMatch(/Don’t pretend to have Linear data/);
+    expect(offered).toMatch(/don’t pretend to have Linear data/);
+    // Another way in on this computer comes before sending the person anywhere.
+    expect(offered).toMatch(/command-line tool, signed in; a key the user saved in Passwords/);
     expect(offered).not.toMatch(/Claude|Codex/);
     expect(offered.split('\n').length).toBeLessThanOrEqual(3);
     const quiet = notConnectedPrompt(['Linear', 'Notion']);

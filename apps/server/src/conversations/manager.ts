@@ -502,9 +502,11 @@ export interface IntegrationSuggestionInput {
 
 /**
  * For a turn about apps that aren't connected: the assistant can't see them
- * and must not act as if it could. When the chat just offered to connect them,
- * it says so, so the reply doesn't explain how. Short, and the same for every
- * provider.
+ * through Conch and must not act as if it could. This computer may still have
+ * its own way in (the service's command-line tool, signed in; a key saved in
+ * Passwords), and that's tried before the person is sent anywhere. When the
+ * chat just offered to connect them, it says so, so the reply doesn't explain
+ * how. Short, and the same for every provider.
  */
 export function notConnectedPrompt(
   unseen: readonly string[],
@@ -515,12 +517,12 @@ export function notConnectedPrompt(
   const one = unseen.length === 1;
   return [
     '## Not connected yet',
-    `${names} ${one ? 'isn’t' : 'aren’t'} connected, so you can’t see anything in ${one ? 'it' : 'them'}.${
+    `${names} ${one ? 'isn’t' : 'aren’t'} connected as an app, so Conch’s apps can’t see anything in ${one ? 'it' : 'them'}. If this computer has another way in (${one ? 'its' : 'their'} command-line tool, signed in; a key the user saved in Passwords), use that instead.${
       offered.length
         ? ` Conch has just shown the user a button in the chat to connect ${offered.join(' and ')}.`
         : ''
     }`,
-    `Don’t pretend to have ${names} data, and don’t guess at it. Answer what you can without it, then say that once ${names} ${one ? 'is' : 'are'} connected you’ll be able to help with that part. ${
+    `Otherwise don’t pretend to have ${names} data, and don’t guess at it. Answer what you can without it, then say that once ${names} ${one ? 'is' : 'are'} connected you’ll be able to help with that part. ${
       offered.length
         ? 'Don’t explain how to connect it: the button does that.'
         : 'They can connect it from Apps in the sidebar.'

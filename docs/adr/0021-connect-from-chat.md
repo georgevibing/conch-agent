@@ -46,8 +46,10 @@ is `preferences.mutedSuggestions`, undone on the card or in Settings → Models 
 modes.
 
 **The assistant is told, briefly.** Every turn about a cued app that isn't
-connected gets a three-line section: it can't see the app, mustn't pretend or
-guess, should answer what it can and say it'll help once it's connected. Only
+connected gets a three-line section: Conch's apps can't see it, but another way
+in on this computer comes first (the service's command-line tool, signed in; a
+key saved in Passwords); failing that, it mustn't pretend or guess, should
+answer what it can and say it'll help once it's connected. Only
 the turn that showed the card mentions the button (so the reply doesn't explain
 how to connect). Later turns, muted apps and routines still get the "can't see
 it" line, so the assistant never makes something up.
