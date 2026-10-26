@@ -270,7 +270,7 @@ describe('SkillService', () => {
     const text = await run({ name: 'release-notes' });
     expect(text).toContain('See references/style.md in');
     expect(text).toContain('Files in this skill (relative to its folder): references/style.md');
-    expect(text.endsWith(SKILL_PRECEDENCE)).toBe(true);
+    expect(String(text).endsWith(SKILL_PRECEDENCE)).toBe(true);
     expect(await run({ name: 'release-notes', file: 'references/style.md' })).toBe('Be brief.');
     await run({ name: 'release-notes' });
     expect(appended).toEqual([
