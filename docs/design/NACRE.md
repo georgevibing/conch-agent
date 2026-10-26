@@ -443,6 +443,11 @@ row between the words and their card.
   they follow it, the word first. A single short line (a header, a bar, a
   note's Undo) keeps its button beside it, and so do tiles in a grid, whose
   words stay on one line.
+- **Approval cards.** The mark sits beside the title; the explanation and command use
+  the full width beneath it. Show one short reason without a second warning icon or
+  a repeated “checking first” sentence. Titles wrap naturally, with each app named
+  once. On narrow cards, actions wrap and keep 44px touch targets; no action is cut
+  off by a long “Always allow” label.
 - **Folding.** A card done with folds away. One that can open again becomes a
   row like a tool's (`--nc-chat-row-*`). One that only says what happened
   becomes a line (`--nc-chat-note-*`). One that's dismissed closes the gap it

@@ -29,7 +29,14 @@ import { useNavigate } from 'react-router';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
-import { approvalTitle, commandOf, isMailApproval, rowState, withAnswer } from './approval';
+import {
+  approvalCaution,
+  approvalTitle,
+  commandOf,
+  isMailApproval,
+  rowState,
+  withAnswer,
+} from './approval';
 import { MailApproval, mailOf } from './MailItems';
 import { StreamingMarkdown } from './Markdown';
 import { drawnAsFile, FileToolItem } from './FileToolItem';
@@ -464,7 +471,7 @@ function AskCard({
       title={withCode(title)}
       detail={item.detail}
       cost={item.cost}
-      caution={item.caution ?? item.taint}
+      caution={approvalCaution(item)}
       // Asked because of what it read or for leaving the sealed box, "always" lets this
       // tool through for the rest of the chat; for a skill's list, or words going to
       // other people, it's this once.

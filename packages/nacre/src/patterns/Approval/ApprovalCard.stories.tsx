@@ -41,6 +41,44 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
+/** The cloud executor on a phone: one name, one short explanation, two touch targets. */
+export const CloudExecutor: Story = {
+  decorators: [
+    (Story) => (
+      <div style={{ maxInlineSize: 358 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    title: 'Cloudflare API Code Executor',
+    cost: undefined,
+    detail: undefined,
+    icon: undefined,
+    caution: 'This tool can change or delete app data.',
+    allowAlways: false,
+  },
+};
+
+/** A longer permission label must wrap without pushing an action off the phone. */
+export const EveryChat: Story = {
+  decorators: [
+    (Story) => (
+      <div style={{ maxInlineSize: 358 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    title: 'Create an issue in GitHub',
+    cost: undefined,
+    detail: undefined,
+    icon: undefined,
+    caution: 'This chat read GitHub. Check this is what you asked for.',
+    alwaysLabel: 'Always allow, in every chat',
+  },
+};
+
 /** A paid picture after the chat read two apps: one short line says so, each place once. */
 export const AfterReading: Story = {
   args: {

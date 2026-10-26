@@ -1,4 +1,4 @@
-import { Ban, Check, Clock, ShieldAlert, ShieldQuestion, type LucideIcon } from 'lucide-react';
+import { Ban, Check, Clock, ShieldQuestion, type LucideIcon } from 'lucide-react';
 import { createElement, type ComponentProps, type ReactNode, type Ref } from 'react';
 
 import { Button } from '../../components/Button';
@@ -99,12 +99,7 @@ export function ApprovalCard({
         </div>
         {command && <ApprovalCommand className={styles.command}>{command}</ApprovalCommand>}
         {children != null && <div className={styles.preview}>{children}</div>}
-        {caution && (
-          <p className={styles.caution}>
-            <ShieldAlert aria-hidden />
-            <span>{caution}</span>
-          </p>
-        )}
+        {caution && <p className={styles.caution}>{caution}</p>}
         {rule && (
           <div className={styles.ruleRow}>
             <Button
