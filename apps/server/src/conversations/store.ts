@@ -130,8 +130,8 @@ export class ConversationStore {
         .split('\n')
         .filter(Boolean)
         .flatMap((line) => {
-          const parsed = ConversationEvent.safeParse(parseLine(line));
-          return parsed.success ? [parsed.data] : [];
+          const event = eventFromLine(line);
+          return event ? [event] : [];
         });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
@@ -202,6 +202,15 @@ export class ConversationStore {
     const index = await this.#load();
     await writeJson(join(this.dir, 'index.json'), [...index.values()]);
   }
+}
+
+/**
+ * One line of a chat's log, as the store reads it: undefined for a line that won't read, so a
+ * reader that streams a long log line by line (`replay.ts`) skips the same lines this does.
+ */
+export function eventFromLine(line: string): ConversationEvent | undefined {
+  const parsed = ConversationEvent.safeParse(parseLine(line));
+  return parsed.success ? parsed.data : undefined;
 }
 
 function parseLine(line: string): unknown {

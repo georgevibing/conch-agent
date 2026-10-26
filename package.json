@@ -42,6 +42,7 @@
     "dev:mock": "CONCH_ENGINE=mock turbo run dev",
     "e2e": "pnpm --filter @conch/web build && playwright test -c e2e/playwright.config.ts",
     "eval": "pnpm --silent --filter @conch/server eval",
+    "auto:replay": "pnpm --silent --filter @conch/server auto:replay",
     "desktop:dev": "pnpm --filter @conch/desktop app:dev",
     "desktop:start": "pnpm --filter @conch/desktop app:start",
     "desktop:build": "pnpm --filter @conch/desktop dist",

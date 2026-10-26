@@ -80,6 +80,33 @@ conch dashboards send grafana-cloud
 
 `conch dashboards test` sends a test, and `conch dashboards off` stops everything. See [the command line](../reference/cli.md).
 
+## How often Auto asks
+
+[Auto](../reference/modes.md#auto) should ask only about real risk. Two numbers show how often it asks:
+
+- `conch.auto.steps`: each step the assistant took, by the chat's mode.
+- `conch.auto.questions`: each question that reached you in Auto, by why: the kind of risk, something the chat read, a pattern across steps, the circuit breaker, or a tool you set to **Ask**.
+
+Questions per 100 steps is one over the other. In Prometheus:
+
+```promql
+100 * sum(rate(conch_auto_questions_total[1d])) / sum(rate(conch_auto_steps_total{conch_mode="auto"}[1d]))
+```
+
+Like every number here, they carry only a mode or a kind, never a command or a word.
+
+### Replay your own chats
+
+In a copy of Conch's code, `pnpm auto:replay` runs every step of your chats through Auto's rules again and says how often they would ask, before and after the chat read something from outside. It also shows how you answered the questions you were really asked.
+
+```bash
+pnpm auto:replay --since 30d
+```
+
+It reads your chats on this computer and changes nothing. It uses no model and no network, and prints only numbers. `--examples` adds a few steps, with keys and personal details taken out. `--json` gives the numbers as JSON, and `--home` reads another Conch's folder.
+
+It counts what the rules would ask before the second look and the review, so after reading it's the most Auto could ask.
+
 ## The numbers
 
 Each by its OpenTelemetry name, its Prometheus name, and the labels it may carry.
