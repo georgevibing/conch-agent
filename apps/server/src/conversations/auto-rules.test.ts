@@ -139,23 +139,46 @@ const DEV = 'terraform apply -target=module.dev';
 describe('Always allow one command (ADR 0149)', () => {
   it('offers the command on the card, keeps it from the press, and asks no more', async () => {
     const { chat, rules, workspace } = await setup();
-    const first = await chat([DEV], { decision: 'allow', rule: true });
+    const web: TaintSource = { kind: 'web', label: 'docs.example' };
+    // A push to a branch asks only once the chat has read something: a rule can lift that.
+    const first = await chat(
+      ['git push origin feature/login'],
+      { decision: 'allow', rule: true },
+      { read: web },
+    );
     expect(first.asked).toHaveLength(1);
-    expect(first.asked[0]?.rule).toBe(DEV);
+    expect(first.asked[0]?.rule).toBe('git push origin feature/*');
     expect(first.outcomes).toEqual(['ran']);
     expect(await rules()).toEqual([
       expect.objectContaining({
         tool: 'Bash',
-        prefix: ['terraform', 'apply', '-target=module.dev'],
+        prefix: ['git', 'push', 'origin', 'feature/*'],
         cwd: workspace,
       }),
     ]);
     const resolved = first.events.find((e) => e.type === 'permission.resolved');
-    expect(resolved).toMatchObject({ decision: 'allow', rule: DEV });
-    // In another chat: the same command goes ahead; a different one still asks.
-    const again = await chat([DEV, 'terraform apply -target=module.prod']);
+    expect(resolved).toMatchObject({ decision: 'allow', rule: 'git push origin feature/*' });
+    // In another chat: the same kind of push goes ahead; a different one still asks.
+    const again = await chat(
+      ['git push origin feature/signup', 'git push origin fix/typo'],
+      undefined,
+      {
+        read: web,
+      },
+    );
     expect(again.outcomes).toEqual(['ran', 'declined']);
-    expect(again.asked.map((a) => a.rule)).toEqual(['terraform apply -target=module.prod']);
+    expect(again.asked.map((a) => a.rule)).toEqual(['git push origin fix/*']);
+  });
+
+  it('offers no "always" for a step serious enough to ask before reading (ADR 0100)', async () => {
+    const { chat, rules } = await setup();
+    for (const command of [DEV, 'git push --force origin main']) {
+      const { asked, outcomes } = await chat([command], { decision: 'allow', rule: true });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.rule).toBeUndefined();
+      expect(outcomes).toEqual(['ran']);
+    }
+    expect(await rules()).toEqual([]);
   });
 
   it('keeps nothing from any answer but the press', async () => {

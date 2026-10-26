@@ -3414,7 +3414,10 @@ export class ConversationManager {
         treeClean: await cleanFor(request.input),
         sameRemote: await remotesFor(request.input),
       });
-      if (risk && (risk.critical || risk.held || risk.wish === NEVER)) return undefined;
+      // Something serious enough to ask before reading too offers no "always", as a class
+      // lift never does (ADR 0100): its card says why, and the person answers it each time.
+      if (risk && (risk.critical || risk.held || risk.wish === NEVER || riskAsks(risk, false)))
+        return undefined;
       return command;
     };
 

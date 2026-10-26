@@ -144,3 +144,12 @@ prefixes, chains and coverage, matching, older settings. `conversations/auto-rul
 offered, kept from a press only, then no question; never for the circuit breaker, someone
 else's words or a held step; a branch by its kind, nothing added. `app.test.ts`: Settings only
 forgets. Nacre `ApprovalCard` and `AllowedList`, web `PermissionCard`.
+
+## 2026-10-26: no "always" before reading
+
+CI's journey for ADR 0100 caught the card for a force-push over `main` offering
+**Always allow** for that command. A step serious enough to ask before the chat reads
+anything (severe and lasting: a force-push over a shared branch, a deploy, a new remote, a
+pushed image) offers no "always", as a class lift never did: its card says why and the
+person answers it each time, or names it in their message (ADR 0128). A rule is offered and
+used only where Auto asks because the chat read something.

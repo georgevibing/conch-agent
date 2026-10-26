@@ -101,7 +101,9 @@ If you allowed that kind in another chat, or a card asks for the third time in o
 
 ### Always allow one command
 
-A card about a command can also offer just that command: **Always allow `terraform apply -target=module.dev`**. Press it, and Auto runs exactly that command without asking again, in any chat, in that work folder. A pushed branch is offered by its kind, so **Always allow `git push origin feature/*`** covers `feature/login` and `feature/checkout`.
+A card about a command can also offer just that command. Press it, and Auto runs exactly that command without asking again, in any chat, in that work folder. A pushed branch is offered by its kind, so **Always allow `git push origin feature/*`** covers `feature/login` and `feature/checkout`.
+
+- It's offered only where Auto asks because the chat read something. A step serious enough to ask before reading too (a force-push over `main`, a deploy, a new remote) asks each time, with no “always”: say it in your message instead.
 
 - It covers the whole command. `git push origin feature/login main` or a `--force` added still asks.
 - It's never offered for a shell or an interpreter (`bash`, `python`, `node`), a project's own scripts (`npm run`, `pnpm`, `make`), `sudo`, `rm`, `curl`, `ssh`, or a program on its own (`git`).
