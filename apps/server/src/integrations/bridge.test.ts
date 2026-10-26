@@ -35,13 +35,13 @@ function pretend(call: (name: string, n: number, options?: CallOptions) => unkno
   return { client, closed: () => closed };
 }
 
-type CallOptions = {
+interface CallOptions {
   signal?: AbortSignal;
   timeout?: number;
   maxTotalTimeout?: number;
   resetTimeoutOnProgress?: boolean;
   onprogress?: () => void;
-};
+}
 
 const ok = (text: string) => ({ content: [{ type: 'text', text }] });
 const drop = () => new McpError(ErrorCode.ConnectionClosed, 'Connection closed');
