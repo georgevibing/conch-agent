@@ -831,7 +831,8 @@ export const AnswerVaultRequestBody = z.object({
 
 /** The agent asking to read or fill something: shown with the permission card. */
 export const VaultPermission = z.object({
-  action: z.enum(['read', 'fill']),
+  /** `use`: put it into a command's environment, unseen by the assistant (ADR 0151). */
+  action: z.enum(['read', 'fill', 'use']),
   itemTitle: z.string(),
   itemType: VaultItemType,
   fieldLabel: z.string(),
@@ -839,6 +840,9 @@ export const VaultPermission = z.object({
   reason: z.string().max(300).optional(),
   /** For a fill, the page's host. */
   site: z.string().optional(),
+  /** For a use, the variable it goes into and the command, shortened. */
+  envName: z.string().max(64).optional(),
+  command: z.string().max(400).optional(),
   /** A password, card or recovery phrase: said plainly on the card. */
   sensitive: z.boolean(),
 });

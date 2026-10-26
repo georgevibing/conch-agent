@@ -105,6 +105,9 @@ export function VaultApprovalItem({
       fieldLabel={vault.fieldLabel}
       reason={vault.reason}
       sensitive={vault.sensitive}
+      {...(vault.action === 'use' && {
+        use: { envName: vault.envName ?? '', command: vault.command },
+      })}
       decision={item.decision}
       busy={busy}
       onDecide={(d) => {
