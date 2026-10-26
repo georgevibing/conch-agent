@@ -490,9 +490,14 @@ after reading, when your message names the thing that makes it risky (the branch
 package, the host, production); what you said not to do holds until you say otherwise.
 Keys, code decoded from a blob, money, an assistant's own permission files and a whole
 folder ask whatever anyone says. An unusual command that could reach out after reading
-gets a second look from a small model, which adds a question or lifts one asked only for
+gets a second look from a model, which adds a question or lifts one asked only for
 what was read, and never writes the card's words. It is a careful reader, not a wall:
 the sealed box and protected paths are what hold ([ADR 0128](./adr/0128-auto-reads-what-you-asked-for.md)).
+Reviews use the chat's own provider, never another: its own fast model where the
+provider declares one (Haiku on Claude Code, Luna on Codex), else the chat's model. A
+review on Copilot, Gemini CLI or Grok is a new session in an empty folder that may use
+no tools; any tool it reaches for ends the review, and the question stands
+([ADR 0147](./adr/0147-fast-reviews-on-every-provider.md)).
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this

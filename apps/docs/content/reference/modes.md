@@ -73,13 +73,13 @@ Issues, pull requests and CI logs read with `gh` count, because anyone can write
 
 ### The second look
 
-Your chat's model takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
+Your chat's provider takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
 
 When Auto would ask only because the chat read something, the look lets a command through if it plainly serves your request. It never lifts a step that asks whatever was read. If the provider cannot make a separate review, the question stands. With Claude Code, Conch answers each of its questions by these same rules.
 
 ### Task-aware review
 
-Before an avoidable question, Auto can review the complete action against your instructions in this chat. It uses this chat's provider and selected model when that provider supports a separate review. A requested push, ordinary deployment or resolved app change can proceed without another card. The review never grants permanent permission.
+Before an avoidable question, Auto can review the complete action against your instructions in this chat. It uses this chat's provider, never another: its own fast model where it has one (Haiku on Claude Code, Luna on Codex), else the chat's selected model. Every provider can review, Copilot, Gemini CLI and Grok included ([ADR 0147](../../../../docs/adr/0147-fast-reviews-on-every-provider.md)). A requested push, ordinary deployment or resolved app change can proceed without another card. The review never grants permanent permission.
 
 An unsafe proposal is returned to the assistant to find a safer approach. After three rejected proposals in one turn, further actions needing this review stop; independent ordinary work can continue. A rejection is not another approval request.
 
