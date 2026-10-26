@@ -90,8 +90,9 @@ test('a signed skill: what it can do, trusting who made it, held to it, and chan
   await composer.press('Enter');
   const card = page.getByRole('group', { name: /asks first/ });
   await expect(card).toContainText(
-    'The “Weekly review” skill is in use, and it doesn’t say it needs to run this command. So I’m checking first.',
+    'The “Weekly review” skill is in use, and it doesn’t say it needs to run this command.',
   );
+  await expect(card).not.toContainText('So I’m checking first.');
   await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(0);
   await card.getByRole('button', { name: 'Deny' }).click();
   // The call's story says so (ADR 0103).
