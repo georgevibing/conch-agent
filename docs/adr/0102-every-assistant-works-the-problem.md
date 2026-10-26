@@ -58,10 +58,28 @@ and plan mode investigates as hard but changes nothing. It says nothing about vo
 the persona says how it talks. Personas compose it as base → resilience → persona →
 instructions → memory and goal.
 
+### The most direct way in, the first time
+
+A real chat went in circles: GitHub was connected but the model sent the person to Apps;
+a token saved in Passwords was "out of reach"; Supabase was connected and the model
+opened its website and started to sign in; a slow lookup ended the turn with nothing. The
+block now says how to reach a service, in order: the connected app's tools (finding a
+held-back tool first), a program on this computer that's signed in (checking the
+account), the service's API with a key from Passwords (`passwords_read` asks the person),
+and the browser last, with a web sign-in only when nothing else can. A program signed in
+to the wrong account is a reason to use the saved key, not to stop. Before saying it
+can't, or handing over the job, it checks what Conch already has (apps, Passwords,
+programs, earlier chats), looking up independent things at once. A slow call means
+asking for less or another tool, never an empty turn, and the way the person names is
+the one used. Asking them to run a command is a last resort.
+
+The browser's own section says the same from its side, and the loop nudges
+(`engines/budget.ts`) name another way in before handing the problem back.
+
 ### Three forms, because every word costs every turn
 
-- **The whole block** (about 1.8 K characters, some 450 tokens) for a model with tools.
-- **`RESILIENCE_COMPACT`** (about 0.5 K characters) in lean mode: `leanSystem` swaps it in and keeps
+- **The whole block** (about 3.7 K characters, some 900 tokens) for a model with tools.
+- **`RESILIENCE_COMPACT`** (about 1 K characters) in lean mode: `leanSystem` swaps it in and keeps
   its section, so a small local model still hears it.
 - **`RESILIENCE_WORDS`** for a model that can only chat and for a guest in a group:
   think it through, check the reasoning, never invent. The API engine also swaps it in
@@ -94,6 +112,14 @@ Four tasks join `pnpm eval`, each made so that giving up at the first failure fa
 - `honest-blocker`: sending needs a setting only the account owner can change; passing
   means saying so, never "sent", in at most three tries.
 
+Two more are shaped like the chat above:
+
+- `saved-key`: Hooli is in a second Ledger account, reached only with its key, which the
+  run saved in Passwords. Passing means finding it there and using it, never asking the
+  person to paste a key. The approver reads only items the run saved itself.
+- `app-before-browser`: the person names the Ledger's website while the app is
+  connected; the app answers, and nobody signs in on the web.
+
 `evals/persistence.test.ts` runs the Ledger ones through the real harness with two
 scripted assistants, one that works the problem and one that quits, and requires a pass
 and a fail. A stand-in engine signs every other provider out for the run, so a scripted
@@ -103,7 +129,7 @@ test can never fall back to a paid one.
 
 - Every provider, persona and mode gets the same way of working; how it says so stays
   the persona's.
-- About 450 tokens more per turn with tools (cached after the first), about 125 in lean
+- About 900 tokens more per turn with tools (cached after the first), about 250 in lean
   mode.
 - A dropped app costs one reconnect instead of the rest of the turn. A change is never
   repeated without the model deciding to.
