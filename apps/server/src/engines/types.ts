@@ -232,6 +232,12 @@ export interface EngineIntegrations {
    */
   mode: 'native' | 'bridge';
   /**
+   * The names an app's tools arrive by: `bare` leaves off the leading `mcp__`
+   * (`github__get_file`), for a provider that keeps that prefix for its own
+   * servers (Codex). Otherwise `mcp__<server>__<tool>`.
+   */
+  toolNames?: 'bare';
+  /**
    * Where the provider account's own connectors (e.g. claude.ai) are managed,
    * if it has any. Only to say where a server it brings came from: the
    * gallery never depends on them, and the portable ones are brought into

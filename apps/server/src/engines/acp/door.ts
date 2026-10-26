@@ -88,6 +88,11 @@ export async function openDoor(
      */
     instructions?: string;
     resourceFeedback?: () => string | undefined;
+    /** The tool a call really runs: a held-back one through `use_tool` (`holdBack`, ADR 0072). */
+    resolve?: (
+      name: string,
+      args: Record<string, unknown>,
+    ) => { tool: Callable; args: Record<string, unknown> } | undefined;
   } = {},
 ): Promise<Door> {
   const key = randomBytes(32).toString('base64url');
@@ -109,12 +114,19 @@ export async function openDoor(
       })),
     }));
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const tool = tools.get(request.params.name);
       const id = `door_${++calls}_${randomBytes(4).toString('hex')}`;
-      const args =
+      const given =
         request.params.arguments && typeof request.params.arguments === 'object'
           ? (request.params.arguments as Record<string, unknown>)
           : {};
+      const found = options.resolve
+        ? options.resolve(request.params.name, given)
+        : (() => {
+            const tool = tools.get(request.params.name);
+            return tool ? { tool, args: given } : undefined;
+          })();
+      const tool = found?.tool;
+      const args = found?.args ?? given;
       if (!tool)
         return {
           isError: true,

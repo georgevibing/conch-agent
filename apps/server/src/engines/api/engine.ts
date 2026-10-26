@@ -101,6 +101,7 @@ import {
   searchTools,
   toolTokens,
 } from './lean';
+import { holdBack } from './held';
 import { chatCacheKey, jobCacheKey } from './cachekey';
 import { collapseStalePages } from './pages';
 import { sessionsDir, startsTurn, TranscriptStore, type Session } from './session';
@@ -145,8 +146,6 @@ export function retryDelay(
 }
 /** As many models as a picker can reasonably show. */
 export const MAX_MODELS = 60;
-/** More tools than this and the model spends its context reading the list. */
-const MAX_TOOLS = 128;
 /** A title is a handful of words; nothing here needs a long answer. */
 const COMPLETION_MAX_TOKENS = 256;
 /** Past this share of the budget, stale page views are let go (ADR 0085). */
@@ -321,7 +320,8 @@ export function buildTools(
   const tools = new Map<string, Callable>();
   const taken = new Set<string>();
   const add = (display: string, make: (name: string) => Callable) => {
-    if (off.has(display) || tools.size >= MAX_TOOLS) return;
+    // Every tool: what doesn't fit in one turn's list is held back, never dropped (`holdBack`).
+    if (off.has(display)) return;
     const name = wireName(bare ? display.replace(/^mcp__/, '') : display, taken);
     taken.add(name);
     tools.set(name, make(name));
@@ -959,7 +959,13 @@ export class ApiEngine implements Engine {
         system: estimateTokens(input.systemAppend),
         tools: toolTokens([...allTools.values()].map((tool) => tool.spec)),
       });
-      const tools = lean && allTools.size ? leanTools(allTools, session, input.prompt) : allTools;
+      // Past the most one list may carry, the rest wait behind `find_tools`, the apps the
+      // person named sent first: never dropped in silence (ADR 0072).
+      const held = lean ? undefined : holdBack(allTools, { said: input.prompt });
+      const tools =
+        lean && allTools.size
+          ? leanTools(allTools, session, input.prompt)
+          : (held?.tools ?? allTools);
       const plan = new ToolPlan({
         tools,
         native:
@@ -985,7 +991,7 @@ export class ApiEngine implements Engine {
           computer: plan.usable,
           ...(this.variant.where && { where: this.variant.where }),
         });
-        const full = [input.systemAppend.trim(), note, resourceContext]
+        const full = [input.systemAppend.trim(), note, held?.note, resourceContext]
           .filter(Boolean)
           .join('\n\n');
         if (lean) {
@@ -1063,7 +1069,7 @@ export class ApiEngine implements Engine {
           return;
         }
         // Tools loaded in lean mode since the last request are sent from now on.
-        if (lean && plan.refresh()) {
+        if ((lean || held?.held.size) && plan.refresh()) {
           fitting.system = systemFor();
           fitting.specs = plan.specs();
           fitting.deferred = plan.deferred(defers);

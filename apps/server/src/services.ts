@@ -1522,7 +1522,7 @@ export class Services {
             .origin
             ? ''
             : computerPrompt(this.computerUse),
-          await this.integrations.promptSection(),
+          await this.integrations.promptSection(engine),
           engine.hostTools === false ? '' : await this.clis.promptSection(),
           // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
           engine.hostTools === false

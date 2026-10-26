@@ -40,6 +40,7 @@ import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
+import { holdBack } from '../api/held';
 import { describeOrSay, withSight } from '../api/sight';
 import { isAtLeast, parseVersion } from '../codex/detect';
 import type {
@@ -994,11 +995,17 @@ export class AcpEngine implements Engine {
     // A program that takes pictures in a prompt gets a tool's pictures too (an
     // MCP `image`); one that doesn't gets them in words (ADR 0070).
     const canSee = running.info.agentCapabilities?.promptCapabilities?.image === true;
-    const tools = withSight(buildTools(input), {
-      sees: () => canSee,
-      ...(input.describe && { describe: input.describe }),
-      signal: input.signal,
-    });
+    // More than one list carries: the rest wait behind `find_tools` and run through
+    // `use_tool`, the same set every turn so a loaded session carries on (ADR 0072).
+    const held = holdBack(
+      withSight(buildTools(input), {
+        sees: () => canSee,
+        ...(input.describe && { describe: input.describe }),
+        signal: input.signal,
+      }),
+      { stable: true },
+    );
+    const tools = held.tools;
     const names = new Set([...tools.values()].map((tool: Callable) => tool.spec.name));
     const local = new AbortController();
     const signal = AbortSignal.any([input.signal, local.signal]);
@@ -1006,7 +1013,10 @@ export class AcpEngine implements Engine {
     const how = this.agent.instructions;
     // Conch's instructions, and where its tools are: the door's own, for programs
     // that read a tool server's instructions (`AcpAgent.instructions`).
-    const instructions = conchInstructions(input.systemAppend, tools.size > 0);
+    const instructions = conchInstructions(
+      held.note ? `${input.systemAppend}\n\n${held.note}` : input.systemAppend,
+      tools.size > 0,
+    );
     const door = tools.size
       ? await openDoor(
           tools,
@@ -1028,6 +1038,7 @@ export class AcpEngine implements Engine {
           {
             ...(how === 'rules' ? {} : { instructions }),
             resourceFeedback: input.resourceFeedback,
+            resolve: held.resolve,
           },
         )
       : undefined;
