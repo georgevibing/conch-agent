@@ -85,6 +85,7 @@ import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
 import { FolderError } from './conversations/folders';
+import { sameRule } from './conversations/lifts';
 import { OfferError } from './offers/desk';
 import { BOOT_ID, restart, restartable } from './lib/lifecycle';
 import { googleRoutes } from './google/routes';
@@ -559,6 +560,14 @@ export async function buildApp(services: Services) {
     }
     // The agents write the personality back to settings themselves, as an older Conch reads it.
     const { persona: _persona, ...rest } = body;
+    // Commands Auto never asks about (ADR 0149) are made only by a press on a card: Settings
+    // can forget one, never add one.
+    if (rest.preferences?.autoRules) {
+      const sent = rest.preferences.autoRules;
+      rest.preferences.autoRules = (await services.settings.get()).preferences.autoRules.filter(
+        (had) => sent.some((rule) => sameRule(had, rule)),
+      );
+    }
     await services.settings.update(rest);
     // Learn from your chats, on again: it starts from here, never reading what was said while off.
     if (!learnedBefore && body.preferences?.autoMemory === true)
@@ -1741,6 +1750,7 @@ export async function buildApp(services: Services) {
               command.decision,
               command.edit,
               command.choice,
+              command.rule,
             );
           }
         }

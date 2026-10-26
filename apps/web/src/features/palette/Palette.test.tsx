@@ -1079,6 +1079,24 @@ describe('Palette search', () => {
       }),
     );
     act(() => useUi.setState({ settingsFocus: undefined }));
+
+    // What Auto never asks about again: kinds of step and commands (ADR 0149).
+    for (const words of ['always allow', 'never ask again', 'allowed commands']) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: What Auto never asks about/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'auto-lifted',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('backs up and restores by name, straight into Settings → Health', async () => {

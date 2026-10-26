@@ -131,3 +131,41 @@ describe('a question from one of Conch’s own tools', () => {
     expect(screen.queryByRole('button', { name: 'Always allow' })).not.toBeInTheDocument();
   });
 });
+
+describe('one command, never asked about again (ADR 0149)', () => {
+  const terraform = asked({
+    title: 'Run terraform in infra',
+    input: { command: 'terraform apply -target=module.dev' },
+    taint:
+      'This would change cloud infrastructure, and that can’t be undone. So I’m checking first.',
+    rule: 'terraform apply -target=module.dev',
+  });
+
+  it('offers the command on its own button, and says so when pressed', async () => {
+    const respond = vi.fn();
+    const onRule = vi.fn();
+    renderApp(<PermissionCard item={terraform} name="Conch" onRespond={respond} onRule={onRule} />);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Always allow terraform apply -target=module.dev' }),
+    );
+    expect(onRule).toHaveBeenCalledOnce();
+    expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('isn’t offered where the card can’t keep it, or where it wasn’t offered', () => {
+    const { unmount } = renderApp(
+      <PermissionCard item={terraform} name="Conch" onRespond={() => {}} />,
+    );
+    expect(screen.queryByRole('button', { name: /Always allow terraform/ })).toBeNull();
+    unmount();
+    renderApp(
+      <PermissionCard
+        item={{ ...terraform, rule: undefined }}
+        name="Conch"
+        onRespond={() => {}}
+        onRule={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Always allow terraform/ })).toBeNull();
+  });
+});

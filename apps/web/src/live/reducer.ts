@@ -157,6 +157,8 @@ export type TranscriptItem =
       editable?: boolean;
       /** Asked from inside a script (ADR 0123): which run, and which of its calls. */
       script?: ScriptAsk;
+      /** A narrower Always allow its card offers (ADR 0149): this command, in words. */
+      rule?: string;
     }
   | {
       /**
@@ -854,6 +856,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...(event.once && { once: true }),
             ...(event.editable && { editable: true }),
             ...(event.script && { script: event.script }),
+            ...(event.rule && { rule: event.rule }),
           },
         ],
       };

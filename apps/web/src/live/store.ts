@@ -26,6 +26,8 @@ export interface StepUp {
   edit?: MailEdit;
   /** One of the question's choices (a browser fill's account, ADR 0130). */
   choice?: string;
+  /** This command never asked about again: the card's narrower Always allow (ADR 0149). */
+  rule?: boolean;
   /** The gateway's words: what it needs, and why. */
   message: string;
 }

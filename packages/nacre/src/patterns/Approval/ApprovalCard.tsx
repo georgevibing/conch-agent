@@ -6,7 +6,8 @@ import { cx } from '../../utils/cx';
 import styles from './Approval.module.css';
 import { ApprovalCommand } from './ApprovalCommand';
 
-export type ApprovalDecision = 'allow' | 'allow-always' | 'deny';
+/** `allow-rule`: Allow, and this one command is never asked about again (`rule`). */
+export type ApprovalDecision = 'allow' | 'allow-always' | 'allow-rule' | 'deny';
 
 export interface ApprovalCardProps extends Omit<ComponentProps<'div'>, 'title'> {
   /** What will happen, short: "Edit your picture with Gemini on OpenRouter". */
@@ -31,6 +32,11 @@ export interface ApprovalCardProps extends Omit<ComponentProps<'div'>, 'title'> 
   allowLabel?: string;
   denyLabel?: string;
   alwaysLabel?: string;
+  /**
+   * A narrower Always allow (ADR 0149): this command, in words (`git push origin feature/*`),
+   * never asked about again, in any chat. A quiet button of its own, beside the rest.
+   */
+  rule?: string;
   /** The answer on its way: the buttons wait, and the one pressed spins. */
   sent?: ApprovalDecision;
   onDecide?: (decision: ApprovalDecision) => void;
@@ -57,6 +63,7 @@ export function ApprovalCard({
   allowLabel = 'Allow',
   denyLabel = 'Deny',
   alwaysLabel = 'Always allow',
+  rule,
   sent,
   onDecide,
   allowRef,
@@ -97,6 +104,23 @@ export function ApprovalCard({
             <ShieldAlert aria-hidden />
             <span>{caution}</span>
           </p>
+        )}
+        {rule && (
+          <div className={styles.ruleRow}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={styles.rule}
+              disabled={busy}
+              loading={sent === 'allow-rule'}
+              title={`Always allow ${rule}, in every chat`}
+              onClick={() => onDecide?.('allow-rule')}
+            >
+              <span className={styles.ruleLabel}>
+                Always allow <code className={styles.ruleWords}>{rule}</code>
+              </span>
+            </Button>
+          </div>
         )}
         <div className={styles.actions}>
           <Button

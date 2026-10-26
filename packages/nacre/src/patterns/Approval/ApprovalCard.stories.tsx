@@ -75,6 +75,35 @@ export const LongCommand: Story = {
   },
 };
 
+/**
+ * A command Auto could always allow on its own (ADR 0149): one quiet button for just this
+ * command, word for word, a pushed branch by its kind. “Always allow” still lifts the kind.
+ */
+export const OneCommandForGood: Story = {
+  args: {
+    title: 'Run git in shop',
+    icon: SquareTerminal,
+    cost: undefined,
+    detail: 'With your own access, outside the sealed box',
+    caution: 'This chat read news.example. Check this is what you asked for.',
+    command: 'git push origin feature/login',
+    rule: 'git push origin feature/*',
+  },
+};
+
+/** A long command in the rule: the words end in an ellipsis, the whole of them on hover. */
+export const LongRule: Story = {
+  args: {
+    title: 'Run terraform in infra',
+    icon: SquareTerminal,
+    cost: undefined,
+    detail: 'Changes cloud infrastructure, and that can’t be undone',
+    command:
+      'terraform apply -target=module.dev_networking -var-file=environments/dev/terraform.tfvars',
+    rule: 'terraform apply -target=module.dev_networking -var-file=environments/dev/terraform.tfvars',
+  },
+};
+
 /** Someone else's words are in the chat: asked every time, no “Always allow”. */
 export const EveryTime: Story = {
   args: {

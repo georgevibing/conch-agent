@@ -99,6 +99,16 @@ A [task](../features/tasks.md) is reviewed against what you'd said in the chat i
 
 If you allowed that kind in another chat, or a card asks for the third time in one go, the button says **Always allow, in every chat**. **Settings → Security → Safety** lists these, each with an × to undo it.
 
+### Always allow one command
+
+A card about a command can also offer just that command: **Always allow `terraform apply -target=module.dev`**. Press it, and Auto runs exactly that command without asking again, in any chat, in that work folder. A pushed branch is offered by its kind, so **Always allow `git push origin feature/*`** covers `feature/login` and `feature/checkout`.
+
+- It covers the whole command. `git push origin feature/login main` or a `--force` added still asks.
+- It's never offered for a shell or an interpreter (`bash`, `python`, `node`), a project's own scripts (`npm run`, `pnpm`, `make`), `sudo`, `rm`, `curl`, `ssh`, or a program on its own (`git`).
+- It's never offered for a line with `&&`, `|`, `>`, `$(…)` or a variable in it.
+- It never lifts a step that asks whatever you say, a step you said not to do, or anything with someone else's messages in the chat.
+- Only your press keeps one. **Settings → Security → Safety** lists them under **Auto never asks again before it runs**, each with an × to forget it.
+
 ### What still goes ahead after reading
 
 - **A push you asked for** in your latest message ("fix CI and push to main"), to the repository's own remote, and merging its pull request. It still asks for:

@@ -54,6 +54,30 @@ describe('gateway HTTP', () => {
     });
   });
 
+  it('Settings forgets a command Auto never asks about, but can’t add one (ADR 0149)', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const kept = {
+      tool: 'Bash',
+      prefix: ['terraform', 'apply', '-target=module.dev'],
+      createdAt: 1,
+    };
+    await services.settings.update({ preferences: { autoRules: [kept] } });
+    const added = { tool: 'Bash', prefix: ['terraform', 'destroy'], createdAt: 2 };
+    const both = await app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      payload: { preferences: { autoRules: [kept, added] } },
+    });
+    expect(both.json().preferences.autoRules).toEqual([kept]);
+    const none = await app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      payload: { preferences: { autoRules: [] } },
+    });
+    expect(none.json().preferences.autoRules).toEqual([]);
+  });
+
   it('lists every connected provider’s models for the picker', async () => {
     const { app } = await setup();
     close = () => app.close();

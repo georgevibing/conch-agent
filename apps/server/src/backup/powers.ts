@@ -13,6 +13,7 @@
  */
 import {
   autoLiftWords,
+  autoRuleWords,
   DASHBOARD_DESTINATIONS,
   POWER_TEXT_MAX,
   type BackupPower,
@@ -189,6 +190,12 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const lifted = (Array.isArray(prefs?.autoAllowed) ? prefs.autoAllowed : [])
     .filter((cls): cls is string => typeof cls === 'string')
     .map((cls) => text(autoLiftWords(cls), 'a kind of step'));
+  // And single commands it never asks about again (ADR 0149), as their words.
+  for (const rule of Array.isArray(prefs?.autoRules) ? prefs.autoRules : []) {
+    const prefix = record(rule)?.prefix;
+    if (Array.isArray(prefix) && prefix.length && prefix.every((w) => typeof w === 'string'))
+      lifted.push(text(`run ${autoRuleWords({ prefix: prefix as string[] })}`, 'run a command'));
+  }
   if (lifted.length)
     powers.push({
       kind: 'auto-never-asks',

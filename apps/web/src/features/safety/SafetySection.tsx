@@ -1,18 +1,18 @@
 import {
   AlertDialog,
+  AllowedList,
   AutoEnvironment,
   Callout,
   Collapsible,
-  IconButton,
   SealCoverage,
   Stack,
   Switch,
   Text,
   toast,
 } from '@conch/nacre';
-import { autoLiftWords } from '@conch/protocol';
+import { autoLiftWords, autoRuleWords, type AutoRule } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
@@ -24,8 +24,7 @@ import { SaveStatus, Section } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
 import { AdminCommand } from '../setup/AdminCommand';
 import { safetyApi, safetyKeys } from './api';
-import { AUTO_ENVIRONMENT_FOCUS } from './focus';
-import styles from './Safety.module.css';
+import { AUTO_ENVIRONMENT_FOCUS, AUTO_LIFTED_FOCUS } from './focus';
 
 type Guard = 'checkAfterReading' | 'sealedCommands' | 'checkMemories';
 
@@ -96,6 +95,15 @@ export function SafetySection() {
     refetchInterval: (q) => (q.state.data && !q.state.data.sandbox.available ? 5_000 : false),
   });
   const [confirm, setConfirm] = useState<Guard>();
+  // ⌘K's "What Auto never asks about": the section comes into view (ADR 0149).
+  const ref = useRef<HTMLElement>(null);
+  const focus = useUi((s) => s.settingsFocus);
+  useEffect(() => {
+    if (focus !== AUTO_LIFTED_FOCUS || !app) return;
+    useUi.setState({ settingsFocus: undefined });
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ref.current?.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+  }, [focus, app]);
   if (!app) return null;
   const prefs = app.preferences;
 
@@ -109,21 +117,24 @@ export function SafetySection() {
     }
   };
   const change = (key: Guard, value: boolean) => (value ? void set(key, true) : setConfirm(key));
-  // A kind of step the person told Auto never to ask about again (ADR 0128): forgetting one
-  // only makes Auto ask again, so it needs no second look.
-  const forget = async (cls: string) => {
+  // A kind of step, or one command, the person told Auto never to ask about again (ADR 0128,
+  // ADR 0149): forgetting one only makes Auto ask again, so it needs no second look.
+  const forget = async (preferences: { autoAllowed?: string[]; autoRules?: AutoRule[] }) => {
     try {
-      await update.mutateAsync({
-        preferences: { autoAllowed: prefs.autoAllowed.filter((c) => c !== cls) },
-      });
+      await update.mutateAsync({ preferences });
     } catch (failure) {
       toast.error(failure instanceof ApiError ? failure.message : 'That didn’t save. Try again.');
     }
   };
+  const ruleId = (rule: AutoRule) => JSON.stringify([rule.tool, rule.cwd ?? '', rule.prefix]);
 
   const sandbox = safety?.sandbox;
   return (
-    <Section title="Safety" description="Checks that hold in every mode, Full trust included.">
+    <Section
+      ref={ref}
+      title="Safety"
+      description="Checks that hold in every mode, Full trust included."
+    >
       <Stack gap={5}>
         <Switch
           labelPosition="start"
@@ -181,21 +192,37 @@ export function SafetySection() {
             <Text size="sm" tone="subtle">
               Auto never asks again, in any chat, before it would:
             </Text>
-            <ul className={styles.lifted} aria-label="Kinds of step Auto never asks about">
-              {prefs.autoAllowed.map((cls) => (
-                <li key={cls} className={styles.lift}>
-                  <ShieldCheck aria-hidden className={styles.liftIcon} />
-                  <span className={styles.liftWords}>{autoLiftWords(cls)}</span>
-                  <IconButton
-                    size="sm"
-                    label={`Ask again before it would ${autoLiftWords(cls)}`}
-                    onClick={() => void forget(cls)}
-                  >
-                    <X />
-                  </IconButton>
-                </li>
-              ))}
-            </ul>
+            <AllowedList
+              aria-label="Kinds of step Auto never asks about"
+              rows={prefs.autoAllowed.map((cls) => ({
+                id: cls,
+                words: autoLiftWords(cls),
+                forget: `Ask again before it would ${autoLiftWords(cls)}`,
+              }))}
+              onForget={(cls) =>
+                void forget({ autoAllowed: prefs.autoAllowed.filter((c) => c !== cls) })
+              }
+            />
+          </Stack>
+        )}
+        {prefs.autoRules.length > 0 && (
+          <Stack gap={2}>
+            <Text size="sm" tone="subtle">
+              Auto never asks again before it runs:
+            </Text>
+            <AllowedList
+              aria-label="Commands Auto never asks about"
+              code
+              rows={prefs.autoRules.map((rule) => ({
+                id: ruleId(rule),
+                words: autoRuleWords(rule),
+                forget: `Ask again before ${autoRuleWords(rule)}`,
+                ...(rule.cwd && { where: rule.cwd.split(/[\\/]/).filter(Boolean).at(-1) }),
+              }))}
+              onForget={(id) =>
+                void forget({ autoRules: prefs.autoRules.filter((r) => ruleId(r) !== id) })
+              }
+            />
           </Stack>
         )}
       </Stack>

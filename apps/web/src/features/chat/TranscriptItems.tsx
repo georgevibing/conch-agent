@@ -19,6 +19,7 @@ import {
   ToolCall,
   TurnCostTag,
   useSmoothText,
+  type ApprovalDecision,
   type Speaker,
 } from '@conch/nacre';
 import type { MailEdit } from '@conch/protocol';
@@ -406,12 +407,15 @@ export function PermissionCard({
   item,
   name,
   onRespond,
+  onRule,
   allowAlways = true,
   call,
 }: {
   item: Of<'permission'>;
   name: string;
   onRespond: (decision: 'allow' | 'allow-always' | 'deny', edit?: MailEdit) => void;
+  /** The narrower Always allow, pressed: this command, never asked about again (ADR 0149). */
+  onRule?: () => void;
   /** Bounded workflows approve this action only, never a lasting permission. */
   allowAlways?: boolean;
   /** The call it's about: an email's card follows it while it goes. */
@@ -420,28 +424,39 @@ export function PermissionCard({
   // An email is asked about as the letter itself (ADR 0099).
   const mail = isMailApproval(item.toolName) ? mailOf(item.input) : undefined;
   if (mail) return <MailApproval item={item} call={call} mail={mail} onRespond={onRespond} />;
-  return <AskCard item={item} name={name} onRespond={onRespond} allowAlways={allowAlways} />;
+  return (
+    <AskCard
+      item={item}
+      name={name}
+      onRespond={onRespond}
+      allowAlways={allowAlways}
+      {...(onRule && { onRule })}
+    />
+  );
 }
 
 function AskCard({
   item,
   name,
   onRespond,
+  onRule,
   allowAlways,
 }: {
   item: Of<'permission'>;
   name: string;
   onRespond: (decision: 'allow' | 'allow-always' | 'deny') => void;
+  onRule?: () => void;
   allowAlways: boolean;
 }) {
-  const [sent, setSent] = useState<'allow' | 'allow-always' | 'deny'>();
+  const [sent, setSent] = useState<ApprovalDecision>();
   const allowRef = useAutoFocus<HTMLButtonElement>();
   const title = approvalTitle(item);
   // Answered with no row of its own to carry it: one quiet line (a row says it itself).
   if (item.decision) return <ApprovalLine decision={item.decision}>{withCode(title)}</ApprovalLine>;
-  const respond = (decision: 'allow' | 'allow-always' | 'deny') => {
+  const respond = (decision: ApprovalDecision) => {
     setSent(decision);
-    onRespond(decision);
+    if (decision === 'allow-rule') onRule?.();
+    else onRespond(decision);
   };
   return (
     <ApprovalCard
@@ -456,6 +471,8 @@ function AskCard({
       allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways}
       // A class of step lifted in another chat before (ADR 0128): the button says every chat.
       {...(item.always && { alwaysLabel: item.always })}
+      // One command, never asked about again (ADR 0149): only where this card can say so.
+      {...(item.rule && onRule && allowAlways && { rule: item.rule })}
       sent={sent}
       onDecide={respond}
       allowRef={allowRef}

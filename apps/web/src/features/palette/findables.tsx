@@ -111,7 +111,7 @@ import { COME_HOME_FOCUS } from '../import/api';
 import { PAST_CHATS_FOCUS } from '../import/pastChats';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
-import { AUTO_ENVIRONMENT_FOCUS } from '../safety/focus';
+import { AUTO_ENVIRONMENT_FOCUS, AUTO_LIFTED_FOCUS } from '../safety/focus';
 import { WORKPLACES_FOCUS } from '../workplaces/words';
 import {
   ADD_DEVICE_FOCUS,
@@ -485,6 +485,15 @@ const settingsPlaces: {
     label: 'What Auto should know about where you work',
     keywords:
       'auto environment where you work trusted hosts my servers remotes buckets production prod staging what production means context tell auto about my setup',
+    icon: <ShieldCheck />,
+  },
+  {
+    // What Auto never asks about again: kinds of step and single commands (ADR 0128, ADR 0149).
+    tab: 'security',
+    focus: AUTO_LIFTED_FOCUS,
+    label: 'What Auto never asks about',
+    keywords:
+      'always allow always allowed commands rules never ask again forget allowed command prefix lifted kinds of step auto asks less',
     icon: <ShieldCheck />,
   },
   {

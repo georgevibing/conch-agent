@@ -264,6 +264,28 @@ const TipsPutAway = z
 /** The device's timezone (`PUT /api/timezone`): an IANA name, like `Europe/Berlin`. */
 export const TimezoneBody = z.object({ timezone: z.string().min(1).max(64) });
 
+/**
+ * A command Auto never asks about again, in any chat (ADR 0149): what the person pressed
+ * **Always allow `…`** to on a card. Narrower than a class in `autoAllowed`: the words of one
+ * command, each in turn, covering the whole of it. Only the last word may end in `*` (a
+ * branch, `feature/*`). `cwd`: only in that work folder. Made only by a person's press, and
+ * checked again whenever it's read (`lifts.ts`): one Conch would refuse is never used.
+ */
+export const AutoRule = z.object({
+  /** The tool that runs it: `Bash` or `PowerShell`. */
+  tool: z.string().min(1).max(64),
+  /** The command's words, as the shell splits them. */
+  prefix: z.array(z.string().min(1).max(300)).min(1).max(24),
+  cwd: z.string().max(4096).optional(),
+  createdAt: z.number(),
+});
+export type AutoRule = z.infer<typeof AutoRule>;
+
+/** A rule as a person reads it: `git push origin feature/*`, a word with spaces in quotes. */
+export function autoRuleWords(rule: Pick<AutoRule, 'prefix'>): string {
+  return rule.prefix.map((w) => (/\s/.test(w) ? `"${w}"` : w)).join(' ');
+}
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -334,6 +356,11 @@ export const Preferences = z.object({
    * Only a person sets it, in Settings → Security → Safety; no tool of the assistant can.
    */
   autoEnvironment: z.string().max(2000).default(''),
+  /**
+   * Commands Auto never asks about again, in any chat (ADR 0149): narrower than
+   * `autoAllowed`. Settings → Security → Safety lists and forgets them.
+   */
+  autoRules: z.array(AutoRule).max(200).default([]),
   /**
    * Commands run in a sealed box: they can change the work folder and caches,
    * and can't read where keys and passwords live (ADR 0028).
@@ -472,6 +499,11 @@ export const UpdateSettingsBody = z.object({
       autoAllowed: z.array(z.string().max(220)).max(200),
       /** The whole note, as Settings last saw it (ADR 0149). */
       autoEnvironment: z.string().max(2000),
+      /**
+       * The whole list, as Settings last saw it: a rule forgotten is left out. Only ever
+       * fewer: the gateway keeps none it didn't make from a card (ADR 0149).
+       */
+      autoRules: z.array(AutoRule).max(200),
       sealedCommands: z.boolean(),
       checkMemories: z.boolean(),
       menuBar: z.boolean(),
@@ -792,6 +824,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     editable: z.boolean().optional(),
     /** Asked from inside a script (ADR 0123): which run, and which of its calls. */
     script: ScriptAsk.optional(),
+    /**
+     * A narrower Always allow (ADR 0149): this command, in words (`git push origin feature/*`),
+     * never asked about again. Answered with `permission.respond` `rule`.
+     */
+    rule: z.string().max(400).optional(),
   }),
   z.object({
     ...logged,
@@ -813,6 +850,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
         everywhere: z.boolean().optional(),
       })
       .optional(),
+    /** The command kept in `preferences.autoRules`, in words (ADR 0149). */
+    rule: z.string().max(400).optional(),
   }),
   z.object({
     ...logged,
@@ -1406,6 +1445,11 @@ export const ClientCommand = z.discriminatedUnion('type', [
      * ADR 0130). One the question didn't offer is a no.
      */
     choice: z.string().min(1).max(300).optional(),
+    /**
+     * Allowed, and this command never asked about again: the question's `rule` (ADR 0149).
+     * On a question without one, it's an Allow and nothing more.
+     */
+    rule: z.boolean().optional(),
   }),
   z.object({ type: z.literal('ping') }),
   /** This page is in front of someone, or isn't: nothing is pushed while one is (ADR 0027). */

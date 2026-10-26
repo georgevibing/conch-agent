@@ -634,8 +634,12 @@ threat model. Hold every change to the bar of a thorough professional security r
       saying why.
     - **Always allow** on a class the person lifted in another chat before, or
       the third question of a turn, means every chat (`preferences.autoAllowed`,
-      `lifts.ts`); Settings → Security → Safety lists it. Nothing is lifted by
-      itself: only a person's press.
+      `lifts.ts`); Settings → Security → Safety lists it. **Always allow `…`** keeps
+      one whole command instead (`preferences.autoRules`, validated in `lifts.ts`,
+      checked in `askUser`, ADR 0149): never a shell, an interpreter, a chain, or a
+      step no words lift. Nothing is lifted by itself: only a person's press.
+      A task's review reads its chat's owner words, frozen at handoff, and the
+      person's own note about their environment (`preferences.autoEnvironment`).
     - A step in an app the person made here (`ownedHere`, after reading too) is
       their own work: it carries `appStep` on its question, and in Auto only what
       the risk policy marks (paying, speaking for them, deleting, granting access,

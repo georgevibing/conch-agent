@@ -44,6 +44,7 @@ import {
   OWNER_WORDS_MAX,
   OutsideAgentId,
   approvalOf,
+  type AutoRule,
   chatGoal,
   contextStart,
   describeTool,
@@ -95,6 +96,7 @@ import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
 import {
   assessRisk,
+  NEVER,
   type Risk,
   breaksCircuit,
   riskAsks,
@@ -117,6 +119,7 @@ import {
   verdictWords,
 } from './auto-review';
 import { askReason, type AskReason } from './ask-reason';
+import { proposeRule, ruleMatches, ruleWords, RULE_TOOLS, sameRule, validRule } from './lifts';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
 import { knownRemotes } from './git-remotes';
@@ -233,6 +236,11 @@ interface PendingPermission {
   edit?: (proposed: MailEdit) => void;
   /** The question takes one of its choices (`AskRequest.choose`). */
   choose?: (choice: string) => void;
+  /**
+   * The narrower Always allow its card offers (ADR 0149): this command, never asked about
+   * again. Kept in `preferences.autoRules` only when the person presses it.
+   */
+  rule?: AutoRule;
 }
 
 /**
@@ -2482,14 +2490,19 @@ export class ConversationManager {
     await this.#persist(live);
   }
 
+  /**
+   * A person's answer to a question. `rule`: they pressed the card's narrower Always allow
+   * (ADR 0149), so its command is kept for every chat; on a question without one, it's Allow.
+   */
   async respond(
     id: string,
     permissionId: string,
     decision: PermissionDecision,
     edit?: MailEdit,
     choice?: string,
+    rule?: boolean,
   ) {
-    await this.#resolvePermission(await this.#get(id), permissionId, decision, edit, choice);
+    await this.#resolvePermission(await this.#get(id), permissionId, decision, edit, choice, rule);
   }
 
   async #resolvePermission(
@@ -2498,10 +2511,18 @@ export class ConversationManager {
     asked: PermissionDecision,
     edit?: MailEdit,
     choice?: string,
+    rule?: boolean,
   ) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
+    // The narrower Always allow (ADR 0149): an Allow, and its command kept for every chat. Only
+    // here, from a person's answer, and only a rule the card offered and Conch would still make.
+    const keptRule =
+      rule && asked !== 'deny' && !edit && !choice && pending.rule && validRule(pending.rule)
+        ? pending.rule
+        : undefined;
+    if (rule && asked !== 'deny') asked = 'allow';
     // Allowed as the person changed it: the question checks the change first. One it
     // can't take, or a change to a question that can't be changed, is a no — never
     // a yes to what was shown before the change.
@@ -2546,11 +2567,19 @@ export class ConversationManager {
             .catch(() => undefined);
       }
     }
+    if (keptRule && decision === 'allow') {
+      const { preferences } = await this.deps.settings.get();
+      if (!preferences.autoRules.some((r) => sameRule(r, keptRule)))
+        await this.deps.settings
+          .update({ preferences: { autoRules: [...preferences.autoRules, keptRule].slice(-200) } })
+          .catch(() => undefined);
+    }
     this.#append(live, {
       type: 'permission.resolved',
       permissionId,
       decision,
       ...(kept && { kept }),
+      ...(keptRule && decision === 'allow' && { rule: ruleWords(keptRule) }),
     });
     // Start on a plan (`/plan`): plan mode is over, from this step on, for every provider.
     if (pending.toolName === PLAN_APPROVAL && (decision === 'allow' || decision === 'allow-always'))
@@ -3356,6 +3385,39 @@ export class ConversationManager {
     };
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
+    /**
+     * The command a rule may cover (ADR 0149), or undefined: only in Auto, only a command line,
+     * never with someone else's words in the chat or a skill's list holding it, and never a
+     * step no words lift (the circuit breaker, a held step, keys, money), nor a count.
+     */
+    const ruleable = async (request: {
+      toolName: string;
+      input: Record<string, unknown>;
+      vault?: unknown;
+      browser?: unknown;
+      cost?: string;
+      once?: boolean;
+      explicit?: boolean;
+      counted?: boolean;
+    }): Promise<string | undefined> => {
+      if (resolved.permissionMode !== 'auto' || !RULE_TOOLS.includes(request.toolName))
+        return undefined;
+      const command = typeof request.input.command === 'string' ? request.input.command : '';
+      if (!command || request.vault || request.browser || request.cost || request.once)
+        return undefined;
+      if (request.explicit || request.counted || isGuest(live.record.origin)) return undefined;
+      if (this.#tainted(live).some((source) => source.kind === 'person')) return undefined;
+      if (skillHolds(live.events).length) return undefined;
+      const risk = assessRisk(request.toolName, request.input, {
+        workspace,
+        said: this.#yourWords(live),
+        treeClean: await cleanFor(request.input),
+        sameRemote: await remotesFor(request.input),
+      });
+      if (risk && (risk.critical || risk.held || risk.wish === NEVER)) return undefined;
+      return command;
+    };
+
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     /** Questions Auto's policy asked this turn: the third one offers its class for every chat. */
     let autoAsks = 0;
@@ -3367,6 +3429,8 @@ export class ConversationManager {
         explicit?: boolean;
         /** What the chat read that made it ask: said once, short, on the card. */
         sources?: readonly TaintSource[];
+        /** Asked because of how much a chat did (`behaviour.ts`): no rule lifts a count. */
+        counted?: boolean;
       },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
@@ -3379,6 +3443,23 @@ export class ConversationManager {
         request.browser?.kind !== 'fill'
       )
         return 'allow';
+      // A command the person said Always allow to on a card (ADR 0149) goes ahead, the whole of
+      // it, in Auto; and a card for one that could be a rule offers it.
+      const command = await ruleable(request);
+      if (command) {
+        const { preferences } = await this.deps.settings.get();
+        if (
+          preferences.autoRules.some((rule) =>
+            ruleMatches(rule, request.toolName, command, workspace),
+          )
+        ) {
+          this.deps.judged?.('lifted', 'rule');
+          return 'allow';
+        }
+      }
+      const offer = command
+        ? proposeRule(request.toolName, command, workspace, Date.now())
+        : undefined;
       if (resolved.permissionMode === 'auto')
         this.deps.questioned?.(askReason(request, { workspace }));
       const permissionId = newId('perm');
@@ -3421,6 +3502,7 @@ export class ConversationManager {
           ...(request.explicit && { explicit: true }),
           ...(request.edit && { edit: request.edit }),
           ...(request.choose && { choose: request.choose }),
+          ...(offer && { rule: offer }),
         });
         const expire = (waited?: number) => {
           clearTimeout(timer);
@@ -3465,6 +3547,7 @@ export class ConversationManager {
           ...(request.once && { once: true }),
           ...(request.edit && { editable: true }),
           ...(step && { script: { runId: step.runId, step: step.step, title: step.title } }),
+          ...(offer && { rule: ruleWords(offer) }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
@@ -4384,6 +4467,7 @@ export class ConversationManager {
           summary: summarizeToolUse(toolName, input),
           taint: patternWords(pattern),
           remember: false,
+          counted: true,
         },
         abort.signal,
       );

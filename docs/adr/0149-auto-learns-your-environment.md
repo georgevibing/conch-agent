@@ -76,6 +76,47 @@ Only a person sets it:
   first words, so an old or someone else's backup can't quietly bring back what Auto trusts
   (ADR 0020).
 
+### 3. Always allow one command
+
+A card about a shell command in Auto can offer **Always allow `<command>`** beside the class's
+Always allow: one command Auto never asks about again, in any chat, in that work folder
+(`preferences.autoRules`, `AutoRule`: `{ tool, prefix, cwd?, createdAt }`). The shape is
+Codex's prefix rules (`prefix_rule`, validated against a list of banned prefixes) and
+OpenClaw's human-only persistence of exec approvals; both keep the question for anything the
+rule doesn't plainly cover.
+
+- **The rule covers the whole command.** Its words match the command's words one for one;
+  nothing may follow them. Codex lets arguments follow a prefix; we don't, because the risk
+  policy reads `git push origin feature/x main` as the same kind of step as
+  `git push origin feature/x`, and a prefix would let the second push through. Only the last
+  word may end in `*`, after a name that pins it down; a pushed branch like `feature/login` is
+  offered as `feature/*`, and `*` never stands for `:`, `..` or a space.
+- **One command, nothing around it** (`lifts.ts`, reusing `risk.ts` `commandParts` and
+  `wordsOf` read-only): no `;`, `&&`, `|`, redirects, `$(…)`, backticks, variables, globs,
+  `~`, comments or escapes, and nothing a wrapper takes off (`sudo`, `env`, `nohup`).
+- **Never broad.** No rule starts with a shell or an interpreter (`bash`, `sh`, `zsh`,
+  `python`, `node`, `ruby`, `perl`, `pwsh`…), a wrapper (`env`, `xargs`, `sudo`, `timeout`…),
+  `rm`, `curl`, `wget`, `ssh`, a project's own script runner (`npm run`, `pnpm`, `yarn`, `npx`,
+  `make`, `cargo run`…), or a program run by its path. Those run whatever a file says, and the
+  assistant can write the file. A program alone (`git`, `terraform`, `aws`) is too broad.
+- **Never for what no words lift.** `askUser`, the one place a question reaches a person,
+  checks rules first, and only in Auto, only for `Bash` and `PowerShell`, and only when the
+  step isn't `critical`, `held` or `NEVER`, the chat has nobody else's words, no skill's list
+  holds it, it isn't a count (`behaviour.ts`), and it isn't money, Passwords, the browser or
+  words shown each time. A rule read back from settings is validated again before it is used,
+  so one Conch would refuse (hand-written, restored, older) is ignored.
+- **Only a person's press keeps one.** The card's offer is computed by the gateway and held on
+  the pending question; `permission.respond` `rule` keeps exactly that, from a person's answer
+  (`#resolvePermission`). Allow, Always allow, Deny with `rule`, or `rule` on a question with
+  no offer keep nothing. Settings can only forget one: the settings route keeps no rule the
+  gateway didn't already have. A backup's rules are named in the restore preview
+  (`auto-never-asks`, "run `…`").
+- **Compatible.** `autoRules` and `autoEnvironment` default when absent, so older settings read
+  as before; an older Conch reads the file and leaves them out.
+
+The review flow (ADR 0146) is unchanged: a rule is consulted only once a question would reach
+the person, so it can't make Auto ask more.
+
 ## Threat model
 
 - **The assistant can't mint authority.** The copy is read from the parent chat's own log by
@@ -84,8 +125,11 @@ Only a person sets it:
   handoff, or in the task later, empties it.
 - **Hard rules are unchanged.** The review still can't waive explicit Ask, Off, keys, money,
   the circuit breaker, `NEVER` risks, protected paths or a held step (ADR 0144).
-
 - **A note is words, not power.** It reaches only the reviewer, inside its fence, as data.
+- **A rule can't be planted.** The assistant can't write settings (a protected path), can't
+  answer a question, and can't choose the rule a card offers. A script it rewrote can't ride
+  a rule, since no rule starts with what runs a file. What a rule allows is exactly what the
+  person read on the card.
 
 ## Tests
 
@@ -95,4 +139,8 @@ hands none on; a routine has none and hands none on; oversized history hands non
 `tasks/service.test.ts`: the copy is stored, hidden from the list and events, and never taken
 by a scoped or standalone task. `lib/protect.test.ts`: `settings.json` is out of the
 assistant's reach; `backup/powers.test.ts`: a restore names the note; Nacre `AutoEnvironment`
-and web `SafetySection` tests (axe), and ⌘K's.
+and web `SafetySection` tests (axe), and ⌘K's. `conversations/lifts.test.ts`: banned
+prefixes, chains and coverage, matching, older settings. `conversations/auto-rules.test.ts`:
+offered, kept from a press only, then no question; never for the circuit breaker, someone
+else's words or a held step; a branch by its kind, nothing added. `app.test.ts`: Settings only
+forgets. Nacre `ApprovalCard` and `AllowedList`, web `PermissionCard`.

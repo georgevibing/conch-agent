@@ -850,7 +850,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       decision: 'allow' | 'allow-always' | 'deny',
       edit?: MailEdit,
       choice?: string,
-    ) => conversationId && live.respond(conversationId, permissionId, decision, edit, choice),
+      rule?: boolean,
+    ) => conversationId && live.respond(conversationId, permissionId, decision, edit, choice, rule),
   );
   const onRetry = useStable(() => {
     const last = lastUserMessage(view);

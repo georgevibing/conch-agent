@@ -129,4 +129,42 @@ describe('Safety in Settings', () => {
       (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
     ).toEqual([]);
   });
+
+  it('lists the commands Auto never asks about, where, and forgets one (ADR 0149)', async () => {
+    const push = {
+      tool: 'Bash',
+      prefix: ['git', 'push', 'origin', 'feature/*'],
+      cwd: '/Users/ada/code/shop',
+      createdAt: 1,
+    };
+    const dev = {
+      tool: 'Bash',
+      prefix: ['terraform', 'apply', '-target=module.dev'],
+      createdAt: 2,
+    };
+    const calls = mockFetch({
+      'GET /api/state': () =>
+        appState({ preferences: { ...appState().preferences, autoRules: [push, dev] } }),
+      'GET /api/auth': () => ({
+        method: 'none',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/safety': () => ({ sandbox: { available: true, protects: [] }, providers: [] }),
+      'PATCH /api/settings': (body) => appState(body as never),
+    });
+    renderApp(<SafetySection />);
+    const list = await screen.findByRole('list', { name: 'Commands Auto never asks about' });
+    expect(list).toHaveTextContent('git push origin feature/*shop');
+    expect(list).toHaveTextContent('terraform apply -target=module.dev');
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Ask again before git push origin feature/*' }),
+    );
+    await vi.waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        preferences: { autoRules: [dev] },
+      }),
+    );
+  });
 });

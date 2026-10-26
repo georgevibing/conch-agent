@@ -41,6 +41,39 @@ describe('ApprovalCard', () => {
     expect(screen.getByRole('button', { name: /Allow/ })).toBeDisabled();
   });
 
+  it('offers one command for good, quietly, beside the rest (ADR 0149)', async () => {
+    const user = userEvent.setup();
+    const onDecide = vi.fn();
+    const { container } = renderNacre(
+      <ApprovalCard
+        title="Run git in shop"
+        command="git push origin feature/login"
+        rule="git push origin feature/*"
+        onDecide={onDecide}
+      />,
+    );
+    const rule = screen.getByRole('button', { name: 'Always allow git push origin feature/*' });
+    expect(rule).toHaveAccessibleDescription(
+      'Always allow git push origin feature/*, in every chat',
+    );
+    // The kind of step is still there; Allow still leads.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Always allow git push origin feature/*',
+      'Deny',
+      'Always allow',
+      'Allow',
+    ]);
+    await user.click(rule);
+    expect(onDecide).toHaveBeenCalledWith('allow-rule');
+    await expectAccessible(container);
+  });
+
+  it('waits on the rule’s button while that answer is sent', () => {
+    renderNacre(<ApprovalCard title="Run terraform" rule="terraform apply" sent="allow-rule" />);
+    expect(screen.getByRole('button', { name: /Always allow terraform apply/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled();
+  });
+
   it('shows what exactly it would do', () => {
     renderNacre(
       <ApprovalCard title="Run a command">

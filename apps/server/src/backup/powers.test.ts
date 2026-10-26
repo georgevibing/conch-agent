@@ -58,6 +58,29 @@ describe('what in a backup can act for you', () => {
     });
   });
 
+  it('discloses the commands Auto never asks about again (ADR 0149)', () => {
+    expect(
+      powersOf(
+        ['settings.json'],
+        reader({
+          'settings.json': {
+            preferences: {
+              autoAllowed: ['risk:install:moderate'],
+              autoRules: [
+                { tool: 'Bash', prefix: ['terraform', 'apply', '-target=module.dev'] },
+                { tool: 'Bash', prefix: 'not a list' },
+              ],
+            },
+          },
+        }),
+      ),
+    ).toContainEqual({
+      kind: 'auto-never-asks',
+      steps: ['install a package it doesn’t know well', 'run terraform apply -target=module.dev'],
+      more: 0,
+    });
+  });
+
   it('discloses what someone told Auto about where they work (ADR 0149)', () => {
     const of = (autoEnvironment: string) =>
       powersOf(

@@ -99,6 +99,8 @@ export interface TranscriptProps {
     edit?: MailEdit,
     /** The account picked on a browser fill (ADR 0130). */
     choice?: string,
+    /** The card's narrower Always allow: this command, never asked about again (ADR 0149). */
+    rule?: boolean,
   ) => void;
   onRetry: () => void;
   /** What the chat can offer about the last failed turn (sign in, another provider…). */
@@ -897,6 +899,9 @@ export const Transcript = memo(function Transcript({
             item={block.item}
             name={name}
             onRespond={(d, edit) => onRespond((block.item as { id: string }).id, d, edit)}
+            onRule={() =>
+              onRespond((block.item as { id: string }).id, 'allow', undefined, undefined, true)
+            }
             call={block.item.toolUseId ? calls.get(block.item.toolUseId) : undefined}
           />
         )}

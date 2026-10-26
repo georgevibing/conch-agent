@@ -126,6 +126,38 @@
     gap: var(--nc-space-2);
   }
 
+  /* The narrower Always allow (ADR 0149): one command, quiet, on a line of its own. */
+  .ruleRow {
+    display: flex;
+    justify-content: flex-end;
+    min-inline-size: 0;
+  }
+
+  .rule {
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .rule > * {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* One line: a long command ends in an ellipsis, the whole of it in the title. */
+  .ruleLabel {
+    display: block;
+    overflow: hidden;
+    min-inline-size: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ruleWords {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-code);
+  }
+
   /* No is always there, never loud. */
   .deny {
     color: var(--nc-text-muted);

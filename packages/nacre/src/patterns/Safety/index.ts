@@ -16,3 +16,4 @@ export {
   AutoEnvironment,
   type AutoEnvironmentProps,
 } from './AutoEnvironment';
+export { AllowedList, type AllowedListProps, type AllowedRow } from './AllowedList';

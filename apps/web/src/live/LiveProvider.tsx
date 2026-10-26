@@ -58,7 +58,8 @@ interface LiveApi {
   interrupt(conversationId: string | undefined): void;
   /**
    * Answer a question; `edit` is the email as the person changed it on an
-   * `editable` card, `choice` the account picked on a browser fill (ADR 0130).
+   * `editable` card, `choice` the account picked on a browser fill (ADR 0130),
+   * `rule` the card's narrower Always allow: this command, never asked about again (ADR 0149).
    */
   respond(
     conversationId: string,
@@ -66,6 +67,7 @@ interface LiveApi {
     decision: 'allow' | 'allow-always' | 'deny',
     edit?: MailEdit,
     choice?: string,
+    rule?: boolean,
   ): void;
   watch(conversationId: string): () => void;
 }
@@ -75,7 +77,7 @@ const LiveContext = createContext<LiveApi | null>(null);
 /** Allows on their way, by question: sent again once you confirm it's you (ADR 0108). */
 const allowsSent = new Map<
   string,
-  { decision: 'allow' | 'allow-always'; edit?: MailEdit; choice?: string }
+  { decision: 'allow' | 'allow-always'; edit?: MailEdit; choice?: string; rule?: boolean }
 >();
 
 function upsertSummary(list: ConversationSummary[] | undefined, next: ConversationSummary) {
@@ -477,7 +479,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           stopWhenCreated.current.add(message.clientMessageId);
         startedNew.current = [];
       },
-      respond(conversationId, permissionId, decision, edit, choice) {
+      respond(conversationId, permissionId, decision, edit, choice, rule) {
         useLiveStore.getState().decide(conversationId, permissionId, decision);
         if (decision === 'deny') allowsSent.delete(permissionId);
         else
@@ -485,6 +487,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             decision,
             ...(edit && { edit }),
             ...(choice && { choice }),
+            ...(rule && { rule }),
           });
         if (allowsSent.size > 50) allowsSent.delete(allowsSent.keys().next().value ?? '');
         socketRef.current?.send({
@@ -494,6 +497,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           decision,
           ...(edit && { edit }),
           ...(choice && { choice }),
+          ...(rule && { rule }),
         });
       },
       watch(conversationId) {
