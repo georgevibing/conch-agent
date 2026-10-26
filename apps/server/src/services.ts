@@ -1358,6 +1358,8 @@ export class Services {
     });
     this.conversations = new ConversationManager({
       judged: (verdict, risk) => this.telemetry.auto(verdict, risk),
+      stepJudged: (mode) => this.telemetry.autoStep(mode),
+      questioned: (reason) => this.telemetry.autoQuestion(reason),
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
       agents: this.agents,
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).

@@ -175,6 +175,24 @@ export const METRICS: readonly MetricDef[] = [
     labels: ['conch.verdict', 'conch.risk'],
     group: 'Tools and approvals',
   },
+  {
+    name: 'conch.auto.steps',
+    kind: 'counter',
+    unit: '{step}',
+    description:
+      'Tool calls Conch’s guard judged, by the chat’s mode. With conch.auto.questions, the questions per 100 steps.',
+    labels: ['conch.mode'],
+    group: 'Tools and approvals',
+  },
+  {
+    name: 'conch.auto.questions',
+    kind: 'counter',
+    unit: '{question}',
+    description:
+      'Questions that reached a person in Auto, by why: the kind of risk, after reading, a pattern, the circuit breaker, Explicit Ask.',
+    labels: ['conch.question.reason'],
+    group: 'Tools and approvals',
+  },
 
   // ── Work Conch does by itself ─────────────────────────────────────────
   {

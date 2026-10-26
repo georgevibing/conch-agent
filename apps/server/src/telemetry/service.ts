@@ -288,6 +288,23 @@ export class TelemetryService {
     });
   }
 
+  /**
+   * A tool call the guard judged, in the chat's mode (ADR 0150): the denominator of Auto's ask
+   * rate. Only the mode, never the tool's words.
+   */
+  autoStep(mode: string): void {
+    this.meter.add('conch.auto.steps', 1, { 'conch.mode': mode });
+  }
+
+  /**
+   * A question that reached a person in Auto (ADR 0150), by its kind of reason
+   * (`conversations/ask-reason.ts`): a risk kind, `after-reading`, `pattern`, `circuit`,
+   * `explicit`, `unavailable-review`, `browser` or `other`. Never the question's words.
+   */
+  autoQuestion(reason: string): void {
+    this.meter.add('conch.auto.questions', 1, { 'conch.question.reason': reason });
+  }
+
   // ── Gauges ─────────────────────────────────────────────────────────────
 
   /** Read the gauges, if they're older than a few seconds. */

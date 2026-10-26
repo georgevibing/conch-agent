@@ -106,6 +106,7 @@ import {
 } from './risk';
 import { AutoReplans, reviewAutoAction } from './auto-review';
 import { judgeCommand, lookAtAppStep } from './risk-look';
+import { askReason, type AskReason } from './ask-reason';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
 import { knownRemotes } from './git-remotes';
@@ -1087,6 +1088,10 @@ export class ConversationManager {
        * rules would have asked after reading, and the second look saw it serves the request.
        */
       judged?: (verdict: 'went_ahead' | 'asked' | 'lifted', risk?: string) => void;
+      /** Counts each tool call the guard judges, by the chat's mode; numbers only (ADR 0150). */
+      stepJudged?: (mode: PermissionMode) => void;
+      /** Counts each question that reaches a person in Auto, by its kind of reason (ADR 0150). */
+      questioned?: (reason: AskReason) => void;
       /**
        * Which chats lifted each class of step with Always allow (ADR 0128), so a card for a
        * class lifted in another chat before can offer it for every chat.
@@ -3342,6 +3347,8 @@ export class ConversationManager {
         request.browser?.kind !== 'fill'
       )
         return 'allow';
+      if (resolved.permissionMode === 'auto')
+        this.deps.questioned?.(askReason(request, { workspace }));
       const permissionId = newId('perm');
       // A class of step (ADR 0128): lifted in another chat before, or the third question this
       // turn, Always allow is offered for every chat, and the button says so.
@@ -4498,6 +4505,7 @@ export class ConversationManager {
         if (this.#draining)
           return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
       }
+      this.deps.stepJudged?.(resolved.permissionMode);
       const refuse = (message: string) =>
         refused(request.toolUseId, { decision: 'deny' as const, message });
       if (guest) return refuse(GUEST_TOOL_MESSAGE);

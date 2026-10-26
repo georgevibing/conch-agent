@@ -11,6 +11,9 @@
  * And it never carries what looks personal: a value shaped like an email
  * address, a file path or a key is `_redacted`, whatever label it's on.
  */
+import { ALL_MODES } from '@conch/protocol';
+
+import { ASK_REASONS } from '../conversations/ask-reason';
 
 type Rule = { kind: 'word'; values: ReadonlySet<string> } | { kind: 'name'; max: number };
 
@@ -68,8 +71,10 @@ export const LABEL_RULES: Record<string, Rule> = {
   'gen_ai.tool.name': name(256),
   'gen_ai.tool.type': word('function', 'extension'),
   'conch.decision': word('allowed', 'always', 'denied', 'expired'),
-  'conch.verdict': word('went_ahead', 'asked'),
+  'conch.verdict': word('went_ahead', 'asked', 'lifted'),
   'conch.risk': name(32),
+  'conch.mode': word(...ALL_MODES),
+  'conch.question.reason': word(...ASK_REASONS),
   'conch.trigger': word('schedule', 'manual', 'catch-up', 'event'),
   'conch.task.kind': name(16),
   'conch.channel': name(48),
