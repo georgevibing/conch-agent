@@ -349,7 +349,6 @@ export const Preferences = z.object({
    * `risk:second-look`). Settings → Security → Safety lists and forgets them.
    */
   autoAllowed: z.array(z.string().max(220)).max(200).default([]),
-  autoEnvironment: z.string().max(2000).default(''),
   /**
    * What the person told Auto about where they work (ADR 0149): hosts they trust, their
    * remotes and buckets, what "production" means here. Auto's review reads it as theirs.
