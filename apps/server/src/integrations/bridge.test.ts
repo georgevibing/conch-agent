@@ -13,7 +13,7 @@ import { type BridgeClient, openBridge, passing } from './bridge';
 const SERVER: EngineMcpServer = { type: 'stdio', command: 'ledger', args: [] };
 
 /** A pretend app: its tools, and what each call does. */
-function pretend(call: (name: string, n: number) => unknown) {
+function pretend(call: (name: string, n: number, options?: CallOptions) => unknown) {
   let calls = 0;
   let closed = 0;
   const client: BridgeClient = {
@@ -23,8 +23,8 @@ function pretend(call: (name: string, n: number) => unknown) {
         { name: 'pay', inputSchema: { type: 'object' } },
       ],
     })) as unknown as BridgeClient['listTools'],
-    callTool: (async ({ name }: { name: string }) => {
-      const result = call(name, ++calls);
+    callTool: (async ({ name }: { name: string }, _schema: unknown, options?: CallOptions) => {
+      const result = await call(name, ++calls, options);
       if (result instanceof Error) throw result;
       return result;
     }) as unknown as BridgeClient['callTool'],
@@ -34,6 +34,14 @@ function pretend(call: (name: string, n: number) => unknown) {
   };
   return { client, closed: () => closed };
 }
+
+type CallOptions = {
+  signal?: AbortSignal;
+  timeout?: number;
+  maxTotalTimeout?: number;
+  resetTimeoutOnProgress?: boolean;
+  onprogress?: () => void;
+};
 
 const ok = (text: string) => ({ content: [{ type: 'text', text }] });
 const drop = () => new McpError(ErrorCode.ConnectionClosed, 'Connection closed');
@@ -101,7 +109,51 @@ describe('the bridge heals', () => {
     const b = await bridge(async () => app.client);
     const result = await b.tools[1]?.call({});
     expect(result).toMatchObject({ isError: true });
-    expect(result?.text).toMatch(/didn’t answer in time.*check before you repeat a change/);
+    expect(result?.text).toMatch(/didn’t answer pay in time.*check before you repeat a change/);
+    // Words a model can act on: ask for less, split it, or another way.
+    expect(result?.text).toMatch(/ask for less at once.*split it.*command-line program/);
+  });
+
+  it('bounds every call: silence ends it, progress keeps it alive, never past the cap', async () => {
+    let seen: CallOptions | undefined;
+    const app = pretend((_name, _n, options) => {
+      seen = options;
+      return ok('done');
+    });
+    const b = await openBridge(
+      { ledger: SERVER },
+      {
+        disallowed: new Set(),
+        fetch: () => undefined,
+        connect: async () => app.client,
+        idleMs: 1_000,
+        maxMs: 5_000,
+      },
+    );
+    await b.tools[0]?.call({});
+    expect(seen).toMatchObject({
+      timeout: 1_000,
+      maxTotalTimeout: 5_000,
+      resetTimeoutOnProgress: true,
+    });
+    expect(typeof seen?.onprogress).toBe('function');
+  });
+
+  it('lets Stop cancel a call still waiting for the app', async () => {
+    const app = pretend(
+      (_name, _n, options) =>
+        new Promise((_resolve, reject) => {
+          // As the SDK does: a cancelled request rejects as a timeout carrying the reason.
+          options?.signal?.addEventListener('abort', () =>
+            reject(new McpError(ErrorCode.RequestTimeout, 'AbortError')),
+          );
+        }),
+    );
+    const b = await bridge(async () => app.client);
+    const stop = new AbortController();
+    const call = b.tools[0]?.call({}, stop.signal);
+    stop.abort(new Error('stopped'));
+    await expect(call).rejects.toThrow('stopped');
   });
 
   it('passes the app’s own error on as it was', async () => {
@@ -122,6 +174,6 @@ describe('the bridge heals', () => {
     });
     const result = await b.tools[0]?.call({});
     expect(result?.isError).toBe(true);
-    expect(result?.text).toMatch(/couldn’t be opened again.*carry on without them/);
+    expect(result?.text).toMatch(/couldn’t be opened again.*apps_check.*another way/);
   });
 });
