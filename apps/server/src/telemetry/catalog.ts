@@ -51,6 +51,9 @@ export const TOKEN_BUCKETS = [
   1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864,
 ] as const;
 
+/** One of Auto's reviews: a fast one lands within a second or two, a slow one hits its deadline. */
+const REVIEW_BUCKETS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 20] as const;
+
 /** Time to the first word: most land within seconds. */
 const FIRST_TOKEN_BUCKETS = [0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 7.5, 10, 20, 40] as const;
 
@@ -148,6 +151,24 @@ export const METRICS: readonly MetricDef[] = [
     description: 'How long each tool call took (GenAI conventions).',
     labels: ['gen_ai.tool.name', 'gen_ai.tool.type', 'error.type'],
     buckets: DURATION_BUCKETS,
+    group: 'Tools and approvals',
+  },
+  {
+    name: 'conch.auto.reviews',
+    kind: 'counter',
+    unit: '{review}',
+    description:
+      'Reviews Auto asked a model for before a question, by stage and how they ended: answered, timeout, error or unavailable.',
+    labels: ['conch.stage', 'conch.review.outcome'],
+    group: 'Tools and approvals',
+  },
+  {
+    name: 'conch.auto.review.duration',
+    kind: 'histogram',
+    unit: 's',
+    description: 'How long each of those reviews took, including getting the model ready.',
+    labels: ['conch.stage', 'conch.review.outcome'],
+    buckets: REVIEW_BUCKETS,
     group: 'Tools and approvals',
   },
   {

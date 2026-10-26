@@ -305,6 +305,16 @@ export class TelemetryService {
     this.meter.add('conch.auto.questions', 1, { 'conch.question.reason': reason });
   }
 
+  /**
+   * One of Auto's reviews (ADR 0147): which stage asked (`autoDecision`, `serves`, `judgeStep`…),
+   * how it ended (answered, timeout, error, unavailable) and how long it took, in ms.
+   */
+  review(stage: string, outcome: string, ms: number): void {
+    const labels = { 'conch.stage': stage, 'conch.review.outcome': outcome };
+    this.meter.add('conch.auto.reviews', 1, labels);
+    this.meter.record('conch.auto.review.duration', ms / 1000, labels);
+  }
+
   // ── Gauges ─────────────────────────────────────────────────────────────
 
   /** Read the gauges, if they're older than a few seconds. */

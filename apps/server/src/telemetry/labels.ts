@@ -75,6 +75,9 @@ export const LABEL_RULES: Record<string, Rule> = {
   'conch.risk': name(32),
   'conch.mode': word(...ALL_MODES),
   'conch.question.reason': word(...ASK_REASONS),
+  // Which of Auto's reviews (ADR 0147): a stage name Conch's own code gives.
+  'conch.stage': name(16),
+  'conch.review.outcome': word('answered', 'timeout', 'error', 'unavailable'),
   'conch.trigger': word('schedule', 'manual', 'catch-up', 'event'),
   'conch.task.kind': name(16),
   'conch.channel': name(48),

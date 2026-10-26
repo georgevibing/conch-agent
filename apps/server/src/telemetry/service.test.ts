@@ -336,6 +336,35 @@ describe('a turn as a trace', () => {
   });
 });
 
+describe('Auto’s reviews (ADR 0147)', () => {
+  it('counts each review by stage and outcome, and how long it took', async () => {
+    const t = service();
+    t.review('autoDecision', 'answered', 900);
+    t.review('autoDecision', 'answered', 1_400);
+    t.review('serves', 'timeout', 6_000);
+    // Anything but the four outcomes is not a new series.
+    t.review('serves', 'Fell over: /Users/ada/secret', 10);
+    const page = (await t.update({ prometheus: { on: true } }).then(() => t.prometheus())).body;
+    expect(page).toContain(
+      'conch_auto_reviews_total{conch_stage="autoDecision",conch_review_outcome="answered"} 2',
+    );
+    expect(page).toContain(
+      'conch_auto_reviews_total{conch_stage="serves",conch_review_outcome="timeout"} 1',
+    );
+    expect(page).toContain(
+      'conch_auto_reviews_total{conch_stage="serves",conch_review_outcome="_OTHER"} 1',
+    );
+    expect(page).toMatch(
+      /conch_auto_review_duration_seconds_sum\{conch_stage="autoDecision",conch_review_outcome="answered"\} 2\.3/,
+    );
+    expect(page).toMatch(
+      /conch_auto_review_duration_seconds_bucket\{conch_stage="autoDecision",conch_review_outcome="answered",le="1"\} 1/,
+    );
+    expect(page).not.toContain('/Users/ada');
+    await t.stop(10);
+  });
+});
+
 describe('a destination that fails', () => {
   it('never slows a turn: events go in at once while the endpoint hangs', async () => {
     let hung = 0;
