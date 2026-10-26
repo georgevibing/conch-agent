@@ -319,6 +319,20 @@ describe('OAuth integrations', () => {
     expect(await service.promptSection()).toMatch(
       /aren’t working right now[\s\S]*Notion: Sign in again/,
     );
+    // Another way first (a program on this computer, another account), then the one fix.
+    expect(await service.promptSection()).toMatch(/another way first[\s\S]*Apps in the sidebar/);
+    expect(await service.promptSection()).not.toMatch(/don’t try to work around it/);
+  });
+
+  it('names app tools the way the engine gets them', async () => {
+    const { service } = await setup();
+    await connectNotion(service);
+    expect(await service.promptSection({ integrations: { mode: 'bridge' } })).toContain(
+      'named `mcp__<server>__<tool>`',
+    );
+    expect(
+      await service.promptSection({ integrations: { mode: 'bridge', toolNames: 'bare' } }),
+    ).toContain('named `<server>__<tool>`');
   });
 
   it('keeps tokens out of everything the browser sees', async () => {

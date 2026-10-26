@@ -1593,7 +1593,7 @@ export class IntegrationService {
   }
 
   /** The system-prompt section about integrations. */
-  async promptSection(): Promise<string> {
+  async promptSection(engine?: Pick<Engine, 'integrations'>): Promise<string> {
     const items = (await this.store.all()).filter((i) => i.enabled);
     const hosted = (await this.deps.hosted?.promptLines().catch(() => undefined)) ?? {
       working: [],
@@ -1607,7 +1607,7 @@ export class IntegrationService {
     const lines = ['## Apps'];
     if (working.length) {
       lines.push(
-        'The user connected these apps through Conch. Their tools are named `mcp__<server>__<tool>`.',
+        `The user connected these apps through Conch. Their tools are named \`${engine?.integrations.toolNames === 'bare' ? '' : 'mcp__'}<server>__<tool>\`. If a tool you need isn’t in your list, look for it (\`find_tools\`, or your own tool search) before you say the app can’t do it.`,
         ...working.map((i) => {
           const entry = i.catalogId ? CATALOG.get(i.catalogId) : undefined;
           return `- ${i.name} (server \`${i.server}\`)${entry ? `: ${entry.tagline}` : ''} — ${POLICY_LABELS[i.policy].toLowerCase()}.`;
@@ -1621,7 +1621,7 @@ export class IntegrationService {
       );
     if (broken.length || hosted.broken.length) {
       lines.push(
-        'These aren’t working right now. If the user asks for something that needs one, say so plainly and suggest fixing it from Apps in the sidebar — don’t try to work around it:',
+        'These aren’t working right now. For a job that needs one, reach the goal another way first: the same thing through a program on this computer (`gh`, `wrangler`, `supabase`…, checking which account it’s signed in to), another connected account, or another app. Only when none can, say in a sentence what’s wrong and offer the one fix, in Apps in the sidebar:',
         ...broken.map((i) => `- ${i.name}: ${i.health.message ?? 'needs attention'}`),
         ...hosted.broken,
       );

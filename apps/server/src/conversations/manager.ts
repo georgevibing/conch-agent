@@ -80,6 +80,7 @@ import {
 } from '../attachments/prompt';
 import type { ReaderDeps } from '../attachments/readers';
 import type { AttachmentStore } from '../attachments/store';
+import { allMissing, missingAppsNote, type MissingApp } from '../integrations/missing';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend, memoryNote, systemParts } from '../memory/prompt';
@@ -4848,15 +4849,21 @@ export class ConversationManager {
       for (const offer of apps.offers) this.#append(live, { type: 'offer', offer });
       for (const issue of loaded?.issues ?? []) appendIssue(issue);
       // Engines that can't run MCP servers get the tools through Conch instead.
+      // An app whose tools didn't come is said to the model this turn, not left looking connected.
+      let missingApps: MissingApp[] = [];
       const bridged =
         loaded && engine.integrations.mode === 'bridge' && Object.keys(loaded.servers).length
           ? await integrations
               ?.bridge(loaded.servers, loaded.disallowedTools)
-              .catch(() => undefined)
+              .catch((error: unknown) => {
+                missingApps = allMissing(Object.keys(loaded.servers), error);
+                return undefined;
+              })
           : undefined;
+      if (bridged?.failed.length) missingApps = bridged.failed;
       closeBridge = bridged?.close;
-      if (bridged?.failed.length)
-        void integrations?.turnFailed(bridged.failed).then(
+      if (missingApps.length)
+        void integrations?.turnFailed(missingApps).then(
           (issues) => issues.forEach(appendIssue),
           () => undefined,
         );
@@ -4959,6 +4966,7 @@ export class ConversationManager {
               apps.unseen,
               apps.offers.map((o) => o.name),
             ),
+            missingAppsNote(missingApps),
             live.room,
             resources === ROOM_NOTE ? undefined : resources,
             // Another chat working in this folder, say, or a message from one (ADR 0134).

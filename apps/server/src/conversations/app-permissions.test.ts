@@ -326,6 +326,43 @@ describe.each(['native', 'bridge'] as const)('app permissions over %s', (transpo
   });
 });
 
+describe('an app whose tools didn’t come', () => {
+  it('tells the model this turn, and checks the app again', async () => {
+    const { manager, integrations, engine } = await setup();
+    integrations.bridge = async () => ({
+      tools: [],
+      failed: [{ name: 'github', error: 'Connection closed' }],
+      close: async () => undefined,
+    });
+    const checked = vi.fn(async () => []);
+    integrations.turnFailed = checked;
+    let prompt = '';
+    engine.script = async function* (input) {
+      prompt = input.prompt;
+      yield { type: 'text', messageId: 'm', delta: 'Done' };
+    };
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'read my repo' });
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(prompt).toMatch(/`github` \(Connection closed\)[\s\S]*another way first/);
+    expect(checked).toHaveBeenCalledWith([{ name: 'github', error: 'Connection closed' }]);
+  });
+
+  it('counts every app as missing when the bridge couldn’t open', async () => {
+    const { manager, integrations, engine } = await setup();
+    integrations.bridge = async () => {
+      throw new Error('spawn failed');
+    };
+    let prompt = '';
+    engine.script = async function* (input) {
+      prompt = input.prompt;
+      yield { type: 'text', messageId: 'm', delta: 'Done' };
+    };
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'read my repo' });
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(prompt).toContain('`github` (spawn failed)');
+  });
+});
+
 describe('apps hosted by Conch', () => {
   it.each([{}, { once: true }])(
     'Auto skips an app’s own Ask, and shows words to other people only after reading: %j',

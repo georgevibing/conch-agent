@@ -336,7 +336,8 @@ export class CodexEngine implements Engine {
   readonly label: string;
   /** Codex's commands go through Conch's sealed tools; Codex CLI's run in Codex's own sandbox. */
   readonly commandSandbox?: 'conch';
-  readonly integrations = { mode: 'bridge' as const };
+  /** Its tools go without the `mcp__` prefix (`bare`): the prompt names them that way. */
+  readonly integrations = { mode: 'bridge' as const, toolNames: 'bare' as const };
   readonly hostTools = true;
   /** Codex's commands are Conch's, so they run where the chat's work runs; Codex CLI's are its own (ADR 0106). */
   readonly places: boolean;
