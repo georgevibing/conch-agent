@@ -93,19 +93,27 @@ import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
 import {
-  askable,
   assessRisk,
   type Risk,
   breaksCircuit,
   riskAsks,
   riskClass,
-  riskScore,
   riskWords,
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
-import { AutoReplans, reviewAutoAction } from './auto-review';
-import { judgeCommand, lookAtAppStep } from './risk-look';
+import {
+  type AutoAction,
+  AutoReplans,
+  type AutoVerdict,
+  contextualRisk,
+  reviewAction,
+  reviewableRisk,
+  reviewKey,
+  type ReviewModels,
+  type ReviewStep,
+  verdictWords,
+} from './auto-review';
 import { askReason, type AskReason } from './ask-reason';
 import type { AutoLifts } from './lifts';
 import { treeClean } from './tree';
@@ -1125,15 +1133,21 @@ export class ConversationManager {
       /** A cheap model for the memory check's second look (ADR 0087); it can only raise a flag. */
       memoryLook?: () => Promise<LookModel | undefined>;
       /**
-       * This turn's model for the legacy second look (ADR 0100, `risk-look.ts`).
-       * Its clear verdict can lift only an eligible contextual question.
+       * The older name for `autoReview` (ADR 0100): used only when `autoReview` is absent.
+       * There is one Auto review per action now (ADR 0146).
        */
       riskLook?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
-      /** Task-aware review uses this turn's provider and selected model, never a price-name heuristic. */
+      /**
+       * Auto's review on this turn's provider and selected model, never a price-name heuristic
+       * (ADR 0144): the full stage of the one review per action (ADR 0146).
+       */
       autoReview?: (engine: Engine, model?: string) => Promise<LookModel | undefined>;
-      /** The turn's provider's declared fast reviewer (ADR 0147); absent or undefined: `autoReview`. */
+      /**
+       * A fast reviewer the turn's provider declares (ADR 0147): asked first, its allow stands
+       * for what is clearly routine and authorized; anything else goes to `autoReview` (ADR 0146).
+       */
       fastReview?: (engine: Engine) => Promise<LookModel | undefined>;
-      /** One of Auto's reviews ended (ADR 0147): its stage, outcome and time, for the dashboards. */
+      /** How each stage of an Auto review ended and how long it took, for telemetry. Numbers only. */
       reviewed?: (stage: string, outcome: string, ms: number) => void;
       /**
        * Who names a new chat (`providers/small.ts`): its own provider when it can and
@@ -3507,13 +3521,108 @@ export class ConversationManager {
       resolved.permissionMode === 'auto' &&
       personTrusts &&
       this.#tainted(live).every((source) => source.kind !== 'person');
+    // ── Auto's one review per action (ADR 0146) ──────────────────────────────
     const replans = new AutoReplans();
+    /**
+     * This turn's verdicts, each bound to everything it judged (`reviewKey`): the tool and its
+     * canonical arguments, the mode, the owner's words, what the chat read, the environment
+     * note, what the rules found, the app step, and the content of every script the command
+     * could run. The guard starts a review and the permission question after it awaits the
+     * same one. A changed script, argument, owner message or mode is a new review; a script
+     * that can't be read binds the verdict to that one call; Stop ends the turn and its
+     * verdicts, and a mode change forgets them all. OpenClaw binds an approval to the hashes
+     * of the files it runs, and Codex's guardian reuses a verdict while its authorization
+     * evidence is unchanged; here nothing outlives the turn.
+     */
+    interface ReviewRequest {
+      toolName: string;
+      toolUseId?: string;
+      input: Record<string, unknown>;
+    }
+    const reviews = new Map<string, ReturnType<typeof reviewAction>>();
+    modeListeners.push(() => reviews.clear());
+    const reviewModels = (): ReviewModels => {
+      const full = this.deps.autoReview ?? this.deps.riskLook;
+      const fast = this.deps.fastReview;
+      return {
+        ...(fast && { fast: () => fast(engine) }),
+        ...(full && { full: () => full(engine, resolved.model) }),
+      };
+    };
+    const canReview = () => {
+      const models = reviewModels();
+      return Boolean(models.fast ?? models.full);
+    };
+    /**
+     * The one review of this action (ADR 0146): its verdict; `changed` when the arguments, the
+     * owner's words or the mode moved on while it was judged, or Stop came; undefined when
+     * nothing could judge it.
+     */
+    const review = async (
+      request: ReviewRequest,
+      subject: { risk?: Risk; step?: ReviewStep } = {},
+    ): Promise<AutoVerdict | 'changed' | undefined> => {
+      if (resolved.permissionMode !== 'auto' || abort.signal.aborted || !canReview())
+        return undefined;
+      const mode = resolved.permissionMode;
+      const ownerMessages = this.#yourWords(live);
+      const owner = JSON.stringify(ownerMessages);
+      let inputAtReview: string;
+      let input: Record<string, unknown>;
+      try {
+        inputAtReview = JSON.stringify(request.input);
+        // What is judged is a copy: a later change to the arguments can't reach the verdict.
+        input = JSON.parse(inputAtReview) as Record<string, unknown>;
+      } catch {
+        return undefined;
+      }
+      const environment = settings.preferences.autoEnvironment;
+      const action: AutoAction = {
+        tool: request.toolName,
+        input,
+        workspace,
+        ...(subject.risk && { risk: subject.risk }),
+        ...(subject.step && { step: subject.step }),
+        ownerMessages,
+        ...(environment && { environment }),
+        sources: this.#tainted(live),
+      };
+      const key = await reviewKey(action, mode, request.toolUseId).catch(() => undefined);
+      let pending = key === undefined ? undefined : reviews.get(key);
+      if (!pending) {
+        pending = reviewAction(action, reviewModels(), {
+          signal: abort.signal,
+          settled: (stage, outcome, ms) => this.deps.reviewed?.(stage, outcome, ms),
+        }).catch(() => undefined);
+        if (key !== undefined) reviews.set(key, pending);
+      }
+      const verdict = await pending;
+      // A review never carries permission across Stop, a new owner instruction or mode change.
+      if (
+        abort.signal.aborted ||
+        resolved.permissionMode !== mode ||
+        owner !== JSON.stringify(this.#yourWords(live)) ||
+        inputAtReview !== JSON.stringify(request.input)
+      )
+        return 'changed';
+      return verdict;
+    };
+    /**
+     * The review where a question already stands (ADR 0144): it lifts the question, keeps it,
+     * or sends the proposal back for a safer plan.
+     */
     const autoDecision = async (
-      request: { toolName: string; input: Record<string, unknown> },
-      reason: string,
-      risk?: Risk,
-    ): Promise<{ decision: 'allow' | 'deny' | 'ask'; reason: string } | undefined> => {
+      request: ReviewRequest,
+      subject: { risk?: Risk; step?: ReviewStep } = {},
+    ): Promise<
+      | { decision: 'allow' }
+      /** `words`: why the review asks. */
+      | { decision: 'ask'; words?: string }
+      | { decision: 'deny'; reason: string }
+      | undefined
+    > => {
       if (resolved.permissionMode !== 'auto') return undefined;
+      const { risk } = subject;
       // A later model may not override an explicit owner boundary.
       if (risk?.held)
         return {
@@ -3521,32 +3630,10 @@ export class ConversationManager {
           reason:
             'The person explicitly held this action. Continue other work; do not retry it or ask for the same approval.',
         };
-      const ownerMessages = this.#yourWords(live);
-      const model = this.deps.autoReview;
-      if (!ownerMessages.length || !model) return undefined;
+      if (!this.#yourWords(live).length || !canReview() || !reviewableRisk(risk)) return undefined;
       if (replans.exhausted) return { decision: 'deny', reason: replans.reject() };
-      const mode = resolved.permissionMode;
-      const inputAtReview = JSON.stringify(request.input);
-      const verdict = await reviewAutoAction(
-        {
-          tool: request.toolName,
-          input: request.input,
-          workspace,
-          reason,
-          risk,
-          ownerMessages,
-          sources: this.#tainted(live),
-        },
-        () => model(engine, resolved.model),
-        { signal: abort.signal },
-      );
-      // A review never carries permission across Stop, a new owner instruction or mode change.
-      if (
-        abort.signal.aborted ||
-        resolved.permissionMode !== mode ||
-        JSON.stringify(ownerMessages) !== JSON.stringify(this.#yourWords(live)) ||
-        inputAtReview !== JSON.stringify(request.input)
-      )
+      const verdict = await review(request, subject);
+      if (verdict === 'changed')
         return {
           decision: 'deny',
           reason:
@@ -3556,7 +3643,92 @@ export class ConversationManager {
       if (verdict.decision === 'replan')
         return { decision: 'deny', reason: replans.reject(verdict) };
       this.deps.judged?.(verdict.decision === 'allow' ? 'lifted' : 'asked', 'task-review');
-      return { decision: verdict.decision, reason };
+      return verdict.decision === 'allow'
+        ? { decision: 'allow' }
+        : { decision: 'ask', words: verdictWords(verdict, Boolean(subject.step)) };
+    };
+    /**
+     * Whether a command the rules would ask about only because the chat read something is
+     * routine work in service of the request, by the review (ADR 0128): its allow lifts the
+     * question, as Claude Code's classifier clears a soft block for work the person asked for.
+     * Never for a step that asks whatever was read, one the person said not to do, or when
+     * nothing could look.
+     */
+    const serves = async (
+      request: ReviewRequest,
+      risk: Risk,
+      step?: ReviewStep,
+    ): Promise<boolean> => {
+      // After repeated unsafe proposals this turn, nothing more is lifted (`AutoReplans`).
+      if (!contextualRisk(risk) || replans.exhausted) return false;
+      const verdict = await review(request, { risk, ...(step && { step }) });
+      return typeof verdict === 'object' && verdict.decision === 'allow';
+    };
+    /**
+     * A command the rules found nothing in, but that isn't only everyday work and can reach the
+     * internet or your sign-ins (`wantsSecondLook`), after reading: here the review can only add
+     * a question. Its allow means no question; its ask or replan, the card's words.
+     */
+    const secondLook = async (
+      request: ReviewRequest,
+      command: string,
+      unsealed: boolean,
+      subject: { risk?: Risk; step?: ReviewStep },
+    ): Promise<string | undefined> => {
+      if (!wantsSecondLook(command, unsealed)) return undefined;
+      const verdict = await review(request, subject);
+      if (typeof verdict !== 'object' || verdict.decision === 'allow') return undefined;
+      return verdictWords(verdict, false);
+    };
+    /**
+     * A step in someone else's app, after reading, in Auto (ADR 0118): the rules found nothing,
+     * so it's judged by what it sends and does, not by whose it is. A look that sends no more
+     * than a lookup goes; one that sends more, and any change, is reviewed, unless the person
+     * set that tool to Allow. The card's words when it should ask; `null` when it goes;
+     * undefined when nothing could judge it, so the question it came with stands.
+     */
+    const judgeStep = async (
+      request: ReviewRequest,
+      step: ReviewStep,
+      risk: Risk | undefined,
+      allowed?: boolean,
+    ): Promise<string | null | undefined> => {
+      if (allowed) return null;
+      if (step.access === 'read' && !sendsMoreThanALookup(request.input)) return null;
+      const verdict = await review(request, { ...(risk && { risk }), step });
+      if (typeof verdict !== 'object') return undefined;
+      if (verdict.decision !== 'allow') return verdictWords(verdict, true);
+      // Its allow lifts only what a review may lift (ADR 0144): never a key or a stranger's code.
+      return reviewableRisk(risk) ? null : undefined;
+    };
+    /** What the rules find in a step one of Conch's own tools asks about, as the tool resolved it. */
+    const hostRisk = async (request: AskRequest) =>
+      assessRisk(request.toolName, request.input, {
+        workspace,
+        ...(request.appStep && { access: request.appStep.access }),
+        said: this.#yourWords(live),
+        treeClean: await cleanFor(request.input),
+        sameRemote: await remotesFor(request.input),
+      });
+    /** That step as the reviewer sees it: an app's, or Gmail's with its connector-verified sender. */
+    const hostStep = (request: AskRequest): ReviewStep | undefined => {
+      if (reviewMailAtSend(request.toolName))
+        return {
+          app: 'Gmail',
+          tool: request.toolName,
+          access: 'write',
+          ...(typeof request.input.accountEmail === 'string' && {
+            resolvedAccountEmail: request.input.accountEmail,
+          }),
+        };
+      const step = request.appStep;
+      return step
+        ? {
+            app: step.app ?? request.toolName,
+            tool: step.tool ?? request.toolName,
+            access: step.access,
+          }
+        : undefined;
     };
 
     const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
@@ -3564,7 +3736,7 @@ export class ConversationManager {
       if (asked.browser) {
         if (asked.revalidate && !asked.browser.ownChrome && !asked.explicit && !asked.cost) {
           const owner = JSON.stringify(this.#yourWords(live));
-          const review = await autoDecision(asked, asked.summary);
+          const review = await autoDecision(asked);
           if (review?.decision === 'deny') throw new Error(review.reason);
           if (review?.decision === 'allow') {
             if (
@@ -3591,27 +3763,35 @@ export class ConversationManager {
               (source) => (!trusting() || source.kind === 'person') && !besides?.(source),
             )
           : [];
-      const access = asked.appStep && { access: asked.appStep.access };
       const request = {
         ...asked,
         ...(toolUseId && { toolUseId }),
         ...(read.length && { sources: read }),
       };
+      // What the rules find, and the step as the reviewer sees it: the same for every look
+      // below, so this action has one review (ADR 0146).
+      const risk = await hostRisk(request);
+      const step = hostStep(request);
+      const subject = { ...(risk && { risk }), ...(step && { step }) };
       // The tool has resolved its actual payload/account before asking here. Explicit
       // policy and monetary consent stay outside model authority.
       if (resolved.permissionMode === 'auto' && !request.explicit && !request.cost) {
-        const risk = assessRisk(request.toolName, request.input, {
-          workspace,
-          ...access,
-          said: this.#yourWords(live),
-          treeClean: await cleanFor(request.input),
-        });
         if (risk?.held || request.once || request.taint || riskAsks(risk, false)) {
-          const review = await autoDecision(request, request.taint ?? riskWords(risk), risk);
+          const review = await autoDecision(request, subject);
           if (review?.decision === 'allow') return 'allow';
           if (review?.decision === 'deny') throw new Error(review.reason);
-          if (review?.decision === 'ask')
-            return askUser({ ...request, remember: false }, abort.signal);
+          if (review?.decision === 'ask') {
+            // Why, in Conch's words: what the rules found, or the kind of risk the review
+            // named (ADR 0146).
+            const why = risk && riskAsks(risk, Boolean(request.taint)) ? risk.reason : review.words;
+            const taint =
+              request.taint && why
+                ? `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`
+                : risk && riskAsks(risk, false)
+                  ? riskWords(risk)
+                  : request.taint;
+            return askUser({ ...request, ...(taint && { taint }), remember: false }, abort.signal);
+          }
         }
       }
       // Words going to other people, after reading or with someone else's words in the chat:
@@ -3621,24 +3801,14 @@ export class ConversationManager {
         (request.taint || this.#tainted(live).some((source) => source.kind === 'person'))
       ) {
         if (
+          step &&
           reviewMailAtSend(request.toolName) &&
           !request.explicit &&
           !request.cost &&
           ![...limitsSaid].some((limit) => request.taint?.includes(limit))
         ) {
-          const verdict = await judgeStep(
-            {
-              app: 'Gmail',
-              tool: request.toolName,
-              access: 'write',
-              ...(typeof request.input.accountEmail === 'string' && {
-                resolvedAccountEmail: request.input.accountEmail,
-              }),
-            },
-            request.toolName,
-            request.input,
-            read,
-          );
+          // The same review as above, with the connector-verified sender: its words on the card.
+          const verdict = await judgeStep(request, step, risk);
           if (verdict === null) return 'allow';
           if (verdict)
             return askUser({ ...request, taint: verdict, remember: false }, abort.signal);
@@ -3652,13 +3822,6 @@ export class ConversationManager {
         if (mode === 'auto') {
           // Auto stops only for something serious, and says what (ADR 0100); not for what
           // the person asked for in their own words (ADR 0128).
-          const risk = assessRisk(request.toolName, request.input, {
-            workspace,
-            ...access,
-            said: this.#yourWords(live),
-            treeClean: await cleanFor(request.input),
-            sameRemote: await remotesFor(request.input),
-          });
           if (riskAsks(risk, false)) {
             this.deps.judged?.('asked', risk?.kind);
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
@@ -3689,20 +3852,14 @@ export class ConversationManager {
         (AUTO_AFTER_READING.test(request.toolName) || request.appStep)
       ) {
         // The person's own words: a push they asked for is the outcome, not a way out (ADR 0117).
-        const risk = assessRisk(request.toolName, request.input, {
-          workspace,
-          ...access,
-          said: this.#yourWords(live),
-          treeClean: await cleanFor(request.input),
-          sameRemote: await remotesFor(request.input),
-        });
+        // Every look below is the same one review of this action (ADR 0146).
         const command = typeof request.input.command === 'string' ? request.input.command : '';
         const unsealed = request.input.dangerouslyDisableSandbox === true;
         // A class the person already said Always allow to, in this chat or every chat, goes
         // (ADR 0117, ADR 0128), as for any command. A question asked only for what the chat
-        // read is lifted by a second look that sees routine work in service of the request.
+        // read is lifted by a review that sees routine work in service of the request.
         let flagged = risk && riskAsks(risk, true) && !lifted(riskClass(risk));
-        if (flagged && risk && command && (await serves(command, unsealed, read, risk))) {
+        if (flagged && risk && command && (await serves(request, risk, step))) {
           this.deps.judged?.('lifted', risk.kind);
           flagged = false;
         }
@@ -3711,25 +3868,15 @@ export class ConversationManager {
           flagged && risk
             ? risk.reason
             : command && !lifted(LOOK_CLASS)
-              ? await secondLook(command, unsealed, this.#tainted(live))
+              ? await secondLook(request, command, unsealed, subject)
               : undefined;
         if (why && !flagged && command) lift = LOOK_CLASS;
         // Someone else's app: judged by what this step sends and does (ADR 0118). When nothing
-        // could judge it (no small model to look), its own question stands, as before.
-        const step = request.appStep;
+        // could judge it (no model to review with), its own question stands, as before.
+        const app = request.appStep;
         let judged = true;
-        if (!why && step && !step.own) {
-          const look = await judgeStep(
-            {
-              app: step.app ?? request.toolName,
-              tool: step.tool ?? request.toolName,
-              access: step.access,
-              ...(step.allowed && { allowed: true }),
-            },
-            request.toolName,
-            request.input,
-            read,
-          );
+        if (!why && app && !app.own && step) {
+          const look = await judgeStep(request, step, risk, app.allowed);
           if (look === undefined) judged = false;
           else if (look) why = look;
         }
@@ -4067,71 +4214,86 @@ export class ConversationManager {
       return answer;
     };
 
-    const legacyReview = this.deps.riskLook;
-    const legacyModel = legacyReview ? () => legacyReview(engine, resolved.model) : undefined;
-    /** No cross-call verdict cache: scripts, targets and authority can change in a turn. */
-    const judge = (command: string, read: readonly TaintSource[]) =>
-      judgeCommand(command, read, legacyModel, {
-        signal: abort.signal,
-        asked: this.#yourWords(live).join('\n'),
+    /** What one of your connected apps says about its tool; nothing for any other tool. */
+    const appOf = async (toolName: string) =>
+      toolName.startsWith('mcp__')
+        ? await integrations?.describeTool(toolName).catch(() => undefined)
+        : undefined;
+    /**
+     * What the rules find in a call the guard sees, the one way every look at it asks: the
+     * review it gets is the same one, from the guard to the permission question (ADR 0146).
+     */
+    const guardRisk = async (
+      request: { toolName: string; input: Record<string, unknown> },
+      described: Awaited<ReturnType<typeof appOf>>,
+    ) =>
+      assessRisk(request.toolName, request.input, {
+        workspace,
+        ...(described?.destructive && { destructive: true }),
+        // What its change does with money is read for a tool known to change things.
+        ...(described?.access && { access: described.access }),
+        // What the person asked for in their own words goes ahead (ADR 0128), in Auto; the
+        // modes below it ask before every change anyway.
+        ...(resolved.permissionMode === 'auto' && { said: this.#yourWords(live) }),
+        treeClean: await cleanFor(request.input),
+        sameRemote: await remotesFor(request.input),
       });
-    const secondLook = async (
-      command: string,
-      unsealed: boolean,
-      read: readonly TaintSource[],
-    ): Promise<string | undefined> => {
-      if (!wantsSecondLook(command, unsealed)) return undefined;
-      const verdict = await judge(command, read);
-      return verdict?.risky ? verdict.words : undefined;
-    };
-    /**
-     * Whether a command the rules would ask about only because the chat read something is
-     * routine work in service of the request, by the second look (ADR 0128): it lifts the
-     * question, as Claude Code's classifier clears a soft block for work the person asked
-     * for. Never for a step that asks whatever was read, one the person said not to do, or
-     * when nothing could look.
-     */
-    const serves = async (
-      command: string,
-      unsealed: boolean,
-      read: readonly TaintSource[],
-      risk: Risk,
-    ): Promise<boolean> => {
-      if (!askable(risk) || risk.held || riskScore(risk, false) >= 3) return false;
-      void unsealed;
-      const verdict = await judge(command, read);
-      return verdict?.risky === false;
-    };
-
-    /**
-     * A step in someone else's app, after reading, in Auto (ADR 0118): the rules found nothing,
-     * so it's judged by what it sends and does, not by whose it is. A look that sends no more
-     * than a lookup goes; one that sends more, and any change, gets a second look, unless the
-     * person set that tool to Allow. The card's words when it should ask; `null` when it goes;
-     * undefined when nothing could judge it, so the question it came with stands.
-     */
-    const judgeStep = async (
-      step: {
-        app: string;
-        tool: string;
-        access: 'read' | 'write';
-        allowed?: boolean;
-        resolvedAccountEmail?: string;
-      },
+    /** A step in one of your connected apps, as the reviewer sees it. */
+    const guardStep = (
       toolName: string,
-      args: Record<string, unknown>,
-      read: readonly TaintSource[],
-    ): Promise<string | null | undefined> => {
-      if (step.allowed) return null;
-      if (step.access === 'read' && !sendsMoreThanALookup(args)) return null;
-      if (!this.deps.riskLook) return undefined;
-      void toolName;
-      return lookAtAppStep(
-        { ...step, args, asked: this.#yourWords(live).join('\n') },
-        read,
-        legacyModel,
-        { signal: abort.signal },
+      described: Awaited<ReturnType<typeof appOf>>,
+    ): ReviewStep | undefined => {
+      const server = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(toolName);
+      if (!server || server[1] === 'conch') return undefined;
+      return {
+        app: described?.integration ?? server[1] ?? 'an app',
+        tool: described?.tool ?? server[2] ?? toolName,
+        access: described?.access === 'read' ? 'read' : 'write',
+      };
+    };
+    /**
+     * Whether a call the guard sees is likely to need Auto's review: in Auto, with a person
+     * here, something to review with, and either a question the review may lift or, after
+     * reading, a command worth a second look or a step in someone else's app. Only a guess,
+     * so the review can start early (ADR 0146); the paths below decide what it is used for.
+     */
+    const worthReviewing = (request: ReviewRequest): boolean => {
+      if (resolved.permissionMode !== 'auto' || !personTrusts || !canReview()) return false;
+      if (replans.exhausted || abort.signal.aborted) return false;
+      const tainted = this.#tainted(live);
+      if (tainted.some((source) => source.kind === 'person')) return false;
+      const shell = request.toolName === 'Bash' || request.toolName === 'PowerShell';
+      const command =
+        shell && typeof request.input.command === 'string' ? request.input.command : '';
+      const app = /^mcp__(?!conch__)/.test(request.toolName);
+      if (!command && !app) return false;
+      const after = guardOn && tainted.length > 0;
+      const quick = assessRisk(request.toolName, request.input, {
+        workspace,
+        said: this.#yourWords(live),
+      });
+      if (quick?.critical || quick?.held) return false;
+      if (quick && riskAsks(quick, after))
+        return (
+          !lifted(riskClass(quick)) &&
+          (reviewableRisk(quick) || (after && Boolean(command) && contextualRisk(quick)))
+        );
+      if (!after) return false;
+      if (app) return sendsMoreThanALookup(request.input);
+      return (
+        !lifted(LOOK_CLASS) &&
+        wantsSecondLook(command, leavesSandbox(request.toolName, request.input))
       );
+    };
+    /** Starts the review of a call the guard sees, without waiting for it. */
+    const startReview = (request: ReviewRequest) => {
+      if (!worthReviewing(request)) return;
+      void (async () => {
+        const described = await appOf(request.toolName);
+        const risk = await guardRisk(request, described);
+        const step = guardStep(request.toolName, described);
+        await review(request, { ...(risk && { risk }), ...(step && { step }) });
+      })().catch(() => undefined);
     };
 
     /**
@@ -4247,20 +4409,7 @@ export class ConversationManager {
       // Something serious asks in every mode but Full trust, whatever was allowed before
       // (an app's tool that deletes, unless you set that tool to Allow in Apps).
       if (mode !== 'bypassPermissions') {
-        const app = request.toolName.startsWith('mcp__')
-          ? await integrations?.describeTool(request.toolName).catch(() => undefined)
-          : undefined;
-        const risk = assessRisk(request.toolName, request.input, {
-          workspace,
-          ...(app?.destructive && { destructive: true }),
-          // What its change does with money is read for a tool known to change things.
-          ...(app?.access && { access: app.access }),
-          // What the person asked for in their own words goes ahead (ADR 0128), in Auto; the
-          // modes below it ask before every change anyway.
-          ...(mode === 'auto' && { said: this.#yourWords(live) }),
-          treeClean: await cleanFor(request.input),
-          sameRemote: await remotesFor(request.input),
-        });
+        const risk = await guardRisk(request, await appOf(request.toolName));
         const allowed =
           risk?.kind === 'app-delete' &&
           (await integrations?.decide(request.toolName).catch(() => undefined)) === 'allow';
@@ -4308,9 +4457,7 @@ export class ConversationManager {
         ? this.#tainted(live).filter((source) => !waived || source.kind === 'person')
         : [];
       if (!tainted.length) return undefined;
-      const described = request.toolName.startsWith('mcp__')
-        ? await integrations?.describeTool(request.toolName).catch(() => undefined)
-        : undefined;
+      const described = await appOf(request.toolName);
       let sink = sinkReason(request.toolName, request.input, {
         workspace,
         access: described?.access,
@@ -4321,15 +4468,10 @@ export class ConversationManager {
       // Auto after reading (ADR 0100): the risk policy decides, not every way out. Routine
       // commands stay sealed, files changed anywhere can be put back, a short search is research.
       if (autoHere && !tainted.some((source) => source.kind === 'person')) {
-        const risk = assessRisk(request.toolName, request.input, {
-          workspace,
-          ...(described?.destructive && { destructive: true }),
-          ...(described?.access && { access: described.access }),
-          // The person's own words: a push they asked for is the outcome (ADR 0117).
-          said: this.#yourWords(live),
-          treeClean: await cleanFor(request.input),
-          sameRemote: await remotesFor(request.input),
-        });
+        // The person's own words: a push they asked for is the outcome (ADR 0117). Every look
+        // below is the same one review of this action (ADR 0146).
+        const risk = await guardRisk(request, described);
+        const step = guardStep(request.toolName, described);
         const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =
           command ||
@@ -4344,14 +4486,14 @@ export class ConversationManager {
         // A class the person already said Always allow to, in this chat or every chat, goes
         // (ADR 0117, ADR 0128): every unknown install, this kind of push. What asks whatever
         // was read never reaches here. A question asked only for what the chat read is
-        // lifted by a second look that sees routine work in service of the request.
+        // lifted by a review that sees routine work in service of the request.
         let asks = risk && riskAsks(risk, true) && !lifted(riskClass(risk));
         if (
           asks &&
           risk &&
           command &&
           typeof request.input.command === 'string' &&
-          (await serves(request.input.command, unsealed, tainted, risk))
+          (await serves(request, risk, step))
         ) {
           this.deps.judged?.('lifted', risk.kind);
           asks = false;
@@ -4359,31 +4501,23 @@ export class ConversationManager {
         const flagged = asks && risk ? risk.reason : undefined;
         if (asks && risk) lift = riskClass(risk);
         sink = flagged ?? (routine ? undefined : sink);
-        // Nothing the rules know, but unusual and able to reach out: a small model looks too.
+        // Nothing the rules know, but unusual and able to reach out: the review looks too.
         if (!sink && command && typeof request.input.command === 'string') {
           sink = lifted(LOOK_CLASS)
             ? undefined
-            : await secondLook(request.input.command, unsealed, tainted);
+            : await secondLook(request, request.input.command, unsealed, {
+                ...(risk && { risk }),
+                ...(step && { step }),
+              });
           if (sink) lift = LOOK_CLASS;
         }
         // A change in one of your connected apps (ADR 0118): judged by what it sends and does,
-        // with a second look; the person's Allow for that tool is their answer. When nothing
-        // could judge it, it asks as before.
-        const server = /^mcp__([a-z0-9_-]+?)__(.+)$/.exec(request.toolName);
-        if (!flagged && sink && server && server[1] !== 'conch') {
+        // by the review; the person's Allow for that tool is their answer. When nothing could
+        // judge it, it asks as before.
+        if (!flagged && sink && step) {
           const allowed =
             (await integrations?.decide(request.toolName).catch(() => undefined)) === 'allow';
-          const look = await judgeStep(
-            {
-              app: described?.integration ?? server[1] ?? 'an app',
-              tool: described?.tool ?? server[2] ?? request.toolName,
-              access: described?.access === 'read' ? 'read' : 'write',
-              ...(allowed && { allowed: true }),
-            },
-            request.toolName,
-            request.input,
-            tainted,
-          );
+          const look = await judgeStep(request, step, risk, allowed);
           if (look === null) sink = undefined;
           else if (look) sink = look;
         }
@@ -4415,14 +4549,10 @@ export class ConversationManager {
         breaksCircuit(request.toolName, request.input, { workspace })
       )
         return question;
-      const risk = assessRisk(request.toolName, request.input, {
-        workspace,
-        said: this.#yourWords(live),
-        ...(described?.destructive && { destructive: true }),
-        ...(described?.access && { access: described.access }),
-        treeClean: await cleanFor(request.input),
-      });
-      const review = await autoDecision(request, question.reason, risk);
+      const app = await appOf(request.toolName);
+      const risk = await guardRisk(request, app);
+      const step = guardStep(request.toolName, app);
+      const review = await autoDecision(request, { ...(risk && { risk }), ...(step && { step }) });
       // Policy may change during the asynchronous review. Off and explicit Ask still win.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       const latest = await integrations?.describeTool(request.toolName).catch(() => undefined);
@@ -4546,6 +4676,9 @@ export class ConversationManager {
       // Your keys, whose skills you trust and who may sign in are yours to use (ADR 0047,
       // ADR 0063), in every mode.
       if (runsConchPower(request.toolName, request.input)) return refuse(CONCH_POWER_MESSAGE);
+      // Auto's review starts now, while the rest of the guard runs; the question below and the
+      // permission path after it await the same one (ADR 0146).
+      startReview(request);
       await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return refuse('The user turned this tool off in Apps.');

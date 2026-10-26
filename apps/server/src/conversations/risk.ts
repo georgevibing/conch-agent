@@ -2403,7 +2403,7 @@ function addsSecrets(part: string, places: Places): boolean {
 /**
  * Programs whose everyday use is reading, building, testing and tidying a
  * project, and the tools whose risky uses the rules above already read. A
- * second look (`risk-look.ts`) adds nothing for a line made only of these.
+ * review (`auto-review.ts`) adds nothing for a line made only of these.
  */
 const EVERYDAY = new Set([
   ...'ls pwd cd pushd popd cat bat head tail less more grep egrep fgrep rg ag find fd wc tree echo printf which whereis type date cal true false sleep test [ stat file du df basename dirname realpath readlink sort uniq cut tr sed awk jq yq diff cmp comm column paste fmt nl rev tee mkdir touch cp mv rm rmdir ln chmod tar unzip zip gzip gunzip bzip2 xz zstd ps lsof top htop pgrep kill pkill killall open code cursor vim nano export source . unset set printenv history clear time wait'.split(
@@ -2441,7 +2441,7 @@ const REACHING_CODE =
 
 /**
  * Whether a command is worth a second look by a small model, once the chat
- * has read something (`risk-look.ts`): the rules found nothing, and it isn't
+ * has read something (`auto-review.ts`): the rules found nothing, and it isn't
  * only everyday work, and it can reach the internet or your sign-ins (it
  * runs outside the sealed box, or names an address or a program that sends).
  */

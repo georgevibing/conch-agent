@@ -186,6 +186,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       tipsPutAway: [],
       checkAfterReading: true,
       autoAllowed: [],
+      autoEnvironment: '',
       sealedCommands: true,
       checkMemories: true,
       menuBar: true,

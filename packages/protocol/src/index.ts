@@ -327,6 +327,7 @@ export const Preferences = z.object({
    * `risk:second-look`). Settings → Security → Safety lists and forgets them.
    */
   autoAllowed: z.array(z.string().max(220)).max(200).default([]),
+  autoEnvironment: z.string().max(2000).default(''),
   /**
    * Commands run in a sealed box: they can change the work folder and caches,
    * and can't read where keys and passwords live (ADR 0028).

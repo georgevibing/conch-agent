@@ -21,6 +21,17 @@ import { SettingsStore } from '../settings/store';
 import { ConversationManager, type AskRequest, type TurnIntegrationsProvider } from './manager';
 import { ConversationStore } from './store';
 
+/** A reviewer's answers (ADR 0146): one schema for every review of an action. */
+const ALLOWS = JSON.stringify({
+  decision: 'allow',
+  risk: 'low',
+  reason: 'routine',
+  kind: 'none',
+  evidence: [0],
+});
+const asks = (kind: string) =>
+  JSON.stringify({ decision: 'ask', risk: 'moderate', reason: 'uncertain', kind, evidence: [] });
+
 const NAME = 'mcp__github__create_issue';
 const REQUEST = { toolName: NAME, input: { title: 'A real change' } };
 
@@ -515,7 +526,7 @@ describe('steps in someone else’s app, after reading, in Auto (ADR 0118)', () 
       ...(allowed && { allowed: true }),
     },
   });
-  const SAFE = '{"risky": false, "kind": "none"}';
+  const SAFE = ALLOWS;
   const read = { kind: 'web' as const, label: 'evil.example' };
 
   /** Runs one turn in a chat that read evil.example; the questions it asked, answered no. */
@@ -564,7 +575,7 @@ describe('steps in someone else’s app, after reading, in Auto (ADR 0118)', () 
   it('asks with the look’s reason when the look sees a risk', async () => {
     const { call, asked } = await run({
       host: stranger('app_weather__save_city', 'write', { city: 'Berlin' }),
-      look: '{"risky": true, "kind": "speak"}',
+      look: asks('speak'),
     });
     expect(asked[0]).toMatchObject({
       taint: expect.stringContaining('speak for you to other people'),
@@ -625,10 +636,7 @@ describe.each(['native', 'bridge'] as const)(
     }
 
     it('goes when the second look sees nothing, or when you set the tool to Allow', async () => {
-      for (const options of [
-        { look: '{"risky": false, "kind": "none"}' },
-        { toolPolicy: 'allow' as const },
-      ]) {
+      for (const options of [{ look: ALLOWS }, { toolPolicy: 'allow' as const }]) {
         const { manager, call, convo } = await after(options);
         const events = await eventsUntil(manager, convo.id, 'turn.completed');
         expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
@@ -637,7 +645,7 @@ describe.each(['native', 'bridge'] as const)(
     });
 
     it('asks with the look’s reason when it sees a risk', async () => {
-      const { manager, call, convo } = await after({ look: '{"risky": true, "kind": "speak"}' });
+      const { manager, call, convo } = await after({ look: asks('speak') });
       const events = await eventsUntil(manager, convo.id, 'permission.requested');
       expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
         taint: expect.stringContaining('speak for you to other people'),
@@ -752,12 +760,14 @@ describe('Full trust separates actions from personal credential access', () => {
 describe.each(['native', 'bridge'] as const)('task-aware review over %s', (transport) => {
   const allow = JSON.stringify({
     decision: 'allow',
+    kind: 'none',
     risk: 'moderate',
     reason: 'authorized',
     evidence: [0],
   });
   const replan = JSON.stringify({
     decision: 'replan',
+    kind: 'other',
     risk: 'moderate',
     reason: 'safer-route',
     evidence: [],
@@ -831,6 +841,7 @@ describe('task-aware review at the resolved host-tool boundary', () => {
       mode: 'auto',
       review: JSON.stringify({
         decision: 'allow',
+        kind: 'none',
         risk: 'moderate',
         reason: 'authorized',
         evidence: [0],
@@ -854,6 +865,7 @@ describe('task-aware review at the resolved host-tool boundary', () => {
       mode: 'auto',
       review: JSON.stringify({
         decision: 'replan',
+        kind: 'other',
         risk: 'severe',
         reason: 'private-data',
         evidence: [],
@@ -870,6 +882,7 @@ describe('task-aware review at the resolved host-tool boundary', () => {
 describe('browser evidence at the host boundary', () => {
   const review = JSON.stringify({
     decision: 'allow',
+    kind: 'none',
     risk: 'moderate',
     reason: 'authorized',
     evidence: [0],
@@ -929,6 +942,7 @@ describe('browser evidence at the host boundary', () => {
 describe('policy changes during Auto review', () => {
   const allowed = JSON.stringify({
     decision: 'allow',
+    kind: 'none',
     risk: 'moderate',
     reason: 'authorized',
     evidence: [0],
