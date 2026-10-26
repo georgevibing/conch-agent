@@ -282,6 +282,6 @@ export function clisPrompt(states: CliState[]): string {
     '## Programs on this computer',
     'These command-line programs are installed here, signed in as shown. When one covers the job, use it: it acts as the person’s own account, and it’s usually quicker and surer than the browser.',
     ...states.map(lineOf),
-    'When the signed-in account can’t see something (a 404 or 403 on another account’s private repository, project or zone), don’t ask the person to sign in again: find a key for the right account in Passwords (`passwords_find`), and give it to the command through its `secrets` option (an environment variable such as `GH_TOKEN`), never typed into the command itself. Name the account you used.',
+    'When the signed-in account can’t see something (a 404 or 403 on another account’s private repository, project or zone), don’t ask the person to sign in again: find a key for the right account in Passwords (`passwords_find`), and give it to the command through the `secrets` option (process_start has it) (an environment variable such as `GH_TOKEN`), never typed into the command itself. Name the account you used.',
   ].join('\n');
 }
