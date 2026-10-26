@@ -233,6 +233,15 @@ const COMPLETE_CONFIG = [
   'permissions.conch.network={enabled=false}',
 ];
 
+/**
+ * Codex's fast models, fastest first, as its own catalog describes them (Codex
+ * 0.164: GPT-6-Luna, "Fast and affordable model for easier tasks"; GPT-5.6-Luna,
+ * "Older fast and efficient model"). Auto's reviews use the first one the
+ * account lists, with the lightest thinking it offers (ADR 0147). Named, never
+ * guessed: a new fast model is added here once it's in Codex's catalog.
+ */
+export const CODEX_REVIEW_MODELS = ['gpt-6-luna', 'gpt-5.6-luna'] as const;
+
 /** How long whether the plan makes pictures is believed before asking Codex again. */
 const PICTURES_MS = 10 * 60_000;
 
@@ -428,6 +437,17 @@ export class CodexEngine implements Engine {
    * headline, "Why?" or a title (ADR 0103): on the person's ChatGPT plan or
    * key, with the lightest thinking the model offers.
    */
+  /**
+   * Auto's reviews run on Codex's fastest model this account lists (`CODEX_REVIEW_MODELS`),
+   * low effort; none when it lists none of them, and the turn's model reviews (ADR 0147).
+   * Each review is a thread and an app server of its own, as every short answer is.
+   */
+  async reviewModel(): Promise<string | undefined> {
+    const caps = await this.capabilities().catch(() => undefined);
+    const listed = new Set(caps?.models.map((m) => m.id));
+    return CODEX_REVIEW_MODELS.find((id) => listed.has(id));
+  }
+
   async complete(input: CompletionInput): Promise<Completion> {
     const status = await this.detect();
     if (status.state !== 'ready' || !status.executablePath)

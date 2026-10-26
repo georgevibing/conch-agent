@@ -639,6 +639,33 @@ describe('Codex app-server parity', () => {
     expect(argv.join(' ')).toContain('features.shell_tool=false');
   });
 
+  it('reviews on the fastest model this account lists, by name, and on none it doesn’t (ADR 0147)', async () => {
+    const fast = await setup({
+      signedIn: true,
+      models: ['gpt-6.1-sol', 'gpt-5.6-luna', 'gpt-6-luna'],
+    });
+    expect(await fast.engine.reviewModel()).toBe('gpt-6-luna');
+    // A cheap-sounding name isn't a declaration.
+    const other = await setup({ signedIn: true, models: ['gpt-big', 'gpt-mini'] });
+    expect(await other.engine.reviewModel()).toBeUndefined();
+    expect(await (await setup()).engine.reviewModel()).toBeUndefined();
+    // The review itself: its own thread, nothing kept, the lightest thinking.
+    await fast.engine.complete({
+      system: 'Judge',
+      prompt: 'Is this fine?',
+      model: 'gpt-6-luna',
+      warm: true,
+      signal: new AbortController().signal,
+    });
+    const calls = await fast.fake.calls();
+    expect(calls.find((c) => c.method === 'thread/start')?.params).toMatchObject({
+      model: 'gpt-6-luna',
+      ephemeral: true,
+      dynamicTools: [],
+    });
+    expect(calls.find((c) => c.method === 'turn/start')?.params).toMatchObject({ effort: 'low' });
+  });
+
   it('says a failed short answer failed, and asks nothing of a Codex that isn’t signed in', async () => {
     const failing = await setup({ signedIn: true, fail: true });
     await expect(
