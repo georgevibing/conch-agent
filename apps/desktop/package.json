@@ -25,7 +25,7 @@
     "@conch/tsconfig": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
-    "electron": "44.9.0",
+    "electron": "44.9.1",
     "electron-builder": "^26.15.3",
     "electron-updater": "^6.8.9",
     "esbuild": "^0.28.2",
