@@ -160,48 +160,454 @@ export function askable(risk: Risk): boolean {
 /** A step no words ask for: keys leaving, a stranger's code decoded from a blob, money. */
 export const NEVER: Wish = { verbs: /(?!)/ };
 
+// ── What a person says, in the languages they write in (ADR 0145) ─────────
+
+/**
+ * Words for an act, each a stem that takes the rest of its word. They are read from a folded
+ * message (`fold`: lower case, accents off), so "löschen" is written `l(?:o|oe)sch` and
+ * "déployer" `deploy`. English is first, as each rule always said it.
+ */
+const stems = (...groups: readonly string[]) =>
+  new RegExp(`\\b(?:${groups.filter(Boolean).join('|')})\\w*`);
+
+/** Spanish, Portuguese and Italian put "it" on the end of the verb: "súbelo", "mándalo", "invialo". */
+const CLITIC = '(?:lo|la|los|las|le|les|li|selo|sela|melo|ci)?';
+
+/**
+ * Each act in German, French, Spanish, Portuguese, Italian and Dutch, one line per language,
+ * as `isHighStakes` knows a shop's words in them (ADR 0117). People write to Conch in their
+ * own language; a push asked for in French is as asked as one in English (ADR 0145).
+ */
+const ABROAD = {
+  push: [
+    'gepusht', // German and Dutch ("pushen", "pushe" read as push)
+    'pouss(?:e|es|er|ez|ons)\\b|envoi(?:e|es)\\b|envoy(?:er|ez)\\b', // French
+    `sub(?:e|es|ir|id|a|an|as)${CLITIC}\\b|empuj`, // Spanish
+    `sobe\\b|envi(?:a|ar|e|em)${CLITIC}\\b|empurr`, // Portuguese
+    `push(?:a|are|ate|i|o)${CLITIC}\\b`, // Italian
+  ].join('|'),
+  forcePush: [
+    'push\\w*\\s+(?:mit\\s+)?force|force[- ]?pushen', // German
+    'pouss\\w*\\s+en\\s+force|forcer\\s+(?:le\\s+)?push|push\\s+force', // French
+    'push\\s+forzado|forz(?:ar|a)\\s+(?:el\\s+)?push', // Spanish
+    'push\\s+forcado|forc(?:ar|a)\\s+(?:o\\s+)?push', // Portuguese
+    'push\\s+forzato|forz(?:are|a)\\s+(?:il\\s+)?push', // Italian
+    'push\\s+geforceerd|forceer\\s+(?:de\\s+)?push', // Dutch
+  ].join('|'),
+  overwrite: [
+    'u(?:e)?berschreib|umschreib', // German
+    'ecras|reecri', // French
+    'sobre?scrib|reescrib', // Spanish
+    'sobrescrev|reescrev', // Portuguese
+    'sovrascriv|riscriv', // Italian
+    'overschrij|herschrij', // Dutch
+  ].join('|'),
+  delete: [
+    'l(?:o|oe)sch|entfern', // German
+    'supprim|effac|enlev|retir', // French
+    `borr(?:a|ar|e|es|en|ad)${CLITIC}\\b|elimin(?:a|ar|e|en)${CLITIC}\\b|suprim|quit(?:a|ar|en)${CLITIC}\\b`, // Spanish
+    `apag|exclu(?:a|ir|i|am)${CLITIC}\\b|remov`, // Portuguese
+    `cancell|elimin(?:a|are|i)${CLITIC}\\b|rimuov|togli`, // Italian
+    'verwijder|wis(?:sen|t)?\\b|weggooi', // Dutch
+  ].join('|'),
+  clean: [
+    'aufr(?:a|ae)um|bereinig', // German
+    'nettoi|nettoy|vide(?:r|z)?\\b', // French
+    'limpi|vaci(?:a|ar)\\b', // Spanish
+    'limp(?:a|ar|e)\\b|esvazi', // Portuguese
+    'pulisc|pulir|svuot', // Italian
+    'opruim|leeg', // Dutch
+  ].join('|'),
+  discard: [
+    'verwerf|verwirf|zur(?:u|ue)cksetz|r(?:u|ue)ckg(?:a|ae)ngig', // German
+    'annul|reinitialis|jet(?:te|er|ez)\\b', // French
+    'descart|deshac|anul(?:a|ar|e)\\b|restablec', // Spanish
+    'descart|desfaz|redefin(?:a|ir)\\b', // Portuguese
+    'scart|annull|ripristin', // Italian
+    'verwerp|terugzet|ongedaan', // Dutch
+  ].join('|'),
+  send: [
+    'schick|verschick|versend|send(?:e|en|et)\\b|teil(?:e|en|t)\\b|hochlad|antwort|beantwort|benachrichtig', // German
+    'envoi|envoy|partag|televers|repond|notifi|previen', // French
+    `envi(?:a|ar|e|en)${CLITIC}\\b|mand(?:a|ar|e|en)${CLITIC}\\b|compart|sub(?:e|ir)${CLITIC}\\b|contest(?:a|ar|e)\\b|avis(?:a|ar|e)\\b`, // Spanish
+    `envi(?:a|ar|e)${CLITIC}\\b|mand(?:a|ar|e)${CLITIC}\\b|compartilh|partilh|respond|avis(?:a|ar|e)\\b`, // Portuguese
+    `invi(?:a|are|ate|o)${CLITIC}\\b|mand(?:a|are|ate)${CLITIC}\\b|condivid|carica|rispond|avvis`, // Italian
+    'stuur|verstuur|verzend|deel(?:t|en)?\\b|antwoord|beantwoord|verwittig', // Dutch
+  ].join('|'),
+  copy: [
+    'kopier|synchronisier|(?:u|ue)bertrag|verbind', // German
+    'copi|synchronis|transfer|connect', // French
+    'copi|sincroniz|transfer|conect', // Spanish and Portuguese
+    'copi|sincronizz|trasferi|collega', // Italian
+    'kopieer|synchroniseer|verbind', // Dutch
+  ].join('|'),
+  deploy: [
+    'bereitstell|ausroll|live\\s+(?:schalt|stell|bring)', // German ("deployen" reads as deploy)
+    'deploi|mett?(?:re|s|ez)?\\s+(?:\\w+\\s+)?en\\s+(?:prod|production|ligne)\\b', // French
+    'despleg|desplieg|pon(?:er|lo|la)?\\s+(?:\\w+\\s+)?en\\s+(?:produccion|prod)\\b', // Spanish
+    'implant|coloc(?:a|ar|que)\\s+(?:\\w+\\s+)?em\\s+(?:producao|prod)\\b', // Portuguese
+    'rilasci|metti\\s+(?:\\w+\\s+)?in\\s+(?:produzione|prod)\\b', // Italian
+    'uitrol|zet\\s+(?:\\w+\\s+)?(?:live|in\\s+(?:productie|prod))\\b', // Dutch
+  ].join('|'),
+  publish: [
+    'ver(?:o|oe)ffentlich', // German
+    'publi(?:e|er|ez)\\b', // French
+    `publi(?:ca|car|que|quen)${CLITIC}\\b`, // Spanish and Portuguese
+    `pubblic(?:a|are|ate)${CLITIC}\\b`, // Italian
+    'publiceer', // Dutch
+  ].join('|'),
+  update: [
+    'aktualisier', // German
+    'met(?:s|tre|tez)?\\s+a\\s+jour', // French
+    'actualiz|atualiz', // Spanish and Portuguese
+    'aggiorn', // Italian
+    'bijwerk|werk\\s+\\w+\\s+bij', // Dutch
+  ].join('|'),
+  install: [
+    'installier|hinzuf(?:u|ue)g|verwend|benutz', // German
+    'ajout|utilis', // French ("installer" reads as install)
+    `instal|anad|agreg|us(?:a|ar|en)${CLITIC}\\b`, // Spanish
+    'instal|adicion|us(?:a|ar|e)\\b', // Portuguese
+    'aggiung|utilizz|us(?:a|are)\\b', // Italian
+    'installeer|voeg|toevoeg|gebruik', // Dutch
+  ].join('|'),
+  run: [
+    'ausf(?:u|ue)hr', // German
+    'execut', // French and Portuguese
+    'ejecut', // Spanish
+    'esegu', // Italian
+    'uitvoer|draai', // Dutch
+  ].join('|'),
+  destroy: [
+    'zerst(?:o|oe)r|abbau|deinstallier', // German
+    'detrui|desinstal', // French ("désinstaller")
+    'destru|desinstal', // Spanish and Portuguese
+    'distrugg|smantell|disinstall', // Italian
+    'vernietig|afbre?ek', // Dutch
+  ].join('|'),
+  restart: [
+    'neu\\s*start|herunterfahr|ausschalt|beend|abmeld|stopp', // German
+    'redemarr|etein|arret|deconnect', // French
+    'reinici|apag|deten|cierr|cerr(?:a|ar)\\b', // Spanish
+    'reinici|deslig|encerr', // Portuguese
+    'riavvi|spegn|ferm(?:a|are)\\b|chiud', // Italian
+    'herstart|afsluit|uitschakel', // Dutch
+  ].join('|'),
+  schedule: [
+    'zeitplan|t(?:a|ae)glich|st(?:u|ue)ndlich|w(?:o|oe)chentlich|jede[nr]?\\s+(?:tag|morgen|abend|stunde|woche)|autostart|beim\\s+(?:start|hochfahren|anmelden)', // German
+    'planifi|tous\\s+les\\s+(?:jours|matins|soirs)|chaque\\s+(?:jour|matin|soir|heure|semaine)|au\\s+demarrage', // French
+    'program(?:a|ar)\\b|cada\\s+(?:dia|hora|semana|manana|noche)|todos\\s+(?:los|os)\\s+dias|diariamente|al\\s+(?:iniciar|arrancar)', // Spanish
+    'agendar|agende\\b|todo\\s+dia|ao\\s+iniciar|em\\s+segundo\\s+plano', // Portuguese
+    "pianific|programmar|ogni\\s+(?:giorno|ora|settimana|mattina|sera)|quotidian|all'avvio", // Italian
+    'inplan|elke\\s+(?:dag|ochtend|avond|week|uur)|dagelijks|bij\\s+het\\s+opstarten', // Dutch
+  ].join('|'),
+  safetyOff: [
+    'deaktivier|abschalt|ausschalt|u(?:e)?berspring|umgeh', // German
+    'desactiv|contourn', // French
+    'desactiv|omit', // Spanish
+    'desativ|pul(?:ar|e)\\b', // Portuguese
+    'disattiv|aggir', // Italian
+    'uitschakel|omzeil|overslaan', // Dutch
+  ].join('|'),
+  grant: [
+    'berechtig|zugriff|freigeb|gew(?:a|ae)hr|erlaub|rechte\\b|einlad', // German
+    'autoris|acces|accorde(?:r|z)?\\b|droits\\b|invit', // French
+    'acces|permis|otorg|conced|autoriz|invit', // Spanish
+    'acess|permiss|conced|autoriz|convid', // Portuguese
+    'accesso|permess|concedi|autorizz|invit', // Italian
+    'toegang|rechten\\b|machtig|bevoegd|uitnodig', // Dutch
+  ].join('|'),
+  admin: 'administrat|amministrat|beheerder', // the computer's administrator, in every language
+  merge: 'fusion|zusammenf(?:u|ue)hr|mescl|unisc|samenvoeg',
+  mirror: 'spiegel|miroir|espej|espelh|specchi',
+  // Not French "accessible", which is English too.
+  expose:
+    'erreichbar|weiterleit|expon(?:er|e|ga)\\b|expor\\b|espon(?:i|ere|ete)\\b|blootstel|accesible|acessivel|raggiungibile|bereikbaar',
+  change: '(?:a|ae)nder|modifi|cambi|mud(?:a|ar|e)\\b|altera|wijzig|verander',
+  migrate: 'migr',
+  public: '(?:o|oe)ffentlich|publique|pubblic|openbaar',
+  secret:
+    'geheim|schl(?:u|ue)ssel|secreto|segredo|clave|llave|chave|chiave|segret|sleutel|zertifikat|certificat|certificad|certificaat',
+} as const;
+
 /** The words that ask for each kind of step, when a rule names none of its own (ADR 0128). */
 const WISHES: Partial<Record<RiskKind, RegExp>> = {
-  history:
-    /\b(?:force[- ]?push|overwrite|rewrite|reset|discard|throw\s+away|revert|undo|start\s+(?:over|fresh|again)|scrap|drop|clear|stash|delete|remove|prune)\w*/,
-  egress:
-    /\b(?:send|post|upload|submit|put|patch|sync|copy|transfer|push|deploy|publish|share|call|hit|request|ssh|connect|run\s+(?:it\s+)?on)\w*/,
-  infra:
-    /\b(?:deploy|ship|release|roll\s*out|go\s+live|put\s+(?:it\s+)?(?:up|live|online)|apply|launch|publish|provision|create|destroy|tear\s+down|delete|remove|take\s+down|decommission|scale|restart|rollback|roll\s+back|migrat|drop|reset|wipe|truncate|recreate|grant|give|allow|share|secret|dns|record|certificate|cert|domain|merge|public|open[- ]source|protect|admin)\w*/,
-  publish:
-    /\b(?:publish|release|ship|push|upload|unpublish|deprecate|yank|take\s+(?:it\s+)?down|remove|tag)\w*/,
-  install:
-    /\b(?:install|add|use|need|try|with|set\s*up|get|bring\s+in|pull\s+in|update|upgrade|bump)\w*/,
-  wipe: /\b(?:delete|remove|rm|clean|clear|wipe|erase|get\s+rid|trash|tidy|prune|empty|reset|fresh)\w*/,
-  'app-delete':
-    /\b(?:delete|remove|trash|cancel|clear|get\s+rid|drop|archive|unsubscribe|decline|dismiss|erase|wipe|clean)\w*/,
-  disrupt:
-    /\b(?:restart|reboot|shut\s*down|power\s+off|kill|stop|quit|force[- ]quit|log\s*out|end)\w*/,
-  persistence:
-    /\b(?:schedule|cron|every\s+(?:day|hour|morning|night|week|minute|evening)|daily|hourly|weekly|nightly|at\s+login|on\s+(?:start|boot|login)|start\s*up|automatic|launch\s*agent|service|daemon|background|keep\s+(?:it\s+)?running|by\s+itself|hook|workflow|action|pipeline|ci\b|zshrc|bashrc|profile|shell|path|alias|dotfile)\w*/,
-  'safety-off':
-    /\b(?:disable|turn\s+off|switch\s+off|skip|bypass|unsafe|insecure|no[- ]verify|yolo|dangerously|without\s+(?:the\s+)?(?:check|sandbox|permission|verif|guard|protection)|allow\s+(?:any|all|unsigned)|quarantine|gatekeeper|firewall|defender|selinux|sip\b|certificate|ssl|tls|hook)\w*/,
-  privilege:
-    /\b(?:sudo|admin|administrator|root|superuser|elevat|as\s+super|permission|chmod|chown|owner|grant|give|allow|access|role|policy|iam|share|collaborator|protect|user|account|password|group|setuid)\w*/,
-  'remote-code':
-    /\b(?:install|run|set\s*up|use|get|execute|bootstrap|script|installer|curl|wget|pipe)\w*/,
+  history: stems(
+    'force[- ]?push|overwrite|rewrite|reset|discard|throw\\s+away|revert|undo|start\\s+(?:over|fresh|again)|scrap|drop|clear|stash|delete|remove|prune',
+    ABROAD.forcePush,
+    ABROAD.overwrite,
+    ABROAD.discard,
+    ABROAD.delete,
+  ),
+  egress: stems(
+    'send|post|upload|submit|put|patch|sync|copy|transfer|push|deploy|publish|share|call|hit|request|ssh|connect|run\\s+(?:it\\s+)?on',
+    ABROAD.send,
+    ABROAD.copy,
+    ABROAD.push,
+    ABROAD.deploy,
+    ABROAD.publish,
+  ),
+  infra: stems(
+    'deploy|ship|release|roll\\s*out|go\\s+live|put\\s+(?:it\\s+)?(?:up|live|online)|apply|launch|publish|provision|create|destroy|tear\\s+down|delete|remove|take\\s+down|decommission|scale|restart|rollback|roll\\s+back|migrat|drop|reset|wipe|truncate|recreate|grant|give|allow|share|secret|dns|record|certificate|cert|domain|merge|public|open[- ]source|protect|admin',
+    ABROAD.deploy,
+    ABROAD.publish,
+    ABROAD.destroy,
+    ABROAD.delete,
+    ABROAD.migrate,
+    ABROAD.grant,
+    ABROAD.merge,
+    ABROAD.secret,
+    ABROAD.public,
+  ),
+  publish: stems(
+    'publish|release|ship|push|upload|unpublish|deprecate|yank|take\\s+(?:it\\s+)?down|remove|tag',
+    ABROAD.publish,
+    // Not "sube" or "envía": they say more than publishing does.
+    'gepusht|pouss(?:e|er|ez)\\b|rilasci|hochlad|televers',
+  ),
+  install: stems(
+    'install|add|use|need|try|with|set\\s*up|get|bring\\s+in|pull\\s+in|update|upgrade|bump',
+    ABROAD.install,
+    ABROAD.update,
+  ),
+  wipe: stems(
+    'delete|remove|rm|clean|clear|wipe|erase|get\\s+rid|trash|tidy|prune|empty|reset|fresh',
+    ABROAD.delete,
+    ABROAD.clean,
+  ),
+  'app-delete': stems(
+    'delete|remove|trash|cancel|clear|get\\s+rid|drop|archive|unsubscribe|decline|dismiss|erase|wipe|clean',
+    ABROAD.delete,
+    ABROAD.clean,
+    'storn|absag|k(?:u|ue)ndig|annul|anul(?:a|ar)\\b|disdic|opzeg|archiv', // cancelling and archiving
+  ),
+  disrupt: stems(
+    'restart|reboot|shut\\s*down|power\\s+off|kill|stop|quit|force[- ]quit|log\\s*out|end',
+    ABROAD.restart,
+  ),
+  persistence: stems(
+    'schedule|cron|every\\s+(?:day|hour|morning|night|week|minute|evening)|daily|hourly|weekly|nightly|at\\s+login|on\\s+(?:start|boot|login)|start\\s*up|automatic|launch\\s*agent|service|daemon|background|keep\\s+(?:it\\s+)?running|by\\s+itself|hook|workflow|action|pipeline|ci\\b|zshrc|bashrc|profile|shell|path|alias|dotfile',
+    ABROAD.schedule,
+    'automati(?:sch|que|co|ca|camente|quement)\\b', // automatisch, automatique, automático
+  ),
+  'safety-off': stems(
+    'disable|turn\\s+off|switch\\s+off|skip|bypass|unsafe|insecure|no[- ]verify|yolo|dangerously|without\\s+(?:the\\s+)?(?:check|sandbox|permission|verif|guard|protection)|allow\\s+(?:any|all|unsigned)|quarantine|gatekeeper|firewall|defender|selinux|sip\\b|certificate|ssl|tls|hook',
+    ABROAD.safetyOff,
+    'quarant(?:a|ae)ne|quarantaine|cuarentena|quarentena|quarantena', // the quarantine flag
+  ),
+  privilege: stems(
+    'sudo|admin|administrator|root|superuser|elevat|as\\s+super|permission|chmod|chown|owner|grant|give|allow|access|role|policy|iam|share|collaborator|protect|user|account|password|group|setuid',
+    ABROAD.admin,
+    ABROAD.grant,
+  ),
+  'remote-code': stems(
+    'install|run|set\\s*up|use|get|execute|bootstrap|script|installer|curl|wget|pipe',
+    ABROAD.install,
+    ABROAD.run,
+  ),
 };
 
-/** A verb said not to, or not yet: "don't push", "wait before deploying", "without pushing". */
-function heldBack(verbs: RegExp): RegExp {
-  return new RegExp(
-    `\\b(?:don['’]?t|do\\s+not|never|without|not|no|wait|hold\\s+off|until|before|avoid|skip|leave|nicht|kein\\w*|nie)\\b[^.!?\\n]{0,40}(?:${verbs.source})`,
-    'i',
-  );
+// ── Reading the person's own words (ADR 0128, ADR 0145) ───────────────────
+
+/**
+ * A message as its intent is read: lower case, accents off ("löschen" reads as "loschen",
+ * "não" as "nao"), one kind of apostrophe, and French elisions apart ("n'oublie" is
+ * "ne oublie"). The words above and below are written for this.
+ */
+function fold(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/ß/g, 'ss')
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
+    .replace(/[’‘ʼ´`]/g, "'")
+    .replace(/[¿¡]/g, ' ')
+    .replace(/\b(qu|[cdjlmnst])'(?=[a-z])/g, '$1e ');
 }
 
-const asked = (verbs: RegExp) => new RegExp(verbs.source, 'i');
+/**
+ * Where a "not" governs something other than the act, so it holds nothing: "don't forget to
+ * push", "no need to ask me", "not only … but also", "can't you just push?", "I haven't
+ * pushed yet" (a state, not a boundary). Blanked out before a message is read for holds.
+ */
+const NOT_A_HOLD = new RegExp(
+  [
+    // English
+    "\\b(?:do\\s+not|don't|dont|never)\\s+(?:you\\s+)?(?:forget|hesitate|worry|bother|fail|mind|be\\s+(?:afraid|shy|scared)|wait(?:\\s+(?:for|on|up)(?:\\s+(?:me|us))?)?|ask(?:\\s+(?:me|us))?|check\\s+with\\s+(?:me|us))\\b",
+    "\\b(?:(?:do|does)\\s+not|don't|dont|doesn't|needn't)\\s+(?:need|have)\\s+to\\s+(?:ask|wait|check|confirm)\\w*(?:\\s+(?:with\\s+)?(?:me|us))?",
+    '\\bno\\s+need\\s+(?:to\\s+|for\\s+)?(?:ask|wait|check|confirm|run\\s+it\\s+by|ping)\\w*(?:\\s+(?:with\\s+)?(?:me|us))?',
+    '\\bwithout\\s+(?:asking|waiting|checking|confirming|bothering)(?:\\s+(?:(?:with|for)\\s+)?(?:me|us))?\\b',
+    '\\bnot\\s+only\\b|\\bnever\\s*mind\\b|\\bno\\s+(?:problem|worries|rush|doubt)\\b|\\bno\\s+reason\\s+not\\s+to\\b',
+    "\\b(?:can't|cannot|couldn't|won't|wouldn't)\\s+(?:you|we)\\b(?!\\s+dare)|\\bwhy\\s+(?:not|don't\\s+(?:you|we))\\b|\\b(?:wouldn't|won't|doesn't|can't)\\s+hurt\\b",
+    "\\b(?:didn't|haven't|hasn't|hadn't|wasn't|weren't|(?:did|have|has|had|was|were)\\s+not)\\b",
+    // German
+    '\\bvergi(?:ss|sst)\\s+(?:\\w+\\s+){0,2}?nicht\\b|\\bnicht\\s+vergessen\\b|\\bz(?:o|oe)ger\\w*\\s+(?:\\w+\\s+)?nicht\\b',
+    '\\bkeine?\\s+(?:sorge|sorgen|angst|problem|eile)\\b|\\bnicht\\s+nur\\b|\\bwarum\\s+nicht\\b',
+    '\\b(?:musst|brauchst|muss|braucht|m(?:u|ue)sst)\\s+(?:mich\\s+|uns\\s+)?(?:nicht|kein\\w*)\\s+(?:mehr\\s+)?(?:zu\\s+)?(?:fragen|nachfragen|warten|best(?:a|ae)tigen)\\b',
+    '\\bohne\\s+(?:mich\\s+|uns\\s+)?(?:zu\\s+)?(?:fragen|nachzufragen|nachfragen|warten|r(?:u|ue)ckfrage)\\b|\\bwarte[nt]?\\s+nicht(?:\\s+auf\\s+(?:mich|uns))?\\b',
+    '\\b(?:kannst|k(?:o|oe)nntest|k(?:o|oe)nnt)\\s+(?:du|ihr)\\s+(?:das\\s+|es\\s+)?nicht\\b',
+    // French
+    '\\b(?:ne\\s+)?(?:oubli|hesit)(?:e|es|ez)\\s+pas\\b|\\b(?:ne\\s+)?(?:te|vous)\\s+(?:inquiete[sz]?|en\\s+fai(?:s|tes))\\s+pas\\b',
+    '\\bpas\\s+(?:besoin|la\\s+peine)\\s+de\\s+(?:me\\s+|nous\\s+)?(?:demander|redemander|attendre|verifier|confirmer)\\b',
+    '\\bsans\\s+(?:me\\s+|nous\\s+)?(?:demander|attendre|confirmer)\\b|\\b(?:ne\\s+)?(?:me\\s+|nous\\s+)?attend(?:s|ez)\\s+pas\\b',
+    '\\bnon\\s+seulement\\b|\\b(?:pas\\s+de|aucun)\\s+(?:souci|soucis|probleme)\\b|\\b(?:tu|vous)\\s+(?:ne\\s+)?(?:peux|pouvez|pourrais|pourriez)\\s+pas\\b|\\bpourquoi\\s+pas\\b',
+    // Spanish
+    '\\bno\\s+(?:te\\s+|se\\s+)?olvid(?:es|e|en)\\b|\\bno\\s+(?:lo\\s+)?dud(?:es|e|en)\\b|\\bno\\s+(?:te\\s+|se\\s+)?preocup(?:es|e|en)\\b',
+    '\\bno\\s+(?:hace\\s+falta|es\\s+necesario|necesitas|tienes\\s+que|hay\\s+que)\\s+(?:que\\s+)?(?:preguntar|esperar|consultar|confirmar)\\w*',
+    '\\bsin\\s+(?:preguntar|esperar|consultar|confirmar)\\w*|\\bno\\s+(?:me\\s+)?esper(?:es|e|en)\\b',
+    '\\bno\\s+(?:solo|solamente)\\b|\\b(?:no\\s+hay|ningun|sin)\\s+problema\\b|\\bno\\s+(?:puedes|podrias)\\b|\\bpor\\s+que\\s+no\\b',
+    // Portuguese
+    '\\bnao\\s+(?:se\\s+|te\\s+)?esque(?:ca|cas|cam|ce)\\b|\\bnao\\s+hesit(?:e|es)\\b|\\bnao\\s+(?:se\\s+|te\\s+)?preocup(?:e|es)\\b',
+    '\\bnao\\s+(?:precisa|precisas|e\\s+preciso|tem\\s+que|tens\\s+que)\\s+(?:de\\s+)?(?:me\\s+)?(?:perguntar|esperar|consultar|confirmar)\\b',
+    '\\bsem\\s+(?:me\\s+)?(?:perguntar|esperar|consultar|confirmar)\\b|\\bnao\\s+(?:me\\s+)?esper(?:e|es)\\b',
+    '\\bnao\\s+(?:so|apenas)\\b|\\b(?:sem|nenhum)\\s+problema\\b|\\bnao\\s+(?:podes|poderias|consegues)\\b|\\bpor\\s*que\\s+nao\\b',
+    // Italian
+    '\\bnon\\s+(?:ti\\s+)?(?:dimentic|scord|preoccup)\\w*|\\bnon\\s+esit\\w*',
+    '\\bnon\\s+(?:serve|devi|occorre|e\\s+necessario|ce\\s+e\\s+bisogno\\s+di)\\s+(?:che\\s+)?(?:mi\\s+)?(?:chied|aspett|conferm)\\w*',
+    '\\bsenza\\s+(?:chied|aspett|conferm)\\w*|\\bnon\\s+(?:mi\\s+)?aspett\\w*',
+    '\\bnon\\s+solo\\b|\\bnessun\\s+problema\\b|\\bnon\\s+(?:puoi|potresti)\\b|\\bperche\\s+no\\b',
+    // Dutch
+    '\\bvergeet\\s+(?:\\w+\\s+)?niet\\b|\\bniet\\s+vergeten\\b|\\baarzel\\s+niet\\b|\\bgeen\\s+(?:zorgen|probleem|haast)\\b',
+    '\\b(?:hoeft|hoef|hoeven)\\s+(?:je\\s+)?(?:het\\s+)?(?:mij\\s+|me\\s+|ons\\s+)?niet\\s+(?:eerst\\s+)?(?:te\\s+)?(?:vragen|wachten)\\b|\\bniet\\s+nodig\\s+om\\s+(?:eerst\\s+)?(?:te\\s+)?(?:vragen|wachten)\\b',
+    '\\bzonder\\s+(?:te\\s+)?(?:vragen|wachten|overleggen)\\b|\\bwacht\\s+niet(?:\\s+op\\s+(?:mij|me|ons))?\\b',
+    '\\bniet\\s+alleen\\b|\\b(?:kun|kunt)\\s+(?:je|jij|u)\\s+(?:het\\s+)?niet\\b|\\bwaarom\\s+niet\\b',
+  ].join('|'),
+  'g',
+);
 
-/** The person's message names this: as a whole word, not part of another. */
-function names(said: string, name: string | RegExp): boolean {
-  if (name instanceof RegExp) return new RegExp(name.source, 'i').test(said);
-  const last = said.toLowerCase();
-  const key = name.toLowerCase();
+/** A word that says not to: "don't", "never", "without", "nicht", "pas", "no", "não", "non", "niet". */
+const NEG_WORD =
+  /^(?:\w+n't|dont|not|no|never|without|nor|neither|cannot|nicht|nichts|kein\w*|nie|niemals|ohne|ne|pas|jamais|sans|aucune?|rien|nunca|jamas|sin|ningun[oa]?|nada|nao|sem|nenhuma?|non|mai|senza|nessun[oa]?|niente|nulla|niet|nooit|zonder|geen|niets)$/;
+/** A word that says not yet: "wait", "hold off", "avoid", "skip", "warte", "attends", "espera", "aspetta", "wacht". */
+const HOLD_WORD =
+  /^(?:wait\w*|hold\w*|avoid\w*|skip\w*|refrain\w*|stop|pause|postpone\w*|delay\w*|leave|warte[nt]?|vermeid\w*|u(?:e)?berspring\w*|verschieb\w*|attend(?:s|ez|re)|evit\w*|arret(?:e|ez|er)|esper(?:a|e|ad|ar|en)|omit\w*|pospon\w*|aguard\w*|aspett\w*|attendi|rimand\w*|wacht\w*|vermijd\w*)$/;
+/** German, Dutch and French say not after the verb: "push nicht", "push nog niet", "pousse pas". */
+const NEG_AFTER =
+  /^(?:nicht|nichts|nie|niemals|kein\w*|niet|niets|nooit|geen|pas|rien|jamais|aucune?)$/;
+/** "And", which starts a new act unless one "not" covers both ("don't commit and push"). */
+const AND_WORD = /^(?:and|&|plus|und|sowie|et|y|ed|en)$/;
+/** Where one clause ends and another starts: "but", "then", "so", in every language. */
+const CLAUSE_WORD =
+  /^(?:[,;:()]|but|then|so|afterwards|aber|dann|danach|anschliessend|sondern|mais|puis|ensuite|alors|pero|luego|despues|entonces|sino|depois|entao|ma|poi|dopo|quindi|allora|maar|daarna|vervolgens)$/;
+/** Acts two at a time under one "not": "don't commit and push", "nicht committen und pushen". */
+const TOGETHER =
+  /^(?:commit|merg|rebas|tag|build|push|deploy|release|publish|ship|send|delet|remov|install|upload|pouss|sub|envi|l(?:o|oe)sch|supprim|borr|verwijder)/;
+/** How many words before the act a "not" still reaches. */
+const REACH = 7;
+
+/**
+ * Said as the person's say: "until I say", "once I've looked", "my OK", "ask me first", "wait
+ * for me". The act waits on them, wherever in the sentence it is.
+ */
+const ON_THEIR_SAY = new RegExp(
+  [
+    // English
+    "\\b(?:until|till|til|unless|before|when|once|after|as\\s+soon\\s+as)\\s+i(?:'ve|'m|'ll|'d|\\s+have|\\s+am|\\s+will|\\s+can)?\\s+(?:\\w+\\s+){0,2}?(?:say|said|tell|told|approv|review|look|check|confirm|give|gave|sign|ok|okay|decid|agree|am\\s+back|get\\s+back|come\\s+back|see|seen|saw|test|read|let\\s+you\\s+know|green)",
+    '\\bmy\\s+(?:ok|okay|approval|review|go-?ahead|go\\s+ahead|say-?so|sign-?off|green\\s+light|permission|consent|confirmation)\\b|\\bwait\\s+for\\s+(?:me|us|my)\\b',
+    '\\b(?:ask|check\\s+with|ping|confirm\\s+with|run\\s+it\\s+by|talk\\s+to|consult|show)\\s+(?:me|us)\\b[^\\n]{0,120}\\b(?:first|before|beforehand)\\b',
+    '\\b(?:first|before|beforehand)\\b[^\\n]{0,120}\\b(?:ask|check\\s+with|ping|confirm\\s+with|run\\s+it\\s+by|talk\\s+to|consult|show)\\s+(?:me|us)\\b',
+    "\\b(?:let\\s+me|i\\s+(?:want|need|would\\s+like|'d\\s+like)\\s+to)\\s+(?:look|review|see|check|test|read|approve|decide)\\b[^\\n]{0,120}\\b(?:first|before)\\b",
+    // German
+    '\\b(?:bis|bevor|sobald|nachdem|erst\\s+wenn|erst\\s+nachdem)\\s+ich\\b|\\bwenn\\s+ich\\s+(?:es\\s+|das\\s+)?(?:sage|sag|freigebe|ok|okay|bescheid|zustimme)\\b',
+    '\\bfrag\\w*\\s+(?:mich|uns)\\s+(?:vorher|zuerst|erst)\\b|\\bmeine?\\s+(?:ok|okay|go|freigabe|zustimmung)\\b|\\bwarte\\w*\\s+auf\\s+(?:mich|uns|mein\\w*)\\b',
+    // French
+    "\\b(?:jusqu'?a\\s+ce\\s+que|avant\\s+que|des\\s+que|apres\\s+que|une\\s+fois\\s+que|tant\\s+que)\\s+je\\b|\\bquand\\s+je\\s+(?:te\\s+)?(?:le\\s+)?(?:dis|dirai|valide|confirme)\\b",
+    '\\bdemande[rsz]?\\s*-?\\s*(?:moi|nous)\\s+(?:avant|de\\s+abord)\\b|\\bmon\\s+(?:accord|feu\\s+vert|ok|aval|go)\\b|\\battend(?:s|ez)\\s*-?\\s*moi\\b',
+    // Spanish
+    '\\b(?:hasta\\s+que|antes\\s+de\\s+que|en\\s+cuanto|despues\\s+de\\s+que|una\\s+vez\\s+que|cuando)\\s+(?:yo\\s+)?(?:te\\s+)?(?:lo\\s+)?(?:diga|revise|apruebe|mire|vea|confirme|autorice|compruebe)\\b',
+    '\\b(?:preguntame|consultame)\\s+(?:antes|primero)\\b|\\bmi\\s+(?:ok|visto\\s+bueno|aprobacion|confirmacion)\\b|\\besperame\\b',
+    // Portuguese
+    '\\b(?:ate\\s+(?:que\\s+)?eu|antes\\s+(?:de|que)\\s+eu|quando\\s+eu|assim\\s+que\\s+eu|depois\\s+(?:que|de)\\s+eu)\\b',
+    '\\b(?:pergunte|pergunta)\\s*-?\\s*me\\s+(?:antes|primeiro)\\b|\\bme\\s+pergunte\\s+(?:antes|primeiro)\\b|\\bmeu\\s+(?:ok|aval|sinal\\s+verde)\\b|\\bminha\\s+(?:aprovacao|confirmacao|autorizacao)\\b|\\b(?:espere|espera|aguarde)\\s+por\\s+mim\\b',
+    // Italian
+    '\\b(?:finche\\s+non|fino\\s+a\\s+quando|prima\\s+che\\s+io|dopo\\s+che\\s+io|appena\\s+io)\\b|\\bquando\\s+(?:te\\s+lo\\s+|lo\\s+)?(?:dico|diro|approvo|controllo|guardo|confermo)\\b',
+    '\\bchiedimi\\s+(?:prima|conferma)\\b|\\bil\\s+mio\\s+(?:ok|via\\s+libera|consenso)\\b|\\bla\\s+mia\\s+(?:approvazione|conferma)\\b|\\baspettami\\b',
+    // Dutch
+    '\\b(?:tot(?:dat)?|voordat|zodra|nadat)\\s+ik\\b|\\bals\\s+ik\\s+(?:het\\s+)?(?:zeg|goedkeur)\\b|\\bvraag\\s+(?:het\\s+)?(?:mij|me)\\s+eerst\\b|\\bmijn\\s+(?:ok|akkoord|goedkeuring|fiat)\\b|\\bwacht\\s+op\\s+(?:mij|me|mijn|ons)\\b',
+  ].join('|'),
+);
+
+/** Not yet, said on its own: "push it, but not yet", "pas encore", "noch nicht", "nog niet". */
+const NOT_YET = new RegExp(
+  [
+    '\\bnot\\s+(?:yet|now|today|until)\\b|\\bbut\\s+(?:wait|hold)\\b', // English
+    '\\bnoch\\s+nicht\\b|\\bnicht\\s+(?:jetzt|heute|sofort)\\b|\\baber\\s+warte\\b', // German
+    "\\bpas\\s+(?:encore|maintenant|aujourd'hui|tout\\s+de\\s+suite)\\b|\\bmais\\s+attend", // French
+    '\\b(?:todavia|aun)\\s+no\\b|\\bno\\s+(?:todavia|aun|ahora|hoy)\\b|\\bpero\\s+espera\\b', // Spanish
+    '\\bainda\\s+nao\\b|\\bnao\\s+(?:ainda|agora|hoje)\\b|\\bmas\\s+espera', // Portuguese
+    '\\bnon\\s+(?:ancora|ora|adesso|oggi|subito)\\b|\\bma\\s+aspetta\\b', // Italian
+    '\\bnog\\s+niet\\b|\\bniet\\s+(?:nu|vandaag|meteen)\\b|\\bmaar\\s+wacht\\b', // Dutch
+  ].join('|'),
+);
+
+/** A short sentence after it that takes it back: "Push it. No, wait.", "Never mind.", "Laisse tomber." */
+const TAKEN_BACK =
+  /^\s*(?:(?:no|nein|non|nee|nao|actually)\b[\s,]*)*(?:wait|hold\s+(?:on|off)|stop|scratch\s+that|never\s*mind|not\s+yet|don't|warte|stopp|doch\s+nicht|noch\s+nicht|vergiss\s+es|attends|pas\s+encore|laisse\s+tomber|espera|todavia\s+no|aun\s+no|olvidalo|ainda\s+nao|esquece|aspetta|non\s+ancora|lascia\s+perdere|wacht|nog\s+niet|laat\s+maar)\b/;
+
+const WORD = /[,;:()]|[^\s,;:()-]+/g;
+
+/** A "not" or a "wait" over the act, in its own clause, a few words before it. */
+function heldBefore(text: string): boolean {
+  const words = text.match(WORD) ?? [];
+  for (let i = words.length - 1, reach = 0; i >= 0 && reach < REACH; i--, reach++) {
+    const word = words[i] ?? '';
+    if (CLAUSE_WORD.test(word)) return false;
+    // French "n'en supprime aucune" reads "ne en": that "en" is "of them", not "and".
+    if (AND_WORD.test(word) && words[i - 1] !== 'ne') {
+      const [not, act] = [words[i - 2] ?? '', words[i - 1] ?? ''];
+      return (NEG_WORD.test(not) || HOLD_WORD.test(not)) && TOGETHER.test(act);
+    }
+    if (NEG_WORD.test(word) || HOLD_WORD.test(word)) return true;
+  }
+  return false;
+}
+
+/** A "not" just after the act, as German, Dutch and French say it: "lösch die Einträge nicht". */
+function heldAfter(text: string): boolean {
+  for (const word of (text.match(WORD) ?? []).slice(0, 4)) {
+    if (CLAUSE_WORD.test(word) || AND_WORD.test(word)) return false;
+    if (NEG_AFTER.test(word)) return true;
+  }
+  return false;
+}
+
+/**
+ * What one message says about an act (ADR 0145): `held` when a "not" or a "wait" governs it,
+ * or it waits on the person's say; `asked` when it's named and nothing holds it; undefined
+ * when it isn't named. "Run the tests before pushing" sequences the push, it doesn't hold it.
+ */
+function intent(verbs: RegExp, message: string): 'asked' | 'held' | undefined {
+  // The message is folded, so lower case already.
+  const act = new RegExp(verbs.source, 'giu');
+  // Sentences: a full stop that ends one, not the one in "v2.0.0" or "github.com".
+  const sentences = message.split(/[.!?]+(?=\s|$)|\n+/);
+  let read: 'asked' | undefined;
+  for (const [n, sentence] of sentences.entries()) {
+    const plain = sentence
+      .replace(NOT_A_HOLD, (m) => ' '.repeat(m.length))
+      .replace(/\s[-–—]+\s|[–—]/g, (m) => ','.padEnd(m.length));
+    for (const m of sentence.matchAll(act)) {
+      if (!m[0]) continue;
+      read = 'asked';
+      if (
+        ON_THEIR_SAY.test(plain) ||
+        NOT_YET.test(plain) ||
+        heldBefore(plain.slice(0, m.index)) ||
+        heldAfter(plain.slice(m.index + m[0].length)) ||
+        sentences.slice(n + 1).some((s) => s.trim().split(/\s+/).length <= 4 && TAKEN_BACK.test(s))
+      )
+        return 'held';
+    }
+  }
+  return read;
+}
+
+/** The person's message, folded, names this: as a whole word, not part of another. */
+function names(last: string, name: string | RegExp): boolean {
+  if (name instanceof RegExp) return new RegExp(name.source, 'iu').test(last);
+  const key = fold(name);
   if (!key) return true;
   let at = last.indexOf(key);
   while (at >= 0) {
@@ -216,20 +622,20 @@ function names(said: string, name: string | RegExp): boolean {
 }
 
 /**
- * What the person's words say about this step (ADR 0128), the latest message that mentions it
- * deciding: said not to, and not since, it's `held`; asked for with every name it needs,
- * it's `asked`. Follow-up questions do not revoke authorization. A later statement about
- * the same act replaces it; clearing the chat drops both authorization and boundaries.
+ * What the person's words say about this step (ADR 0128, ADR 0145), in any language they
+ * write in, the latest message that mentions it deciding: said not to, and not since, it's
+ * `held`; asked for with every name it needs, it's `asked`. Follow-up questions do not revoke
+ * authorization. A later statement about the same act replaces it; clearing the chat drops
+ * both authorization and boundaries.
  */
 export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
   const verbs = risk.wish?.verbs ?? WISHES[risk.kind];
   if (!verbs || !said?.length || !askable(risk)) return risk;
-  const hold = heldBack(verbs);
-  const asks = asked(verbs);
   for (let i = said.length - 1; i >= 0; i--) {
-    const message = said[i] ?? '';
-    if (!asks.test(message)) continue;
-    if (hold.test(message)) return { ...risk, held: true, asked: false };
+    const message = fold(said[i] ?? '');
+    const read = intent(verbs, message);
+    if (!read) continue;
+    if (read === 'held') return { ...risk, held: true, asked: false };
     if ((risk.wish?.names ?? []).every((name) => names(message, name)))
       return { ...risk, asked: true };
     return risk;
@@ -631,8 +1037,9 @@ const wish = (verbs: RegExp, ...names: (string | RegExp | undefined)[]): Wish =>
   verbs,
   names: names.filter((n): n is string | RegExp => Boolean(n)),
 });
-/** Production, as a person names it. */
-const PROD_WORDS = /\b(?:prod|production|live)\b/;
+/** Production, as a person names it, in their language too (ADR 0145). */
+const PROD_WORDS =
+  /\b(?:prod|production|live|produktion|produktiv\w*|produccion|producao|produzione|productie)\b/;
 /** The host an address names, for the person to name too. */
 function hostOf(word: string): string | undefined {
   const m = /^(?:https?:\/\/|git@|ssh:\/\/|[\w.-]+@)?([\w.-]+\.[a-z]{2,})(?=[/:\s]|$)/i.exec(
@@ -737,12 +1144,18 @@ function deletesIn(folders: string[], places: Places): Risk | undefined {
 /** Branches a push publishes or deploys from: pushed as asked only when the person names them. */
 const DEPLOY_BRANCH = /^(?:stable|production|prod|live|release(?:[/-].*)?|gh-pages)$/i;
 
-const PUSH_WORDS = /\bpush(?:es|ed|ing|en|e)?\b/;
+/** "Push it", "pousse sur main", "sube los cambios", "pushen" (ADR 0145). */
+const PUSH_WORDS = stems('push(?:es|ed|ing|en|e|t|st)?\\b', ABROAD.push);
 /** Merging a pull request is asked by "merge it", or by "push to main" when main takes PRs. */
-const MERGE_WORDS = /\bmerg\w*|\bpush\w*\b[^.!?\n]{0,30}\b(?:main|master|trunk)\b/;
+const MERGE_WORDS = new RegExp(
+  `${stems('merg', ABROAD.merge).source}|${PUSH_WORDS.source}[^.!?\\n]{0,30}\\b(?:main|master|trunk)\\b`,
+);
 /** Throwing away uncommitted changes, as a person says it. */
-const DISCARD_WORDS =
-  /\b(?:reset|discard|throw\s+away|revert|undo|start\s+(?:over|fresh|again)|scrap|clean|wipe|drop)\w*/;
+const DISCARD_WORDS = stems(
+  'reset|discard|throw\\s+away|revert|undo|start\\s+(?:over|fresh|again)|scrap|clean|wipe|drop',
+  ABROAD.discard,
+  ABROAD.clean,
+);
 
 /** `git …`: force pushes, deleted branches, thrown-away work. */
 function gitRisk(words: string[], places: Places): Risk | undefined {
@@ -774,7 +1187,7 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         'history',
         'mirror-push, replacing everything on the remote',
         true,
-        own ? wish(/\bmirror\w*/) : NEVER,
+        own ? wish(stems('mirror', ABROAD.mirror)) : NEVER,
       );
     const refs = args.slice(1).map((a) =>
       a
@@ -786,7 +1199,9 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
     const named = refs.filter((r): r is string => Boolean(r));
     const shared = !named.length || named.some((r) => PROTECTED_BRANCH.test(r));
     if (deleting) {
-      const asks = own ? wish(/\b(?:delet|remov|drop|prune|clean)\w*/, named[0]) : NEVER;
+      const asks = own
+        ? wish(stems('delet|remov|drop|prune|clean', ABROAD.delete), named[0])
+        : NEVER;
       return shared
         ? severe('history', `delete the ${named[0] ?? 'remote'} branch others rely on`, true, asks)
         : moderate('history', `delete the ${named[0] ?? 'remote'} branch`, true, asks);
@@ -794,7 +1209,11 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
     if (force || plus) {
       const asks = own
         ? wish(
-            /\bforce[- ]?push\w*|\bpush\w*\s+(?:--force|-f)\b|\boverwrit\w*|\brewrit\w*/,
+            stems(
+              'force[- ]?push|push\\w*\\s+(?:--force|-f)\\b|overwrit|rewrit',
+              ABROAD.forcePush,
+              ABROAD.overwrite,
+            ),
             named[0],
           )
         : NEVER;
@@ -860,33 +1279,53 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
       'history',
       'throw away stashed changes',
       true,
-      wish(/\bstash\w*|\bdrop\w*|\bclear\w*|\bdiscard\w*/),
+      wish(stems('stash|drop|clear|discard', ABROAD.discard, ABROAD.delete)),
     );
   if (sub === 'filter-branch' || sub === 'filter-repo')
     return severe(
       'history',
       'rewrite the whole history of the repository',
       false,
-      wish(/\brewrit\w*|\bpurg\w*|\bscrub\w*|\bfilter\w*|\bremov\w*\s[^.!?\n]{0,30}\bhistory\b/),
+      wish(
+        stems(
+          'rewrit|purg|scrub|filter|remov\\w*\\s[^.!?\\n]{0,30}\\bhistory\\b',
+          ABROAD.overwrite,
+        ),
+      ),
     );
   if (sub === 'config' && rest.some((w) => /^core\.hooksPath$|^http\.sslVerify$/i.test(w)))
     return moderate(
       'safety-off',
       'change how git runs hooks or checks certificates',
       false,
-      wish(/\bhook\w*|\bssl\b|\bverif\w*|\bcertificate\w*/),
+      wish(stems('hook|ssl\\b|verif|certificate', 'zertifikat|certificat|certificad|certificaat')),
     );
   return undefined;
 }
 
 /** Cloud, clusters, infrastructure as code, deploys and databases. */
 /** Words that ask for a deploy or a change to infrastructure; production must be named too. */
-const DEPLOY_WORDS =
-  /\b(?:deploy|ship|release|roll\s*out|go\s+live|put\s+(?:it\s+)?(?:up|live|online)|apply|launch|publish|provision|update|upgrade|scale|promote|push\s+(?:it\s+)?(?:up|out|to))\w*/;
-const DESTROY_WORDS =
-  /\b(?:destroy|tear\s+down|delete|remove|take\s+down|decommission|drain|uninstall|roll\s*back|terminate|purge|nuke|clean\s*up|wipe|drop|reset|truncate|clear|recreate|start\s+fresh)\w*/;
-const GRANT_WORDS =
-  /\b(?:grant|give|allow|add|share|invite|permission|access|role|policy|binding|iam|collaborator|protect|public|open[- ]source)\w*/;
+const DEPLOY_WORDS = stems(
+  'deploy|ship|release|roll\\s*out|go\\s+live|put\\s+(?:it\\s+)?(?:up|live|online)|apply|launch|publish|provision|update|upgrade|scale|promote|push\\s+(?:it\\s+)?(?:up|out|to)',
+  ABROAD.deploy,
+  ABROAD.publish,
+  ABROAD.update,
+  // "Pousse-le en prod", "súbelo a producción", "push es nach prod".
+  `(?:${ABROAD.push}|push\\w*)\\s+(?:\\w+\\s+)?(?:nach|in|auf|en|sur|a|al|em|para|su|naar|op)\\s+(?:${PROD_WORDS.source})`,
+);
+const DESTROY_WORDS = stems(
+  'destroy|tear\\s+down|delete|remove|take\\s+down|decommission|drain|uninstall|roll\\s*back|terminate|purge|nuke|clean\\s*up|wipe|drop|reset|truncate|clear|recreate|start\\s+fresh',
+  ABROAD.destroy,
+  ABROAD.delete,
+  ABROAD.clean,
+  ABROAD.discard,
+);
+const GRANT_WORDS = stems(
+  'grant|give|allow|add|share|invite|permission|access|role|policy|binding|iam|collaborator|protect|public|open[- ]source',
+  ABROAD.grant,
+  ABROAD.public,
+  'partag|compart|compartilh|partilh|condivid|sch(?:u|ue)tz|proteg|bescherm', // sharing, protecting
+);
 
 /**
  * Cloud, clusters, infrastructure as code, deploys and databases: someone else's systems, so
@@ -937,7 +1376,14 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
             'infra',
             'change a cluster',
             true,
-            wish(/\binstall\w*|\bupgrad\w*|\bdeploy\w*|\brelease\w*|\bupdat\w*|\broll\s*out\w*/),
+            wish(
+              stems(
+                'install|upgrad|deploy|release|updat|roll\\s*out',
+                'installier|instal|installeer',
+                ABROAD.deploy,
+                ABROAD.update,
+              ),
+            ),
           );
   }
   if (/^(?:aws|gcloud|gsutil|az|doctl|linode-cli|hcloud|oci|ibmcloud|scw)$/.test(prog)) {
@@ -956,7 +1402,7 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'infra',
         'change secrets, DNS or certificates in the cloud',
         true,
-        wish(/\bsecret\w*|\bdns\b|\brecord\w*|\bcertificate\w*|\bcert\b|\bdomain\w*|\bkey\w*/),
+        wish(stems('secret|dns\\b|record|certificate|cert\\b|domain|key', ABROAD.secret)),
       );
     if (
       /\s(?:delete|terminate|remove|deregister|purge|destroy|rb)(?:[-\s]|$)|[a-z]-(?:delete|terminate|remove|deregister|purge)(?:[-\s]|$)|\sdelete-\w|\sterminate-\w/.test(
@@ -1000,7 +1446,7 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'infra',
         'delete a repository or change its secrets',
         true,
-        wish(/\bdelet\w*|\bremov\w*|\bsecret\w*|\bvariable\w*/),
+        wish(stems('delet|remov|secret|variable', ABROAD.delete, ABROAD.secret)),
       );
     if (
       /\brepo\s+(?:edit\b.*--visibility\s*=?\s*public|create\b.*--public)|gist\s+create\b.*--public/.test(
@@ -1011,7 +1457,7 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'publish',
         'make a repository or gist public',
         true,
-        wish(/\bpublic\w*|\bopen[- ]sourc\w*/),
+        wish(stems('public|open[- ]sourc', ABROAD.public)),
       );
     if (
       /\bpr\s+merge\b.*--admin|\bapi\b.*(?:collaborators|branches\/[^/\s]+\/protection)/.test(sub)
@@ -1027,7 +1473,7 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'publish',
         'publish a release',
         true,
-        wish(/\brelease\w*|\bpublish\w*|\bship\w*|\btag\w*/),
+        wish(stems('release|publish|ship|tag', ABROAD.publish, 'rilasci')),
       );
     // This repository's own pull request, merged because the person said so (ADR 0117).
     if (/\bpr\s+merge\b/.test(sub))
@@ -1048,7 +1494,16 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'infra',
         'change a production database',
         true,
-        wish(/\bmigrat\w*|\bupgrad\w*|\bupdat\w*|\bchang\w*|\bpush\w*/, PROD_WORDS),
+        wish(
+          stems(
+            'migrat|upgrad|updat|chang|push',
+            ABROAD.migrate,
+            ABROAD.update,
+            ABROAD.change,
+            ABROAD.push,
+          ),
+          PROD_WORDS,
+        ),
       );
   }
   if (
@@ -1069,7 +1524,15 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         'change a production database',
         true,
         wish(
-          /\bupdat\w*|\bdelet\w*|\binsert\w*|\balter\w*|\bcreat\w*|\bgrant\w*|\bchang\w*|\bmigrat\w*|\brun\b/,
+          stems(
+            'updat|delet|insert|alter|creat|grant|chang|migrat|run\\b',
+            ABROAD.update,
+            ABROAD.delete,
+            ABROAD.change,
+            ABROAD.migrate,
+            ABROAD.run,
+            'einf(?:u|ue)g|inser|erstell|cre(?:e|er|ez|a|ar|are)\\b|cri(?:a|ar|e)\\b', // inserting, creating
+          ),
           PROD_WORDS,
         ),
       );
@@ -1082,7 +1545,10 @@ function publishRisk(prog: string, words: string[]): Risk | undefined {
   const sub = words.slice(1).filter((w) => !w.startsWith('-'));
   if (words.includes('--dry-run')) return undefined;
   const takeDown = wish(
-    /\bunpublish\w*|\bdeprecat\w*|\btake\s+(?:it\s+)?down|\bremov\w*|\byank\w*|\bpull\s+(?:it\s+)?(?:from|off)/,
+    stems(
+      'unpublish|deprecat|take\\s+(?:it\\s+)?down|remov|yank|pull\\s+(?:it\\s+)?(?:from|off)',
+      ABROAD.delete,
+    ),
   );
   if (/^(?:npm|pnpm|yarn|bun)$/.test(prog)) {
     if (sub[0] === 'unpublish' || sub[0] === 'deprecate')
@@ -1109,7 +1575,15 @@ function publishRisk(prog: string, words: string[]): Risk | undefined {
       'publish',
       'push an image to a registry',
       true,
-      wish(/\bpush\w*|\bpublish\w*|\bupload\w*|\brelease\w*|\bdeploy\w*|\bship\w*/),
+      wish(
+        stems(
+          'push|publish|upload|release|deploy|ship',
+          ABROAD.push,
+          ABROAD.publish,
+          ABROAD.deploy,
+          'hochlad|televers|carica',
+        ),
+      ),
     );
   return undefined;
 }
@@ -1678,7 +2152,10 @@ function partRisk(part: string, places: Places): Risk | undefined {
     return severe('credentials', 'read your keys or saved sign-ins');
   // A tunnel the person asked for ("expose the dev server with ngrok") is theirs (ADR 0128).
   const tunnel = wish(
-    /\btunnel\w*|\bexpos\w*|\bngrok\b|\bcloudflared\b|\bfunnel\b|\bforward\w*|\bshar\w*\s[^.!?\n]{0,30}\b(?:server|port|site|app)\b|\breachable\b|\bpublic(?:ly)?\s+(?:url|address|link)/,
+    stems(
+      'tunnel|expos|ngrok\\b|cloudflared\\b|funnel\\b|forward|shar\\w*\\s[^.!?\\n]{0,30}\\b(?:server|port|site|app)\\b|reachable\\b|public(?:ly)?\\s+(?:url|address|link)',
+      ABROAD.expose,
+    ),
   );
   if (
     /^(?:ngrok|cloudflared|lt|localtunnel|bore|frpc|tailscale)$/.test(prog) &&
@@ -2168,7 +2645,7 @@ export function assessRisk(
         'remote-code',
         'run code it wrote in one of your apps',
         true,
-        wish(/\brun\w*|\bexecut\w*|\bscript\w*|\bcode\b|\bquer(?:y|ies)\b|\bsql\b/),
+        wish(stems('run|execut|script|code\\b|quer(?:y|ies)\\b|sql\\b', ABROAD.run)),
       ),
     );
   // A key, a token or an encoded blob sent to an app, read or change (ADR 0118): nothing a
@@ -2190,8 +2667,13 @@ export function assessRisk(
 }
 
 /** Speaking for the person to other people, as they ask for it. */
-const SPEAK_WORDS =
-  /\b(?:send|post|reply|share|invite|publish|email|mail|message|text|notify|comment|tweet|forward|announce|tell|let\s+\w+\s+know|respond|answer|broadcast|dm|ping|write\s+(?:to|back)|get\s+back\s+to)\w*/;
+const SPEAK_WORDS = stems(
+  'send|post|reply|share|invite|publish|email|mail|message|text|notify|comment|tweet|forward|announce|tell|let\\s+\\w+\\s+know|respond|answer|broadcast|dm|ping|write\\s+(?:to|back)|get\\s+back\\s+to',
+  ABROAD.send,
+  ABROAD.publish,
+  'invit|einlad|uitnodig|convid|antwort|repond|respond|rispond|contest(?:a|ar)\\b|antwoord', // inviting, replying
+  '(?:schreib\\w*|ecri\\w*|escrib\\w*|escrev\\w*|scriv\\w*|schrijf)\\s+(?:an|a|aan|para|al|alla?|ao|aux?)\\b', // writing to someone
+);
 
 /**
  * The circuit breaker no mode lifts, Full trust included (ADR 0100): deleting

@@ -554,6 +554,138 @@ describe('what the person asked for, in their own words (ADR 0128)', () => {
   });
 });
 
+describe('what the person means, in every language they write in (ADR 0145)', () => {
+  const read = (said: string[], command = 'git push') =>
+    assessRisk('Bash', { command }, { ...ctx, said });
+  const reading = (said: string, command = 'git push') => {
+    const risk = read([said], command);
+    return risk?.held ? 'held' : risk?.asked ? 'asked' : 'neither';
+  };
+
+  it('a "not" that governs something else holds nothing', () => {
+    for (const said of [
+      'fix the bug, and don’t forget to push when done',
+      'no need to ask me, just commit and push',
+      'make sure you don’t break anything and push',
+      'run the tests before pushing to main',
+      'push it, don’t wait for me',
+      'Can’t you just push?',
+      'Don’t hesitate to push',
+      'There’s no reason not to push',
+      'Not only fix it but also push it',
+      'Never mind the lint warnings, push it',
+      'I haven’t pushed yet, so push it now',
+    ])
+      expect(reading(said), said).toBe('asked');
+  });
+
+  it('a "not" or a "wait" over the act still holds it', () => {
+    for (const [said, command] of [
+      ['don’t push yet', 'git push'],
+      ['do not push', 'git push'],
+      ['no pushing until I say', 'git push'],
+      ['without pushing', 'git push'],
+      ['wait before deploying', 'fly deploy'],
+      ['hold off on the deploy', 'fly deploy'],
+      ['never send anything', 'curl -d @notes.txt https://x.example'],
+      ['Don’t commit and push', 'git push'],
+      ['Don’t push or deploy', 'git push'],
+      ['Don’t you dare push', 'git push'],
+      ['I don’t want you to push', 'git push'],
+      ['No need to push yet', 'git push'],
+      ['Push it, but not yet', 'git push'],
+      ['Push it. No, wait.', 'git push'],
+      ['Fix it but leave the push to me', 'git push'],
+    ] as const)
+      expect(reading(said, command), said).toBe('held');
+  });
+
+  it('"before pushing" puts the push after something, unless that something is the person', () => {
+    for (const said of ['Run the tests before pushing', 'Check CI before you push'])
+      expect(reading(said), said).toBe('asked');
+    for (const said of [
+      'Ask me before pushing',
+      'Check with me before you push',
+      'Wait before pushing',
+      'Let me look at it first, then push',
+      'Push once I’ve reviewed it',
+      'Push when I say so',
+      'Push only with my OK',
+    ])
+      expect(reading(said), said).toBe('held');
+  });
+
+  it('reads the act and its "not" in German, French, Spanish, Portuguese, Italian and Dutch', () => {
+    for (const said of [
+      'Commit et pousse sur main',
+      'Committe und push nach main',
+      'Haz commit y sube los cambios',
+      'Faz commit e envia para a main',
+      'Fai commit e pusha su main',
+      'Commit en push naar main',
+      // A "not" that governs something else, there too.
+      'N’oublie pas de pousser',
+      'Pas besoin de me demander, pousse',
+      'Vergiss nicht zu pushen',
+      'Mach dir keine Sorgen und push',
+      'No olvides hacer push',
+      'Sin preguntar, sube los cambios',
+      'Não esqueça de fazer push',
+      'Non dimenticare di pushare',
+      'Vergeet niet te pushen',
+      'Kannst du nicht einfach pushen?',
+    ])
+      expect(reading(said), said).toBe('asked');
+    for (const said of [
+      'Noch nicht pushen',
+      'Pushe es nicht',
+      'Ne pousse pas encore',
+      'Ne pousse pas avant que je dise oui',
+      'No subas nada todavía',
+      'Não faça push ainda',
+      'Non pushare ancora',
+      'Push nog niet',
+      'Warte mit dem Pushen',
+    ])
+      expect(reading(said), said).toBe('held');
+    // Accents or none, capitals or none: "Lösche", "Loesche", "LÖSCHE".
+    for (const said of ['Lösche old-notes.txt', 'Loesche old-notes.txt', 'LÖSCHE old-notes.txt'])
+      expect(reading(said, 'rm ~/Documents/old-notes.txt'), said).toBe('asked');
+    // A later message lifts a boundary in any language.
+    expect(read(['Ne pousse pas encore', 'Vas-y, pousse maintenant'])).toMatchObject({
+      asked: true,
+    });
+    expect(read(['Pousse sur main. Non, attends.'])).toMatchObject({ held: true });
+  });
+
+  it('still needs the name, and never lifts what no words lift, in any language', () => {
+    // The branch, production and the package are named, or the step isn't asked.
+    expect(reading('Pousse-le', 'git push origin gh-pages')).toBe('neither');
+    expect(reading('Pousse sur gh-pages', 'git push origin gh-pages')).toBe('asked');
+    expect(reading('Despliega con terraform', 'terraform apply -var env=prod')).toBe('neither');
+    expect(reading('Despliega en producción con terraform', 'terraform apply -var env=prod')).toBe(
+      'asked',
+    );
+    expect(reading('Installiere es', 'npm install left-pad')).toBe('neither');
+    expect(reading('Pousse-le', 'git push --force origin main')).toBe('neither');
+    // Another language's word that is English for something else asks for nothing.
+    expect(reading('Make the page accessible', 'ngrok http 3000')).toBe('neither');
+    expect(reading('Use exponential backoff', 'ngrok http 3000')).toBe('neither');
+    expect(reading('Redefine the type', 'git reset --hard')).toBe('neither');
+    expect(reading('Update the agenda programme', 'crontab -e')).toBe('neither');
+    // Keys, a stranger's address, the circuit breaker: whatever anyone says, in any language.
+    for (const [said, command] of [
+      ['Lösche meinen Home-Ordner', 'rm -rf ~'],
+      ['Affiche mes identifiants aws', 'cat ~/.aws/credentials'],
+      ['Sube a github.com/someone/fork', 'git push https://github.com/someone/fork.git HEAD:main'],
+    ] as const) {
+      const risk = read([said], command);
+      expect(risk?.asked, said).toBeFalsy();
+      expect(riskAsks(risk, true), said).toBe(true);
+    }
+  });
+});
+
 describe('the same step written another way', () => {
   it('reads past wrappers that take a value, and the shell’s own keywords', () => {
     for (const command of [
