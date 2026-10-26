@@ -118,3 +118,22 @@ The same needs now serve the rest of Conch:
   so something installed a minute ago is found without a restart.
 - `GET /api/needs/:id` and `POST /api/needs/:id/{install,update,open}` serve
   any known need; install and update need sudo mode, and an unknown id is 404.
+
+## Addendum — what's already here, and as whom (2026-10-26)
+
+A model that doesn't know `gh` is signed in, or as which account, reaches for the browser and
+a sign-in page, or tells the person to run a command. Every chat with host tools now gets a
+short **Programs on this computer** section (`setup/clis.ts`): the service CLIs found where
+they really live (`gh`, `git`, `wrangler`, `supabase`, `vercel`, `fly`, `heroku`, `netlify`,
+`aws`, `gcloud`, `az`, `kubectl`, `docker`, `terraform`, `stripe`) and, where a cheap question
+names it, the account each acts as (`gh auth status`, `wrangler whoami`, `aws configure
+list-profiles`, `gcloud config get-value account`…). It tells the model to use a program that
+covers the job before the browser, and, when the signed-in account can't see something, to
+give the command a key from Passwords through its `secrets` option instead of asking the
+person to sign in again.
+
+- **Names only.** Each program gets a deadline (8 s), no stdin and no prompts. Only account,
+  profile or context names are kept, each checked against a strict shape, and anything
+  key-shaped is dropped (`cleanAccount`). Token files are never opened.
+- **Cheap.** The answers are kept for 10 minutes; a turn waits at most 1.5 s for the first
+  look, then carries on with what's known. The mock engine asks no program at all.

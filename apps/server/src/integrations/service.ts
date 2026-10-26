@@ -1639,14 +1639,22 @@ export class IntegrationService {
    * ADR 0125). Never handed to the model, a tool's result or a log.
    */
   async tokenOf(catalogId: string): Promise<string | undefined> {
-    const items = await this.store.all();
-    const item = items.find(
+    return (await this.tokensOf(catalogId))[0];
+  }
+
+  /** Every connected copy's token (a second GitHub account is `github-2`), first connected first. */
+  async tokensOf(catalogId: string): Promise<string[]> {
+    const items = (await this.store.all()).filter(
       (i) => i.catalogId === catalogId && i.auth === 'token' && i.enabled !== false,
     );
-    if (!item) return undefined;
-    const entry = CATALOG.get(catalogId);
-    const stored = await this.store.secrets(item.id).catch(() => undefined);
-    return stored?.values[entry?.tokenField ?? 'token'] || undefined;
+    const field = CATALOG.get(catalogId)?.tokenField ?? 'token';
+    const tokens = await Promise.all(
+      items.map(async (item) => {
+        const stored = await this.store.secrets(item.id).catch(() => undefined);
+        return stored?.values[field] || undefined;
+      }),
+    );
+    return [...new Set(tokens.filter((t): t is string => !!t))];
   }
 
   // ── Internals ───────────────────────────────────────────────────────────
