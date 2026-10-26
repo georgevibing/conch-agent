@@ -960,9 +960,8 @@ export class ApiEngine implements Engine {
         tools: toolTokens([...allTools.values()].map((tool) => tool.spec)),
       });
       // Past the most one list may carry, the rest wait behind `find_tools`, the apps the
-      // person named sent first; the wire that defers app tools carries them all (ADR 0072).
-      const deferring = !lean && (this.variant.wire.defersTools?.(model) ?? false);
-      const held = lean || deferring ? undefined : holdBack(allTools, { said: input.prompt });
+      // person named sent first: never dropped in silence (ADR 0072).
+      const held = lean ? undefined : holdBack(allTools, { said: input.prompt });
       const tools =
         lean && allTools.size
           ? leanTools(allTools, session, input.prompt)
@@ -980,7 +979,7 @@ export class ApiEngine implements Engine {
       });
       if (plan.notice) yield plan.notice;
       // With many apps connected, their tools wait to be searched for, where the wire can (ADR 0072).
-      const defers = deferring;
+      const defers = !lean && (this.variant.wire.defersTools?.(model) ?? false);
       /** The agent's instructions were too long for this model to read whole beside the chat. */
       let shortened = false;
       let resourceContext = '';

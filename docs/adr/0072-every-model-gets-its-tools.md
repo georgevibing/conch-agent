@@ -187,3 +187,32 @@ pick the right tool more often that way.
 - On a 200K window the line is 20K tokens, which Conch's own tools nearly fill, so any
   connected app tips it; on a 1M window (100K) the 128-tool cap keeps it from ever tipping.
 - Tests: `engines/api/toolsearch.test.ts`.
+
+## Amended 2026-10-26: past the room, tools wait to be found, never cut
+
+`buildTools` stopped adding tools at `MAX_TOOLS` (128) without a word, and app tools come
+last, so a chat with many of Conch's own tools could get none of an app's. The prompt still
+said the app was connected; a model on Codex told the person to reconnect GitHub when its
+tools had simply been left off the list.
+
+- **Held back, never dropped.** `buildTools` builds every tool; `holdBack`
+  (`engines/api/held.ts`) sends at most `MAX_TOOLS` and puts the rest behind `find_tools`.
+  Conch's own tools come first, apps keep at least a third of the room, and the apps the
+  person's message names come first among them (up to two thirds).
+- **Loaded, or called through.** The API engine loads what `find_tools` finds into the turn's
+  list (sent from the next request, like lean mode). Codex and ACP programs can't be given new
+  tools once a thread starts, so they get `use_tool` beside it and a list that depends only on
+  the tools (not the message), so the thread carries on. `HeldTools.resolve` turns a
+  `use_tool` call into the tool it names before it's shown, recorded or guarded, so the guard
+  after reading sees the app's tool, not `use_tool`.
+- **Said.** When anything is held, the system prompt gets a short "Tools held back" section
+  naming the apps and how many of their tools wait, and to look before saying an app can't do
+  something. The Apps section names tools the way the engine receives them
+  (`EngineIntegrations.toolNames: 'bare'` on Codex: `github__…`, not `mcp__github__…`).
+- **An app that didn't come this turn.** When the bridge can't open an app (or opens none),
+  the person's message is led by a note naming it and why, and every such app is checked
+  again (`integrations/missing.ts`). For a broken app the prompt asks for another way first —
+  a program on this computer signed in to the right account, another account, another app —
+  and only then the one fix in Apps, instead of "don't try to work around it".
+- Tests: `engines/api/held.test.ts`, `integrations/missing.test.ts`,
+  `conversations/app-permissions.test.ts` (an app whose tools didn't come).
