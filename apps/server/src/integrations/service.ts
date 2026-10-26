@@ -32,7 +32,7 @@ import {
   publicCatalog,
   type ResolvedCatalogItem,
 } from './catalog';
-import { type Bridge, openBridge } from './bridge';
+import { type Bridge, type BridgeClient, openBridge } from './bridge';
 import { needFor, nodeFallback } from './commands';
 import { cuedApps } from './cues';
 import { checkEndpoint, EndpointError, guardedFetch, type Reach, reachOf } from './net';
@@ -243,6 +243,8 @@ export interface IntegrationServiceDeps {
   setup?: Setup;
   /** Leaves a “fixed on its own” note (an integration came back by itself). */
   onHeal?: (message: string) => void;
+  /** How the bridge connects to an app for a turn; tests pass a pretend client. */
+  connectBridge?: (server: EngineMcpServer) => Promise<BridgeClient>;
   /** How long to wait before each retry; tests shorten it. Unset with `manualChecks`: no retries. */
   retryAfterMs?: number[];
   /** How long a turn waits to learn what the provider reaches by itself; tests shorten it. */
@@ -1507,14 +1509,61 @@ export class IntegrationService {
     const reach = new Map<EngineMcpServer, Reach>();
     for (const server of Object.values(servers))
       if (server.type === 'http') reach.set(server, await reachOf(server.url));
-    return openBridge(servers, {
+    const options = {
       disallowed: new Set(disallowedTools),
-      fetch: (server) => {
+      fetch: (server: EngineMcpServer) => {
         const r = reach.get(server);
         return r ? this.#httpFetch(r) : undefined;
       },
       cwd: await this.deps.cwd(),
-    });
+      ...(this.deps.connectBridge && { connect: this.deps.connectBridge }),
+    };
+    const first = await openBridge(servers, options);
+    return first.failed.length ? this.#healBridge(first, servers, reach, options) : first;
+  }
+
+  /**
+   * An app that didn't open for the turn is looked at once more before the
+   * turn goes on without it (working agreement 11): the check renews a
+   * refused sign-in and says what's wrong, and one that works again is
+   * opened for this very turn, with a quiet note. What still fails is left
+   * for `turnFailed` to explain.
+   */
+  async #healBridge(
+    first: Bridge,
+    servers: Record<string, EngineMcpServer>,
+    reach: Map<EngineMcpServer, Reach>,
+    options: Parameters<typeof openBridge>[1],
+  ): Promise<Bridge> {
+    const items = await this.store.all();
+    const back: Record<string, EngineMcpServer> = {};
+    const names = new Map<string, string>();
+    for (const { name } of first.failed) {
+      const item = items.find((i) => i.server === name);
+      const server = servers[name];
+      if (!item || !server) continue;
+      const checked = await this.check(item.id).catch(() => undefined);
+      if (checked?.health.state !== 'ok' && checked?.health.state !== 'warning') continue;
+      // A renewed sign-in changes the headers: open it as it is now, not as the turn began,
+      // through the same guard.
+      const now = await this.#resolve(checked).catch(() => undefined);
+      if (now && now.server.type === 'http') reach.set(now.server, now.reach);
+      back[name] = now?.server ?? server;
+      names.set(name, checked.name);
+    }
+    if (!Object.keys(back).length) return first;
+    const again = await openBridge(back, options);
+    const healed = new Set(
+      Object.keys(back).filter((n) => !again.failed.some((f) => f.name === n)),
+    );
+    for (const name of healed) this.deps.onHeal?.(`Reconnected ${names.get(name) ?? name}`);
+    return {
+      tools: [...first.tools, ...again.tools],
+      failed: first.failed.filter((f) => !healed.has(f.name)),
+      close: async () => {
+        await Promise.all([first.close(), again.close()]);
+      },
+    };
   }
 
   /** The engine couldn't connect some integrations at the start of a turn. */
