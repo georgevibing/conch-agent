@@ -67,7 +67,8 @@ export interface EvalTask {
   title: string;
   /** What it proves, in a line for the report. */
   about: string;
-  needs?: readonly ('ledger' | 'partner')[];
+  /** The pretend Ledger app; another model to hand over to; the other account's key in Passwords. */
+  needs?: readonly ('ledger' | 'partner' | 'vault')[];
   timeoutMs?: number;
   smoke?: boolean;
   run(scene: Scene): Promise<Verdict>;
@@ -187,6 +188,20 @@ export function claimsSent(text: string): boolean {
 }
 
 /**
+ * The Ledger's second account (Hooli's invoices), reached only with its key,
+ * which the run saves in Passwords under this title. What Hooli owes there.
+ */
+export const OTHER_ACCOUNT = {
+  title: 'Ledger API key (Hooli Ltd account)',
+  key: 'ldg_eval_' + 'hooli_7f3a9c2e1b5d',
+  owed: 742.4,
+} as const;
+
+/** Tool names as every engine reports them: without `mcp__conch__`, or the app's `mcp__…__`. */
+const toolsUsed = (scene: Scene) =>
+  scene.seen.toolInputs.map((t) => t.name.replace(/^mcp__.+?__/, ''));
+
+/**
  * Persistence (ADR 0102): the first way fails, and a good assistant finds the
  * cause or another way; the one thing it can't do, it says plainly. Each is
  * made so that giving up at the first failure fails the task.
@@ -265,6 +280,60 @@ export const PERSISTENCE_TASKS: readonly EvalTask[] = [
       return /sender|settings|e-?mail address/i.test(turn.text)
         ? pass('said what’s in the way and what to do')
         : fail('didn’t say what the person can do');
+    },
+  },
+  {
+    id: 'saved-key',
+    title: 'Use the key already in Passwords',
+    about:
+      'The app is signed in to the wrong account; the other account’s key is in Passwords. Use it, never hand the job back.',
+    needs: ['ledger', 'vault'],
+    async run(scene) {
+      const turn = await scene.say(
+        'Using my Ledger app, how much does Hooli still owe us on unpaid invoices? Hooli is kept in a separate Ledger account, not my main one.',
+      );
+      const calls = await scene.ledgerCalls();
+      const missed = unanswered(turn);
+      if (missed) return missed;
+      const keyed = calls.some((c) => c.args.account_key === OTHER_ACCOUNT.key);
+      if (keyed && mentionsAmount(turn.text, OTHER_ACCOUNT.owed))
+        return pass('found the key in Passwords and used it');
+      if (keyed) return fail('used the saved key, but gave the wrong total');
+      const used = toolsUsed(scene);
+      if (used.includes('passwords_read')) return fail('read the key but never used it');
+      if (!used.includes('passwords_find')) return fail('never looked in Passwords');
+      return fail('found the key but didn’t use it');
+    },
+  },
+  {
+    id: 'app-before-browser',
+    title: 'Use the connected app, not the website',
+    about:
+      'The Ledger app is connected and the person mentions its website: the app answers, and nobody signs in on the web.',
+    needs: ['ledger'],
+    async run(scene) {
+      const turn = await scene.say(
+        `How much does Globex still owe us on unpaid invoices? It’s all in Ledger; its website is ${scene.siteUrl}/account if you need it.`,
+      );
+      const calls = await scene.ledgerCalls();
+      const missed = unanswered(turn);
+      if (missed) return missed;
+      const used = toolsUsed(scene);
+      const signedIn =
+        scene.submissions.logins > 0 ||
+        scene.seen.handoffs > 0 ||
+        used.some((t) => t === 'browser_type' || t === 'browser_form');
+      const app = calls.some((c) => c.tool === 'find_invoices');
+      if (!app)
+        return fail(
+          used.some((t) => t.startsWith('browser_'))
+            ? 'went to the website instead of the connected app'
+            : 'never used the connected app',
+        );
+      if (signedIn) return fail('used the app, but also tried to sign in on the website');
+      return mentionsAmount(turn.text, 1234.5)
+        ? pass('answered from the app')
+        : fail('used the app but gave the wrong total');
     },
   },
 ];

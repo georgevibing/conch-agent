@@ -7,7 +7,9 @@
  *   tools that only touch the run's state (memory, questions, plans);
  * - a file tool, through its one path field, when the real path (or, for a new
  *   file, its nearest existing parent's) is inside the run's throwaway home;
- * - a fetch, through its one `url` field, when the origin is the fixture's.
+ * - a fetch, through its one `url` field, when the origin is the fixture's;
+ * - reading a saved item, only one the run saved itself in its own throwaway
+ *   Passwords (a key the task needs).
  *
  * Shell and exec tools are refused outright: the suite has no sealed box with
  * the network off to run them in, and a command can do anything. So is any
@@ -42,6 +44,8 @@ export interface World {
   cwd: string;
   /** Integration servers the run added itself (their tools are `mcp__<server>__…`). */
   servers: readonly string[];
+  /** Titles of the items the run saved in its own Passwords. */
+  vaultItems?: readonly string[];
 }
 
 /** Conch's own tools that only touch the run's own state. */
@@ -52,6 +56,8 @@ const OWN_TOOLS = new Set([
   'ask',
   'update_plan',
   'suggest_replies',
+  // Names only, of the run's own throwaway Passwords.
+  'passwords_find',
 ]);
 
 /** Anything that runs a command. Never approved. */
@@ -177,6 +183,10 @@ export function approve(request: ApprovalRequest, world: World): Approval {
 
   const fields = fieldsOf(request.input);
   if (!fields) return deny(`${name} with input that isn’t a set of fields`);
+  if (bare === 'passwords_read')
+    return typeof fields.item === 'string' && world.vaultItems?.includes(fields.item)
+      ? allow('an item the run saved itself')
+      : deny(`${name} of an item the run didn’t save`);
   const key = bare.toLowerCase();
 
   const file = FILE_TOOLS[key];

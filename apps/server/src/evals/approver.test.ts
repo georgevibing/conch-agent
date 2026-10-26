@@ -27,6 +27,7 @@ beforeAll(async () => {
     home,
     cwd: join(home, 'workspace'),
     servers: ['ledger'],
+    vaultItems: ['Ledger key'],
   };
 });
 
@@ -54,6 +55,13 @@ describe('what an eval approves', () => {
     );
     expect(decide('mcp__github__create_issue', {})).toBe('deny');
     expect(decide('mcp__conch__remember', { content: 'x' })).toBe('allow');
+  });
+
+  it('reads only an item the run saved in its own Passwords', () => {
+    expect(decide('mcp__conch__passwords_find', { query: 'ledger' })).toBe('allow');
+    expect(decide('passwords_read', { item: 'Ledger key', field: 'API key' })).toBe('allow');
+    expect(decide('passwords_read', { item: 'Bank card', field: 'PIN' })).toBe('deny');
+    expect(decide('passwords_read', { field: 'PIN' })).toBe('deny');
   });
 
   it('lets file tools work inside the run’s folder, by their path field', () => {
