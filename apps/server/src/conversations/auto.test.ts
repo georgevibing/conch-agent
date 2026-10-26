@@ -764,14 +764,30 @@ describe('what the person asked for, in Auto (ADR 0128)', () => {
     expect(after.outcomes).toEqual(['ran', 'ran', 'ran']);
   });
 
-  it('a boundary the person stated refuses without asking, through every way of asking', async () => {
-    const { asked, outcomes } = await run(
-      'auto',
-      [unsealed('git push origin HEAD'), native('git push origin HEAD')],
-      { text: 'Fix the bug, but don’t push yet' },
-    );
-    expect(outcomes).toEqual(['declined', 'declined']);
-    expect(asked).toHaveLength(0);
+  it('a boundary the person stated asks, through every way of asking, and no review lifts it (ADR 0146)', async () => {
+    const reviewer = vi.fn(async () => ({ text: ALLOWS }));
+    const steps = [unsealed('git push origin HEAD'), native('git push origin HEAD')];
+    for (const read of [undefined, page]) {
+      const { asked, outcomes } = await run('auto', steps, {
+        text: 'Fix the bug, but don’t push yet',
+        review: reviewer,
+        ...(read && { read }),
+      });
+      expect(outcomes).toEqual(['declined', 'declined']);
+      expect(asked.map((a) => a.taint)).toEqual([
+        'You asked me not to push code to a remote. So I’m checking before I do it now.',
+        'You asked me not to push code to a remote. So I’m checking before I do it now.',
+      ]);
+      // Their yes is this once: a hold is lifted only by what they say.
+      expect(asked.every((a) => !a.lasting && !a.always)).toBe(true);
+    }
+    expect(reviewer).not.toHaveBeenCalled();
+    // Said yes: it goes, this once.
+    const yes = await run('auto', steps.slice(0, 1), {
+      text: 'Fix the bug, but don’t push yet',
+      answer: 'allow',
+    });
+    expect(yes.outcomes).toEqual(['ran']);
   });
 
   it('the second look lifts a question asked only for what was read, when the step serves the request', async () => {

@@ -107,6 +107,7 @@ import {
   AutoReplans,
   type AutoVerdict,
   contextualRisk,
+  heldWords,
   reviewAction,
   reviewableRisk,
   reviewKey,
@@ -3609,27 +3610,22 @@ export class ConversationManager {
     };
     /**
      * The review where a question already stands (ADR 0144): it lifts the question, keeps it,
-     * or sends the proposal back for a safer plan.
+     * or sends the proposal back for a safer plan. A step the person said not to do is asked
+     * about, never lifted and never refused (ADR 0146, AGENTS.md security rule 11).
      */
     const autoDecision = async (
       request: ReviewRequest,
       subject: { risk?: Risk; step?: ReviewStep } = {},
     ): Promise<
       | { decision: 'allow' }
-      /** `words`: why the review asks. */
-      | { decision: 'ask'; words?: string }
+      /** `held`: the person's own boundary, in their words; `words`: why the review asks. */
+      | { decision: 'ask'; held?: string; words?: string }
       | { decision: 'deny'; reason: string }
       | undefined
     > => {
       if (resolved.permissionMode !== 'auto') return undefined;
       const { risk } = subject;
-      // A later model may not override an explicit owner boundary.
-      if (risk?.held)
-        return {
-          decision: 'deny',
-          reason:
-            'The person explicitly held this action. Continue other work; do not retry it or ask for the same approval.',
-        };
+      if (risk?.held) return { decision: 'ask', held: heldWords(risk) };
       if (!this.#yourWords(live).length || !canReview() || !reviewableRisk(risk)) return undefined;
       if (replans.exhausted) return { decision: 'deny', reason: replans.reject() };
       const verdict = await review(request, subject);
@@ -3781,15 +3777,16 @@ export class ConversationManager {
           if (review?.decision === 'allow') return 'allow';
           if (review?.decision === 'deny') throw new Error(review.reason);
           if (review?.decision === 'ask') {
-            // Why, in Conch's words: what the rules found, or the kind of risk the review
-            // named (ADR 0146).
+            // Why, in Conch's words: the person's boundary, what the rules found, or the
+            // kind of risk the review named (ADR 0146).
             const why = risk && riskAsks(risk, Boolean(request.taint)) ? risk.reason : review.words;
             const taint =
-              request.taint && why
+              review.held ??
+              (request.taint && why
                 ? `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`
                 : risk && riskAsks(risk, false)
                   ? riskWords(risk)
-                  : request.taint;
+                  : request.taint);
             return askUser({ ...request, ...(taint && { taint }), remember: false }, abort.signal);
           }
         }
@@ -4561,6 +4558,9 @@ export class ConversationManager {
       if (latest?.asks) return question;
       if (review?.decision === 'allow') return undefined;
       if (review?.decision === 'deny') return { decision: 'deny', reason: review.reason };
+      // The person said not to (ADR 0146): asked this once, in their words, never refused.
+      if (review?.decision === 'ask' && review.held)
+        return { reason: review.held, ...(question.sources && { sources: question.sources }) };
       return question;
     };
 

@@ -274,6 +274,11 @@ export function verdictWords(verdict: AutoVerdict, step: boolean): string {
   return (step ? STEP_WORDS : WORDS)[verdict.kind];
 }
 
+/** A step the person said not to do: their card asks, and no review lifts it (ADR 0146). */
+export function heldWords(risk: Risk): string {
+  return `You asked me not to ${risk.reason}. So I’m checking before I do it now.`;
+}
+
 // ── What a cached verdict is bound to ────────────────────────────────────
 
 /** Files a command could run from: a script, a relative program, a project's own scripts. */

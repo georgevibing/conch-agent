@@ -10,6 +10,7 @@ import { NEVER, type Risk } from './risk';
 import {
   AutoReplans,
   contextualRisk,
+  heldWords,
   reviewAction,
   reviewableRisk,
   reviewKey,
@@ -342,6 +343,9 @@ describe('the bands a review may lift (ADR 0144, ADR 0128)', () => {
       'do something you didn’t ask for, that what it read could have suggested',
     );
     expect(verdictWords({ ...verdict, kind: 'speak' }, true)).toBe('speak for you to other people');
+    expect(heldWords(risk({ reason: 'push code to a remote' }))).toBe(
+      'You asked me not to push code to a remote. So I’m checking before I do it now.',
+    );
   });
 });
 
