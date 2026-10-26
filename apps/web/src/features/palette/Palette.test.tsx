@@ -1059,6 +1059,26 @@ describe('Palette search', () => {
       }),
     );
     act(() => useUi.setState({ settingsFocus: undefined }));
+
+    // What Auto should know about where you work (ADR 0149), in Safety.
+    for (const words of ['where you work', 'trusted hosts', 'what production means']) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', {
+          name: /Settings: What Auto should know about where you work/,
+        }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'auto-environment',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('backs up and restores by name, straight into Settings → Health', async () => {

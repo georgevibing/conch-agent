@@ -329,6 +329,12 @@ export const Preferences = z.object({
   autoAllowed: z.array(z.string().max(220)).max(200).default([]),
   autoEnvironment: z.string().max(2000).default(''),
   /**
+   * What the person told Auto about where they work (ADR 0149): hosts they trust, their
+   * remotes and buckets, what "production" means here. Auto's review reads it as theirs.
+   * Only a person sets it, in Settings → Security → Safety; no tool of the assistant can.
+   */
+  autoEnvironment: z.string().max(2000).default(''),
+  /**
    * Commands run in a sealed box: they can change the work folder and caches,
    * and can't read where keys and passwords live (ADR 0028).
    */
@@ -464,6 +470,8 @@ export const UpdateSettingsBody = z.object({
       checkAfterReading: z.boolean(),
       /** The whole list, as Settings last saw it: a class forgotten is left out (ADR 0128). */
       autoAllowed: z.array(z.string().max(220)).max(200),
+      /** The whole note, as Settings last saw it (ADR 0149). */
+      autoEnvironment: z.string().max(2000),
       sealedCommands: z.boolean(),
       checkMemories: z.boolean(),
       menuBar: z.boolean(),

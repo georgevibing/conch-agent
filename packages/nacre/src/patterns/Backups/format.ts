@@ -31,6 +31,7 @@ export type BackupPowerInfo =
   | { kind: 'chats-never-ask' }
   | { kind: 'chats-go-ahead' }
   | { kind: 'auto-never-asks'; steps: string[]; more?: number }
+  | { kind: 'auto-environment'; note: string }
   | { kind: 'work-runs-elsewhere'; where: string }
   | { kind: 'safety-off'; checks: string[] }
   | { kind: 'routine-never-asks'; name: string }
@@ -96,6 +97,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: 'Auto',
         text: `Never asks again before it would ${named(power.steps, power.more)}`,
+      };
+    case 'auto-environment':
+      return {
+        subject: 'Auto',
+        text: `Is told this about where you work, and trusts it: “${power.note}”`,
       };
     case 'work-runs-elsewhere':
       return {

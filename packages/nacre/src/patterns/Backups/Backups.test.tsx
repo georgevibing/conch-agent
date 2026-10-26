@@ -74,6 +74,7 @@ describe('BackupPowers', () => {
       'Acts on “bank.example” and “shop.example” without asking you first',
     );
     expect(items[9]).toHaveTextContent('Other devices can open a terminal on this computer');
+    expect(items.at(-2)).toHaveTextContent('AutoIs told this about where you work, and trusts it');
     expect(items.at(-1)).toHaveTextContent('RoutinesSpend up to $60 a month without asking');
     expect(screen.getByText('And 2 more.')).toBeInTheDocument();
     expect(screen.getByText('Restore it only if you set these up yourself.')).toBeInTheDocument();

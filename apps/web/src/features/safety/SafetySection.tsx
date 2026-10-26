@@ -1,5 +1,6 @@
 import {
   AlertDialog,
+  AutoEnvironment,
   Callout,
   Collapsible,
   IconButton,
@@ -12,15 +13,18 @@ import {
 import { autoLiftWords } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldAlert, ShieldCheck, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { keys, useAppState, useUpdateSettings } from '../../api/queries';
+import { useUi } from '../../app/ui';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
-import { Section } from '../settings/Section';
+import { SaveStatus, Section } from '../settings/Section';
+import { useAutosave } from '../settings/useAutosave';
 import { AdminCommand } from '../setup/AdminCommand';
 import { safetyApi, safetyKeys } from './api';
+import { AUTO_ENVIRONMENT_FOCUS } from './focus';
 import styles from './Safety.module.css';
 
 type Guard = 'checkAfterReading' | 'sealedCommands' | 'checkMemories';
@@ -42,6 +46,35 @@ const OFF: Record<Guard, { title: string; detail: string }> = {
       'Commands the assistant runs could then read your SSH keys, cloud sign-ins and browsers’ saved passwords, and change any file you can.',
   },
 };
+
+/**
+ * What Auto should know about where you work (ADR 0149), saved as it's typed. Only here:
+ * no tool of the assistant writes it. ⌘K brings it into view, ready to type in.
+ */
+function EnvironmentNote({ saved }: { saved: string }) {
+  const update = useUpdateSettings();
+  const [note, setNote] = useState(saved);
+  const status = useAutosave(note, (value) =>
+    update.mutateAsync({ preferences: { autoEnvironment: value } }),
+  );
+  const ref = useRef<HTMLDivElement>(null);
+  const focus = useUi((s) => s.settingsFocus);
+  useEffect(() => {
+    if (focus !== AUTO_ENVIRONMENT_FOCUS) return;
+    useUi.setState({ settingsFocus: undefined });
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ref.current?.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+    ref.current?.querySelector('textarea')?.focus({ preventScroll: true });
+  }, [focus]);
+  return (
+    <AutoEnvironment
+      ref={ref}
+      value={note}
+      onChange={setNote}
+      status={<SaveStatus status={status} />}
+    />
+  );
+}
 
 /**
  * Settings → Security → Safety (ADR 0028, ADR 0087): the checks that hold in
@@ -142,6 +175,7 @@ export function SafetySection() {
             </Collapsible>
           )}
         </Stack>
+        <EnvironmentNote saved={prefs.autoEnvironment} />
         {prefs.autoAllowed.length > 0 && (
           <Stack gap={2}>
             <Text size="sm" tone="subtle">

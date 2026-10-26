@@ -24,6 +24,18 @@ describe('what the assistant’s own tools never touch', () => {
     expect(touchesProtected({ file_path: join(home, 'learning-spend.json') }, paths)).toBe(true);
   });
 
+  it('keeps out your preferences: what Auto never asks about is a person’s to set (ADR 0149)', () => {
+    const home = join('/home', 'ada', '.conch');
+    const paths = protectedPaths(home);
+    expect(touchesProtected({ file_path: join(home, 'settings.json') }, paths)).toBe(true);
+    expect(
+      touchesProtected(
+        { command: `echo '{"preferences":{"autoRules":[]}}' > ${join(home, 'settings.json')}` },
+        paths,
+      ),
+    ).toBe(true);
+  });
+
   it('keeps out where Conch is reached: the address, and the names the hello link goes to', () => {
     const home = join('/home', 'ada', '.conch');
     const paths = protectedPaths(home);

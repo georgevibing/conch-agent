@@ -195,6 +195,9 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
       steps: lifted.slice(0, MAX_LISTED),
       more: Math.max(0, lifted.length - MAX_LISTED),
     });
+  // What someone told Auto about where they work (ADR 0149): its review trusts it.
+  const environment = text(prefs?.autoEnvironment, '');
+  if (environment) powers.push({ kind: 'auto-environment', note: environment });
   const off = [
     ...(prefs?.checkAfterReading === false ? ['checking after it reads something'] : []),
     ...(prefs?.sealedCommands === false ? ['sealed commands'] : []),

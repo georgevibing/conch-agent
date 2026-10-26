@@ -111,6 +111,7 @@ import { COME_HOME_FOCUS } from '../import/api';
 import { PAST_CHATS_FOCUS } from '../import/pastChats';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
+import { AUTO_ENVIRONMENT_FOCUS } from '../safety/focus';
 import { WORKPLACES_FOCUS } from '../workplaces/words';
 import {
   ADD_DEVICE_FOCUS,
@@ -476,6 +477,15 @@ const settingsPlaces: {
     keywords:
       'where work runs commands run container docker podman sandbox isolated box ssh remote machine server another computer cloud daytona vm devbox',
     icon: <Box />,
+  },
+  {
+    // Safety, under Security's Advanced (ADR 0149): the person's own note for Auto.
+    tab: 'security',
+    focus: AUTO_ENVIRONMENT_FOCUS,
+    label: 'What Auto should know about where you work',
+    keywords:
+      'auto environment where you work trusted hosts my servers remotes buckets production prod staging what production means context tell auto about my setup',
+    icon: <ShieldCheck />,
   },
   {
     tab: 'security',

@@ -87,6 +87,12 @@ An unsafe proposal is returned to the assistant to find a safer approach. After 
 
 Explicit **Ask** and **Off** settings, credential access, spending and critical destructive checks remain in force. Missing context, an unavailable reviewer or an unreadable answer keeps the existing check. Very long actions are never silently shortened to obtain permission.
 
+A [task](../features/tasks.md) is reviewed against what you'd said in the chat it came from, as you'd said it when you handed it off. Its own instructions, written by the assistant, count for nothing. A routine, or a chat with someone else's messages in it, hands nothing on.
+
+### Tell Auto about where you work
+
+**What Auto should know about where you work**, in **Settings → Security → Safety**, is a note in your own words: the hosts you trust, your remotes and buckets, what production means here. The review reads it as yours, so "staging.acme.dev is ours" lets a deploy there go ahead. Only you can change it. No assistant can write it, and a backup that carries one says so before you restore it.
+
 ### Always allow
 
 **Always allow** after reading lifts that kind of step for the rest of the chat: allow one unfamiliar package, and the next installs without asking. A push, sending data or a look-alike name still asks on its own terms.

@@ -245,7 +245,8 @@ that does it. Daily backups and signed updates that roll back on failure come wi
   certificate. [On a server](./apps/docs/content/start/server.md)
 - **Requested Gmail sends in Auto** are checked against your request after resolving the account and recipients; reading a page does not automatically add a second approval.
 - **Four permission modes,** the same on every provider: Read only, Ask first, Auto
-  and Full trust. [Modes](./apps/docs/content/reference/modes.md)
+  and Full trust. Tell Auto about where you work, in your own words, and it asks less.
+  [Modes](./apps/docs/content/reference/modes.md)
 - **Careful after reading.** Once a chat has read a web page or an email, anything
   risky asks first. Commands run sealed off from your keys.
 - **Choose where work runs.** This computer, a locked-down container, a machine over

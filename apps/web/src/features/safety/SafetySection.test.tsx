@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import axe from 'axe-core';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -100,5 +101,32 @@ describe('Safety in Settings', () => {
         preferences: { autoAllowed: ['risk:install:moderate'] },
       }),
     );
+  });
+
+  it('keeps what you tell Auto about where you work, in your words (ADR 0149)', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/auth': () => ({
+        method: 'none',
+        signedIn: true,
+        setupRequired: false,
+        secure: true,
+      }),
+      'GET /api/safety': () => ({ sandbox: { available: true, protects: [] }, providers: [] }),
+      'PATCH /api/settings': (body) => appState(body as never),
+    });
+    const { container } = renderApp(<SafetySection />);
+    const note = await screen.findByRole('textbox', {
+      name: 'What Auto should know about where you work',
+    });
+    await userEvent.type(note, 'staging.acme.dev is ours');
+    await vi.waitFor(() =>
+      expect(calls.findLast((c) => c.method === 'PATCH')?.body).toEqual({
+        preferences: { autoEnvironment: 'staging.acme.dev is ours' },
+      }),
+    );
+    expect(
+      (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
+    ).toEqual([]);
   });
 });

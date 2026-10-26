@@ -44,6 +44,10 @@ export const powers: BackupPowerInfo[] = [
   { kind: 'terminal-remote' },
   { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'] },
   { kind: 'phone-calls', name: '(500) 555-0006 on SMS', answers: true, approves: true },
+  {
+    kind: 'auto-environment',
+    note: 'staging.acme.dev and the acme-scratch bucket are ours. Production is anything in the prod AWS account.',
+  },
   { kind: 'routines-spend', limitUsd: 60 },
 ];
 

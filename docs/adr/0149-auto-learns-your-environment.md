@@ -51,6 +51,31 @@ knows they were said in the chat the task came from.
 - **Not shown elsewhere.** The page, other chats (`list_chats`, `wait_for`) and the task
   routes see the task without them (`taskShown`).
 
+### 2. Your environment, in your words
+
+`preferences.autoEnvironment` (`z.string().max(2000).default('')`) is the person's own note:
+the hosts they trust, their remotes and buckets, what production means here. Settings →
+Security → Safety shows it as one calm field, **What Auto should know about where you work**
+(Nacre `AutoEnvironment`), saved as it's typed, and ⌘K finds it. Auto's review reads it as the
+person's (ADR 0146). It is context for a judgement, never a rule: it can't lift a hard rule,
+and a note that says "anything goes" is still read by a reviewer that may not waive keys,
+money, the circuit breaker or a held step.
+
+Only a person sets it:
+
+- **No tool writes preferences.** The only writers are the settings route (a person's session
+  or key), a chat app's own settings pages (the owner's presses, built by code), and the
+  manager's own Always allow, which needs a press.
+- **Nor does a file tool.** `settings.json` held the mode, the safety checks and every class
+  Auto never asks about, yet no rule kept the assistant's file tools and shell from it. It is
+  now a protected path (`lib/protect.ts`), like `tasks.json`: no read or write by the
+  assistant's own tools, in any mode. This is stricter on purpose: an assistant that could
+  write the file could give itself Full trust after the next restart. Nothing of Conch's reads
+  it through the assistant's tools; the gateway keeps it in memory.
+- **A backup names it.** The restore preview lists it as `auto-environment`, with the note's
+  first words, so an old or someone else's backup can't quietly bring back what Auto trusts
+  (ADR 0020).
+
 ## Threat model
 
 - **The assistant can't mint authority.** The copy is read from the parent chat's own log by
@@ -60,10 +85,14 @@ knows they were said in the chat the task came from.
 - **Hard rules are unchanged.** The review still can't waive explicit Ask, Off, keys, money,
   the circuit breaker, `NEVER` risks, protected paths or a held step (ADR 0144).
 
+- **A note is words, not power.** It reaches only the reviewer, inside its fence, as data.
+
 ## Tests
 
 `conversations/handed-off.test.ts`: a task's review reads the chat's words, marked, and not its
 prompt; the copy is frozen; a task with no inherited words asks; a chat with a guest's words
 hands none on; a routine has none and hands none on; oversized history hands none on.
 `tasks/service.test.ts`: the copy is stored, hidden from the list and events, and never taken
-by a scoped or standalone task.
+by a scoped or standalone task. `lib/protect.test.ts`: `settings.json` is out of the
+assistant's reach; `backup/powers.test.ts`: a restore names the note; Nacre `AutoEnvironment`
+and web `SafetySection` tests (axe), and ⌘K's.

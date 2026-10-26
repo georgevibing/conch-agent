@@ -22,6 +22,7 @@ import { fail, useAccess, useApply, type Focus as AccessFocus, type Guard } from
 import { ADDRESS_FOCUS, DEVICES_FOCUS, REACH_FOCUS } from './focus';
 import { useVerify } from './useVerify';
 import { LIVE_DATA_FOCUS, LiveDataSection } from '../artifacts/LiveDataSection';
+import { SAFETY_FOCUSES } from '../safety/focus';
 import { SafetySection } from '../safety/SafetySection';
 import { WhereWorkRuns } from '../workplaces/WhereWorkRuns';
 import { WORKPLACES_FOCUSES } from '../workplaces/words';
@@ -91,6 +92,7 @@ export function SecurityTab() {
     LIVE_DATA_FOCUS,
     ADDRESS_FOCUS,
     ...WORKPLACES_FOCUSES,
+    ...SAFETY_FOCUSES,
   );
   const asked = fix.focus?.place;
   useEffect(() => {

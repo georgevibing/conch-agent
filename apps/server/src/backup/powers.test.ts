@@ -58,6 +58,19 @@ describe('what in a backup can act for you', () => {
     });
   });
 
+  it('discloses what someone told Auto about where they work (ADR 0149)', () => {
+    const of = (autoEnvironment: string) =>
+      powersOf(
+        ['settings.json'],
+        reader({ 'settings.json': { preferences: { autoEnvironment } } }),
+      );
+    expect(of('staging.acme.dev is ours.\n\nProduction is the prod account.')).toContainEqual({
+      kind: 'auto-environment',
+      note: 'staging.acme.dev is ours. Production is the prod account.',
+    });
+    expect(of('   ').some((p) => p.kind === 'auto-environment')).toBe(false);
+  });
+
   it('discloses new chats running their work on another machine or in the cloud (ADR 0106)', () => {
     const of = (place: string) =>
       powersOf(['settings.json'], reader({ 'settings.json': { preferences: { place } } }));

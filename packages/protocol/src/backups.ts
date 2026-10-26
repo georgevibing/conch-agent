@@ -118,6 +118,11 @@ export const BackupPower = z.discriminatedUnion('kind', [
     /** More kinds than listed. */
     more: z.number().int().nonnegative().default(0),
   }),
+  /**
+   * What someone told Auto about where they work (ADR 0149): hosts it may trust, what
+   * "production" means. Its review reads it as the person's, so it can let more go ahead.
+   */
+  z.object({ kind: z.literal('auto-environment'), note: PowerText }),
   /** New chats' commands run on another machine or in the cloud, the work folder copied there (ADR 0106). */
   z.object({ kind: z.literal('work-runs-elsewhere'), where: PowerText }),
   /** Safety checks turned off (ADR 0028, ADR 0087): what they'd stop doesn't stop. */

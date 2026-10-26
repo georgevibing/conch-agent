@@ -78,6 +78,10 @@ export function protectedPaths(home: string): string[] {
     // assistant could make itself "this computer" and approve its own devices.
     join(home, 'here'),
     join(home, 'tray'),
+    // Your preferences: among them what Auto may do without asking, the commands it never asks
+    // about, what you told it about where you work, and the safety checks (ADR 0128, ADR 0149).
+    // Only a person changes them, in Settings, never the assistant's own file tools.
+    join(home, 'settings.json'),
     // Task evidence is authority: the model must never forge completion or erase dedupe.
     join(home, 'tasks.json'),
     // What Conch learned and what it was told never to learn again, and what learning may

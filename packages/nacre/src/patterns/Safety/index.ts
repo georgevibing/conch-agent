@@ -11,3 +11,8 @@ export {
   type TaintReadsProps,
 } from './TaintNotice';
 export { SealCoverage, type SealCoverageProps, type SealCoverageRow } from './SealCoverage';
+export {
+  AUTO_ENVIRONMENT_MAX,
+  AutoEnvironment,
+  type AutoEnvironmentProps,
+} from './AutoEnvironment';

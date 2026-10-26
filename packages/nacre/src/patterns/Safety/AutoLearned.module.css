@@ -1,0 +1,19 @@
+/* What Auto has learned from you (ADR 0149): your note about where you work. */
+@layer nacre.components {
+  .environment {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .labelRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .count {
+    font-variant-numeric: tabular-nums;
+  }
+}
