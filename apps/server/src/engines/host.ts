@@ -7,10 +7,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 
 import { z } from 'zod';
 
-import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
+import { sandboxSupport, sealedConfig, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
 import { LINK_MODULE, spawnLinked, spawnTethered, stopTree } from '../processes/tether';
-import { SEALED_HINT } from './trust';
+import { SEALED_HINT, SEALED_OFFLINE_HINT } from './trust';
 import { PlaceUnavailable } from '../workplaces/types';
 import type { HostTool, TurnInput } from './types';
 
@@ -158,17 +158,18 @@ async function runElsewhere(
     );
   if (result.code !== 0)
     throw new Error(
-      `Command exited with code ${result.code ?? 'unknown'}.\n${result.output}${!open && place.seals ? SEALED_HINT : ''}${note}`,
+      `Command exited with code ${result.code ?? 'unknown'}.\n${result.output}${!open && place.seals ? SEALED_OFFLINE_HINT : ''}${note}`,
     );
   return (result.output || 'Command completed with no output.') + note;
 }
 
 /**
  * Run a command for the assistant. Sealed by the operating system when this
- * computer can (no network, no secrets, writes only in the work folder).
- * `unsealed`: it runs as you, with your access — the person said yes to that
- * (or chose Full trust), and it's how a repository is cloned or a package
- * installed. A computer that can't seal commands runs every one that way.
+ * computer can (no secrets, writes only in the work folder and caches, and on
+ * the network only the registries and code hosts, ADR 0148). `unsealed`: it
+ * runs as you, with your access — the person said yes to that (or chose Full
+ * trust), and it's how a private package is installed or a branch pushed. A
+ * computer that can't seal commands runs every one that way.
  */
 export async function runHostCommand(
   input: TurnInput,
@@ -186,6 +187,15 @@ export async function runHostCommand(
     const places = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)];
     if (touchesProtected({ command }, places)) throw new Error(PROTECTED_MESSAGE);
   }
+  // The box (ADR 0028, ADR 0148): the work folder and caches, no keys, and on the network
+  // only the registries, code hosts and this folder's own remotes.
+  const config = unboxed
+    ? undefined
+    : await sealedConfig(input.cwd, {
+        protectedPaths: input.protectedPaths ?? [],
+        denyRead: input.sandbox?.denyRead ?? [],
+      });
+  input.signal.throwIfAborted();
   // Its own process group, tied to this gateway: it dies with it (ADR 0094).
   const child = unboxed
     ? spawnTethered(command, [], {
@@ -216,25 +226,14 @@ export async function runHostCommand(
   };
   child.stdout?.on('data', collect);
   child.stderr?.on('data', collect);
-  if (!unboxed && child.stdin) {
+  if (config && child.stdin) {
     child.stdin.on('error', () => {});
     child.stdin.end(
       JSON.stringify({
         module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
         command,
         cwd: input.cwd,
-        config: {
-          network: { allowedDomains: [], deniedDomains: [] },
-          filesystem: {
-            allowWrite: [input.cwd],
-            denyWrite: [...(input.protectedPaths ?? []), resolve(input.cwd, '.git')],
-            denyRead: [
-              ...(input.sandbox?.denyRead ?? []),
-              ...(input.protectedPaths ?? []),
-              ...secretPlaces().map((p) => p.path),
-            ],
-          },
-        },
+        config,
       }),
     );
   }
@@ -390,7 +389,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
       description: input.place
         ? `Run a command. ${input.place.about} Never tell the person the session is read-only: ask for what you need. ${PYTHON_PACKAGES}`
         : sealable(input)
-          ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need. ' +
+          ? 'Run a command in the work folder, sealed by the operating system: no secrets, writes stay in the work folder and package caches (not .git), and the network reaches only package registries, GitHub, GitLab, Bitbucket and this folder’s own remotes over HTTPS, so installs, clones and pulls work sealed. For a command that needs more (another host, a private registry, a push, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need. ' +
             PYTHON_PACKAGES
           : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust. ' +
             PYTHON_PACKAGES,

@@ -36,6 +36,40 @@ function httpsRemote(raw: string): string | undefined {
   }
 }
 
+/**
+ * The hosts a work folder's own HTTPS remotes name, as `host:port` (ADR 0148), read from its
+ * Git settings on this computer: no network. A remote with a password in its address, a
+ * plain-HTTP or SSH one, or a host that is only an address (no name) adds nothing.
+ */
+export async function remoteHosts(dir: string): Promise<string[]> {
+  if (!existsSync(join(dir, '.git'))) return [];
+  const names = await new Promise<string[]>((done) => {
+    execFile(
+      'git',
+      ['-C', dir, 'remote'],
+      { timeout: 1500, maxBuffer: 8192, windowsHide: true },
+      (error, stdout) => done(error ? [] : stdout.split('\n').filter(Boolean)),
+    );
+  });
+  const urls = await Promise.all(
+    names
+      .filter((name) => /^[\w.-]+$/.test(name))
+      .slice(0, 8)
+      .map((name) => remoteUrls(dir, name)),
+  );
+  const hosts = urls.flatMap((list) =>
+    (list ?? []).flatMap((raw) => {
+      const target = httpsRemote(raw);
+      if (!target) return [];
+      const url = new URL(target);
+      // A name with letters at its end: never an address, and never `localhost`.
+      if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*[a-z0-9]$/.test(url.hostname)) return [];
+      return [`${url.hostname}:${url.port || '443'}`];
+    }),
+  );
+  return [...new Set(hosts)];
+}
+
 export async function knownRemotes(
   command: string,
   workspace: string,

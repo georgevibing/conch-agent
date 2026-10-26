@@ -24,7 +24,7 @@ Codex uses Conch's file tools, commands, memory, browser, skills, routines and a
 
 ## Sealed commands
 
-Sealed commands have no network and write only to the chat's work folder. One that needs more, like cloning a repository, asks first. In Full trust it doesn't ask, and in Auto not until the chat reads something.
+Sealed commands write only to the chat's work folder and the caches installs use, can't read your sign-ins, and reach only package registries, GitHub, GitLab, Bitbucket and the work folder's own remotes. So installs, clones and pulls just run. One that needs more, like a push or a private registry, asks first. In Full trust it doesn't ask, and in Auto not until the chat reads something.
 
 - **On Linux,** sealing needs bubblewrap. The installer offers it, and **Settings → Health → Seal commands** types the command into Conch's terminal. On Ubuntu 23.10 and later, the same command allows it.
 - **In a container** it often can't be allowed.

@@ -502,8 +502,16 @@ assistant brings back from them carries a password or a key.
 
 Commands also run **sealed**: they can change your work folder and the caches
 installs use, and can't read your SSH keys, cloud sign-ins, keychains or
-browsers' saved passwords. A command that needs out (the network for a clone or
-an install) asks first, with **Always allow** for the rest of the chat; in Full
+browsers' saved passwords. Conch's own sealed commands reach package registries,
+GitHub, GitLab, Bitbucket and the work folder's own remotes over HTTPS, so installs,
+clones and pulls run sealed, and they can't read the keys that publish (`~/.npmrc`,
+`~/.pypirc`, Cargo's and RubyGems' credentials, saved Git passwords), so a command there can't use them to publish a package or
+push a branch. When your own `~/.npmrc` or pip settings
+name another registry, the public one stays out of the box too, so a package meant for
+yours can't come from a stranger's of the same name. Claude Code's box reaches the same
+hosts without asking, and asks Conch about any other
+([ADR 0148](./adr/0148-the-sealed-box-reaches-registries.md)). A command that needs out
+(another host, a private registry, a push) asks first, with **Always allow** for the rest of the chat; in Full
 trust it just runs, and in Auto it asks only for what Auto would stop anyway (with
 someone else's words in the chat, or nobody there, once the chat reads something). Where commands can't be sealed, or you turn sealing off,
 every command runs with your own access and asks the same way. Unsealed, a

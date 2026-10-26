@@ -44,8 +44,16 @@ export function runsUnsealedByTrust(
   return false;
 }
 
-/** What a sealed command that failed is told, so it asks for what it needs rather than giving up. */
+/**
+ * What a sealed command that failed is told, so it asks for what it needs rather than giving
+ * up. The box reaches the registries and code hosts (ADR 0148), so an install or a clone
+ * isn't the reason; another host, a private registry or a push is.
+ */
 export const SEALED_HINT =
+  '\n[Conch: this ran sealed. Package registries, GitHub, GitLab, Bitbucket and this folder’s own remotes work in it over HTTPS; other hosts, sign-ins (a private registry’s, a push’s) and writes outside the work folder and caches (or in .git) don’t. If it failed for one of those reasons, run it again with dangerouslyDisableSandbox: true. The person is asked first, unless they chose Full trust or Auto. Do not tell the person the session is read-only.]';
+
+/** The same, for a place that seals with no network at all (a container, ADR 0106). */
+export const SEALED_OFFLINE_HINT =
   '\n[Conch: this ran sealed: no network, and writes only in the work folder (not .git). If it failed for that reason, run it again with dangerouslyDisableSandbox: true. The person is asked first, unless they chose Full trust or Auto. Do not tell the person the session is read-only.]';
 
 /**

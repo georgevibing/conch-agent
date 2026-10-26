@@ -134,7 +134,7 @@ Signing in, unlocking Passwords and approving access to a saved credential still
 ## In every mode
 
 - In **Ask first** and **Read only**, anything that sends, spends or deletes asks once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted). **Always allow** lets it through for the rest of the chat.
-- A command that wants out of the sealed box (to clone a repository or install something) asks, with **Always allow**. Full trust never asks this. In Auto:
+- A command that wants out of the sealed box (to push, install from a private registry or reach another host) asks, with **Always allow**. Full trust never asks this. In Auto:
   - before the chat has read something from outside, it goes ahead;
   - after that, with you in the chat and only pages or files read, it asks only for what Auto would stop anyway;
   - after that, with someone else's words in the chat or nobody there (a routine, a chat app), it asks.

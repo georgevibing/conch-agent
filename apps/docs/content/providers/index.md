@@ -43,7 +43,7 @@ Each provider opens on its own page. **Providers** at the top goes back to them 
 
 Copilot, Gemini CLI and Grok use Conch's tools, not their own:
 
-- Files in the chat's work folder, sealed commands with no network, memory, the browser and your [apps](../features/apps.md) all go through Conch's approvals, skill limits and **Undo**.
+- Files in the chat's work folder, sealed commands that reach only package registries and code hosts, memory, the browser and your [apps](../features/apps.md) all go through Conch's approvals, skill limits and **Undo**.
 - When the program's own tools would change a file or run a command, Conch declines.
 - A chat carries on in the program's own session. Your assistant keeps its name, voice and what it knows about you.
 - You see each step in the chat as it happens.

@@ -4,7 +4,7 @@ description: Run your assistant's commands on this computer, in a locked-down co
 order: 10
 ---
 
-Commands run on this computer, in the sealed box: they can change your work folder, but can't reach the network or your keys. For one chat or every new one, you can send them to:
+Commands run on this computer, in the sealed box: they can change your work folder and reach package registries, GitHub, GitLab, Bitbucket and your work folder's own remotes, but not the rest of the network or your keys. For one chat or every new one, you can send them to:
 
 - **A container**: a fresh, locked-down box on this computer per command. It sees only your work folder.
 - **Your machine**: a computer you reach with SSH. Conch copies the work folder there before each command and brings back what changed.
@@ -30,12 +30,12 @@ If a place stops answering, commands wait rather than run elsewhere. Your assist
 
 ## What each place keeps from your computer
 
-|                  | This computer           | A container                | Your machine                 | The cloud                    |
-| ---------------- | ----------------------- | -------------------------- | ---------------------------- | ---------------------------- |
-| Sees             | Your work folder        | Your work folder only      | A copy of it                 | A copy of it                 |
-| Your keys        | Kept out                | Not there                  | Not sent                     | Not sent                     |
-| The network      | Asks first              | Asks first                 | That machine's own           | Yes                          |
-| What's left over | Your files, as you left | Nothing outside the folder | Its copy, in `~/.conch-work` | Removed after 30 days unused |
+|                  | This computer                                  | A container                | Your machine                 | The cloud                    |
+| ---------------- | ---------------------------------------------- | -------------------------- | ---------------------------- | ---------------------------- |
+| Sees             | Your work folder                               | Your work folder only      | A copy of it                 | A copy of it                 |
+| Your keys        | Kept out                                       | Not there                  | Not sent                     | Not sent                     |
+| The network      | Registries and code hosts; the rest asks first | Asks first                 | That machine's own           | Yes                          |
+| What's left over | Your files, as you left                        | Nothing outside the folder | Its copy, in `~/.conch-work` | Removed after 30 days unused |
 
 - Remote commands are checked as if they left the sealed box. In **Auto**, routine work goes ahead and serious things ask ([permission modes](../reference/modes.md)).
 - `node_modules`, `.venv` and similar stay on each side. Your assistant installs them where the work runs.

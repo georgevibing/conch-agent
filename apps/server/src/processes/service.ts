@@ -1,6 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +20,7 @@ import type { ToolContext } from '../conversations/manager';
 import { trustsFully } from '../engines/trust';
 import { hostEnvironment } from '../engines/host';
 import type { HostTool } from '../engines/types';
-import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
+import { sandboxSupport, sealedConfig, secretPlaces } from '../conversations/sandbox';
 import { touchesProtected, PROTECTED_MESSAGE } from '../lib/protect';
 
 /** A managed command as a wait sees it (ADR 0125). */
@@ -413,7 +412,7 @@ export class ProcessService {
         name: 'process_start',
         row: true,
         description:
-          'Start or queue a managed shell command in this chat’s work folder and return its id immediately. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Network access needs dangerouslyDisableSandbox when commands are sealed. Never enter passwords or secrets through stdin.',
+          'Start or queue a managed shell command in this chat’s work folder and return its id immediately. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Sealed, a command reaches package registries, GitHub, GitLab, Bitbucket and the work folder’s own remotes over HTTPS; any other host, a private registry or a push needs dangerouslyDisableSandbox. Never enter passwords or secrets through stdin.',
         input: {
           command: z.string().min(1).max(32_000),
           timeout_ms: z.number().int().min(1000).max(1_800_000).default(600_000),
@@ -437,6 +436,11 @@ export class ProcessService {
           await commandAccess('process_start', args, command, unsealed);
           const cwd = await ctx.workspace?.();
           if (!cwd) throw new Error('This chat does not have a work folder.');
+          // The box (ADR 0028, ADR 0148): the work folder and caches, no keys, and on the
+          // network only the registries, code hosts and this folder's own remotes.
+          const sandbox = unsealed
+            ? undefined
+            : await sealedConfig(cwd, { protectedPaths: this.deps.protectedPaths });
           ctx.signal.throwIfAborted();
           if (this.#closed)
             throw new Error('Conch is closing. Start this command after it returns.');
@@ -537,19 +541,9 @@ export class ProcessService {
                 JSON.stringify({
                   command,
                   cwd,
-                  ...(!unsealed && {
+                  ...(sandbox && {
                     module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
-                    sandbox: {
-                      network: { allowedDomains: [], deniedDomains: [] },
-                      filesystem: {
-                        allowWrite: [cwd],
-                        denyWrite: [...this.deps.protectedPaths, resolve(cwd, '.git')],
-                        denyRead: [
-                          ...this.deps.protectedPaths,
-                          ...secretPlaces().map((p) => p.path),
-                        ],
-                      },
-                    },
+                    sandbox,
                   }),
                 }) + '\n',
               );

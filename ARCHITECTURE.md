@@ -615,8 +615,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   the same keystore; it fails closed), both protected paths; the guard refuses
   `pnpm conch skills sign|trust|forget|key` from the assistant's shell.
   An invalid signature turns a skill off; a trusted publisher's signed update keeps
-  it on. API and Codex commands always use Conch’s OS sandbox (workspace writes,
-  no network, protected secrets); if unavailable they expose no command tool.
+  it on. API and Codex commands always use Conch’s OS sandbox (workspace and cache
+  writes, only registries and code hosts on the network, protected secrets; ADR 0148); if unavailable they expose no command tool.
   Codex uses isolated ChatGPT device-code sign-in and app-server dynamic tools
   ([ADR 0036](./docs/adr/0036-provider-consistency.md)). `/api/safety` reports actual
   confinement per provider, independently of the native-provider sealing toggle.

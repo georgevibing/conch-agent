@@ -1,21 +1,196 @@
 /**
- * The sealed box for commands (ADR 0028): what a command may change, and
- * what it may never read. Claude Code runs commands in the computer's own
- * sandbox (Seatbelt on a Mac, bubblewrap on Linux) with these lists; leaving
- * the box asks first (the guard).
+ * The sealed box for commands (ADR 0028): what a command may change, what it
+ * may never read, and where it may reach (ADR 0148). Claude Code runs commands
+ * in the computer's own sandbox (Seatbelt on a Mac, bubblewrap on Linux) with
+ * these lists, and so do Conch's own commands (`engines/host.ts`, `process_start`);
+ * leaving the box asks first (the guard).
  *
  * Measured on macOS before choosing (Sept 2026): with the sandbox on and no
  * lists, a command can write only to its working folder — not even `/tmp`
- * or `~/.npm` — while reading and the network stay open. So the lists add
- * the places installs and builds need, and take away where keys live.
+ * or `~/.npm`. So the lists add the places installs and builds need, and take
+ * away where keys live. Claude Code asks Conch about each host one of its
+ * sealed commands reaches (`SandboxNetworkAccess`), unless the host is on
+ * the list it's given; Conch's own box reaches only the hosts on its list.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, platform, tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
+
+import { remoteHosts } from './git-remotes';
 
 const home = homedir();
 const lib = (...parts: string[]) => join(home, 'Library', ...parts);
+
+/**
+ * The hosts a sealed command may reach (ADR 0148), over HTTPS only: package
+ * registries, code hosts and the languages' own tooling (the hosts
+ * `packages.ts` `TOOLING_HOSTS` names). Every one serves downloads to anyone
+ * and takes an upload only with an account's key, and the keys that publish
+ * are kept out of the box (`publishingKeys`). So `npm install`, `pip install`,
+ * `cargo fetch`, `go mod download` and `git clone`/`pull` over HTTPS work sealed.
+ *
+ * Left out on purpose: `upload.pypi.org` (where Python packages are published),
+ * `api.github.com` (issues and gists), and the cloud's buckets
+ * (`storage.googleapis.com`, S3): anyone can upload to a bucket with a signed
+ * address, and that would be a way out for what a command read.
+ */
+export const REGISTRY_HOSTS = {
+  npm: ['registry.npmjs.org', 'registry.yarnpkg.com', 'repo.yarnpkg.com'],
+  pypi: ['pypi.org', 'files.pythonhosted.org'],
+  crates: ['crates.io', 'index.crates.io', 'static.crates.io'],
+  go: ['proxy.golang.org', 'sum.golang.org', 'golang.org'],
+  rubygems: ['rubygems.org', 'index.rubygems.org'],
+  homebrew: ['formulae.brew.sh', 'ghcr.io', 'pkg-containers.githubusercontent.com'],
+  code: [
+    'github.com',
+    'codeload.github.com',
+    'objects.githubusercontent.com',
+    'raw.githubusercontent.com',
+    'release-assets.githubusercontent.com',
+    'gitlab.com',
+    'bitbucket.org',
+  ],
+  tooling: [
+    'bootstrap.pypa.io',
+    'python.org',
+    'www.python.org',
+    'nodejs.org',
+    'static.rust-lang.org',
+    'sh.rustup.rs',
+    'astral.sh',
+    'get.pnpm.io',
+    'bun.sh',
+    'go.dev',
+    'dl.google.com',
+  ],
+} as const satisfies Record<string, readonly string[]>;
+
+export type HostGroup = keyof typeof REGISTRY_HOSTS;
+
+/**
+ * Where the keys that publish packages and push code live (ADR 0148): never
+ * read from inside Conch's own box, which now reaches the registries. Not in
+ * `secretPlaces`, so a command outside the box that names one is asked about
+ * (risk.ts reads these as keys) rather than refused. A project's own `.npmrc`
+ * is in the work folder and stays readable.
+ */
+export function publishingKeys(): { path: string; what: string }[] {
+  return [
+    { path: join(home, '.npmrc'), what: 'npm sign-ins' },
+    { path: join(home, '.yarnrc'), what: 'Yarn sign-ins' },
+    { path: join(home, '.yarnrc.yml'), what: 'Yarn sign-ins' },
+    { path: join(home, '.bunfig.toml'), what: 'Bun sign-ins' },
+    { path: join(home, '.config', 'configstore'), what: 'sign-ins kept by npm tools' },
+    { path: join(home, '.pypirc'), what: 'PyPI sign-ins' },
+    ...pipConfigs().map((path) => ({ path, what: 'pip index sign-ins' })),
+    { path: join(home, '.cargo', 'credentials'), what: 'crates.io sign-ins' },
+    { path: join(home, '.cargo', 'credentials.toml'), what: 'crates.io sign-ins' },
+    { path: join(home, '.gem', 'credentials'), what: 'RubyGems sign-ins' },
+    { path: join(home, '.config', 'hub'), what: 'hub’s GitHub sign-in' },
+    { path: join(home, '.config', 'glab-cli'), what: 'GitLab CLI sign-in' },
+    { path: join(home, '.config', 'git', 'credentials'), what: 'saved Git passwords' },
+    { path: join(home, '.gcm'), what: 'Git Credential Manager' },
+    { path: join(home, '.terraformrc'), what: 'Terraform sign-ins' },
+    { path: join(home, '.terraform.d', 'credentials.tfrc.json'), what: 'Terraform sign-ins' },
+  ];
+}
+
+/** Where pip reads a person's own settings, index addresses and their passwords among them. */
+function pipConfigs(): string[] {
+  return [
+    join(home, '.config', 'pip', 'pip.conf'),
+    join(home, '.pip', 'pip.conf'),
+    ...(platform() === 'darwin' ? [lib('Application Support', 'pip', 'pip.conf')] : []),
+  ];
+}
+
+const read = (path: string): string => {
+  try {
+    return readFileSync(path, 'utf8').slice(0, 64_000);
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * The registries a person points their own settings elsewhere for: their
+ * `~/.npmrc` (or `~/.bunfig.toml`) names another npm registry, their pip
+ * settings another index. Those settings can't be read inside the box, so
+ * there the tool would ask the public registry instead, and a name meant for
+ * the person's own registry could come from a stranger's package of the same
+ * name. So the public one stays out of the box too, and such installs leave
+ * it as before.
+ */
+export function elsewhere(
+  files: { npmrc: string; bunfig: string; pip: string[] } = {
+    npmrc: join(home, '.npmrc'),
+    bunfig: join(home, '.bunfig.toml'),
+    pip: pipConfigs(),
+  },
+): Set<HostGroup> {
+  const out = new Set<HostGroup>();
+  const own = /^https?:\/\/registry\.(?:npmjs\.org|yarnpkg\.com)\/?$/i;
+  for (const match of read(files.npmrc).matchAll(/^\s*(?:@[\w.-]+:)?registry\s*=\s*(\S+)/gim))
+    if (!own.test((match[1] ?? '').replace(/^["']|["']$/g, ''))) out.add('npm');
+  // Bun's own registry or scopes, whatever they say: TOML is too many shapes to read here.
+  if (/^\s*(?:registry\s*=|\[install\.scopes\])/im.test(read(files.bunfig))) out.add('npm');
+  const pypi = /^https?:\/\/pypi\.org\/simple\/?$/i;
+  for (const text of files.pip.map(read))
+    for (const match of text.matchAll(/^\s*(?:extra-)?index-url\s*=\s*(\S+)/gim))
+      if (!pypi.test(match[1] ?? '')) out.add('pypi');
+  return out;
+}
+
+/** An entry the runtime takes: a host on HTTPS's port, or with the remote's own port. */
+const https = (host: string) => (/:\d+$/.test(host) ? host : `${host}:443`);
+
+/**
+ * Where one work folder's sealed commands may reach (ADR 0148): the
+ * registries and code hosts, and the hosts of the folder's own HTTPS remotes
+ * (read from its Git settings, on this computer). `keysDenied`: the box can't
+ * read the publishing keys, so a registry the person moved elsewhere stays out.
+ */
+export async function sealedHosts(
+  workspace: string,
+  { keysDenied = true, moved }: { keysDenied?: boolean; moved?: Set<HostGroup> } = {},
+): Promise<string[]> {
+  moved ??= keysDenied ? elsewhere() : new Set();
+  const listed = (Object.keys(REGISTRY_HOSTS) as HostGroup[])
+    .filter((registry) => !moved.has(registry))
+    .flatMap((registry) => REGISTRY_HOSTS[registry]);
+  const remotes = await remoteHosts(workspace).catch(() => []);
+  return [...new Set([...listed, ...remotes].map(https))];
+}
+
+/**
+ * The whole box for Conch's own sealed commands (the host tools and
+ * `process_start`), for one work folder: writes in it and the caches an
+ * install needs (never `.git`), no keys, and the network to `sealedHosts`.
+ */
+export async function sealedConfig(
+  cwd: string,
+  { protectedPaths = [], denyRead = [] }: { protectedPaths?: string[]; denyRead?: string[] },
+): Promise<{
+  network: { allowedDomains: string[]; deniedDomains: string[] };
+  filesystem: { allowWrite: string[]; denyWrite: string[]; denyRead: string[] };
+}> {
+  return {
+    network: { allowedDomains: await sealedHosts(cwd), deniedDomains: [] },
+    filesystem: {
+      allowWrite: [...new Set([cwd, ...writableCaches()])],
+      denyWrite: [...protectedPaths, resolve(cwd, '.git')],
+      denyRead: [
+        ...new Set([
+          ...denyRead,
+          ...protectedPaths,
+          ...secretPlaces().map((p) => p.path),
+          ...publishingKeys().map((p) => p.path),
+        ]),
+      ],
+    },
+  };
+}
 
 /** Where package managers and build tools keep their caches: an install must work in the box. */
 export function writableCaches(): string[] {

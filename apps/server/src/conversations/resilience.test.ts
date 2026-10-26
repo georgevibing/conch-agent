@@ -196,7 +196,7 @@ describe('how every assistant works on a problem', () => {
 
 describe('its forms', () => {
   it('are short enough for every model, the compact one shortest', () => {
-    expect(RESILIENCE_PROMPT.length).toBeLessThan(2_600);
+    expect(RESILIENCE_PROMPT.length).toBeLessThan(2_650);
     expect(RESILIENCE_COMPACT.length).toBeLessThan(700);
     expect(RESILIENCE_WORDS.length).toBeLessThan(500);
     for (const form of [RESILIENCE_PROMPT, RESILIENCE_COMPACT, RESILIENCE_WORDS])

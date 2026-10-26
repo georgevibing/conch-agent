@@ -40,6 +40,7 @@ import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { openRelay } from '../../workplaces/relay';
 import { forbiddenPlaces } from '../host';
+import { sealedHosts } from '../../conversations/sandbox';
 import { childEnv, settingsEnv } from './env';
 import { startClaudeLogin } from './login';
 import { Translator } from './translate';
@@ -748,6 +749,8 @@ export class ClaudeCodeEngine implements Engine {
       string,
       { shown: Record<string, unknown>; runs: Record<string, unknown> }
     >();
+    // The hosts its sealed commands reach without asking (ADR 0148); any other still asks.
+    const reaches = input.sandbox ? await sealedHosts(input.cwd, { keysDenied: false }) : [];
     let finished = false;
     try {
       const q = query({
@@ -797,12 +800,16 @@ export class ClaudeCodeEngine implements Engine {
           ],
           // The sealed box (ADR 0028): commands write only to the work folder, temp and
           // caches, and can't read where keys live. Escaping it asks (the guard below).
+          // The registries, code hosts and the folder's own remotes are reached without a
+          // question (ADR 0148). Every other host asks Conch (`SandboxNetworkAccess`), as
+          // before: no `strictAllowlist`, so nothing it reached before is refused now.
           ...(input.sandbox && {
             sandbox: {
               enabled: true,
               failIfUnavailable: false,
               autoAllowBashIfSandboxed: false,
               allowUnsandboxedCommands: true,
+              network: { allowedDomains: reaches },
               filesystem: {
                 allowWrite: input.sandbox.allowWrite,
                 denyRead: input.sandbox.denyRead,
