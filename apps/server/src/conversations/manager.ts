@@ -556,7 +556,10 @@ export interface TurnIntegrationsProvider {
       name: string;
       description: string;
       inputSchema: Record<string, unknown>;
-      call(args: Record<string, unknown>): Promise<{ text: string; isError: boolean }>;
+      call(
+        args: Record<string, unknown>,
+        signal?: AbortSignal,
+      ): Promise<{ text: string; isError: boolean }>;
     }[];
     failed: { name: string; error: string }[];
     close(): Promise<void>;
@@ -4872,7 +4875,7 @@ export class ConversationManager {
             abort.signal,
           );
           if (decision === 'deny') return { text: 'The user declined this action.', isError: true };
-          return tool.call(args);
+          return tool.call(args, abort.signal);
         },
       }));
 

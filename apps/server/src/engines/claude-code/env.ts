@@ -10,6 +10,8 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { CALL_IDLE_MS, CALL_MAX_MS } from '../../integrations/limits';
+
 const SESSION_VARS = [
   /^CLAUDECODE$/,
   /^CLAUDE_CODE_ENTRYPOINT$/,
@@ -50,8 +52,21 @@ export const QUIET: Readonly<Record<string, string>> = {
   CLAUDE_CODE_GOAL_CHECKIN_MINUTES: '0',
 };
 
+/**
+ * How long one app call may hold a turn, the same bounds the bridge keeps
+ * (`integrations/limits.ts`): left alone, Claude Code waits on an app for
+ * about a day, so one stuck query can hold a chat for the better part of an
+ * hour with nothing to show. A call silent this long ends with an error the
+ * model can act on; one that keeps reporting progress still stops at the cap.
+ * Only defaults: a value the person set wins.
+ */
+export const BOUNDED: Readonly<Record<string, string>> = {
+  CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: String(CALL_IDLE_MS),
+  MCP_TOOL_TIMEOUT: String(CALL_MAX_MS),
+};
+
 export function childEnv(extra: Record<string, string | undefined> = {}): Record<string, string> {
-  const env: Record<string, string> = { ...QUIET };
+  const env: Record<string, string> = { ...QUIET, ...BOUNDED };
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined || CONCH_VARS.test(key) || SESSION_VARS.some((re) => re.test(key)))
       continue;

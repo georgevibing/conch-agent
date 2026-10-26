@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { childEnv, QUIET, settingsEnv } from './env';
+import { BOUNDED, childEnv, QUIET, settingsEnv } from './env';
 
 describe('childEnv', () => {
   const saved = { ...process.env };
@@ -50,6 +50,18 @@ describe('childEnv', () => {
     expect(env.CLAUDE_CODE_ENABLE_AWAY_SUMMARY).toBe('1');
     expect(env.CLAUDE_CODE_GOAL_CHECKIN_MINUTES).toBe('15');
     expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe('1');
+  });
+
+  it('bounds an app call the way the bridge does, unless the person set their own', () => {
+    process.env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !(key in BOUNDED)),
+    );
+    expect(childEnv()).toMatchObject({
+      CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: '180000',
+      MCP_TOOL_TIMEOUT: '600000',
+    });
+    process.env.MCP_TOOL_TIMEOUT = '900000';
+    expect(childEnv().MCP_TOOL_TIMEOUT).toBe('900000');
   });
 
   it('quiets only those four, nothing that changes the answer', () => {

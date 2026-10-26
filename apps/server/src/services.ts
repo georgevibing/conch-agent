@@ -215,6 +215,7 @@ import { type Blueprint, CATALOG } from './integrations/catalog';
 import { MockVendor } from './integrations/mock/vendor';
 import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
+import { appsCheckTool } from './integrations/tools';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
 import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
@@ -1446,6 +1447,8 @@ export class Services {
               ...this.browser.tools(ctx),
               ...computerTools(this.computerUse, ctx),
               ...vaultTools(this.vault, ctx),
+              // A connected app looked at again mid-turn, before anyone is told it's broken.
+              appsCheckTool(this.integrations),
               ...this.artifacts.tools(ctx),
               // A routine's run hands nothing off: what it starts would spend past its own
               // limits (ADR 0057) and outlive it. A task doesn't either (one level, ADR 0033).

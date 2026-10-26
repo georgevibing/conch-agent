@@ -9,9 +9,10 @@ import { awaitsSignIn, type ServerEvent } from '@conch/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { MockEngine } from '../engines/mock/engine';
-import type { Engine, EngineMcpStatus } from '../engines/types';
+import type { Engine, EngineMcpServer, EngineMcpStatus } from '../engines/types';
 import { type NeedSpec, Setup } from '../setup/needs';
 import { fakeProgram } from '../test/fakeProgram';
+import type { BridgeClient } from './bridge';
 import { CATALOG } from './catalog';
 import { MockVendor } from './mock/vendor';
 import { checkEndpoint, EndpointError, guardedFetch } from './net';
@@ -40,6 +41,7 @@ async function setup(
     retryAfterMs?: number[];
     engines?: () => Promise<Engine[]>;
     fetchFor?: () => typeof fetch;
+    connectBridge?: (server: EngineMcpServer) => Promise<BridgeClient>;
   } = {},
 ) {
   const home = await mkdtemp(join(tmpdir(), 'conch-int-'));
@@ -54,6 +56,7 @@ async function setup(
     onHeal: options.onHeal,
     retryAfterMs: options.retryAfterMs,
     fetchFor: options.fetchFor,
+    connectBridge: options.connectBridge,
     blueprints: (id) => {
       if (options.realCatalog) return undefined;
       const entry = CATALOG.get(id);
@@ -1058,6 +1061,53 @@ describe('the bridge (engines without MCP of their own)', () => {
     } finally {
       await bridge.close();
     }
+  });
+
+  it('looks again at an app that didn’t open, and opens it for this turn when it works', async () => {
+    const notes: string[] = [];
+    let opens = 0;
+    const client = {
+      listTools: async () => ({ tools: [{ name: 'search', inputSchema: { type: 'object' } }] }),
+      callTool: async () => ({ content: [{ type: 'text', text: 'found' }] }),
+      close: async () => undefined,
+    } as unknown as BridgeClient;
+    const { service } = await setup({
+      onHeal: (m) => notes.push(m),
+      connectBridge: async () => {
+        // The first open fails for a reason that doesn't pass by itself; the check finds it fine.
+        if (++opens === 1) throw new Error('Unauthorized');
+        return client;
+      },
+    });
+    const notion = await connectNotion(service);
+    const turn = await service.forTurn();
+    const bridge = await service.bridge(turn.servers, turn.disallowedTools);
+    expect(bridge.failed).toEqual([]);
+    expect(bridge.tools.map((t) => t.name)).toEqual([`mcp__${notion.server}__search`]);
+    expect(opens).toBe(2);
+    expect(notes).toEqual(['Reconnected Notion']);
+    await bridge.close();
+  });
+
+  it('leaves an app that’s still broken for the turn to explain', async () => {
+    const notes: string[] = [];
+    const { service } = await setup({
+      onHeal: (m) => notes.push(m),
+      connectBridge: async () => {
+        throw new Error('Unauthorized');
+      },
+    });
+    const notion = await connectNotion(service);
+    vendor.revokeAll();
+    const turn = await service.forTurn();
+    const bridge = await service.bridge(
+      {
+        [notion.server]: turn.servers[notion.server] ?? { type: 'http', url: vendor.url('notion') },
+      },
+      [],
+    );
+    expect(bridge.failed).toEqual([expect.objectContaining({ name: notion.server })]);
+    expect(notes).toEqual([]);
   });
 
   it('reports servers it couldn’t reach instead of failing the turn', async () => {

@@ -2,6 +2,7 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 
 import type { EngineMcpServer } from '../engines/types';
+import { CALL_IDLE_MS, CALL_MAX_MS } from './limits';
 import { connectClient, scrub } from './probe';
 
 export interface BridgeTool {
@@ -9,7 +10,11 @@ export interface BridgeTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  call(args: Record<string, unknown>): Promise<{ text: string; isError: boolean }>;
+  /** `signal` is the turn's: Stop cancels a call still waiting for the app. */
+  call(
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<{ text: string; isError: boolean }>;
 }
 
 export interface Bridge {
@@ -84,6 +89,11 @@ function timedOut(error: unknown): boolean {
   return error instanceof McpError && error.code === ErrorCode.RequestTimeout;
 }
 
+/** Words a model can act on when an app went quiet, instead of waiting on it again. */
+export function slowWords(app: string, tool: string): string {
+  return `${app} didn’t answer ${tool} in time, so Conch stopped waiting. It may still be doing it: check before you repeat a change. For a lookup, ask for less at once (a shorter time range, fewer fields, a limit, one item instead of all) or split it into smaller calls; or get it another way — another of ${app}’s tools, its command-line program on this computer, or its API.`;
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -108,12 +118,17 @@ export async function openBridge(
     /** How to connect; tests pass a pretend client. */
     connect?: (server: EngineMcpServer) => Promise<BridgeClient>;
     retryMs?: number;
+    /** Tests shorten how long a call may take. */
+    idleMs?: number;
+    maxMs?: number;
   },
 ): Promise<Bridge> {
   const clients = new Set<BridgeClient>();
   const tools: BridgeTool[] = [];
   const failed: { name: string; error: string }[] = [];
   const retryMs = options.retryMs ?? RETRY_MS;
+  const idleMs = options.idleMs ?? CALL_IDLE_MS;
+  const maxMs = options.maxMs ?? CALL_MAX_MS;
   const open = async (server: EngineMcpServer): Promise<BridgeClient> => {
     const client = options.connect
       ? await options.connect(server)
@@ -159,24 +174,33 @@ export async function openBridge(
             const full = `mcp__${name}__${tool.name}`;
             if (options.disallowed.has(full)) continue;
             const lookup = tool.annotations?.readOnlyHint === true;
-            const once = async (via: BridgeClient, given: Record<string, unknown>) => {
-              const result = await via.callTool({ name: tool.name, arguments: given });
+            const once = async (
+              via: BridgeClient,
+              given: Record<string, unknown>,
+              signal: AbortSignal | undefined,
+            ) => {
+              const result = await via.callTool({ name: tool.name, arguments: given }, undefined, {
+                // Reported progress keeps a long call alive; silence ends it (ADR 0049).
+                onprogress: () => undefined,
+                resetTimeoutOnProgress: true,
+                timeout: idleMs,
+                maxTotalTimeout: maxMs,
+                ...(signal && { signal }),
+              });
               return { text: textOf(result), isError: Boolean(result.isError) };
             };
             tools.push({
               name: full,
               description: tool.description ?? '',
               inputSchema: tool.inputSchema as Record<string, unknown>,
-              call: async (given) => {
+              call: async (given, signal) => {
                 const via = client;
                 try {
-                  return await once(via, given);
+                  return await once(via, given, signal);
                 } catch (error) {
-                  if (timedOut(error))
-                    return {
-                      text: `${name} didn’t answer in time. It may still be doing it: check before you repeat a change; a lookup can simply be asked again, perhaps for less at once.`,
-                      isError: true,
-                    };
+                  // Stop: the SDK hands a cancel back as a timeout, so ask the signal first.
+                  if (signal?.aborted) throw signal.reason ?? error;
+                  if (timedOut(error)) return { text: slowWords(name, tool.name), isError: true };
                   if (!dropped(error))
                     return { text: scrub((error as Error).message), isError: true };
                   let again: BridgeClient;
@@ -184,15 +208,18 @@ export async function openBridge(
                     again = await reopen(via);
                   } catch (reason) {
                     return {
-                      text: `The connection to ${name} dropped, and it couldn’t be opened again (${scrub((reason as Error).message)}). Its tools won’t work for now: carry on without them, or tell the person.`,
+                      text: `The connection to ${name} dropped, and it couldn’t be opened again (${scrub((reason as Error).message)}). Its tools won’t work for now: call apps_check for ${name} to have Conch look again, or reach the same thing another way (its command-line program on this computer, its API, another tool) before you tell the person.`,
                       isError: true,
                     };
                   }
                   // A lookup changes nothing, so asking again is safe.
                   if (lookup) {
                     try {
-                      return await once(again, given);
+                      return await once(again, given, signal);
                     } catch (second) {
+                      if (signal?.aborted) throw signal.reason ?? second;
+                      if (timedOut(second))
+                        return { text: slowWords(name, tool.name), isError: true };
                       return { text: scrub((second as Error).message), isError: true };
                     }
                   }

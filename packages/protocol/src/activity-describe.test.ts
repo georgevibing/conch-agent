@@ -2104,6 +2104,14 @@ const TOOLS: Case[] = [
   ],
   ['current_time', 'mcp__conch__current_time', {}, undefined, { done: 'Checked the time' }],
   [
+    'apps_check',
+    'mcp__conch__apps_check',
+    { app: 'GitHub' },
+    undefined,
+    { done: 'Checked GitHub' },
+  ],
+  ['apps_check all', 'mcp__conch__apps_check', {}, undefined, { done: 'Checked your apps' }],
+  [
     'switch_model',
     'mcp__conch__switch_model',
     { to: 'Opus 5.5', carry_on: true },
