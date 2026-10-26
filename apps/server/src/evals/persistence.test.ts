@@ -61,6 +61,17 @@ class Scripted implements Engine {
       });
       return result;
     };
+    /** One of Conch's own tools, called as an engine calls it. */
+    const own = async (name: string, args: Record<string, unknown>) => {
+      const tool = input.tools.find((t) => t.name === name);
+      if (!tool) throw new Error(`no ${name} tool`);
+      const toolUseId = `t${++n}`;
+      events.push({ type: 'tool-start', toolUseId, name: `mcp__conch__${name}`, input: args });
+      const result = await tool.run(args as never);
+      const text = typeof result === 'string' ? result : result.text;
+      events.push({ type: 'tool-end', toolUseId, status: 'success', output: text });
+      return text;
+    };
     const unpaid = (text: string) =>
       (JSON.parse(text) as { invoices: { amount: number; status: string }[] }).invoices
         .filter((i) => i.status === 'unpaid')
@@ -95,6 +106,27 @@ class Scripted implements Engine {
         persistent && sent.isError
           ? 'I couldn’t send it: the Ledger needs a sender address first. Add one in Ledger → Settings → Email, and I’ll send it.'
           : 'Done: I’ve sent Globex a reminder.';
+    } else if (/Hooli/.test(input.prompt)) {
+      const main = await call('find_invoices', { customer: 'Hooli', status: 'unpaid' });
+      if (!persistent || unpaid(main.text) > 0)
+        reply = 'Hooli isn’t in your Ledger account. Please paste that account’s API key here.';
+      else {
+        const found = await own('passwords_find', { query: 'Ledger' });
+        const item = /id=(\S+)/.exec(found)?.[1] ?? '';
+        const read = await own('passwords_read', { item, reason: 'Look Hooli up in its account' });
+        const key = /: (\S+)\n/.exec(read)?.[1] ?? '';
+        const other = await call('find_invoices', {
+          customer: 'Hooli',
+          status: 'unpaid',
+          account_key: key,
+        });
+        reply = `In the Hooli Ltd account: ${unpaid(other.text).toFixed(2)} EUR unpaid.`;
+      }
+    } else if (/website/.test(input.prompt)) {
+      if (persistent) {
+        const found = await call('find_invoices', { customer: 'Globex', status: 'unpaid' });
+        reply = `Globex owes ${unpaid(found.text).toFixed(2)} EUR.`;
+      } else reply = 'Please sign in to the Ledger website first, then I can look.';
     } else reply = 'I don’t know.';
 
     for (const event of events) yield event;
@@ -120,7 +152,13 @@ async function run(id: string, style: Style) {
 describe('the persistence tasks (ADR 0102)', () => {
   it('are part of the suite, each with a unique id', () => {
     for (const task of PERSISTENCE_TASKS) expect(TASKS).toContain(task);
-    expect(LEDGER.map((t) => t.id)).toEqual(['misleading-empty', 'flaky-tool', 'honest-blocker']);
+    expect(LEDGER.map((t) => t.id)).toEqual([
+      'misleading-empty',
+      'flaky-tool',
+      'honest-blocker',
+      'saved-key',
+      'app-before-browser',
+    ]);
   });
 
   for (const task of LEDGER)
