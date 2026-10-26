@@ -30,6 +30,7 @@ import { run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
+import { holdBack } from '../api/held';
 import { withSight } from '../api/sight';
 import { secretPlaces } from '../../conversations/sandbox';
 import { hostEnvironment } from '../host';
@@ -785,11 +786,16 @@ export class CodexEngine implements Engine {
         (await this.capabilities().catch(() => undefined))?.models.find(
           (m) => m.id === input.options.model,
         )?.images ?? true;
-      const tools = withSight(buildTools({ ...input, signal }, { computer: !agent, bare: true }), {
+      const all = withSight(buildTools({ ...input, signal }, { computer: !agent, bare: true }), {
         sees: () => sees,
         ...(input.describe && { describe: input.describe }),
         signal,
       });
+      // More than one list carries: the rest wait behind `find_tools` and run through
+      // `use_tool`, the same set every turn so the thread carries on (ADR 0072).
+      const held = holdBack(all, { stable: true });
+      const tools = held.tools;
+      const systemAppend = held.note ? `${input.systemAppend}\n\n${held.note}` : input.systemAppend;
       // The thread this chat had, carried on while its tools are the same (Codex
       // can't be given new ones: ADR 0036). Otherwise a new one, with the handoff.
       const toolsKey = toolsDigest(
@@ -799,7 +805,7 @@ export class CodexEngine implements Engine {
       const wanted = parseResumeId(input.resumeId);
       const kept =
         wanted && wanted.tools === toolsKey ? await this.#threads.meta(wanted.threadId) : undefined;
-      const instructions = digest(input.systemAppend);
+      const instructions = digest(systemAppend);
       let restored = false;
       let threadId = '';
       // One entry per path: Codex reads this as a TOML table, and a path twice is an error that
@@ -900,7 +906,7 @@ export class CodexEngine implements Engine {
               if (message.method === 'currentTime/read') {
                 const requestId = message.id;
                 const id = `clock:${typeof requestId}:${requestId}`;
-                const clock = tools.get('conch__current_time');
+                const clock = all.get('conch__current_time');
                 if (
                   !threadId ||
                   p.threadId !== threadId ||
@@ -988,14 +994,17 @@ export class CodexEngine implements Engine {
                 }
                 const call = parsed.data;
                 invoked.add(call.callId);
-                const tool = tools.get(call.tool);
+                // A held-back tool run through `use_tool` is that tool, as shown and as guarded.
+                const found = held.resolve(call.tool, call.arguments);
+                const tool = found?.tool;
+                const args = found?.args ?? call.arguments;
                 const job = toolQueue.run(tool?.display, async () => {
                   signal.throwIfAborted();
                   await publish({
                     type: 'tool-start',
                     toolUseId: call.callId,
                     name: tool?.display ?? call.tool,
-                    input: call.arguments,
+                    input: args,
                   });
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
@@ -1004,7 +1013,7 @@ export class CodexEngine implements Engine {
                   try {
                     if (tool) {
                       signal.throwIfAborted();
-                      const result = await tool.run(call.arguments, call.callId);
+                      const result = await tool.run(args, call.callId);
                       text = result.text;
                       isError = result.isError;
                       view = result.isError ? undefined : result.view;
@@ -1241,7 +1250,7 @@ export class CodexEngine implements Engine {
                 approvalPolicy: 'untrusted',
                 permissions: 'conch',
                 config: trust,
-                developerInstructions: input.systemAppend,
+                developerInstructions: systemAppend,
                 allowProviderModelFallback: false,
                 // Kept, so the next turn can carry it on (`threads.ts`).
                 ephemeral: false,
@@ -1292,7 +1301,7 @@ export class CodexEngine implements Engine {
                   additionalContext: {
                     conch: {
                       kind: 'application',
-                      value: `Conch's instructions for this conversation, as they are now. They replace the earlier ones.\n\n${input.systemAppend}`,
+                      value: `Conch's instructions for this conversation, as they are now. They replace the earlier ones.\n\n${systemAppend}`,
                     },
                   },
                 }),
