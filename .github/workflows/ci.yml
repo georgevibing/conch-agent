@@ -42,7 +42,9 @@ jobs:
   unit:
     name: Unit / ${{ matrix.suite }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Room for Playwright's system packages: on a slow Ubuntu mirror they alone took
+    # 10-12 minutes (2026-10-26), and the tests were cancelled, not failed.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +78,8 @@ jobs:
   e2e:
     name: Browser journeys / ${{ matrix.shard }} of 4
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # As for Unit: a slow mirror for Playwright's system packages, not the journeys.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
