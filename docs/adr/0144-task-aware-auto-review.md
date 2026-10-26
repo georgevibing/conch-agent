@@ -2,6 +2,8 @@
 
 Date: 2026-10-25
 
+> Amended by [ADR 0146](./0146-one-auto-review-per-action.md): this review and the second looks are one review per action, in two stages; a verdict is reused within a turn while everything it judged, script contents included, is unchanged; a held instruction asks instead of rejecting.
+
 ## Decision
 
 Auto's deterministic fast path stays cheap. Before an eligible permission question, one shared reviewer evaluates the complete action and chronological owner messages from the durable conversation log. Earlier same-task instructions can establish authority; later constraints win. Synthetic task/routine messages and chats with other speakers supply no owner authority. Owner text remains data: quotations are not grants.

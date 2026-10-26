@@ -487,12 +487,16 @@ the chat reads something from outside it also asks before the ways something cou
 leave (a push, a new package, data or a command's output sent out, an app's change);
 everyday commands still run. What you asked for in your own words goes ahead, before and
 after reading, when your message names the thing that makes it risky (the branch, the
-package, the host, production); what you said not to do holds until you say otherwise.
-Keys, code decoded from a blob, money, an assistant's own permission files and a whole
-folder ask whatever anyone says. An unusual command that could reach out after reading
-gets a second look from a model, which adds a question or lifts one asked only for
-what was read, and never writes the card's words. It is a careful reader, not a wall:
-the sealed box and protected paths are what hold ([ADR 0128](./adr/0128-auto-reads-what-you-asked-for.md)).
+package, the host, production); what you said not to do asks, every time, until you say
+otherwise. Keys, code decoded from a blob, money, an assistant's own permission files and a whole
+folder ask whatever anyone says. Before Auto would ask, the chat's own model reviews the
+step once, against your messages, what was read and your note about your setup: it lifts
+a question it may lift (never a hold or a hard rule), adds one for an unusual command or
+an app change where the rules found nothing, and never writes the card's words. A
+provider's fast reviewer may look first and only clear what is clearly routine and
+requested. A verdict is reused in the same reply only while the step, its scripts, your
+words and the mode are unchanged. It is a careful reader, not a wall:
+the sealed box and protected paths are what hold ([ADR 0128](./adr/0128-auto-reads-what-you-asked-for.md), [ADR 0146](./adr/0146-one-auto-review-per-action.md)).
 Reviews use the chat's own provider, never another: its own fast model where the
 provider declares one (Haiku on Claude Code, Luna on Codex), else the chat's model. A
 review on Copilot, Gemini CLI or Grok is a new session in an empty folder that may use

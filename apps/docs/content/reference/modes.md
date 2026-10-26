@@ -41,8 +41,8 @@ Spending money asks (a paid picture). Your own plan, at no extra charge, doesn't
 Name a risky step, and it goes ahead without a card, even after the chat has read something: "force-push my branch feature/login", "ship it to production", "delete the old branch feature/old", "install nginx with sudo", "send it to the team".
 
 - **The name matters.** "Push it" doesn't force-push, and "apply the terraform" doesn't apply to production.
-- **Your task carries across follow-ups.** The task-aware review can use your earlier instructions for the same task. Later restrictions take precedence; pasted material grants no permission. Routine follow-ups do not revoke an earlier instruction.
-- **"Don't" holds.** "Don't push yet", "no deploys today" or "never send anything" hold that step until a later message says otherwise. Auto refuses the held action instead of repeatedly asking you.
+- **Your task carries across follow-ups.** [The review](#the-review) can use your earlier instructions for the same task. Later restrictions take precedence; pasted material grants no permission. Routine follow-ups do not revoke an earlier instruction.
+- **"Don't" holds.** "Don't push yet", "no deploys today" or "never send anything" hold that step until a later message says otherwise. If the assistant tries it anyway, the card says you asked it not to, and asks whether to do it now. Your **Allow** is for this once; no review lifts it.
 
 These ask whatever you say:
 
@@ -71,15 +71,17 @@ Issues, pull requests and CI logs read with `gh` count, because anyone can write
 - a language's own tools from where they're published (`get-pip.py` from bootstrap.pypa.io, Python and Node from python.org and nodejs.org);
 - Conch's own lists of models and the pictures it makes.
 
-### The second look
+### The review
 
-Your chat's provider takes a second look at an unusual command that could reach the internet or your sign-ins, and at a change in an app from someone else. It knows what you asked this turn and asks only about a real harm, or a step that looks steered by what was read.
+Before Auto would ask, your chat's provider reviews the step once: a command, or a change in an app from someone else. It reads your messages in this chat, what the chat read, and the note about your setup you may have written in **Settings → Security → Safety** (which hosts and remotes are yours, what production means), and answers for that step alone. The note helps it understand; it never says yes by itself. One step gets one review, even when the provider asks about it twice.
 
-When Auto would ask only because the chat read something, the look lets a command through if it plainly serves your request. It never lifts a step that asks whatever was read. If the provider cannot make a separate review, the question stands. With Claude Code, Conch answers each of its questions by these same rules.
+- **It knows what you asked.** It lets a step through when it plainly serves your request and your messages back it. A page can tell it which package or flag; it can't give permission.
+- **It can only add a question where the rules found nothing.** For an unusual command that could reach the internet or your sign-ins, or a change in someone else's app, it asks about a real harm, or a step that looks steered by what was read. The card says why in Conch's words.
+- **It lifts only what it may.** It never lifts a step that asks whatever was read, or one you said not to do.
+- **A fast first look.** When your provider has a quicker model for this, it looks first and lets clearly routine, requested work through. Anything else goes to your chat's model.
+- **It's reused only while nothing changed.** The same step again in the same reply isn't reviewed twice. A changed command, script, message or mode is a new review.
 
-### Task-aware review
-
-Before an avoidable question, Auto can review the complete action against your instructions in this chat. It uses this chat's provider, never another: its own fast model where it has one (Haiku on Claude Code, Luna on Codex), else the chat's selected model. Every provider can review, Copilot, Gemini CLI and Grok included ([ADR 0147](../../../../docs/adr/0147-fast-reviews-on-every-provider.md)). A requested push, ordinary deployment or resolved app change can proceed without another card. The review never grants permanent permission.
+A requested push, an ordinary deployment or a resolved app change can go ahead without another card. The review never grants permanent permission. If the provider can't make a separate review, the question stands. With Claude Code, Conch answers each of its questions by these same rules. It uses this chat's provider, never another: its own fast model where it has one (Haiku on Claude Code, Luna on Codex), else the chat's selected model. Every provider can review, Copilot, Gemini CLI and Grok included ([ADR 0147](../../../../docs/adr/0147-fast-reviews-on-every-provider.md)).
 
 An unsafe proposal is returned to the assistant to find a safer approach. After three rejected proposals in one turn, further actions needing this review stop; independent ordinary work can continue. A rejection is not another approval request.
 
@@ -100,7 +102,7 @@ If you allowed that kind in another chat, or a card asks for the third time in o
   - anything on the same line that sends what it read;
   - any push after "don't push yet", or with someone else's words in the chat.
 - **Apps you made in Conch.** Lookups never ask after reading, in any mode, and in Auto an ordinary change (logging a meal) doesn't either. Paying, sending to other people, deleting, giving access, or sending a key or pages of text to the app's site asks.
-- **Apps from someone else.** In Auto, a lookup that sends only a date, an id or a city goes ahead. A bigger lookup or any change gets the second look, unless the tool is set to **Allow**. Paying, deleting, giving access, running code, or sending something like a key always asks.
+- **Apps from someone else.** In Auto, a lookup that sends only a date, an id or a city goes ahead. A bigger lookup or any change gets [the review](#the-review), unless the tool is set to **Allow**. Paying, deleting, giving access, running code, or sending something like a key always asks.
 - **Lookups asked at once** for the same reason get one question.
 - **Reading and shopping** in [the browser](../features/browser.md): searching, reading pages, filtering a shop, filling a basket. These ask, in German, French, Spanish, Portuguese, Italian and Dutch shops too:
   - buying or deleting on a site;

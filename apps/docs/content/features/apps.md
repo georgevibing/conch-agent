@@ -90,7 +90,7 @@ For each app:
 **Auto** does the same, except:
 
 - A tool set to **Ask** still asks, and one that deletes asks unless it's **Allow** or the app is **Don't ask**.
-- After the chat reads something from outside, a change goes ahead once a second look sees nothing wrong (apps you made in Conch can make ordinary changes). Paying, sending to other people, deleting, sharing access, or sending a key or pages of text still asks ([Permission modes](../reference/modes.md#auto)).
+- After the chat reads something from outside, a change goes ahead once [Auto's review](../reference/modes.md#the-review) sees nothing wrong (apps you made in Conch can make ordinary changes). Paying, sending to other people, deleting, sharing access, or sending a key or pages of text still asks ([Permission modes](../reference/modes.md#auto)).
 - It asks when a chat's numbers look wrong: one message to a crowd, a run of deletes, a big payment ([what a chat does, watched](../reference/modes.md#what-a-chat-does-watched)).
 
 In every mode, with someone else's words in the chat, what goes to other people shows first. If an app changes what a tool does, Conch stops allowing it by itself and tells you.
