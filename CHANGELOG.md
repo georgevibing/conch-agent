@@ -4,47 +4,24 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.18](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-26)
 
+### New
 
-### Features
+- Put a saved key into a command's environment without the model seeing it
+- Replay your own chats to see how often Auto's rules would ask
+- Count Auto's reviews and how long they take
+- Always allow one command, not a whole kind of step
+- The assistant can have Conch look at an app again
+- Auto checks each step once, quickly, and reuses the answer
+- Every chat knows which programs here reach a service, and as whom
+- And 3 new things
 
-* always allow one command, not a whole kind of step ([5c9381c](https://github.com/georgevibing/conch-agent/commit/5c9381c0be139ecb454036370cd4c881cb8eee7c))
-* **nacre:** VaultApproval asks to use a saved key in a command, unseen ([78fbf88](https://github.com/georgevibing/conch-agent/commit/78fbf88d33ede23f9d069b2cfc4449a533710798))
-* replay your own chats to see how often Auto's rules would ask ([71b0447](https://github.com/georgevibing/conch-agent/commit/71b044718bcb55748265269b6a9125e3868c0983))
-* **server:** a provider can name its own fast model for Auto's reviews ([5bc183e](https://github.com/georgevibing/conch-agent/commit/5bc183e05479fede2ddd1fd4a1a0ab02c82b9157))
-* **server:** Auto can review steps for Copilot, Gemini CLI and Grok ([d433776](https://github.com/georgevibing/conch-agent/commit/d43377621f39992fdd4845fe46808bb66d164ad8))
-* **server:** Auto checks each step once, quickly, and reuses the answer ([c48465e](https://github.com/georgevibing/conch-agent/commit/c48465ec508fd2b31952cc24128894a0cb633c4a))
-* **server:** Auto's reviews on Claude Code run on Haiku, with Claude Code started ahead ([f8abac8](https://github.com/georgevibing/conch-agent/commit/f8abac80fd5717cd66affe8a0303ade257eed391))
-* **server:** Auto's reviews on Codex use its fastest model your account lists ([acb2791](https://github.com/georgevibing/conch-agent/commit/acb27919ae7d8c1469a67afb4f31011aa60a5296))
-* **server:** Auto's reviews on pay-as-you-go keys use the provider's own fast model ([da34f31](https://github.com/georgevibing/conch-agent/commit/da34f3121f0c262fd8cdd7c13a395fc72acfd1b0))
-* **server:** count Auto's reviews and how long they take ([96cd4bc](https://github.com/georgevibing/conch-agent/commit/96cd4bc33c2bb68fa7caff6e1dca7a62118ca700))
-* **server:** every chat knows which programs here reach a service, and as whom ([433bd3f](https://github.com/georgevibing/conch-agent/commit/433bd3f226a659bad6a0849ef6b6665dff01f526))
-* **server:** Full trust, or your own words naming it, uses a saved key without a card ([8a1a114](https://github.com/georgevibing/conch-agent/commit/8a1a114fdd8d0c9b324ad570510de520b3258730))
-* **server:** installs, clones and pulls run in the sealed box ([1ad5d1b](https://github.com/georgevibing/conch-agent/commit/1ad5d1b389c63086b335542c0fdeb7e4edce6dc3))
-* **server:** put a saved key into a command's environment without the model seeing it ([a602f71](https://github.com/georgevibing/conch-agent/commit/a602f71cd66ee8473f97db010e000e6fe3458870))
-* **server:** tasks keep what you asked for in their chat, so Auto doesn't ask again ([c15e508](https://github.com/georgevibing/conch-agent/commit/c15e508fb3473d0bd7ed6a27b7fed742b1e622fe))
-* **server:** the assistant can have Conch look at an app again ([a393758](https://github.com/georgevibing/conch-agent/commit/a393758597b9de2063ff612b572c1ddcc16cf8a5))
-* **server:** your dashboard shows how often Auto asks, per 100 steps, and why ([a811221](https://github.com/georgevibing/conch-agent/commit/a811221232642e784e58334958e22708c9534956))
-* tell Auto about where you work, in your own words ([d8baf7c](https://github.com/georgevibing/conch-agent/commit/d8baf7c46eab2b2bd13b44c26825de84a49fa050))
+### Fixed
 
-
-### Bug Fixes
-
-* **nacre:** a password card fits a phone, its check beside the first line ([1938e42](https://github.com/georgevibing/conch-agent/commit/1938e42b3a7c87e0f64a3d8b9302eee9331d66ad))
-* **server:** a serious step's card never offers to always allow it ([106085d](https://github.com/georgevibing/conch-agent/commit/106085d530ebd8a0c60b2fed8654523645a879f6))
-* **server:** a skill's rule never stands between the person and Conch's own safe way ([6f3ac3c](https://github.com/georgevibing/conch-agent/commit/6f3ac3c20f6e8bbf1a9adf711e04002f456a50a5))
-* **server:** a step you said not to do asks you, instead of being refused ([a05e8d0](https://github.com/georgevibing/conch-agent/commit/a05e8d096579cc6d09da4d0ed23b46dcf3b95d0c))
-* **server:** a wait reads CI through whichever GitHub sign-in can see the repo ([b233407](https://github.com/georgevibing/conch-agent/commit/b23340723bce92454dd327a0897c23c9cf81d471))
-* **server:** an app call never holds a turn, and Stop cancels it ([20ed68e](https://github.com/georgevibing/conch-agent/commit/20ed68e3ff0509bdf16755d7372bbee99af6ab96))
-* **server:** an app that didn't open for a turn is looked at again first ([78402d5](https://github.com/georgevibing/conch-agent/commit/78402d5da3d2f47bebfacbbd6fa57e3c1038ffe5))
-* **server:** an app that isn't connected doesn't hide the way in this computer already has ([45fefba](https://github.com/georgevibing/conch-agent/commit/45fefbaa11db881bd6f696de413180cb2dc6d259))
-* **server:** Auto doesn't make you wait for a review that can't change the answer ([4b47af3](https://github.com/georgevibing/conch-agent/commit/4b47af39d8c18f9f7ab8d89e29d4da8b03a901ac))
-* **server:** Auto goes ahead when you ask it to push, in your own words and language ([63627c0](https://github.com/georgevibing/conch-agent/commit/63627c05545abfe97ad4b0b9fe63daf8b548f10a))
-* **server:** every assistant reaches a service the most direct way first ([c6929e9](https://github.com/georgevibing/conch-agent/commit/c6929e9ee8d5d2eac52c05c2e3cdd6a7a5f8c639))
-* **server:** every prompt names one way to give a command a saved key ([81632e9](https://github.com/georgevibing/conch-agent/commit/81632e97fd4dcb1292979859d8fbfca56aa37f76))
-* **server:** Passwords tells every model how to use a saved key, whatever a skill says ([5ef2cad](https://github.com/georgevibing/conch-agent/commit/5ef2cad9da90fc8e6a7c714ed44da91e0f641e82))
-* **server:** the apps prompt names tools as the engine gets them, and a missing app's tools are said ([1bb619c](https://github.com/georgevibing/conch-agent/commit/1bb619c2f818c7a209b5f3980c1e3d0319bfaea1))
-* **server:** the browser comes after the app, and a stuck model tries another way in ([02d490a](https://github.com/georgevibing/conch-agent/commit/02d490ae16fa98a10abcdd58edce6a8094b3b476))
-* **server:** tools past one list's room wait behind find_tools instead of vanishing ([d741af4](https://github.com/georgevibing/conch-agent/commit/d741af42990500561197e2a973d5c705a3eb3f6c))
+- Tools past one list's room wait behind find_tools instead of vanishing
+- The apps prompt names tools as the engine gets them, and a missing app's tools are said
+- An app call never holds a turn, and Stop cancels it
+- An app that isn't connected doesn't hide the way in this computer already has
+- And 2 fixes
 
 ## [0.1.0-alpha.17](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-25)
 
