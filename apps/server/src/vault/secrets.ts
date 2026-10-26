@@ -2,6 +2,7 @@ import type { VaultRequest } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
+import { consented } from './consent';
 import type { VaultService } from './service';
 
 /**
@@ -99,7 +100,15 @@ export function refusedName(name: string): string | undefined {
 
 export type SecretContext = Pick<
   ToolContext,
-  'conversationId' | 'ask' | 'append' | 'signal' | 'unattended' | 'untrusted'
+  | 'conversationId'
+  | 'ask'
+  | 'append'
+  | 'signal'
+  | 'unattended'
+  | 'untrusted'
+  | 'permissionMode'
+  | 'fullTrust'
+  | 'said'
 >;
 
 export interface SecretEnvironment {
@@ -155,9 +164,11 @@ export class CommandSecrets {
         throw new Error(error instanceof Error ? error.message : 'That item couldn’t be read.');
       }
       const key = `${ref.item}\u0000${policy.field.id}\u0000${ref.name.toUpperCase()}`;
-      // After reading something untrusted, a page may be asking for the key: always the person.
+      // After reading something untrusted, a page may be asking for the key: the person,
+      // unless Full trust or their own words already said yes (`consented`).
       const tainted = ctx.untrusted?.();
-      if (tainted || (policy.ask && !this.#isAllowed(ctx.conversationId, key))) {
+      const yes = consented(ctx, policy.title);
+      if (!yes && (tainted || (policy.ask && !this.#isAllowed(ctx.conversationId, key)))) {
         const decision = await ctx.ask({
           toolName: tool,
           input: { item: policy.title, field: policy.field.label, name: ref.name },

@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
+import { consented } from './consent';
 import { VaultError, type VaultService } from './service';
 
 /** "signs in with Google as ada@gmail.com": how an item signs in, for the agent (ADR 0133). Never a value. */
@@ -159,7 +160,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
   }> = {
     name: 'passwords_read',
     description:
-      'Read one field of a saved item (a note, a PIN, an account number) when you must know the value itself, after the user agrees in the chat. The value enters your context. A key a command needs doesn’t: pass it in the command’s secrets (process_start, or Bash where it takes secrets), which puts it in the environment without you seeing it. To sign in on a website use browser_type, which fills it without you seeing it. Never repeat a value back in your reply.',
+      'Read one field of a saved item (a note, a PIN, an account number) when you must know the value itself, after the user agrees in the chat (no card in Full trust, or when their message names the item). The value enters your context. A key a command needs doesn’t: pass it in the command’s secrets (process_start, or Bash where it takes secrets), which puts it in the environment without you seeing it. To sign in on a website use browser_type, which fills it without you seeing it. Never repeat a value back in your reply.',
     searchHint: 'read secure note pin account number api key token secret value use',
     input: {
       item: z.string().min(1).max(300).describe('The item id from passwords_find.'),
@@ -183,7 +184,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
       } catch (error) {
         return error instanceof VaultError ? error.message : 'That item couldn’t be read.';
       }
-      if (policy.ask) {
+      if (policy.ask && !consented(ctx, policy.title)) {
         const decision = await ctx.ask({
           toolName: 'passwords_read',
           input: { item: policy.title, field: policy.field.label },

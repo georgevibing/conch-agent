@@ -607,6 +607,11 @@ export interface ToolContext {
    */
   untrusted?: (besides?: (source: TaintSource) => boolean) => string | undefined;
   /**
+   * The person's own words in this chat, latest last (ADR 0087): none where they could be
+   * someone else's. A tool reads it to know what was asked for, never what a page said.
+   */
+  said?: () => readonly string[];
+  /**
    * Everything untrusted this chat has read so far (ADR 0028), whether or not
    * the guard is on: a `person` among them means someone else's words are in it.
    */
@@ -4138,6 +4143,7 @@ export class ConversationManager {
               return resolved.permissionMode;
             },
             fullTrust: trusting,
+            said: () => this.#yourWords(live),
             ask: hostAsk,
             signal: abort.signal,
             restricted: async (capability, detail) => {
@@ -5038,6 +5044,9 @@ export class ConversationManager {
                   signal: abort.signal,
                   unattended: Boolean(extras || live.record.origin),
                   untrusted,
+                  permissionMode: resolved.permissionMode,
+                  fullTrust: trusting,
+                  said: () => this.#yourWords(live),
                 },
                 wanted,
                 { command, tool: 'Bash' },

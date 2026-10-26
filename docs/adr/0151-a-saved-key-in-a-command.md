@@ -83,3 +83,18 @@ are Conch's ways to use a saved key and hold whatever a skill or another tool's 
   person can see where it goes.
 - Claude Code's own `Bash` doesn't take `secrets`; its model is pointed at Conch's
   `process_start` for these commands.
+
+## Addendum, 2026-10-26: no card when the person already said yes
+
+The card asked even in Full trust, and in Auto after the person had written "use the gh pat
+giotiskl". Both are the answer the card would get, so the card is noise (`vault/consent.ts`,
+`consented`), for `secrets` and for `passwords_read`:
+
+- **Full trust** uses an item without a card, unless someone else's words are in the chat
+  (`untrusted` there counts only a `person` source, ADR 0028).
+- **Auto** uses it without a card when one of the person's own messages (`said`, which is empty
+  when anyone else is in the chat) names the item: every word of its title, and for a one-word
+  title a word for a secret beside it ("my github token", not "check github"). A page can't write
+  the person's words, so this holds after reading, as an asked-for step does (ADR 0128).
+- **Read only, Ask first** and unattended runs ask as before; an item set to **never** is refused
+  in every mode.

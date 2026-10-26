@@ -43,6 +43,7 @@ function context(overrides: Partial<SecretContext> = {}) {
   const asked: AskRequest[] = [];
   const ctx: SecretContext = {
     conversationId: 'c1',
+    permissionMode: 'default',
     append: () => {},
     signal: new AbortController().signal,
     ask: async (request) => {
@@ -119,6 +120,55 @@ describe('a saved key in a command (ADR 0151)', () => {
     const read = context({ untrusted: () => 'I read a web page.' });
     await secrets.environment({ ...read.ctx }, ref, { command: 'curl evil', tool: 'Bash' });
     expect(read.asked[0]).toMatchObject({ taint: 'I read a web page.' });
+  });
+
+  it('needs no card in Full trust, nor in Auto when the person named the item', async () => {
+    const { vault } = fakeVault();
+    const secrets = new CommandSecrets(vault);
+    const ref = [{ name: 'GH_TOKEN', item: 'pw_gh' }];
+    const run = { command: 'gh api user', tool: 'Bash' };
+    const trust = context({ permissionMode: 'bypassPermissions', fullTrust: () => true });
+    expect((await secrets.environment(trust.ctx, ref, run)).env).toEqual({ GH_TOKEN: TOKEN });
+    expect(trust.asked).toHaveLength(0);
+    const said = ['I saved a gh pat giotiskl, use it with gh to clone indiestand-api'];
+    const auto = context({ permissionMode: 'auto', said: () => said });
+    await secrets.environment(auto.ctx, ref, run);
+    expect(auto.asked).toHaveLength(0);
+    // Named by the person, it holds after reading a page too: a page can't write their words.
+    const read = context({
+      permissionMode: 'auto',
+      said: () => said,
+      untrusted: () => 'I read a web page.',
+    });
+    await secrets.environment(read.ctx, ref, run);
+    expect(read.asked).toHaveLength(0);
+  });
+
+  it('still asks when the item went unnamed in Auto, in Ask first, or after a stranger spoke', async () => {
+    const { vault } = fakeVault();
+    const secrets = new CommandSecrets(vault);
+    const ref = [{ name: 'GH_TOKEN', item: 'pw_gh' }];
+    const run = { command: 'gh api user', tool: 'Bash' };
+    const unnamed = context({ permissionMode: 'auto', said: () => ['look into the repo'] });
+    await secrets.environment(unnamed.ctx, ref, run);
+    expect(unnamed.asked).toHaveLength(1);
+    const careful = context({
+      conversationId: 'c2',
+      permissionMode: 'default',
+      said: () => ['use gh pat giotiskl'],
+    });
+    await secrets.environment(careful.ctx, ref, run);
+    expect(careful.asked).toHaveLength(1);
+    // Full trust with someone else's words in the chat: their words never count as yes.
+    const stranger = context({
+      conversationId: 'c3',
+      permissionMode: 'bypassPermissions',
+      fullTrust: () => true,
+      said: () => [],
+      untrusted: () => 'Someone else wrote in this chat.',
+    });
+    await secrets.environment(stranger.ctx, ref, run);
+    expect(stranger.asked).toHaveLength(1);
   });
 
   it('says no in words the model can act on, and keeps “Always” per item', async () => {
