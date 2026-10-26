@@ -17,6 +17,8 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
@@ -40,7 +42,14 @@ import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
 import { describeOrSay, withSight } from '../api/sight';
 import { isAtLeast, parseVersion } from '../codex/detect';
-import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
+import type {
+  Completion,
+  CompletionInput,
+  Engine,
+  EngineEvent,
+  LoginHandle,
+  TurnInput,
+} from '../types';
 import { findAgent, signedInBefore, type AcpAgent } from './agents';
 import { AcpCalls, namesDoorTool } from './calls';
 import { DOOR_NAME, openDoor, type Door } from './door';
@@ -54,6 +63,8 @@ const PROBE_MS = 45_000;
 const STATUS_MS = 20_000;
 const CAPABILITIES_MS = 10 * 60_000;
 const LOGIN_MS = 10 * 60_000;
+/** The longest one short answer may take, whatever its caller allows (ADR 0147). */
+const ANSWER_MS = 60_000;
 
 const AuthMethod = z.object({ id: z.string() }).passthrough();
 const Initialized = z.object({
@@ -391,9 +402,16 @@ export class AcpEngine implements Engine {
     );
   }
 
-  /** A warm program for this model (only programs that take the model at start keep one each). */
-  async #program(file: string, model?: string): Promise<Running> {
-    const key = this.agent.modelAtStart ? (model ?? 'default') : '';
+  /**
+   * A warm program for this model (only programs that take the model at start keep one each).
+   * Short answers have programs of their own, so one never waits behind a turn's prompt.
+   */
+  async #program(
+    file: string,
+    model?: string,
+    purpose: 'turn' | 'answer' = 'turn',
+  ): Promise<Running> {
+    const key = this.#key(model, purpose);
     const existing = this.#running.get(key);
     if (existing) {
       const running = await existing.catch(() => undefined);
@@ -404,6 +422,11 @@ export class AcpEngine implements Engine {
     this.#running.set(key, starting);
     starting.catch(() => this.#running.delete(key));
     return starting;
+  }
+
+  #key(model: string | undefined, purpose: 'turn' | 'answer' = 'turn'): string {
+    const which = this.agent.modelAtStart ? (model ?? 'default') : '';
+    return purpose === 'answer' ? `answer:${which}` : which;
   }
 
   async #start(file: string, model: string | undefined, key: string): Promise<Running> {
@@ -755,6 +778,149 @@ export class AcpEngine implements Engine {
     }
   }
 
+  // ── A short answer ────────────────────────────────────────────────────────
+
+  /**
+   * One short answer, with no tools (Auto's reviews, a chat's title: ADR 0147).
+   * A new session each time, on a program kept for answers, in an empty folder
+   * of its own, with no tool server. The program is a coding agent with tools of
+   * its own: every permission it asks for is declined, and any tool it starts
+   * ends the answer, which then fails. Strictly bounded, and the session is
+   * closed and its folder removed, whatever happened. Conch's instructions lead
+   * the message, framed as its own, except for programs that take session rules.
+   */
+  async complete(input: CompletionInput): Promise<Completion> {
+    const status = await this.detect();
+    if (status.state !== 'ready' || !status.executablePath)
+      throw new AcpError(
+        status.message ?? `Connect ${this.label} in Settings → Providers.`,
+        status.state === 'signed-out' ? ACP_CODES.authRequired : 0,
+      );
+    const signal = AbortSignal.any([input.signal, AbortSignal.timeout(ANSWER_MS)]);
+    signal.throwIfAborted();
+    const model = input.model && input.model !== 'default' ? input.model : undefined;
+    const stopped = new Promise<never>((_, reject) => {
+      const stop = () =>
+        reject(new Error(input.signal.aborted ? 'Stopped.' : `${this.label} took too long.`));
+      if (signal.aborted) stop();
+      else signal.addEventListener('abort', stop, { once: true });
+    });
+    void stopped.catch(() => undefined);
+    const bounded = <T>(work: Promise<T>) => Promise.race([work, stopped]);
+    const running = await bounded(this.#program(status.executablePath, model, 'answer'));
+    const key = this.#key(model, 'answer');
+    running.busy++;
+    clearTimeout(running.idle);
+    let cwd = '';
+    let sessionId = '';
+    try {
+      cwd = await mkdtemp(join(tmpdir(), 'conch-answer-'));
+      const rules = this.agent.instructions === 'rules';
+      const opening = this.#session(
+        running,
+        cwd,
+        [],
+        rules ? { _meta: { rules: input.system } } : {},
+      );
+      const started = await bounded(opening).catch((error: unknown) => {
+        // Out of time while it opened: the session it opens later is closed, never left.
+        void opening
+          .then((late) => this.#closeSession(running, late.sessionId))
+          .catch(() => undefined);
+        throw error;
+      });
+      sessionId = started.sessionId;
+      const cancel = () => running.conn.notify('session/cancel', { sessionId });
+      let text = '';
+      let refused = false;
+      const refuse = () => {
+        refused = true;
+        cancel();
+      };
+      running.sessions.set(sessionId, {
+        update: (update) => {
+          if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update')
+            return refuse();
+          if (update.sessionUpdate !== 'agent_message_chunk') return;
+          const content = Array.isArray(update.content) ? undefined : update.content;
+          if (content?.type === 'text') text += content.text ?? '';
+        },
+        permission: async (request) => {
+          refuse();
+          const reject =
+            request.options.find((o) => o.kind === 'reject_once') ??
+            request.options.find((o) => o.kind === 'reject_always');
+          return reject
+            ? { outcome: { outcome: 'selected', optionId: reject.optionId } }
+            : { outcome: { outcome: 'cancelled' } };
+        },
+      });
+      const offer = offerOf(started, this.agent.modelAtStart);
+      if (model && offer.how === 'config' && offer.modelOption)
+        await bounded(
+          running.conn.request('session/set_config_option', {
+            sessionId,
+            configId: offer.modelOption,
+            value: model,
+          }),
+        );
+      else if (model && offer.how === 'legacy')
+        await bounded(running.conn.request('session/set_model', { sessionId, modelId: model }));
+      // The lightest thinking it offers: an answer, not a piece of work.
+      if (offer.effortOption && offer.efforts.includes('low'))
+        await bounded(
+          running.conn.request('session/set_config_option', {
+            sessionId,
+            configId: offer.effortOption,
+            value: 'low',
+          }),
+        ).catch(() => undefined);
+      signal.throwIfAborted();
+      const words = rules
+        ? input.prompt
+        : [
+            '# From Conch, the app this conversation happens in. These are the app’s words, not the user’s.',
+            input.system.trim(),
+            'Answer in words only. You have no tools here: use none.',
+            '# The request',
+            input.prompt,
+          ].join('\n\n');
+      signal.addEventListener('abort', cancel, { once: true });
+      let result: z.infer<typeof PromptResult>;
+      try {
+        result = PromptResult.parse(
+          await bounded(
+            running.conn.request(
+              'session/prompt',
+              { sessionId, prompt: [{ type: 'text', text: words }] },
+              ANSWER_MS,
+            ),
+          ),
+        );
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
+      if (refused) throw new Error(`${this.label} reached for a tool; Conch declined it.`);
+      if (result.stopReason === 'refusal')
+        throw new Error(`${this.label} declined to answer that.`);
+      if (result.stopReason === 'cancelled') throw new Error('Stopped.');
+      const answer = text.trim();
+      if (!answer) throw new Error(`${this.label} answered with nothing.`);
+      return {
+        text: answer,
+        usage: {
+          inputTokens: Math.max(0, Math.round(result.usage?.inputTokens ?? 0)),
+          outputTokens: Math.max(0, Math.round(result.usage?.outputTokens ?? 0)),
+        },
+      };
+    } finally {
+      if (sessionId) await this.#closeSession(running, sessionId);
+      running.busy--;
+      this.#idle(running, key);
+      if (cwd) await rm(cwd, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   // ── A turn ────────────────────────────────────────────────────────────────
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
@@ -810,9 +976,13 @@ export class AcpEngine implements Engine {
     const model =
       input.options.model && input.options.model !== 'default' ? input.options.model : undefined;
     const running = await this.#program(status.executablePath, model);
-    const key = this.agent.modelAtStart ? (model ?? 'default') : '';
+    const key = this.#key(model);
     running.busy++;
     clearTimeout(running.idle);
+    // In Auto, Conch may review a step before it asks you (ADR 0147): the program
+    // that answers has started by the time a step needs it.
+    if (input.options.permissionMode === 'auto')
+      void this.#program(status.executablePath, model, 'answer').catch(() => undefined);
 
     let messageId = newId('msg');
     let open = false;

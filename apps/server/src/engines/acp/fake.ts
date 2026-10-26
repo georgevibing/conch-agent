@@ -11,10 +11,13 @@ import type { AcpStreams } from './rpc';
 export interface AgentScript {
   /** What `initialize` answers. */
   initialize?: Record<string, unknown>;
-  /** Answer `session/new`: a result, or an error. */
+  /** Answer `session/new`: a result, or an error (now, or later). */
   session?: (
     params: Record<string, unknown>,
-  ) => Record<string, unknown> | { error: { code: number; message: string } };
+  ) =>
+    | Record<string, unknown>
+    | { error: { code: number; message: string } }
+    | Promise<Record<string, unknown>>;
   /**
    * Answer `session/load`: a result, or an error. Before answering, the pretend
    * program replays the session's history, as ACP has programs do.
@@ -113,7 +116,7 @@ export function fakeSpawn(script: AgentScript) {
             case 'authenticate':
               return send({ id, result: {} });
             case 'session/new': {
-              const answer = script.session?.(params) ?? { sessionId: `sess_${id}` };
+              const answer = (await script.session?.(params)) ?? { sessionId: `sess_${id}` };
               return 'error' in answer
                 ? send({ id, error: answer.error })
                 : send({ id, result: answer });
