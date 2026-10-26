@@ -663,7 +663,8 @@ clear (ADR 0025):
   `Services.#systemKeys` so it shows in Passwords.
 - **A secret the person owns** (a login, a card, a note) lives in Passwords.
   The agent reaches it only through `passwords_find`, `passwords_request`,
-  `passwords_read` and the browser fill.
+  `passwords_read`, a command's `secrets` (`vault/secrets.ts`, ADR 0151: into
+  its environment, unseen) and the browser fill.
 - Add any new place secrets live to `lib/protect.ts`, so the agent's own
   file tools can't touch it.
 
