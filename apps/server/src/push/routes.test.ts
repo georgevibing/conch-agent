@@ -293,7 +293,7 @@ describe('a step that matters, from another device (ADR 0108)', () => {
     // A no never needs it.
     phone.respond('deny');
     await vi.waitUntil(() => respond.mock.calls.length === 1);
-    expect(respond).toHaveBeenLastCalledWith('c_1', 'p_1', 'deny', undefined, undefined);
+    expect(respond).toHaveBeenLastCalledWith('c_1', 'p_1', 'deny', undefined, undefined, undefined);
 
     // The sheet's way in is held to the same.
     const answer = vi.spyOn(services.push, 'answer');
@@ -315,7 +315,14 @@ describe('a step that matters, from another device (ADR 0108)', () => {
     expect(verified.statusCode).toBe(200);
     phone.respond('allow');
     await vi.waitUntil(() => respond.mock.calls.length === 2);
-    expect(respond).toHaveBeenLastCalledWith('c_1', 'p_1', 'allow', undefined, undefined);
+    expect(respond).toHaveBeenLastCalledWith(
+      'c_1',
+      'p_1',
+      'allow',
+      undefined,
+      undefined,
+      undefined,
+    );
     phone.ws.close();
 
     // This computer, proven, allows as it always did: Date.now is still past the window.

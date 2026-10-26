@@ -223,6 +223,9 @@ export async function reviewAction(
   options: ReviewOptions,
 ): Promise<(AutoVerdict & { stage: ReviewStage }) | undefined> {
   if (!models.fast && !models.full) return undefined;
+  // A step the rules already ask about can only be lifted with the person's words as evidence:
+  // without any, a review could change nothing but how long the question takes.
+  if (action.risk && !action.ownerMessages.length) return undefined;
   const payload = payloadOf(action);
   // A verdict about a clipped action or a missing middle of the authority history is none.
   if (!payload || payload.length > 48_000) return undefined;

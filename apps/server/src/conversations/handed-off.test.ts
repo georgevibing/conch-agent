@@ -69,6 +69,7 @@ const allow = async () => ({
     decision: 'allow',
     risk: 'moderate',
     reason: 'authorized',
+    kind: 'none',
     evidence: [0],
   }),
 });
