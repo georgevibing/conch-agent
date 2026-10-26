@@ -196,8 +196,8 @@ describe('how every assistant works on a problem', () => {
 
 describe('its forms', () => {
   it('are short enough for every model, the compact one shortest', () => {
-    expect(RESILIENCE_PROMPT.length).toBeLessThan(2_650);
-    expect(RESILIENCE_COMPACT.length).toBeLessThan(700);
+    expect(RESILIENCE_PROMPT.length).toBeLessThan(3_800);
+    expect(RESILIENCE_COMPACT.length).toBeLessThan(1_100);
     expect(RESILIENCE_WORDS.length).toBeLessThan(500);
     for (const form of [RESILIENCE_PROMPT, RESILIENCE_COMPACT, RESILIENCE_WORDS])
       expect(form.startsWith(`${RESILIENCE_HEADING}\n`)).toBe(true);
@@ -214,6 +214,27 @@ describe('its forms', () => {
       expect(form).toMatch(/Never claim a success you haven’t seen/);
     }
     expect(RESILIENCE_WORDS).toMatch(/Never invent facts/);
+  });
+
+  it('reach a service the most direct way, the browser last, in every form', () => {
+    for (const form of [RESILIENCE_PROMPT, RESILIENCE_COMPACT]) {
+      const app = form.indexOf('connected app');
+      const program = form.search(/signed-in program|program on this computer that’s signed in/);
+      const key = form.indexOf('key from Passwords');
+      const browser = form.indexOf('the browser last');
+      expect(app, 'the app first').toBeGreaterThan(-1);
+      expect(program).toBeGreaterThan(app);
+      expect(key).toBeGreaterThan(program);
+      expect(browser).toBeGreaterThan(key);
+      // What Conch already has is looked at before giving up, and a slow call isn't a dead end.
+      expect(form).toMatch(/Passwords/);
+      expect(form).toMatch(/earlier chats/);
+      expect(form).toMatch(/never end (a turn )?with nothing/);
+      expect(form).toMatch(/the way the person names|When the person names a way/);
+    }
+    // A wrong account is a reason to use the saved key, and their own command is a last resort.
+    expect(RESILIENCE_PROMPT).toMatch(/wrong account is a reason to use the saved key/);
+    expect(RESILIENCE_PROMPT).toMatch(/run a command themselves is a last resort/);
   });
 
   it('swaps in place, leaving every other section as it was', () => {
