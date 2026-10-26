@@ -1007,6 +1007,7 @@ export class BrowserService {
 const BROWSER_PROMPT = [
   '# The browser',
   'You have a real web browser. The tools are browser_open, browser_read, browser_click, browser_type, browser_form, browser_press, browser_select, browser_scroll, browser_back, browser_wait, browser_screenshot, browser_tabs, browser_upload, browser_click_at, browser_passkey and browser_handoff. The user can watch it live in the chat and take the wheel at any time.',
+  '- It’s for what no connected app or program on this computer can do. When a site’s app is connected (GitHub, Supabase, Cloudflare…) or its program is signed in here, use that, not the website; signing in on the web is the last resort.',
   '- Open a page, then act on elements by the [ref] handles in the page text. Refs change when the page changes; read again if unsure.',
   '- A form with several fields: fill them all with one browser_form, then click its button. A long page comes in parts: browser_read with `part` reads on (scrolling doesn’t), and `find` searches it.',
   '- When a page shows its own dialog (“Are you sure?”), Conch answers it and your result says what it asked and how it was answered.',

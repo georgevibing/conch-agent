@@ -232,17 +232,17 @@ export class TurnWatch {
     if (run === LOOP_NUDGE || run === LOOP_NUDGE * 2)
       return {
         kind: 'nudge',
-        note: `[From Conch: this exact ${name} call has given the same answer ${run} times in a row. Don’t run it again as it is: change something, try a different way, or tell the person what’s in the way. If you’re waiting on something, wait longer between checks.]`,
+        note: `[From Conch: this exact ${name} call has given the same answer ${run} times in a row. Don’t run it again as it is: change something or try a different way (another tool, the connected app, a program on this computer); tell the person what’s in the way only when no other way is left. If you’re waiting on something, wait longer between checks.]`,
       };
     if (this.#errors === ERRORS_NUDGE)
       return {
         kind: 'nudge',
-        note: `[From Conch: the last ${ERRORS_NUDGE} tool calls failed. Step back: read what the errors say and try another way, or tell the person what’s blocking you.]`,
+        note: `[From Conch: the last ${ERRORS_NUDGE} tool calls failed. Step back: read what the errors say and try another way (another tool, the connected app, a program on this computer); tell the person what’s blocking you only when no other way is left.]`,
       };
     if (this.#same.count === SAME_NUDGE)
       return {
         kind: 'nudge',
-        note: `[From Conch: ${name} has given the same answer ${SAME_NUDGE} times in a row, so nothing is changing. Try something different, or tell the person what’s in the way.]`,
+        note: `[From Conch: ${name} has given the same answer ${SAME_NUDGE} times in a row, so nothing is changing. Try something different (another tool or another way in); tell the person what’s in the way only when no other way is left.]`,
       };
     return GO;
   }

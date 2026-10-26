@@ -168,6 +168,17 @@ describe('TurnWatch', () => {
     expect(kinds).not.toContain('stop');
   });
 
+  it('points a stuck model at another way in before handing the problem back', () => {
+    const watch = new TurnWatch(roomy);
+    const verdicts = Array.from({ length: ERRORS_NUDGE }, (_, i) =>
+      watch.result('shell', { command: `try ${i}` }, `failed ${i}`, true),
+    );
+    const nudge = verdicts.at(-1);
+    const note = nudge?.kind === 'nudge' ? nudge.note : '';
+    expect(note).toMatch(/the connected app, a program on this computer/);
+    expect(note).toMatch(/only when no other way is left/);
+  });
+
   it('notices the same long answer coming back fast, but not a short confirmation', () => {
     const page = `Page: Shop\n${'- button "Next" [ref=e1]\n'.repeat(20)}`;
     const watch = new TurnWatch(roomy);
