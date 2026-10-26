@@ -28,6 +28,7 @@ import {
   riskAsks,
   riskClass,
   riskScore,
+  riskWords,
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
@@ -79,6 +80,56 @@ describe('the risk policy behind Auto (ADR 0100)', () => {
     expect(assessRisk('Bash', { command: 'git push -f origin main' }, ctx)?.reason).toBe(
       'force-push over main, which rewrites history others share',
     );
+  });
+
+  it.each([
+    "async () => cloudflare.request({method: 'GET', path: '/accounts'})",
+    "async () => cloudflare.request({method: 'DELETE', path: '/accounts/a/cfd_tunnel/t'})",
+    "async () => { const method = 'DE' + 'LETE'; return cloudflare.request({method, path: '/accounts/a/cfd_tunnel/t'}); }",
+  ])(
+    'describes an executor’s destructive capability without claiming this call deletes',
+    (code) => {
+      const risk = assessRisk(
+        'mcp__cloudflare__execute',
+        { code },
+        {
+          ...ctx,
+          access: 'write',
+          destructive: true,
+        },
+      );
+      expect(risk).toMatchObject({
+        kind: 'app-delete',
+        harm: 'severe',
+        lasting: true,
+        possible: true,
+      });
+      expect(riskWords(risk)).toBe(
+        'This tool can change or delete app data. I’m checking before running it.',
+      );
+      // A GET-looking string is no proof about an arbitrary program's effects.
+      expect(riskAsks(risk, false)).toBe(true);
+      expect(riskAsks(risk, true)).toBe(true);
+    },
+  );
+
+  it('keeps the concrete deletion warning for a delete action, with or without hints', () => {
+    for (const destructive of [true, false]) {
+      const risk = assessRisk(
+        'mcp__github__delete_file',
+        { path: 'README.md' },
+        {
+          ...ctx,
+          access: 'write',
+          destructive,
+        },
+      );
+      expect(risk?.possible).toBeUndefined();
+      expect(riskWords(risk)).toBe(
+        'This would delete something in one of your apps, and that can’t be undone. So I’m checking first.',
+      );
+      expect(riskAsks(risk, false)).toBe(true);
+    }
   });
 
   it('scores harm, what lasts and what the chat read', () => {

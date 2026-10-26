@@ -86,6 +86,28 @@ describe('Auto’s one review (ADR 0146)', () => {
     expect(input?.prompt).toContain(`"found":"send${DATAMARK}it${DATAMARK}out"`);
   });
 
+  it('tells the reviewer when a risk is only an app capability hint', async () => {
+    const found = full(JSON.stringify(allowed));
+    const risk: Risk = {
+      kind: 'app-delete',
+      harm: 'severe',
+      lasting: true,
+      possible: true,
+      reason: 'make changes or delete data in one of your apps',
+    };
+    const run: AutoAction = {
+      ...action,
+      tool: 'mcp__cloudflare__execute',
+      input: { code: "async () => cloudflare.request({method: 'GET', path: '/accounts'})" },
+      risk,
+    };
+    await reviewAction(run, found.models, options());
+    expect(found.complete.mock.calls[0]?.[0]?.prompt).toContain('"possible":true');
+    expect(await reviewKey(run, 'auto')).not.toBe(
+      await reviewKey({ ...run, risk: { ...risk, possible: false } }, 'auto'),
+    );
+  });
+
   it('quotes the environment note as owner-written context, apart from owner messages', async () => {
     const found = full(JSON.stringify(allowed));
     await reviewAction(

@@ -75,6 +75,8 @@ export interface Risk {
   harm: 'severe' | 'moderate';
   /** Conch can't put it back. */
   lasting: boolean;
+  /** A tool's capability hint, not an established effect of this call. */
+  possible?: boolean;
   /** What it would do, after "So I'm checking before I " (plain words, no jargon). */
   reason: string;
   /** No mode lifts it, Full trust included: a whole folder or disk gone (`breaksCircuit`). */
@@ -110,7 +112,7 @@ export interface Wish {
 export interface RiskContext {
   /** The chat's work folder. */
   workspace: string;
-  /** For an app's tool: it says it deletes or can't be undone. */
+  /** For an app's tool: it may perform destructive updates (MCP destructiveHint). */
   destructive?: boolean;
   /**
    * For an app's tool, when known: `write` when it changes things, `read` when
@@ -646,6 +648,8 @@ export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
 /** What the card says (`GuardNote`): what it would do, and whether that can be put back. */
 export function riskWords(risk: Risk | undefined): string {
   if (!risk) return 'This could matter, so I’m checking first.';
+  if (risk.possible)
+    return 'This tool can change or delete app data. I’m checking before running it.';
   return `This would ${risk.reason}${risk.lasting ? ', and that can’t be undone' : ''}. So I’m checking first.`;
 }
 
@@ -2620,8 +2624,14 @@ export function assessRisk(
   const step = app ?? (/^(?:google|slack|app)_/.test(bare) ? bare : '');
   // The person's words lift an app's step too (ADR 0128): "delete the old entries", "send it
   // to the team", "give Bo access". Money and keys are nobody's to ask for this way.
-  if (context.destructive || DELETES.test(step))
-    return said(severe('app-delete', 'delete something in one of your apps'));
+  if (DELETES.test(step)) return said(severe('app-delete', 'delete something in one of your apps'));
+  // MCP's destructiveHint says what a tool may do, not what these arguments will do.
+  // Keep its approval gate; don't guess that arbitrary executor code is read-only.
+  if (context.destructive)
+    return said({
+      ...severe('app-delete', 'make changes or delete data in one of your apps'),
+      possible: true,
+    });
   // What an app's change does with money or other people, by what its tool is called
   // (ADR 0117). Only for a tool known to change things: `get_order` only looks.
   const tool = step.replace(/^app_[a-z0-9_]+?__/, '');
