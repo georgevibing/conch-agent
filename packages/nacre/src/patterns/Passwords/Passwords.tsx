@@ -1719,6 +1719,11 @@ export interface VaultApprovalProps extends Omit<ComponentProps<'div'>, 'title'>
   reason?: string;
   /** A password, card number, PIN or recovery phrase. */
   sensitive?: boolean;
+  /**
+   * Into a command's environment instead of read (ADR 0151): the variable and
+   * the command. The assistant never sees it, so the card says so.
+   */
+  use?: { envName: string; command?: string };
   decision?: VaultDecision | 'expired';
   busy?: boolean;
   onDecide?: (decision: VaultDecision) => void;
@@ -1727,7 +1732,8 @@ export interface VaultApprovalProps extends Omit<ComponentProps<'div'>, 'title'>
 /**
  * The assistant asking to read one thing from Passwords: what, from which
  * item, and why in its own words. A secret says plainly that the assistant
- * will see it. Answered, it becomes a quiet line.
+ * will see it. Asked to `use` it in a command, it names the variable and the
+ * command, and that the assistant won't see it. Answered, it becomes a quiet line.
  */
 export function VaultApproval({
   name = 'Conch',
@@ -1736,6 +1742,7 @@ export function VaultApproval({
   fieldLabel,
   reason,
   sensitive,
+  use,
   decision,
   busy,
   onDecide,
@@ -1745,6 +1752,7 @@ export function VaultApproval({
   // "PIN" stays "PIN"; "Account number" reads as "account number".
   const field = fieldLabel === fieldLabel.toUpperCase() ? fieldLabel : fieldLabel.toLowerCase();
   const what = `the ${field} of “${itemTitle}”`;
+  const asking = use ? `Let this command use ${what}?` : `Let ${name} read ${what}?`;
   if (decision) {
     const allowed = decision === 'allow' || decision === 'allow-always';
     return (
@@ -1759,7 +1767,13 @@ export function VaultApproval({
           {decision === 'expired'
             ? `No answer needed any more · ${what}`
             : allowed
-              ? `${name} read ${what}${decision === 'allow-always' ? ' · always for this item' : ''}`
+              ? `${use ? `A command used ${what}` : `${name} read ${what}`}${
+                  decision === 'allow-always'
+                    ? ' · always for this item'
+                    : use
+                      ? ' · in this chat'
+                      : ''
+                }`
               : `Kept private · ${what}`}
         </span>
       </div>
@@ -1768,7 +1782,7 @@ export function VaultApproval({
   return (
     <div
       role="group"
-      aria-label={`Let ${name} read ${what}?`}
+      aria-label={asking}
       className={cx(styles.chatCard, className)}
       data-lustre=""
       {...props}
@@ -1776,14 +1790,15 @@ export function VaultApproval({
       <div className={styles.chatHead}>
         <VaultItemIcon kind={itemKind} title={itemTitle} size="sm" />
         <div className={styles.chatText}>
-          <p className={styles.chatTitle}>
-            Let {name} read {what}?
-          </p>
+          <p className={styles.chatTitle}>{asking}</p>
           {reason && <p className={styles.chatReason}>“{reason}”</p>}
+          {use?.command && <code className={styles.chatCommand}>{use.command}</code>}
           <p className={styles.chatDetail}>
-            {sensitive
-              ? `${name} will see it to do this. It’s hidden from this chat afterwards.`
-              : `${name} will see it to do this. Nothing else in “${itemTitle}” is shared.`}
+            {use
+              ? `It goes to the command as ${use.envName}. ${name} doesn’t see it, and it’s hidden from this chat.`
+              : sensitive
+                ? `${name} will see it to do this. It’s hidden from this chat afterwards.`
+                : `${name} will see it to do this. Nothing else in “${itemTitle}” is shared.`}
           </p>
         </div>
       </div>
@@ -1813,7 +1828,7 @@ export function VaultApproval({
           disabled={busy}
           onClick={() => onDecide?.('allow')}
         >
-          Allow once
+          {use ? 'Allow in this chat' : 'Allow once'}
         </button>
       </div>
     </div>

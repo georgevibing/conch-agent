@@ -77,6 +77,7 @@ import { documentTools } from './files/documents';
 import { publishTools } from './files/publish';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
+import { CommandSecrets } from './vault/secrets';
 import { vaultCheck } from './vault/doctor';
 import { keystoreMode } from './vault/keystore';
 import { deviceSealer, registerSealer } from './lib/sealed';
@@ -403,6 +404,8 @@ export class Services {
   }
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
+  /** A saved key put into a command's environment, unseen (ADR 0151). */
+  readonly commandSecrets: CommandSecrets;
   readonly routines: RoutineService;
   /** Standing orders and the check-in that watches for them (ADR 0107). */
   readonly standingOrders: StandingOrderStore;
@@ -633,6 +636,8 @@ export class Services {
       protectedPaths: protectedPaths(config.CONCH_HOME),
       sealed: async () => (await this.settings.get()).preferences.sealedCommands,
       healed: (message) => void this.healed.note('gateway', message),
+      // Made with Passwords, below: a saved key into a command, unseen (ADR 0151).
+      secrets: () => this.commandSecrets,
     });
     this.recovery = new GatewayRecovery({
       sample: () => this.processes.resourceSnapshot(),
@@ -686,6 +691,7 @@ export class Services {
       },
       systemKeys: () => this.#systemKeys(),
     });
+    this.commandSecrets = new CommandSecrets(this.vault);
     // Conch's own keys (providers, integrations, channels) are sealed under this
     // computer's device key from here on (ADR 0025 § Keys Conch uses).
     registerSealer(
@@ -1600,6 +1606,8 @@ export class Services {
         workload: () => this.processes.workload,
       },
       redact: this.vault.redactor(),
+      // A saved key into Conch's own Bash, unseen (ADR 0151).
+      secrets: this.commandSecrets,
       protectedPaths: protectedPaths(config.CONCH_HOME),
       // The sealed box, only where this computer can do it (ADR 0028).
       undo: this.undo,

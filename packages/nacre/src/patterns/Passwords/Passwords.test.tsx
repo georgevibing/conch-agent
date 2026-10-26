@@ -353,6 +353,28 @@ describe('in the chat', () => {
     await expectAccessible(container);
   });
 
+  it('asks to use a key in a command, naming the variable and the command, unseen', async () => {
+    const user = userEvent.setup();
+    const onDecide = vi.fn();
+    const { container } = renderNacre(
+      <VaultApproval
+        itemTitle="GitHub token"
+        itemKind="apiKey"
+        fieldLabel="Key"
+        reason="Clone the private repository"
+        sensitive
+        use={{ envName: 'GH_TOKEN', command: 'git clone https://github.com/ada/private' }}
+        onDecide={onDecide}
+      />,
+    );
+    expect(screen.getByText('Let this command use the key of “GitHub token”?')).toBeInTheDocument();
+    expect(screen.getByText('git clone https://github.com/ada/private')).toBeInTheDocument();
+    expect(screen.getByText(/as GH_TOKEN\. Conch doesn’t see it/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Allow in this chat' }));
+    expect(onDecide).toHaveBeenCalledWith('allow');
+    await expectAccessible(container);
+  });
+
   it('unlocks in place, and says so when the password is wrong', async () => {
     const user = userEvent.setup();
     const onUnlock = vi.fn().mockRejectedValue(new Error('That isn’t the password for Passwords.'));

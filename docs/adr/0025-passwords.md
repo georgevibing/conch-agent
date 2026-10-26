@@ -119,8 +119,11 @@ a recent sign-in and a plain warning.
 
 ### The agent (§ The agent)
 
-1. **The model never sees a value.** `passwords_find` returns names, kinds and
-   sites only: no hint, no last four. No tool returns a value. The prompt tells
+1. **The model never sees a value unless the person agrees.** `passwords_find`
+   returns names, kinds and sites only: no hint, no last four. Only
+   `passwords_read` returns a value, after the person agrees (§ Seeing a value).
+   A key a command needs goes into the command's environment without the model
+   seeing it ([ADR 0151](./0151-a-saved-key-in-a-command.md)). The prompt tells
    the agent never to ask for a password in the chat.
 2. **Conch fills, the person agrees.** On a password, one-time code or card
    field, `browser_type` looks for the item saved for that site. It asks

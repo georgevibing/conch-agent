@@ -22,6 +22,13 @@ import { hostEnvironment } from '../engines/host';
 import type { HostTool } from '../engines/types';
 import { sandboxSupport, sealedConfig, secretPlaces } from '../conversations/sandbox';
 import { touchesProtected, PROTECTED_MESSAGE } from '../lib/protect';
+import {
+  redactingStream,
+  secretsInput,
+  type CommandSecrets,
+  type SecretEnvironment,
+  type SecretRef,
+} from '../vault/secrets';
 
 /** A managed command as a wait sees it (ADR 0125). */
 export interface ProcessPeek {
@@ -78,6 +85,8 @@ export class ProcessService {
       /** What each managed job's process tree uses, by its supervisor's pid. */
       usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
       healed?: (message: string) => void;
+      /** Saved keys put into a command's environment, unseen (ADR 0151). */
+      secrets?: () => CommandSecrets;
     },
   ) {
     this.#pace = new ResourcePace(deps.now);
@@ -412,11 +421,12 @@ export class ProcessService {
         name: 'process_start',
         row: true,
         description:
-          'Start or queue a managed shell command in this chat’s work folder and return its id immediately. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Sealed, a command reaches package registries, GitHub, GitLab, Bitbucket and the work folder’s own remotes over HTTPS; any other host, a private registry or a push needs dangerouslyDisableSandbox. Never enter passwords or secrets through stdin.',
+          'Start or queue a managed shell command in this chat’s work folder and return its id immediately. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Sealed, a command reaches package registries, GitHub, GitLab, Bitbucket and the work folder’s own remotes over HTTPS; any other host, a private registry or a push needs dangerouslyDisableSandbox. Never enter passwords or secrets through stdin: a saved key goes in `secrets`, which puts it in the command’s environment without you seeing it.',
         input: {
           command: z.string().min(1).max(32_000),
           timeout_ms: z.number().int().min(1000).max(1_800_000).default(600_000),
           dangerouslyDisableSandbox: z.boolean().default(false),
+          ...(this.deps.secrets && { secrets: secretsInput }),
         },
         run: async (args) => {
           if (this.#closed)
@@ -434,6 +444,15 @@ export class ProcessService {
             !(await this.deps.sealed()) ||
             !sandboxSupport().available;
           await commandAccess('process_start', args, command, unsealed);
+          const wanted = (args.secrets as SecretRef[] | undefined) ?? [];
+          let secrets: SecretEnvironment | undefined;
+          if (wanted.length) {
+            if (!this.deps.secrets) throw new Error('Saved keys can’t be used in commands here.');
+            secrets = await this.deps.secrets().environment(ctx, wanted, {
+              command,
+              tool: 'process_start',
+            });
+          }
           const cwd = await ctx.workspace?.();
           if (!cwd) throw new Error('This chat does not have a work folder.');
           // The box (ADR 0028, ADR 0148): the work folder and caches, no keys, and on the
@@ -492,7 +511,7 @@ export class ProcessService {
                 [fileURLToPath(new URL('./worker.mjs', import.meta.url))],
                 {
                   cwd,
-                  env: hostEnvironment(),
+                  env: { ...hostEnvironment(), ...secrets?.env },
                   detached: process.platform !== 'win32',
                   windowsHide: true,
                   stdio: ['pipe', 'pipe', 'pipe'],
@@ -501,7 +520,11 @@ export class ProcessService {
               session.child = child;
               session.status = 'running';
               session.reason = undefined;
-              const collect = (text: string) => {
+              // A saved key never reaches the kept output, whole or split across pieces.
+              const redacted = secrets && redactingStream(secrets.redact, secrets.longest);
+              const collect = (raw: string, last = false) => {
+                const text = redacted ? redacted.push(raw) + (last ? redacted.end() : '') : raw;
+                if (!text) return;
                 session.end += text.length;
                 session.output = (session.output + text).slice(-64_000);
                 session.start = session.end - session.output.length;
@@ -514,7 +537,7 @@ export class ProcessService {
               }
               child.stdin.on('error', () => {});
               child.once('error', () => {
-                collect('The command supervisor could not start.');
+                collect('The command supervisor could not start.', true);
                 if (session.status === 'running') session.status = 'exited';
                 session.exitCode = 1;
                 clearTimeout(session.timer);
@@ -523,6 +546,7 @@ export class ProcessService {
                 void this.#pump();
               });
               child.once('close', (code) => {
+                collect('', true);
                 if (session.status === 'running') session.status = 'exited';
                 session.exitCode = code ?? session.exitCode;
                 clearTimeout(session.timer);

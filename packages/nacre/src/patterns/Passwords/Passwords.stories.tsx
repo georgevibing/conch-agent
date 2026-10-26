@@ -656,6 +656,33 @@ export const AskToRead: Story = {
   ),
 };
 
+/** A key put into a command's environment: the variable, the command, and that it isn't seen (ADR 0151). */
+export const AskToUseInACommand: Story = {
+  render: () => (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <VaultApproval
+        itemTitle="Gh pat giotiskl"
+        itemKind="apiKey"
+        fieldLabel="Key"
+        reason="Clone indiestand-api as giotiskl"
+        sensitive
+        use={{
+          envName: 'GH_TOKEN',
+          command: 'git clone https://x-access-token:$GH_TOKEN@github.com/giotiskl/indiestand-api',
+        }}
+        onDecide={fn()}
+      />
+      <VaultApproval
+        itemTitle="Gh pat giotiskl"
+        itemKind="apiKey"
+        fieldLabel="Key"
+        use={{ envName: 'GH_TOKEN' }}
+        decision="allow"
+      />
+    </div>
+  ),
+};
+
 /** Passwords is locked: unlock it in the chat, and the task carries on. */
 export const UnlockInTheChat: Story = {
   render: () => (

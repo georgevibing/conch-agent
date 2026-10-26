@@ -11,6 +11,7 @@ import { sandboxSupport, sealedConfig, secretPlaces } from '../conversations/san
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
 import { LINK_MODULE, spawnLinked, spawnTethered, stopTree } from '../processes/tether';
 import { SEALED_HINT, SEALED_OFFLINE_HINT } from './trust';
+import { secretsInput, type SecretRef } from '../vault/secrets';
 import { PlaceUnavailable } from '../workplaces/types';
 import type { HostTool, TurnInput } from './types';
 
@@ -175,7 +176,7 @@ export async function runHostCommand(
   input: TurnInput,
   command: string,
   timeoutMs: number,
-  { unsealed = false }: { unsealed?: boolean } = {},
+  { unsealed = false, env }: { unsealed?: boolean; env?: Record<string, string> } = {},
 ): Promise<string> {
   input.signal.throwIfAborted();
   if (input.place) return runElsewhere(input, input.place, command, timeoutMs, unsealed);
@@ -200,14 +201,14 @@ export async function runHostCommand(
   const child = unboxed
     ? spawnTethered(command, [], {
         cwd: input.cwd,
-        env: hostEnvironment(),
+        env: { ...hostEnvironment(), ...env },
         // The system's own shell: sh where there is one, cmd on Windows.
         shell: process.platform === 'win32' ? true : '/bin/sh',
         stdin: 'ignore',
       })
     : spawnLinked(['--input-type=module', '-e', WORKER, '--', LINK_MODULE], {
         cwd: input.cwd,
-        env: hostEnvironment(),
+        env: { ...hostEnvironment(), ...env },
         stdin: 'pipe',
       });
   let output = '';
@@ -397,11 +398,32 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
         command: z.string().min(1).max(32_000),
         timeout_ms: z.number().int().min(100).max(600_000).default(30_000),
         dangerouslyDisableSandbox: z.boolean().optional(),
+        // A saved key, put in the environment unseen (ADR 0151); never to a command that runs elsewhere.
+        ...(input.secretEnv && !input.place && { secrets: secretsInput }),
       },
-      run: async (args: Record<string, unknown>) =>
-        runHostCommand(input, String(args.command), Number(args.timeout_ms), {
-          unsealed: args.dangerouslyDisableSandbox === true,
-        }),
+      run: async (args: Record<string, unknown>) => {
+        const command = String(args.command);
+        const options = { unsealed: args.dangerouslyDisableSandbox === true };
+        const wanted = (args.secrets as SecretRef[] | undefined) ?? [];
+        if (!wanted.length) return runHostCommand(input, command, Number(args.timeout_ms), options);
+        if (input.place)
+          throw new Error(
+            'A saved key stays on this computer, and this chat’s commands run elsewhere. Do it without the key, or ask the user to run it on this computer.',
+          );
+        if (!input.secretEnv) throw new Error('Saved keys can’t be used in commands here.');
+        const secrets = await input.secretEnv(wanted, command);
+        // What the command prints comes back blanked: `echo $GH_TOKEN` shows •••.
+        try {
+          return secrets.redact(
+            await runHostCommand(input, command, Number(args.timeout_ms), {
+              ...options,
+              env: secrets.env,
+            }),
+          );
+        } catch (error) {
+          throw new Error(secrets.redact(error instanceof Error ? error.message : String(error)));
+        }
+      },
     },
   ];
   for (const tool of tools) {

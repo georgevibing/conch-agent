@@ -19,6 +19,7 @@ import type {
   UsageWindow,
 } from '@conch/protocol';
 
+import type { SecretEnvironment, SecretRef } from '../vault/secrets';
 import type { WorkPlace } from '../workplaces/types';
 import type { z } from 'zod';
 
@@ -359,6 +360,12 @@ export interface TurnInput {
   tools: HostTool[];
   /** Apply the task ledger to engine-supplied host tools, too. */
   wrapTool?: (tool: HostTool) => HostTool;
+  /**
+   * Saved keys from Passwords into a command's environment, after the person
+   * agrees (ADR 0151): Conch's own Bash takes `secrets` only when this is set.
+   * Throws a sentence the model can act on.
+   */
+  secretEnv?: (wanted: readonly SecretRef[], command: string) => Promise<SecretEnvironment>;
   /** Bounded host resource guidance at a safe tool boundary; never a permission decision. */
   resourceFeedback?: () => string | undefined;
   requestPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
