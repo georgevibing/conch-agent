@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   asksSignIn,
   capFrom,
+  namesSite,
   PaymentYes,
   PAYMENT_WINDOW_MS,
   reviewableClick,
+  showsCharge,
   showsTotal,
   spendsMoney,
   totalOnPage,
@@ -108,5 +110,51 @@ describe('one card for a payment', () => {
     yes.agreed('shop.example');
     now = PAYMENT_WINDOW_MS + 1;
     expect(yes.take('shop.example')).toBe(false);
+  });
+});
+
+describe('a price that isn’t called a total (2026-10-27)', () => {
+  it('counts a plan per month, a deposit, a bill after a trial as paying', () => {
+    for (const page of [
+      'Pro plan\n$9.99/month\nSubscribe',
+      'Premium · €120 per year',
+      'Pay a €20 deposit to hold the table',
+      'Deposit of £50 required',
+      'Free for 7 days, then $12.99',
+      'Billed annually at $99',
+      '9,99 € pro Monat',
+    ])
+      expect(showsCharge(page), page).toBe(true);
+  });
+
+  it('leaves a free newsletter or a page without a price alone', () => {
+    for (const page of [
+      'Get our weekly newsletter. Subscribe',
+      'Book a table for 2 at 20:00',
+      'Rated 4.8 by 1,200 diners',
+    ])
+      expect(showsCharge(page), page).toBe(false);
+  });
+
+  it('keeps renewing, upgrading and adding funds on their card', () => {
+    for (const label of ['Renew now', 'Upgrade plan', 'Add funds', 'Start plan', 'Renew domain'])
+      expect(spendsMoney(label), label).toBe(true);
+    expect(reviewableClick('Renew now')).toBe(false);
+  });
+});
+
+describe('the person naming a site (2026-10-27)', () => {
+  it('takes its brand as a word, without sign-in words', () => {
+    expect(namesSite('order the same ink on Amazon', 'amazon.co.uk')).toBe(true);
+    expect(namesSite('post this on LinkedIn', 'linkedin.com')).toBe(true);
+    expect(namesSite('cancel my Netflix', 'netflix.com')).toBe(true);
+    expect(namesSite('look at hetzner.cloud', 'hetzner.cloud')).toBe(true);
+  });
+
+  it('never a lookalike, part of a word, or a plain label', () => {
+    expect(namesSite('order the same ink on Amazon', 'amazon-deals.shop')).toBe(false);
+    expect(namesSite('order the same ink on Amazon', 'amaz0n.com')).toBe(false);
+    expect(namesSite('open the netflixparty page', 'netflix.com')).toBe(false);
+    expect(namesSite('check my account', 'account.com')).toBe(false);
   });
 });

@@ -16,11 +16,11 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
 import {
-  asksSignIn,
   capFrom,
+  namesSite,
   PaymentYes,
   reviewableClick,
-  showsTotal as pageShowsTotal,
+  showsCharge,
   spendsMoney,
   totalOnPage,
   withinCap,
@@ -184,9 +184,11 @@ export function browserTools(
    * Auto or Full trust, with the person here and nobody else's words in the chat: the only
    * time their own words can stand in for a card. Your own Chrome keeps every card.
    */
+  // Someone can answer: the chat, a task from it, or the owner's own chat app (ADR 0151).
+  const answerable = () => !ctx.unattended || ctx.attended === true;
   const yoursToSay = () =>
     (ctx.permissionMode === 'auto' || ctx.permissionMode === 'bypassPermissions') &&
-    !ctx.unattended &&
+    answerable() &&
     !service.runtime.backend.shared &&
     !(ctx.taints?.().some((source) => source.kind === 'person') ?? false);
   /** The words the page shows, for its total: what the person sees, not the model's account of it. */
@@ -195,7 +197,8 @@ export function browserTools(
       .locator('body')
       .innerText({ timeout: 3_000 })
       .catch(() => '');
-  const showsTotal = async (tab: Tab) => pageShowsTotal(await visibleText(tab));
+  /** The page asks money for this: a total, a price a month, a deposit (ADR 0131). */
+  const charges = async (tab: Tab) => showsCharge(await visibleText(tab));
   /** The page's own total is inside a limit the person named ("buy it if under $50"). */
   const withinTheirLimit = async (tab: Tab): Promise<boolean> => {
     if (!yoursToSay()) return false;
@@ -440,7 +443,7 @@ export function browserTools(
     const someone = ctx.taints?.().some((source) => source.kind === 'person') ?? false;
     const browsing =
       ctx.permissionMode === 'auto' &&
-      !ctx.unattended &&
+      answerable() &&
       !someone &&
       !held &&
       !own &&
@@ -456,11 +459,12 @@ export function browserTools(
     const title = await tab.page.title().catch(() => '');
     // Only a resolved communication click is eligible here. Payment, access changes,
     // upload contents and typed-but-not-yet-applied payloads keep their own consent.
-    // Money stays out: a label about it (`spendsMoney`), or a "Book now" beside a total on the
-    // page ("€384 total"), which is paying by another name. Its card, or a limit named below.
+    // Money stays out: a label about it (`spendsMoney`), or a "Book now" or "Subscribe" beside
+    // a price on the page ("€384 total", "$9.99/month", "€20 deposit"), which is paying by
+    // another name. Its card, or a limit named below.
     const pays =
       kind === 'high-stakes' &&
-      (spendsMoney(request.action) || (request.reviewClick === true && (await showsTotal(tab))));
+      (spendsMoney(request.action) || (request.reviewClick === true && (await charges(tab))));
     const review =
       ctx.permissionMode === 'auto' && !own && !someone && request.reviewClick && !pays
         ? await reviewPage(tab.page)
@@ -541,15 +545,16 @@ export function browserTools(
       },
       check,
       consent: {
-        // The person's own message asked to sign in here, by the item or by the site; or Full
-        // trust. The fill still only goes to the item's own site, over https.
+        // The person's own message named this site or the item ("order the ink on Amazon",
+        // "sign in to Hetzner"), or Full trust: signing in there is part of what they asked.
+        // The fill still only goes to the item's own site, over https; a lookalike is refused.
         signIn: (title, host) => {
           if (!yoursToSay()) return false;
           const site = siteOf(`https://${host}`) ?? host;
           return (
             consented(ctx, title) ||
             (ctx.said?.() ?? []).some(
-              (message) => names(message, title) || asksSignIn(message, site),
+              (message) => names(message, title) || namesSite(message, site),
             )
           );
         },
