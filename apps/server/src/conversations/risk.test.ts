@@ -281,7 +281,9 @@ describe('“fix CI and push to main”: the push the person asked for (ADR 0117
       'gh pr create --fill --base main',
       'gh pr merge --squash --delete-branch',
     ]);
-    expect(assessRisk('Bash', { command }, ctx)?.reason).toBe('push code to a remote');
+    expect(assessRisk('Bash', { command }, ctx)?.reason).toBe(
+      'merge a pull request into a shared branch',
+    );
     expect(wantsSecondLook(command, true)).toBe(false);
     // What a shell or an interpreter is handed is read as commands; so is what an unquoted
     // here-document fills in.
@@ -309,8 +311,9 @@ describe('“fix CI and push to main”: the push the person asked for (ADR 0117
 
   it('never lifts what asks before reading, and a page can’t say it for the person', () => {
     expect(asked(bash('git push --force origin main'), said, false)).toBe(true);
-    // A chat that read nothing: the push went ahead before, and still does.
-    expect(asked(bash('git push origin main'), [], false)).toBe(false);
+    // Unasked, straight onto main: the person's call, before reading too (2026-10-27).
+    expect(asked(bash('git push origin main'), [], false)).toBe(true);
+    expect(asked(bash('git push origin feature/x'), [], false)).toBe(false);
     const push = assessRisk('Bash', { command: 'git push' }, { ...ctx, said });
     if (!push) throw new Error('A push is still a way out');
     expect(push).toMatchObject({ harm: 'moderate', lasting: true, asked: true });
@@ -1706,7 +1709,8 @@ describe('round 4: deletes at a vendor, secret stores, pushes that skip checks (
       false,
     );
     expect(stops('git push --no-verify origin feature/x')).toBe(false);
-    expect(stops('git push origin main')).toBe(false);
+    expect(stops('git push origin main')).toBe(true);
+    expect(stops('git push origin main', { said: ['ship it'] })).toBe(false);
   });
 
   it('reads renaming the default branch as asking for it', () => {

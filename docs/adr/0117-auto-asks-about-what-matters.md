@@ -453,3 +453,12 @@ A second replay attacked the lifts above, and five got through. Each is closed i
   too, unless a push was asked for. A plain push to `main` and `gh pr merge` stay as the corpus
   has them (`AFTER_READING`): routine before reading, asked about after.
 - "Rename the default branch" asks for `gh api … default_branch=`.
+
+## Addendum, 2026-10-27: straight onto main is the person's call
+
+Auto used to let an unasked `git push origin main` or `gh pr merge` go before the chat read
+anything. That was the model deciding to publish: "fix the failing test" isn't "push it to
+main", and "make CI green" isn't "merge the PR". Now a push straight to a branch others build
+from (`main`, `master`, `trunk`…), and a pull request merged into one, are severe history: they
+ask unless the person's words asked ("push", "ship it", "merge it", "push to main"), and "don't
+push yet" holds a merge too. A push to a feature branch is unchanged and goes without a word.

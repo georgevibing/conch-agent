@@ -1388,6 +1388,11 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         true,
         own ? wish(PUSH_WORDS) : NEVER,
       );
+    // Straight onto a branch others build from (`main`), unasked: publishing the work is the
+    // person's call, before reading too (2026-10-27). "Push", "ship it", "push to main" make it.
+    const onto = named.find((r) => PROTECTED_BRANCH.test(r));
+    if (onto && onto !== 'HEAD')
+      return severe('history', `push straight to ${onto}`, true, own ? wish(PUSH_WORDS) : NEVER);
     return moderate('egress', 'push code to a remote', true, own ? wish(PUSH_WORDS) : NEVER);
   }
   // Where pushes go: a new or repointed remote is a new way out, before reading too, unless
@@ -1756,13 +1761,17 @@ function infraRisk(part: string, prog: string, words: string[], places?: Places)
         true,
         wish(stems('release|publish|ship|tag', ABROAD.publish, 'rilasci')),
       );
-    // This repository's own pull request, merged because the person said so (ADR 0117).
+    // This repository's own pull request, merged because the person said so (ADR 0117); unasked,
+    // it lands on a branch others build from, so it asks before reading too (2026-10-27).
     if (/\bpr\s+merge\b/.test(sub))
-      return moderate(
-        'egress',
-        'merge a pull request',
+      return severe(
+        'history',
+        'merge a pull request into a shared branch',
         true,
-        /(?:^|\s)(?:-R|--repo)\b/.test(sub) ? NEVER : wish(MERGE_WORDS),
+        // "Don't push yet" holds a merge too: it's the same work going out.
+        /(?:^|\s)(?:-R|--repo)\b/.test(sub)
+          ? NEVER
+          : wish(new RegExp(`${MERGE_WORDS.source}|${PUSH_WORDS.source}`)),
       );
   }
   if (

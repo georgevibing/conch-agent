@@ -345,8 +345,9 @@ describe('“fix CI and push to main”, after reading the CI logs (ADR 0117, 20
       text: 'Fix the CI failures',
     });
     expect(outcomes).toEqual(['declined']);
+    // Unasked, the merge onto main is what it names first (2026-10-27).
     expect(asked[0]?.caution).toBe(
-      'This chat read CI logs on GitHub, which others can write to, and this would push code to a remote. Check this is what you asked for.',
+      'This would merge a pull request into a shared branch, and that can’t be undone. So I’m checking first.',
     );
   });
 
