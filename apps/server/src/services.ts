@@ -696,6 +696,8 @@ export class Services {
         this.#vaultDoctor.unref?.();
       },
       systemKeys: () => this.#systemKeys(),
+      onKeyMoved: () =>
+        void this.healed.note('secrets', 'Moved the key to your passwords into the keychain'),
     });
     this.commandSecrets = new CommandSecrets(this.vault);
     // Conch's own keys (providers, integrations, channels) are sealed under this

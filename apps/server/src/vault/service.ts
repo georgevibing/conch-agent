@@ -152,6 +152,8 @@ export interface VaultDeps {
   systemKeys?: () => Promise<SystemKey[]>;
   /** For tests: which operating system to act as (the macOS Keychain is Mac-only). */
   platform?: NodeJS.Platform;
+  /** The key moved from a file into the operating system's keystore (ADR 0152): say so, quietly. */
+  onKeyMoved?: () => void;
 }
 
 /** A key Conch uses itself, kept where it's used and shown in Passwords (`system`). */
@@ -394,6 +396,7 @@ export class VaultService {
       join(this.deps.home, 'vault'),
       this.deps.home,
       this.deps.keystore ?? 'auto',
+      { ...(this.deps.onKeyMoved && { onMoved: this.deps.onKeyMoved }) },
     );
     return this.#keystore;
   }

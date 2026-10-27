@@ -50,13 +50,13 @@ it's reachable, the file only when it isn't:
 
 ### What each place stops, honestly
 
-| Where the key is | Stops | Doesn't stop |
-| --- | --- | --- |
-| macOS login Keychain | Reading the key off the disk, out of a backup, a disk image or a synced folder; other users | A program running as you: items made through `/usr/bin/security` trust that tool, so any process can call it |
-| Windows DPAPI (CurrentUser) | The blob copied to another computer or read by another Windows user | A program running as you, which DPAPI unwraps for |
-| Linux Secret Service | Reading the key off the disk or a backup; other users; a locked keyring after logout | A program running as you while the keyring is unlocked |
-| A 0600 file | Other users | Anything running as you, a copy of the folder |
-| **The Passwords lock** (any of the above) | **A program running as you after a restart**: the vault's key is wrapped with your password and the device key, and Conch keeps no unwrapped copy | A program running as you that reads Conch's memory while it's unlocked |
+| Where the key is                          | Stops                                                                                                                                             | Doesn't stop                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| macOS login Keychain                      | Reading the key off the disk, out of a backup, a disk image or a synced folder; other users                                                       | A program running as you: items made through `/usr/bin/security` trust that tool, so any process can call it |
+| Windows DPAPI (CurrentUser)               | The blob copied to another computer or read by another Windows user                                                                               | A program running as you, which DPAPI unwraps for                                                            |
+| Linux Secret Service                      | Reading the key off the disk or a backup; other users; a locked keyring after logout                                                              | A program running as you while the keyring is unlocked                                                       |
+| A 0600 file                               | Other users                                                                                                                                       | Anything running as you, a copy of the folder                                                                |
+| **The Passwords lock** (any of the above) | **A program running as you after a restart**: the vault's key is wrapped with your password and the device key, and Conch keeps no unwrapped copy | A program running as you that reads Conch's memory while it's unlocked                                       |
 
 The operating system's store is the floor; the lock is the only thing that keeps another program
 running as the same person out, and Health says so where the key is a file.
