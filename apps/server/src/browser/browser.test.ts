@@ -51,6 +51,8 @@ const pages: Record<string, string> = {
     <p>Order total: £12.00</p>
     <button onclick="document.title='Ordered'">Place order</button>
     <button onclick="document.title='Booked'">Book a table</button>`,
+  '/table': `<title>Trattoria</title><h1>A table for two at 8</h1>
+    <button onclick="document.title='Booked'">Book a table</button>`,
   '/cookies': `<title>News</title><div id="onetrust-banner-sdk" class="cookie-consent">We use cookies
     <button id="onetrust-reject-all-handler" onclick="this.parentElement.remove();document.title='Rejected'">Reject all</button>
     <button id="onetrust-accept-btn-handler">Accept all</button></div><h1>Today’s news</h1>`,
@@ -770,13 +772,21 @@ describe.skipIf(!hasBrowser)('what the person already said, in Auto (ADR 0131, 2
   );
 
   it('lets Auto’s review weigh a booking, never a payment', { timeout: 60_000 }, async () => {
-    const h = harness(['deny', 'deny'], 'auto', 'conv_review_book');
-    const page = await h.call('browser_open', { url: `${origin}/checkout` });
+    const h = harness(['deny', 'deny', 'deny'], 'auto', 'conv_review_book');
+    let page = await h.call('browser_open', { url: `${origin}/table` });
     await h.call('browser_click', { ref: refOf(page, /Book a table/), element: 'Book a table' });
+    page = await h.call('browser_open', { url: `${origin}/checkout` });
     await h.call('browser_click', { ref: refOf(page, /Place order/), element: 'Place order' });
-    expect(h.asked.map((a) => a.browser?.kind)).toEqual(['high-stakes', 'high-stakes']);
-    // The booking carries the page for the review; the order doesn't.
+    // "Book" beside a total to pay is paying by another name.
+    await h.call('browser_click', { ref: refOf(page, /Book a table/), element: 'Book a table' });
+    expect(h.asked.map((a) => a.browser?.kind)).toEqual([
+      'high-stakes',
+      'high-stakes',
+      'high-stakes',
+    ]);
+    // The free booking carries the page for the review; the order and the paid one don't.
     expect(h.asked[0]?.revalidate).toBeTypeOf('function');
     expect(h.asked[1]?.revalidate).toBeUndefined();
+    expect(h.asked[2]?.revalidate).toBeUndefined();
   });
 });

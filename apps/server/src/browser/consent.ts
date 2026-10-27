@@ -108,24 +108,39 @@ const TOTAL = new RegExp(
   'giu',
 );
 
+/** The same, with the word after the amount: "€384 total", "$42.10 in total". */
+const TOTAL_AFTER = new RegExp(
+  `(?:(${SYMBOL})\\s*${AMOUNT}|${AMOUNT}\\s*(${SYMBOL}|${CODE})(?![\\p{L}\\p{N}])|(${CODE})\\s*${AMOUNT})\\s*(?:in )?(?:total|gesamt|au total|en total)\\b`,
+  'giu',
+);
+
+/** Every amount the page labels as a total. */
+function totals(text: string): { amount: number; currency: string }[] {
+  const found: { amount: number; currency: string }[] = [];
+  for (const match of [...text.matchAll(TOTAL), ...text.matchAll(TOTAL_AFTER)]) {
+    const [, sym1, amt1, amt2, unit2, code3, amt3] = match;
+    const currency = currencyOf(sym1 ?? unit2 ?? code3);
+    const raw = amt1 ?? amt2 ?? amt3;
+    const amount = raw ? amountOf(raw) : undefined;
+    if (currency && amount !== undefined) found.push({ amount, currency });
+  }
+  return found;
+}
+
 /**
  * The order's total as the page itself shows it, never as the model says: the largest
  * amount labelled as a total, in one currency. Undefined when there's none, or the page
  * shows totals in more than one currency.
  */
 export function totalOnPage(text: string): { amount: number; currency: string } | undefined {
-  let best: { amount: number; currency: string } | undefined;
-  const currencies = new Set<string>();
-  for (const match of text.matchAll(TOTAL)) {
-    const [, sym1, amt1, amt2, unit2, code3, amt3] = match;
-    const currency = currencyOf(sym1 ?? unit2 ?? code3);
-    const raw = amt1 ?? amt2 ?? amt3;
-    const amount = raw ? amountOf(raw) : undefined;
-    if (!currency || amount === undefined) continue;
-    currencies.add(currency);
-    if (!best || amount > best.amount) best = { amount, currency };
-  }
-  return currencies.size === 1 ? best : undefined;
+  const found = totals(text);
+  if (new Set(found.map((t) => t.currency)).size !== 1) return undefined;
+  return found.reduce((best, t) => (t.amount > best.amount ? t : best));
+}
+
+/** The page shows a total to pay, in any currency: a "Book now" there is paying. */
+export function showsTotal(text: string): boolean {
+  return totals(text).length > 0;
 }
 
 /** The page's total is inside the person's limit, in the same currency. */

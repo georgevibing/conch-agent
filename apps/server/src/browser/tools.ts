@@ -20,6 +20,7 @@ import {
   capFrom,
   PaymentYes,
   reviewableClick,
+  showsTotal as pageShowsTotal,
   spendsMoney,
   totalOnPage,
   withinCap,
@@ -188,16 +189,19 @@ export function browserTools(
     !ctx.unattended &&
     !service.runtime.backend.shared &&
     !(ctx.taints?.().some((source) => source.kind === 'person') ?? false);
+  /** The words the page shows, for its total: what the person sees, not the model's account of it. */
+  const visibleText = (tab: Tab) =>
+    tab.page
+      .locator('body')
+      .innerText({ timeout: 3_000 })
+      .catch(() => '');
+  const showsTotal = async (tab: Tab) => pageShowsTotal(await visibleText(tab));
   /** The page's own total is inside a limit the person named ("buy it if under $50"). */
   const withinTheirLimit = async (tab: Tab): Promise<boolean> => {
     if (!yoursToSay()) return false;
     const cap = capFrom(ctx.said?.() ?? []);
     if (!cap) return false;
-    const text = await tab.page
-      .locator('body')
-      .innerText({ timeout: 3_000 })
-      .catch(() => '');
-    const total = totalOnPage(text);
+    const total = totalOnPage(await visibleText(tab));
     return Boolean(total && withinCap(cap, total));
   };
 
@@ -452,18 +456,18 @@ export function browserTools(
     const title = await tab.page.title().catch(() => '');
     // Only a resolved communication click is eligible here. Payment, access changes,
     // upload contents and typed-but-not-yet-applied payloads keep their own consent.
-    // Money stays out (`spendsMoney`): its card, or a limit the person named, below.
+    // Money stays out: a label about it (`spendsMoney`), or a "Book now" beside a total on the
+    // page ("€384 total"), which is paying by another name. Its card, or a limit named below.
+    const pays =
+      kind === 'high-stakes' &&
+      (spendsMoney(request.action) || (request.reviewClick === true && (await showsTotal(tab))));
     const review =
-      ctx.permissionMode === 'auto' &&
-      !own &&
-      !someone &&
-      request.reviewClick &&
-      !spendsMoney(request.action)
+      ctx.permissionMode === 'auto' && !own && !someone && request.reviewClick && !pays
         ? await reviewPage(tab.page)
         : undefined;
     // Paying, once the person settled it: a yes to the saved card on this site a moment ago,
     // or a total on the page inside the limit they named. Never the model's word for either.
-    if (kind === 'high-stakes' && spendsMoney(request.action) && yoursToSay()) {
+    if (pays && yoursToSay()) {
       if (payments.take(site) || (await withinTheirLimit(tab))) {
         tab.sites.add(site);
         vouched = true;
@@ -506,7 +510,7 @@ export function browserTools(
     if (kind === 'site') await service.lendSignIn(conversationId, site);
     if (kind === 'high-stakes') vouched = true;
     // The person's yes to the order covers filling the saved card on this checkout.
-    if (kind === 'high-stakes' && spendsMoney(request.action)) payments.agreed(site);
+    if (pays) payments.agreed(site);
     // "Always" in your own Chrome stays this chat's: it never grants a site for good there.
     if (decision === 'allow-always' && kind === 'site' && !own) await service.grantSite(site);
   };

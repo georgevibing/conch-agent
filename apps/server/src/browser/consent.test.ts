@@ -6,6 +6,7 @@ import {
   PaymentYes,
   PAYMENT_WINDOW_MS,
   reviewableClick,
+  showsTotal,
   spendsMoney,
   totalOnPage,
   withinCap,
@@ -77,6 +78,13 @@ describe('a limit the person named', () => {
     expect(totalOnPage('Total: 1.234,50 €')).toEqual({ amount: 1234.5, currency: 'EUR' });
     expect(totalOnPage('Total $10.00 · Total €9.00')).toBeUndefined();
     expect(totalOnPage('Subtotal $10.00')).toBeUndefined();
+    expect(totalOnPage('Casa do Rio · €384 total')).toEqual({ amount: 384, currency: 'EUR' });
+  });
+
+  it('knows a page that shows a total to pay, in any currency', () => {
+    expect(showsTotal('Casa do Rio · €384 total')).toBe(true);
+    expect(showsTotal('Total $10.00 · Total €9.00')).toBe(true);
+    expect(showsTotal('Pasta 12 € · Wine 6 €')).toBe(false);
   });
 });
 
