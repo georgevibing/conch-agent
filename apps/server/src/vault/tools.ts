@@ -197,6 +197,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
           ...(tainted && { taint: tainted }),
           vault: {
             action: 'read',
+            itemId: item,
             itemTitle: policy.title,
             itemType: policy.type,
             fieldLabel: policy.field.label,

@@ -638,7 +638,12 @@ export interface ToolContext {
    * A Passwords question this chat already answered yes to, read from its own log, so a
    * restart or another provider doesn't ask it again (ADR 0151).
    */
-  answeredBefore?: (asked: { itemTitle: string; fieldLabel: string; envName?: string }) => boolean;
+  answeredBefore?: (asked: {
+    itemId?: string;
+    itemTitle: string;
+    fieldLabel: string;
+    envName?: string;
+  }) => boolean;
   /** Where the conversation came from, when not from the person in Conch: a routine run, a chat app… */
   origin?: ConversationSummary['origin'];
   /** The model answering this turn, when one was chosen. */
@@ -1014,25 +1019,31 @@ export const FROM_PARENT_CHAT = '[Said in the chat this task came from]';
 /**
  * Whether the chat's log already has a yes to this Passwords question (ADR 0151): the same
  * item, field and variable, answered Allow or Always. The log outlives the gateway and the
- * provider, so a restart or a switch of model doesn't ask again.
+ * provider, so a restart or a switch of model doesn't ask again. Only since the chat was
+ * last cleared (clearing drops what was allowed, ADR 0128), and by the item's id where the
+ * question kept one: another item saved under the same title isn't the one allowed.
  */
 export function vaultAnswered(
   events: readonly ConversationEvent[],
-  asked: { itemTitle: string; fieldLabel: string; envName?: string },
+  asked: { itemId?: string; itemTitle: string; fieldLabel: string; envName?: string },
 ): boolean {
+  const start = contextStart(events);
+  const since = events.filter((e) => e.seq >= start);
   const yes = new Set(
-    events.flatMap((e) =>
+    since.flatMap((e) =>
       e.type === 'permission.resolved' && (e.decision === 'allow' || e.decision === 'allow-always')
         ? [e.permissionId]
         : [],
     ),
   );
-  return events.some(
+  return since.some(
     (e) =>
       e.type === 'permission.requested' &&
       yes.has(e.permissionId) &&
-      e.vault?.itemTitle === asked.itemTitle &&
-      e.vault.fieldLabel === asked.fieldLabel &&
+      (e.vault?.itemId && asked.itemId
+        ? e.vault.itemId === asked.itemId
+        : e.vault?.itemTitle === asked.itemTitle) &&
+      e.vault?.fieldLabel === asked.fieldLabel &&
       (e.vault.envName ?? undefined) === asked.envName,
   );
 }

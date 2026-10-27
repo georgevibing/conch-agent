@@ -231,6 +231,7 @@ describe('a saved key in a command (ADR 0151)', () => {
     });
     expect(asked).toHaveLength(0);
     expect(seen[0]).toEqual({
+      itemId: 'pw_gh',
       itemTitle: 'Gh pat giotiskl',
       fieldLabel: 'Key',
       envName: 'GH_TOKEN',
