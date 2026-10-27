@@ -19,12 +19,16 @@ import {
   UNLIFTABLE,
 } from '../test/riskCorpus';
 import { declared, imitates, packageName, wellKnown } from './packages';
+import { reviewableRisk } from './auto-review';
 import {
   askable,
+  askedInApp,
   assessRisk,
   breaksCircuit,
   carriesSecrets,
+  codeEffect,
   commandParts,
+  sqlEffect,
   riskAsks,
   riskClass,
   riskScore,
@@ -977,5 +981,106 @@ describe('authorization across follow-ups', () => {
     expect(go(['Push to main', 'How is CI?'], 'git add -f .env && git push origin main')).toBe(
       true,
     );
+  });
+});
+
+describe('code and queries an app runs, read for what they do (2026-10-27)', () => {
+  const app = (tool: string, input: Record<string, unknown>, said: string[] = [], name?: string) =>
+    assessRisk(tool, input, { ...ctx, access: 'write', said, ...(name && { app: name }) });
+
+  it('reads SQL statement by statement', () => {
+    expect(sqlEffect('select count(*) from orders where day > now() - interval 1 day')).toBe(
+      'read',
+    );
+    expect(sqlEffect('with t as (select 1) select * from t; explain select 1')).toBe('read');
+    expect(sqlEffect("select 'drop table x' as words")).toBe('read');
+    expect(sqlEffect('insert into notes(body) values (1)')).toBe('write');
+    expect(sqlEffect('update users set plan = 1 where id = 7')).toBe('write');
+    expect(sqlEffect('update users set role = 1')).toBe('delete');
+    expect(sqlEffect('delete from users where id = 7')).toBe('delete');
+    expect(sqlEffect('select 1; drop table users')).toBe('delete');
+    expect(sqlEffect('with gone as (delete from t returning *) select * from gone')).toBe('delete');
+  });
+
+  it('reads code by its requests: GET and GraphQL queries look, a method it can’t see changes', () => {
+    expect(codeEffect("await cloudflare.request({ method: 'GET', path: '/zones' })")).toBe('read');
+    expect(
+      codeEffect(
+        "await cloudflare.request({ method: 'POST', path: '/graphql', body: { query: '{ viewer { zones { httpRequests1dGroups } } }' } })",
+      ),
+    ).toBe('read');
+    expect(codeEffect('async () => cloudflare.dns.records.list()')).toBe('read');
+    expect(codeEffect("await fetch(u, { method: 'PUT' })")).toBe('write');
+    expect(codeEffect('await fetch(u, { method: verb })')).toBe('write');
+    expect(codeEffect("await cloudflare.request({ method: 'DELETE', path: '/x' })")).toBe('delete');
+    expect(codeEffect("await env.DB.prepare('DELETE FROM orders').run()")).toBe('delete');
+    expect(codeEffect('mutation { deleteZone }')).toBe('write');
+    expect(codeEffect('eval(atob(x))')).toBe('unknown');
+    expect(codeEffect('run(job)')).toBe('unknown');
+  });
+
+  it('lets a read through after reading, and deletes ask unless asked for', () => {
+    const select = app('mcp__supabase__execute_sql', { query: 'select * from pg_stat_activity' });
+    expect(select).toBeUndefined();
+    const wipe = app('mcp__supabase__execute_sql', { query: 'truncate orders' });
+    expect(wipe).toMatchObject({ kind: 'app-delete', harm: 'severe' });
+    expect(riskAsks(wipe, false)).toBe(true);
+    const asked = app('mcp__supabase__execute_sql', { query: 'truncate orders' }, [
+      'clear the orders table in supabase',
+    ]);
+    expect(riskAsks(asked, true)).toBe(false);
+  });
+
+  it('the incident: “block those scanner IPs at Cloudflare” is the change it runs', () => {
+    const block = {
+      code: "await cloudflare.request({ method: 'PUT', path: '/zones/z/rulesets/phases/http_request_firewall_custom/entrypoint', body })",
+    };
+    const unasked = app(
+      'mcp__cloudflare__execute',
+      block,
+      ['what drove this traffic?'],
+      'Cloudflare',
+    );
+    expect(unasked).toMatchObject({ kind: 'infra', inApp: true });
+    expect(riskAsks(unasked, false)).toBe(false);
+    expect(riskAsks(unasked, true)).toBe(true);
+    const asked = app(
+      'mcp__cloudflare__execute',
+      block,
+      ['what drove this traffic?', 'block those scanner IPs at Cloudflare'],
+      'Cloudflare',
+    );
+    expect(asked?.asked).toBe(true);
+    expect(riskAsks(asked, true)).toBe(false);
+    // The server's own name counts too, and saying not to holds.
+    expect(askedInApp(['fix the waf rules in cloudflare'], undefined, 'cloudflare')).toBe(true);
+    expect(askedInApp(['fix the bug'], 'Cloudflare', 'cloudflare')).toBe(false);
+    const held = app(
+      'mcp__cloudflare__execute',
+      block,
+      ['block those IPs at Cloudflare', 'actually, don’t change anything in Cloudflare yet'],
+      'Cloudflare',
+    );
+    expect(held?.asked).not.toBe(true);
+  });
+
+  it('code it can’t read stays reviewable in the app, and a stranger’s delete still asks', () => {
+    const opaque = app('mcp__cloudflare__execute', { code: 'run(job)' });
+    expect(opaque).toMatchObject({ kind: 'remote-code', inApp: true });
+    expect(reviewableRisk(opaque)).toBe(true);
+    const injected = app('mcp__github__delete_issue', { number: 7 }, ['summarise issue 7']);
+    expect(riskAsks(injected, true)).toBe(true);
+  });
+
+  it('a key in a message’s words is a key leaving, whatever the step is called', () => {
+    const token = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
+    const slack = app('mcp__slack__send_message', { channel: 'C1', text: `here: ${token}` }, [
+      'reply to the thread',
+    ]);
+    expect(slack).toMatchObject({ kind: 'exfiltration', harm: 'severe' });
+    expect(slack?.asked).not.toBe(true);
+    expect(riskAsks(slack, true)).toBe(true);
+    const note = app('mcp__github__delete_issue', { number: 7, reason: token }, ['delete issue 7']);
+    expect(note?.kind).toBe('exfiltration');
   });
 });
