@@ -1348,17 +1348,30 @@ export function googleWriteTools(
     noun: 'answered',
     capability: 'calendar-write',
     description:
-      'Answer an invitation in Google Calendar, after the person approves it: accepted, declined or tentative (maybe), with an optional note. Use this, not the browser, for "accept the meeting from Bob". Pass the eventId from google_calendar_briefing. Google tells the organizer unless notify is false.',
+      'Answer an invitation in Google Calendar, after the person approves it: accepted, declined or tentative (maybe), with an optional note. Use this, not the browser, for "accept the meeting from Bob". To suggest another time ("ask Bob to move it to Thursday"), give proposedStart and proposedEnd (RFC3339 with offsets, or days): Google has no way to propose a time through its API, so the suggestion goes to the organizer as the note on your answer. Pass the eventId from google_calendar_briefing. Google tells the organizer unless notify is false.',
     input: {
       accountId: accountRef,
       calendarId,
       eventId,
       response: z.enum(['accepted', 'declined', 'tentative']),
       comment: oneLine(500).optional(),
+      proposedStart: When.optional(),
+      proposedEnd: When.optional(),
       notify: z.boolean().default(true),
     },
-    identity: (a) => [a.accountId, a.calendarId, a.eventId, a.response, a.comment ?? null],
+    identity: (a) => [
+      a.accountId,
+      a.calendarId,
+      a.eventId,
+      a.response,
+      a.comment ?? null,
+      a.proposedStart ?? null,
+      a.proposedEnd ?? null,
+    ],
     async prepare(a, account) {
+      if ((a.proposedStart === undefined) !== (a.proposedEnd === undefined))
+        throw new GoogleError('invalid', 'Give both proposedStart and proposedEnd, or neither.');
+      if (a.proposedStart && a.proposedEnd) checkSpan(a.proposedStart, a.proposedEnd);
       const event = await readEvent(account.id, a.calendarId, a.eventId);
       if (!event || event.status === 'cancelled')
         throw new GoogleError(
@@ -1371,10 +1384,20 @@ export function googleWriteTools(
           'invalid',
           `${account.email} isn’t a guest of “${event.summary ?? 'this event'}”, so there’s no invitation to answer (it may be their own event).`,
         );
-      return { event, attendees };
+      // A time to suggest goes as words on the answer, the one place Google lets a guest say it.
+      const note = [
+        a.comment,
+        a.proposedStart && a.proposedEnd
+          ? `Could we move it to ${whenText(a.proposedStart, a.proposedEnd).replace(/^(?:from|at|on) /, '')}?`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 500);
+      return { event, attendees, note: note || undefined };
     },
-    summary: (a, account, { event }) =>
-      `${ANSWER[a.response]} “${event.summary ?? 'an event'}” (${whenText(startOf(event), endOf(event))}) on ${account.email}’s calendar${a.comment ? `, saying “${a.comment}”` : ''}${a.notify ? ', and Google tells the organizer' : ''}`,
+    summary: (a, account, { event, note }) =>
+      `${ANSWER[a.response]} “${event.summary ?? 'an event'}” (${whenText(startOf(event), endOf(event))}) on ${account.email}’s calendar${note ? `, saying “${note}”` : ''}${a.notify ? ', and Google tells the organizer' : ''}`,
     async perform(a, account, run) {
       // Google takes the whole guest list: everyone as they were, only this account's answer new.
       const attendees = run.prepared.attendees.map((p) =>
@@ -1382,7 +1405,7 @@ export function googleWriteTools(
           ? {
               ...p,
               responseStatus: a.response,
-              ...(a.comment !== undefined && { comment: a.comment }),
+              ...(run.prepared.note !== undefined && { comment: run.prepared.note }),
             }
           : p,
       );

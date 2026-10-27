@@ -1146,6 +1146,42 @@ describe('tidying mail, leaving lists and answering invitations', () => {
     ]);
   });
 
+  it('suggests another time as the note on the answer, shown on the card', async () => {
+    granted = scopesOf('calendar-write');
+    await signIn(['calendar-write']);
+    const attendees = [{ email: 'ada@work.example', self: true, responseStatus: 'needsAction' }];
+    fetcher.mockImplementation(async (_url, init) =>
+      init?.method === 'PATCH'
+        ? new Response(String(init.body).replace('{', '{"id":"ev1","summary":"Demo",'))
+        : json({
+            id: 'ev1',
+            summary: 'Demo',
+            start: { dateTime: '2026-10-30T10:00:00Z' },
+            attendees,
+          }),
+    );
+    const { ctx, ask } = context();
+    const respond = tool(googleTools(service, ctx), 'google_calendar_respond');
+    await respond.run({
+      eventId: 'ev1',
+      response: 'tentative',
+      proposedStart: '2026-10-31T15:00:00Z',
+      proposedEnd: '2026-10-31T16:00:00Z',
+    });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.stringMatching(/Could we move it to 2026-10-31T15/),
+      }),
+    );
+    const [, init] = calls('PATCH')[0] ?? [];
+    expect(JSON.parse(String(init?.body)).attendees[0].comment).toMatch(
+      /^Could we move it to 2026-10-31T15:00:00Z to 2026-10-31T16:00:00Z\?$/,
+    );
+    await expect(
+      respond.run({ eventId: 'ev1', response: 'tentative', proposedStart: '2026-10-31T15:00:00Z' }),
+    ).rejects.toThrow(/both proposedStart and proposedEnd/);
+  });
+
   it('an event the account isn’t invited to has nothing to answer', async () => {
     granted = scopesOf('calendar-write');
     await signIn(['calendar-write']);
