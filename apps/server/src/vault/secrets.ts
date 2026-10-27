@@ -105,6 +105,8 @@ export type SecretContext = Pick<
   | 'append'
   | 'signal'
   | 'unattended'
+  | 'attended'
+  | 'answeredBefore'
   | 'untrusted'
   | 'permissionMode'
   | 'fullTrust'
@@ -137,10 +139,9 @@ export class CommandSecrets {
     wanted: readonly SecretRef[],
     { command, tool }: { command: string; tool: string },
   ): Promise<SecretEnvironment> {
-    if (ctx.unattended)
-      throw new Error(
-        'Nobody is here to agree to using a saved key, so this run can’t use one. Do it without the key, or leave it for the user.',
-      );
+    // Nobody answers a routine's questions: only an item the person set to be used without
+    // asking goes, below. A task from a watched chat, or your own chat app, asks as a chat does.
+    const nobody = ctx.unattended && !ctx.attended;
     const names = new Set<string>();
     for (const ref of wanted) {
       const refused = refusedName(ref.name);
@@ -149,6 +150,10 @@ export class CommandSecrets {
       if (names.has(upper)) throw new Error(`${ref.name} is given twice. Give each variable once.`);
       names.add(upper);
     }
+    if (nobody && (await this.vault.isLocked()))
+      throw new Error(
+        'The user’s Passwords is locked and nobody is here to unlock it, so this run can’t use a saved key. Do it without the key, or leave it for the user.',
+      );
     const show = (request: VaultRequest) => ctx.append({ type: 'vault.request', request });
     if (!(await this.vault.ensureOpen(show, ctx.signal)))
       throw new Error(
@@ -167,8 +172,20 @@ export class CommandSecrets {
       // After reading something untrusted, a page may be asking for the key: the person,
       // unless Full trust or their own words already said yes (`consented`).
       const tainted = ctx.untrusted?.();
-      const yes = consented(ctx, policy.title);
-      if (!yes && (tainted || (policy.ask && !this.#isAllowed(ctx.conversationId, key)))) {
+      if (nobody && (policy.ask || tainted))
+        throw new Error(
+          `Nobody is here to agree to using “${policy.title}”, so this run can’t use it. Do it without the key, or leave it for the user. (They can let the assistant use it without asking, under the item’s Your assistant setting.)`,
+        );
+      const yes = consented(ctx, policy.title, { loose: true });
+      const before =
+        this.#isAllowed(ctx.conversationId, key) ||
+        (ctx.answeredBefore?.({
+          itemTitle: policy.title,
+          fieldLabel: policy.field.label,
+          envName: ref.name,
+        }) ??
+          false);
+      if (!yes && (tainted || (policy.ask && !before))) {
         const decision = await ctx.ask({
           toolName: tool,
           input: { item: policy.title, field: policy.field.label, name: ref.name },

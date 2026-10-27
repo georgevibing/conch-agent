@@ -622,6 +622,17 @@ export interface ToolContext {
   restricted?: (capability: SkillCapability, detail?: string) => Promise<string | undefined>;
   /** Nobody is there to answer: a routine, a task, a chat from a chat app (ADR 0060). */
   unattended?: boolean;
+  /**
+   * Unattended, yet a person answers its questions where they are (ADR 0151): a task sent
+   * from a chat a person is in, or your own chat app, where questions are relayed to you.
+   * Not a routine, a pinned app, another app or another agent.
+   */
+  attended?: boolean;
+  /**
+   * A Passwords question this chat already answered yes to, read from its own log, so a
+   * restart or another provider doesn't ask it again (ADR 0151).
+   */
+  answeredBefore?: (asked: { itemTitle: string; fieldLabel: string; envName?: string }) => boolean;
   /** Where the conversation came from, when not from the person in Conch: a routine run, a chat app… */
   origin?: ConversationSummary['origin'];
   /** The model answering this turn, when one was chosen. */
@@ -993,6 +1004,32 @@ function grant(live: Live, grants: TurnExtras['grants']) {
  * anything said in the task itself (ADR 0149): each one starts with this.
  */
 export const FROM_PARENT_CHAT = '[Said in the chat this task came from]';
+
+/**
+ * Whether the chat's log already has a yes to this Passwords question (ADR 0151): the same
+ * item, field and variable, answered Allow or Always. The log outlives the gateway and the
+ * provider, so a restart or a switch of model doesn't ask again.
+ */
+export function vaultAnswered(
+  events: readonly ConversationEvent[],
+  asked: { itemTitle: string; fieldLabel: string; envName?: string },
+): boolean {
+  const yes = new Set(
+    events.flatMap((e) =>
+      e.type === 'permission.resolved' && (e.decision === 'allow' || e.decision === 'allow-always')
+        ? [e.permissionId]
+        : [],
+    ),
+  );
+  return events.some(
+    (e) =>
+      e.type === 'permission.requested' &&
+      yes.has(e.permissionId) &&
+      e.vault?.itemTitle === asked.itemTitle &&
+      e.vault.fieldLabel === asked.fieldLabel &&
+      (e.vault.envName ?? undefined) === asked.envName,
+  );
+}
 
 /**
  * Someone other than you, in a group chat (ADR 0075): the chat answers in
@@ -3379,6 +3416,13 @@ export class ConversationManager {
     live.unwatched = undefined;
     /** Full trust here is a person's: this chat's, or the one a task came from (ADR 0033). */
     const personTrusts = watched || Boolean(extras?.attended);
+    /**
+     * A person answers this turn's questions (ADR 0151): here, from the chat a task came
+     * from, or in your own chat app, where questions are relayed to you (a stranger's go to
+     * you too). Not a routine, a pinned app, another app or another agent.
+     */
+    const answersHere =
+      personTrusts || (live.record.origin?.kind === 'channel' && !live.record.origin.guest);
     // A mode picked mid-turn holds from the next step, not the next message
     // (a routine keeps its own). What's waiting that it would have let through, goes.
     const modeListeners: ((mode: PermissionMode) => void)[] = [];
@@ -4152,6 +4196,8 @@ export class ConversationManager {
               return limit;
             },
             unattended: Boolean(extras || live.record.origin),
+            attended: answersHere,
+            answeredBefore: (asked) => vaultAnswered(live.events, asked),
             ...(live.record.origin && { origin: live.record.origin }),
             ...(resolved.model && { model: resolved.model }),
             waitingForYou: (waiting) =>
@@ -5043,6 +5089,8 @@ export class ConversationManager {
                   append: (event) => this.#append(live, event),
                   signal: abort.signal,
                   unattended: Boolean(extras || live.record.origin),
+                  attended: answersHere,
+                  answeredBefore: (asked) => vaultAnswered(live.events, asked),
                   untrusted,
                   permissionMode: resolved.permissionMode,
                   fullTrust: trusting,
