@@ -47,6 +47,10 @@ const pages: Record<string, string> = {
   '/change': `<title>Security</title><form><label>Current password <input type=password name=cur autocomplete=current-password></label>
     <label>New password <input type=password name=n1 autocomplete=new-password></label>
     <label>Confirm new password <input type=password name=n2 autocomplete=new-password></label><button type=button>Save</button></form>`,
+  '/checkout': `<title>Checkout</title><h1>Your order</h1><p>The pearl mug</p>
+    <p>Order total: £12.00</p>
+    <button onclick="document.title='Ordered'">Place order</button>
+    <button onclick="document.title='Booked'">Book a table</button>`,
   '/cookies': `<title>News</title><div id="onetrust-banner-sdk" class="cookie-consent">We use cookies
     <button id="onetrust-reject-all-handler" onclick="this.parentElement.remove();document.title='Rejected'">Reject all</button>
     <button id="onetrust-accept-btn-handler">Accept all</button></div><h1>Today’s news</h1>`,
@@ -96,6 +100,7 @@ function harness(
   answers: Answer[] = [],
   mode: PermissionMode = 'default',
   conversationId = 'conv_test',
+  said: readonly string[] = [],
 ) {
   const asked: AskRequest[] = [];
   const events: ConversationEventInput[] = [];
@@ -110,6 +115,7 @@ function harness(
       return Promise.resolve(typeof answer === 'function' ? answer(request) : answer);
     },
     signal: new AbortController().signal,
+    said: () => said,
   };
   const tools = new Map(browser.tools(ctx).map((t) => [t.name, t]));
   const call = async (name: string, args: Record<string, unknown>) =>
@@ -550,6 +556,34 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
     );
 
     it(
+      'signs in with no card in Auto when the person asked for this sign-in, and asks when not',
+      { timeout: 90_000 },
+      async () => {
+        await withVault(async (vault) => {
+          await vault.create(login('Mail', 'ada@example.com', 'violet-heron-57!'));
+          const asked = harness([], 'auto', 'conv_said_signin', ['log in to Mail with my login']);
+          let text = await asked.call('browser_open', { url: `${origin}/step1` });
+          const filled = await asked.call('browser_type', {
+            ref: refOf(text, /textbox "Email or phone"/),
+            element: 'Email or phone',
+            text: '',
+          });
+          expect(asked.asked).toHaveLength(0);
+          expect(filled).toContain('Conch filled the username');
+
+          const other = harness(['deny'], 'auto', 'conv_unsaid_signin', ['what’s new today?']);
+          text = await other.call('browser_open', { url: `${origin}/step1` });
+          await other.call('browser_type', {
+            ref: refOf(text, /textbox "Email or phone"/),
+            element: 'Email or phone',
+            text: '',
+          });
+          expect(other.asked.map((a) => a.browser?.kind)).toEqual(['fill']);
+        });
+      },
+    );
+
+    it(
       'never fills a sign-in box from another origin inside the page',
       { timeout: 90_000 },
       async () => {
@@ -698,5 +732,51 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
     });
     expect(result).toContain('Read only mode');
     expect(asked).toHaveLength(0);
+  });
+});
+
+describe.skipIf(!hasBrowser)('what the person already said, in Auto (ADR 0131, 2026-10-27)', () => {
+  it(
+    'places an order inside the limit they named, and asks past it',
+    { timeout: 60_000 },
+    async () => {
+      const within = harness([], 'auto', 'conv_cap_ok', ['buy the pearl mug if it’s under £20']);
+      let page = await within.call('browser_open', { url: `${origin}/checkout` });
+      await within.call('browser_click', {
+        ref: refOf(page, /Place order/),
+        element: 'Place order',
+      });
+      expect(within.asked).toHaveLength(0);
+      expect(await browser.tabIfOpen('conv_cap_ok')?.page.title()).toBe('Ordered');
+
+      const past = harness(['deny'], 'auto', 'conv_cap_past', ['buy it if under £10']);
+      page = await past.call('browser_open', { url: `${origin}/checkout` });
+      const refused = await past.call('browser_click', {
+        ref: refOf(page, /Place order/),
+        element: 'Place order',
+      });
+      expect(past.asked.map((a) => a.browser?.kind)).toEqual(['high-stakes']);
+      expect(refused).toMatch(/said no/);
+
+      // A limit in another currency than the page's is no limit at all.
+      const dollars = harness(['deny'], 'auto', 'conv_cap_usd', ['buy it if under $50']);
+      page = await dollars.call('browser_open', { url: `${origin}/checkout` });
+      await dollars.call('browser_click', {
+        ref: refOf(page, /Place order/),
+        element: 'Place order',
+      });
+      expect(dollars.asked.map((a) => a.browser?.kind)).toEqual(['high-stakes']);
+    },
+  );
+
+  it('lets Auto’s review weigh a booking, never a payment', { timeout: 60_000 }, async () => {
+    const h = harness(['deny', 'deny'], 'auto', 'conv_review_book');
+    const page = await h.call('browser_open', { url: `${origin}/checkout` });
+    await h.call('browser_click', { ref: refOf(page, /Book a table/), element: 'Book a table' });
+    await h.call('browser_click', { ref: refOf(page, /Place order/), element: 'Place order' });
+    expect(h.asked.map((a) => a.browser?.kind)).toEqual(['high-stakes', 'high-stakes']);
+    // The booking carries the page for the review; the order doesn't.
+    expect(h.asked[0]?.revalidate).toBeTypeOf('function');
+    expect(h.asked[1]?.revalidate).toBeUndefined();
   });
 });
