@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, MessageSquare, Plug } from 'lucide-react';
+import { ArrowLeftRight, Check, ListChecks, MessageSquare, Plug } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
 import { Button } from '../../components/Button';
@@ -8,9 +8,10 @@ import styles from './ModelSwitch.module.css';
 
 /** Something a message needs that the chat's model can't use. */
 export interface ModelSwitchNeed {
-  /** An app ("Linear"), or a skill's title. */
+  /** An app ("Linear"), a skill's title, or "a long job". */
   name: string;
-  kind?: 'app' | 'skill';
+  /** `job`: a job of many steps, for a model that calls tools only in words. */
+  kind?: 'app' | 'skill' | 'job';
   /** Catalog id, for the app's mark. */
   brand?: string;
   /** The app's tile colour (hex). */
@@ -68,6 +69,48 @@ export function ModelSwitchCard({
   ...props
 }: ModelSwitchCardProps) {
   const words = needWords(needs);
+  // A long job (2026-10-27): the model can do it in words, step by step; one with its own
+  // tool calls does it better. Keeping it is as good an answer as switching.
+  const job = needs.length > 0 && needs.every((n) => n.kind === 'job');
+  if (job && state !== 'offer')
+    return (
+      <div role="note" data-state={state} className={cx(styles.settled, className)} {...props}>
+        {state === 'switched' ? <ArrowLeftRight aria-hidden /> : <Check aria-hidden />}
+        <span>
+          {state === 'switched' && switchTo
+            ? `Switched to ${switchTo.label} for a long job`
+            : `Kept ${model} for this job`}
+        </span>
+      </div>
+    );
+  if (job && switchTo) {
+    const title = `${model} calls tools only in words`;
+    return (
+      <div role="group" aria-label={title} className={cx(styles.card, className)} {...props}>
+        <span className={styles.mark} aria-hidden>
+          <ListChecks />
+        </span>
+        <div className={styles.words}>
+          <p className={styles.title}>{title}</p>
+          <p className={styles.body}>
+            {`This looks like a job of many steps. ${switchTo.label}${switchTo.provider ? ` on ${switchTo.provider}` : ''} calls tools itself and does long jobs better. Switch, and your message goes by itself.`}
+          </p>
+          <div className={styles.actions}>
+            {onSwitch && (
+              <Button size="sm" leadingIcon={<ArrowLeftRight />} loading={busy} onClick={onSwitch}>
+                Switch to {switchTo.label}
+              </Button>
+            )}
+            {onAnswerWithout && (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={onAnswerWithout}>
+                Keep {model}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (state !== 'offer') {
     return (
       <div role="note" data-state={state} className={cx(styles.settled, className)} {...props}>

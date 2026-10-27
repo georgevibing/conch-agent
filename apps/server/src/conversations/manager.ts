@@ -2110,7 +2110,12 @@ export class ConversationManager {
         e.model.engine === found.model.engine &&
         e.model.id === found.model.id,
     );
-    return asked ? undefined : found;
+    // A long job is offered once a chat (2026-10-27): kept or switched, it isn't asked again.
+    const job = found.needs.every((need) => need.kind === 'job');
+    const offeredJob = live.events.some(
+      (e) => e.type === 'turn.needs-apps' && e.needs.some((need) => need.kind === 'job'),
+    );
+    return asked || (job && offeredJob) ? undefined : found;
   }
 
   /**

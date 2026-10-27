@@ -91,4 +91,28 @@ describe('ModelSwitchCard', () => {
     );
     expect(needWords([{ name: 'Weekly review', kind: 'skill' }])).toBe('the “Weekly review” skill');
   });
+
+  it('offers a model with its own tool calls for a long job, and keeping is the other answer', async () => {
+    const onSwitch = vi.fn();
+    const onAnswerWithout = vi.fn();
+    const job = [{ name: 'a long job', kind: 'job' as const }];
+    const { container, rerender } = renderNacre(
+      <ModelSwitchCard
+        model="GPT-6.1-Sol"
+        needs={job}
+        switchTo={{ label: 'GPT-6.1', provider: 'Codex' }}
+        onSwitch={onSwitch}
+        onAnswerWithout={onAnswerWithout}
+      />,
+    );
+    const card = screen.getByRole('group', { name: 'GPT-6.1-Sol calls tools only in words' });
+    expect(card).toHaveTextContent('GPT-6.1 on Codex calls tools itself and does long jobs better');
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to GPT-6.1' }));
+    expect(onSwitch).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole('button', { name: 'Keep GPT-6.1-Sol' }));
+    expect(onAnswerWithout).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+    rerender(<ModelSwitchCard model="GPT-6.1-Sol" needs={job} state="answered" />);
+    expect(screen.getByRole('note')).toHaveTextContent('Kept GPT-6.1-Sol for this job');
+  });
 });

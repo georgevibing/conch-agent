@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
-import { appsNeeded } from '../providers/apps';
+import { appsNeeded, looksLong } from '../providers/apps';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager, type TurnRoute } from './manager';
 import { ConversationStore } from './store';
@@ -284,6 +284,68 @@ describe('a chat-only model and a message that needs an app (ADR 0050)', () => {
       origin: { kind: 'channel', channelId: 'ch_1', channel: 'telegram' },
     });
     await idle(manager, convo.id);
+    expect(router.turns).toHaveLength(1);
+  });
+});
+
+describe('a long job for a model that calls tools only in words (2026-10-27)', () => {
+  it('reads a job of many steps by code, and leaves a single ask alone', () => {
+    expect(looksLong('fix the failing test, push it and deploy to cloudflare')).toBe(true);
+    expect(looksLong('clone the repo and then run the tests')).toBe(true);
+    expect(looksLong('please:\n1. rename the files\n2. update imports\n3. open a PR')).toBe(true);
+    expect(looksLong('tell me a joke')).toBe(false);
+    expect(looksLong('fix the typo in the README')).toBe(false);
+  });
+
+  it('offers a model with its own tool calls once a chat, and keeping it is an answer', async () => {
+    const { manager, router } = await setup();
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'fix the failing test, push it and deploy',
+      options: { engine: 'openrouter', model: 'tiny' },
+    });
+    const waiting = (await log(manager, convo.id)).find((e) => e.type === 'turn.needs-apps');
+    expect(waiting).toMatchObject({
+      needs: [{ kind: 'job', name: 'a long job' }],
+      switchTo: { engine: 'openrouter', model: 'big' },
+    });
+    expect(router.turns).toHaveLength(0);
+    // Keep it: the message goes to the chat's own model.
+    expect(await manager.release(convo.id)).toBe(true);
+    await idle(manager, convo.id);
+    expect(router.turns[0]?.options.model).toBe('tiny');
+    // Never offered again in this chat, whatever the next job.
+    await manager.send({
+      conversationId: convo.id,
+      clientMessageId: 'u2',
+      text: 'now refactor the module, add tests and then release it',
+    });
+    await idle(manager, convo.id);
+    expect(router.turns).toHaveLength(2);
+    expect((await log(manager, convo.id)).filter((e) => e.type === 'turn.needs-apps')).toHaveLength(
+      1,
+    );
+  });
+
+  it('says nothing for a long job when there’s no model to switch to, or the model calls tools itself', async () => {
+    const lonely = new FakeEngine('ollama', 'Ollama', [model('gemma', 'Gemma', false)]);
+    const deps = {
+      about: async () => [],
+      catalog: async () => ({
+        default: 'ollama' as const,
+        providers: [{ ...(await lonely.capabilities()), local: true }],
+      }),
+      defaults: async () => ({}),
+    };
+    const text = 'fix the bug, push and deploy';
+    expect(await appsNeeded(deps, { text, engine: lonely })).toBe(undefined);
+    const { manager, router } = await setup();
+    const able = await manager.send({
+      clientMessageId: 'u1',
+      text,
+      options: { engine: 'openrouter', model: 'big' },
+    });
+    await idle(manager, able.id);
     expect(router.turns).toHaveLength(1);
   });
 });
