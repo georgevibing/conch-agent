@@ -180,9 +180,24 @@ Outside Full trust, Conch asks about the steps that need approval:
 - **Downloads.** It asks, and saves them in the Downloads folder of your working
   folder.
 
+In **Auto**, what you already said counts as your answer:
+
+- **A sign-in you asked for.** "Log in to my Hetzner account" signs in from Passwords
+  with no card, on that item's own site only.
+- **Sending, booking, subscribing, cancelling, answering an invite.** Auto checks the
+  button and the page against what you asked for, and goes ahead when they match. Paying
+  isn't one of these.
+- **A limit you named.** "Buy it if it's under $50" places the order with no card when the
+  total on the page is inside that limit, in the same currency. Over it, or with no limit
+  named, it asks.
+- **One card per payment.** A yes to the order covers filling your saved card on that
+  checkout, and the other way round.
+
+None of this applies after someone else has written in the chat, or in your own Chrome.
+
 In **Read only** mode it reads but never clicks, types or fills. In **Full trust** mode it
-skips action approvals, including significant actions, uploads and downloads.
-Sign-in and access to a saved credential still need you.
+skips action approvals, including significant actions, uploads and downloads, and signs
+in from Passwords without asking.
 
 ## Where it runs
 

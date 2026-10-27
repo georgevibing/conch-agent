@@ -11,9 +11,20 @@ import type { Download, Locator, Page, Response } from 'playwright-core';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
+import { consented, names } from '../vault/consent';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
+import {
+  asksSignIn,
+  capFrom,
+  PaymentYes,
+  reviewableClick,
+  showsTotal as pageShowsTotal,
+  spendsMoney,
+  totalOnPage,
+  withinCap,
+} from './consent';
 import { agentFill, chainFromClick, pageSignInNote, type AgentFillDeps } from './fill';
 import { focused, targetAt } from './point';
 import { asksHighStakes, isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk';
@@ -167,6 +178,32 @@ export function browserTools(
   const { conversationId } = ctx;
   /** The person said yes to something significant in this step: the site's own "Are you sure?" after it doesn't ask again. */
   let vouched = false;
+  /** One card for a payment (ADR 0131, 2026-10-27): a yes to one half of a checkout carries the other. */
+  const payments = new PaymentYes();
+  /**
+   * Auto or Full trust, with the person here and nobody else's words in the chat: the only
+   * time their own words can stand in for a card. Your own Chrome keeps every card.
+   */
+  const yoursToSay = () =>
+    (ctx.permissionMode === 'auto' || ctx.permissionMode === 'bypassPermissions') &&
+    !ctx.unattended &&
+    !service.runtime.backend.shared &&
+    !(ctx.taints?.().some((source) => source.kind === 'person') ?? false);
+  /** The words the page shows, for its total: what the person sees, not the model's account of it. */
+  const visibleText = (tab: Tab) =>
+    tab.page
+      .locator('body')
+      .innerText({ timeout: 3_000 })
+      .catch(() => '');
+  const showsTotal = async (tab: Tab) => pageShowsTotal(await visibleText(tab));
+  /** The page's own total is inside a limit the person named ("buy it if under $50"). */
+  const withinTheirLimit = async (tab: Tab): Promise<boolean> => {
+    if (!yoursToSay()) return false;
+    const cap = capFrom(ctx.said?.() ?? []);
+    if (!cap) return false;
+    const total = totalOnPage(await visibleText(tab));
+    return Boolean(total && withinCap(cap, total));
+  };
 
   const locate = (tab: Tab, ref: string): Locator => tab.page.locator(`aria-ref=${ref}`);
   /** A ref to act on, which must still be on the page: a gone one fails before anything is done. */
@@ -419,14 +456,24 @@ export function browserTools(
     const title = await tab.page.title().catch(() => '');
     // Only a resolved communication click is eligible here. Payment, access changes,
     // upload contents and typed-but-not-yet-applied payloads keep their own consent.
+    // Money stays out: a label about it (`spendsMoney`), or a "Book now" beside a total on the
+    // page ("€384 total"), which is paying by another name. Its card, or a limit named below.
+    const pays =
+      kind === 'high-stakes' &&
+      (spendsMoney(request.action) || (request.reviewClick === true && (await showsTotal(tab))));
     const review =
-      ctx.permissionMode === 'auto' &&
-      !own &&
-      !someone &&
-      request.reviewClick &&
-      /\b(?:send|post|publish|reply|comment|submit)\b/i.test(request.action)
+      ctx.permissionMode === 'auto' && !own && !someone && request.reviewClick && !pays
         ? await reviewPage(tab.page)
         : undefined;
+    // Paying, once the person settled it: a yes to the saved card on this site a moment ago,
+    // or a total on the page inside the limit they named. Never the model's word for either.
+    if (pays && yoursToSay()) {
+      if (payments.take(site) || (await withinTheirLimit(tab))) {
+        tab.sites.add(site);
+        vouched = true;
+        return;
+      }
+    }
     const decision = await ctx.ask({
       toolName: `browser_${kind}`,
       input: { site, action: request.action, url, ...(review && { page: review }) },
@@ -462,6 +509,8 @@ export function browserTools(
     // The person's press lends the site's sign-in to this errand, never Auto by itself.
     if (kind === 'site') await service.lendSignIn(conversationId, site);
     if (kind === 'high-stakes') vouched = true;
+    // The person's yes to the order covers filling the saved card on this checkout.
+    if (pays) payments.agreed(site);
     // "Always" in your own Chrome stays this chat's: it never grants a site for good there.
     if (decision === 'allow-always' && kind === 'site' && !own) await service.grantSite(site);
   };
@@ -491,6 +540,26 @@ export function browserTools(
         return { ...(picture?.box && { box: picture.box }), ...(shot && { shot }) };
       },
       check,
+      consent: {
+        // The person's own message asked to sign in here, by the item or by the site; or Full
+        // trust. The fill still only goes to the item's own site, over https.
+        signIn: (title, host) => {
+          if (!yoursToSay()) return false;
+          const site = siteOf(`https://${host}`) ?? host;
+          return (
+            consented(ctx, title) ||
+            (ctx.said?.() ?? []).some(
+              (message) => names(message, title) || asksSignIn(message, site),
+            )
+          );
+        },
+        payment: async (host) => {
+          if (!yoursToSay()) return false;
+          const site = siteOf(`https://${host}`) ?? host;
+          return payments.take(site) || (await withinTheirLimit(tab));
+        },
+        paid: (host) => payments.agreed(siteOf(`https://${host}`) ?? host),
+      },
     };
   };
 
@@ -819,11 +888,9 @@ export function browserTools(
                 : `${how === 'double' ? 'Double-click' : how === 'right' ? 'Right-click' : 'Click'} “${own || element}”`,
             // Exact resolved communication labels only; 'Send payment' and 'Publish
             // access key' are not ordinary communication candidates.
-            reviewClick:
-              how === 'click' &&
-              /^(?:send(?: message| email)?|post(?: comment)?|publish(?: post)?|reply|comment)$/i.test(
-                own.trim(),
-              ),
+            // Communication, bookings, subscriptions and invites, by their exact resolved
+            // label; anything about money ('Send payment', 'Book · $40') keeps its card.
+            reviewClick: how === 'click' && reviewableClick(own),
             highStakes:
               isHighStakes(own) ||
               isHighStakes(element) ||

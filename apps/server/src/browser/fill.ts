@@ -706,6 +706,16 @@ export interface AgentFillDeps {
   /** A thumbnail of the page with the box marked, for the card. */
   picture: (target: Locator) => Promise<{ box?: BrowserPermission['box']; shot?: string }>;
   check: () => void;
+  /**
+   * What the person already settled (ADR 0131, 2026-10-27): a sign-in their own words asked
+   * for on this site or item, and a payment here they already said yes to, or that sits
+   * inside a limit they named. Absent: every fill asks as before.
+   */
+  consent?: {
+    signIn: (title: string, host: string) => boolean;
+    payment: (host: string) => Promise<boolean>;
+    paid: (host: string) => void;
+  };
 }
 
 export type AgentFill =
@@ -869,7 +879,15 @@ export async function agentFill(
         };
     }
     const covered = grant && chosen === grant.itemId;
-    const asking = choices.length > 1 || (policy.ask && !covered) || CARD_ROLES.has(role);
+    const card = CARD_ROLES.has(role);
+    // The person's words asked for this sign-in, or already settled this payment: no card.
+    // Several accounts still ask which one.
+    const settled =
+      choices.length <= 1 &&
+      (card
+        ? Boolean(await deps.consent?.payment(at.host))
+        : Boolean(deps.consent?.signIn(policy.title, at.host)));
+    const asking = !settled && (choices.length > 1 || (policy.ask && !covered) || card);
     if (asking) {
       let picked = chosen;
       const accounts =
@@ -901,6 +919,8 @@ export async function agentFill(
         };
       // Allowed without picking (a chat app's Allow): the closest, most recently used one.
       chosen = picked ?? first;
+      // A yes to the card here carries the order click on this site (one card per payment).
+      if (card) deps.consent?.paid(at.host);
       if (decision === 'allow-always' && !CARD_ROLES.has(role))
         await passwords.allowAgent(chosen, at.host).catch(() => undefined);
       if (chosen !== first)
