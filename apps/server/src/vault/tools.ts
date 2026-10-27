@@ -184,7 +184,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
       } catch (error) {
         return error instanceof VaultError ? error.message : 'That item couldn’t be read.';
       }
-      if (policy.ask && !consented(ctx, policy.title, { grave: policy.grave })) {
+      if (policy.ask && !consented(ctx, policy.title)) {
         // A routine has nobody to ask: only an item set to be read without asking goes.
         if (ctx.unattended && !ctx.attended)
           return `Nobody is here to agree to reading “${policy.title}”, so this run can’t. Do it without it, or leave it for the user.`;

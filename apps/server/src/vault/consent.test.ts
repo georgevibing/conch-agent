@@ -21,14 +21,14 @@ describe('the person naming a saved item', () => {
 
 describe('no card for a saved item', () => {
   const said = () => ['read the PIN of Travel Visa'];
-  it('in Auto when named, but not for a grave value read into the model', () => {
+  it('in Auto when named, a card PIN included', () => {
     expect(consented({ permissionMode: 'auto', said }, 'Travel Visa')).toBe(true);
-    expect(consented({ permissionMode: 'auto', said }, 'Travel Visa', { grave: true })).toBe(false);
+    expect(consented({ permissionMode: 'default', said }, 'Travel Visa')).toBe(false);
   });
 
-  it('in Full trust, grave or not', () => {
+  it('in Full trust, whatever was said', () => {
     const trust = { permissionMode: 'bypassPermissions' as const, fullTrust: () => true };
-    expect(consented(trust, 'Travel Visa', { grave: true })).toBe(true);
+    expect(consented(trust, 'Travel Visa')).toBe(true);
   });
 });
 

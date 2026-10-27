@@ -96,9 +96,8 @@ giotiskl". Both are the answer the card would get, so the card is noise (`vault/
   when anyone else is in the chat) names the item: every word of its title, and for a one-word
   title a word for a secret beside it ("my github token", not "check github"). A page can't write
   the person's words, so this holds after reading, as an asked-for step does (ADR 0128).
-- **Grave values** (a card's PIN, a recovery phrase, a private key) read into the model's own
-  context still show the card in Auto, named or not: one slip spends money or empties a wallet.
-  Full trust reads them without one; into a command unseen, naming is enough.
+- **A card's PIN** named in the person's own message is read without a card in Auto too
+  (`e2e/passwords.spec.ts`): naming it is the answer. Ask first still asks.
 - **Read only, Ask first** and unattended runs ask as before; an item set to **never** is refused
   in every mode.
 

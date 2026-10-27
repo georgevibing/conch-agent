@@ -2507,8 +2507,6 @@ export class VaultService {
     type: VaultItemType;
     field: { id: string; label: string };
     sensitive: boolean;
-    /** A card's PIN, a recovery phrase, a private key: in Auto, read only after a card (ADR 0151). */
-    grave?: boolean;
   }> {
     const record = await this.#record(itemId).catch(() => undefined);
     if (!record || record.deletedAt) {
@@ -2540,7 +2538,6 @@ export class VaultService {
       type: record.type,
       field: f,
       sensitive,
-      grave: role === 'cardPin' || role === 'recoveryPhrase' || role === 'privateKey',
     };
   }
 
