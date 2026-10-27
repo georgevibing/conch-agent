@@ -739,6 +739,13 @@ export interface Engine {
    * tool calls from outside and pauses it there (Codex, the ACP programs).
    */
   readonly turnBudget?: 'own';
+  /**
+   * How long one call to a Conch tool may stay quiet before the provider's own program gives up
+   * on it (Claude Code's MCP idle limit, an ACP program's MCP client). `process_start` with
+   * `wait: true` hands back its id before then. Absent: Conch runs the call itself, with no
+   * such limit, so it waits for the command to end.
+   */
+  readonly toolCallLimitMs?: number;
   /** Subscribe to live limit hints emitted while turns run. */
   onLimits?(listener: (signal: LimitSignal) => void): () => void;
 }

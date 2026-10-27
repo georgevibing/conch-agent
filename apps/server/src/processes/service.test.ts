@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../conversations/manager';
 import { InterruptedProcesses, interruptedNote } from './interrupted';
-import { ProcessService } from './service';
+import { ProcessService, foregroundFor } from './service';
 import {
   resourcePolicy,
   sampleTrees,
@@ -700,5 +700,14 @@ describe('commands a restart stopped (ADR 0094, 2026-10-27)', () => {
     expect(note).toMatch(/nothing was run again/);
     expect(note).toMatch(/process_start/);
     expect(interruptedNote([])).toBeUndefined();
+  });
+});
+
+describe('how long wait holds, per provider (2026-10-27)', () => {
+  it('waits for the end where Conch runs the call, and stays under a provider’s limit', () => {
+    expect(foregroundFor(undefined, 600_000)).toBe(600_000);
+    expect(foregroundFor(180_000, 600_000)).toBe(150_000);
+    expect(foregroundFor(60_000, 600_000)).toBe(30_000);
+    expect(foregroundFor(180_000, 20_000)).toBe(20_000);
   });
 });

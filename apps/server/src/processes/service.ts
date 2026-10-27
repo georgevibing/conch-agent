@@ -36,11 +36,18 @@ const MAX_WATCHED_MS = 7_200_000;
 /** Longest in a run nobody answers for (a routine). */
 const MAX_UNATTENDED_MS = 1_800_000;
 /**
- * Longest `wait: true` holds the call (2026-10-27): under the 3 minutes a provider's MCP
- * client lets a quiet call go (Claude Code's `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`), so a long
- * keyed command hands back its id while it runs on instead of failing the call.
+ * Longest `wait: true` holds the call where the provider's MCP client lets a quiet call go
+ * (`Engine.toolCallLimitMs`: Claude Code's `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, an ACP
+ * program's), so a long keyed command hands back its id while it runs on instead of failing
+ * the call. Where Conch runs the call, it holds to the command's own time limit.
  */
 const FOREGROUND_MS = 150_000;
+
+/** How long `wait: true` holds, given the provider's limit on one call and the command's own. */
+export function foregroundFor(limit: number | undefined, timeout: number): number {
+  if (limit === undefined) return timeout;
+  return Math.min(timeout, FOREGROUND_MS, Math.max(5_000, limit - 30_000));
+}
 
 /** A managed command as a wait sees it (ADR 0125). */
 export interface ProcessPeek {
@@ -614,7 +621,11 @@ export class ProcessService {
           // In the foreground: Conch's Bash with a saved key, for a provider whose own shell
           // can't take one (ADR 0151). Stop still stops it. Past `FOREGROUND_MS` it runs on,
           // and the model waits for it instead of the call timing out.
-          const until = performance.now() + (this.deps.foregroundMs ?? FOREGROUND_MS);
+          // As long as the call itself may last: under the provider's limit when it has one,
+          // to the end where Conch runs the call (the model APIs, Codex's host tools).
+          const until =
+            performance.now() +
+            (this.deps.foregroundMs ?? foregroundFor(ctx.engine?.toolCallLimitMs, timeout));
           while (
             (session.status === 'running' || session.status === 'queued') &&
             performance.now() < until
