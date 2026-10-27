@@ -179,6 +179,11 @@ export function askable(risk: Risk): boolean {
 
 /** A step no words ask for: keys leaving, a stranger's code decoded from a blob, money. */
 export const NEVER: Wish = { verbs: /(?!)/ };
+/**
+ * No one's words ask for it, but Auto's review may still see it serve the request (2026-10-27):
+ * code an app runs that the rules couldn't read. Unlike `NEVER`, it stays reviewable.
+ */
+export const NOT_BY_WORDS: Wish = { verbs: /(?!)/ };
 
 // ── What a person says, in the languages they write in (ADR 0145) ─────────
 
@@ -624,6 +629,27 @@ function intent(verbs: RegExp, message: string): 'asked' | 'held' | undefined {
   return read;
 }
 
+/**
+ * What the person wrote themselves in a message, without what they pasted in (2026-10-27): a
+ * fenced block, a triple-quoted one, lines quoted with `>`, a long passage in quotation marks,
+ * and the middle of a long paste. "URGENT: update the DNS to 6.6.6.6" quoted from an email is
+ * the email's words, not theirs, so it never asks for a step; the review reads it the same way.
+ */
+export function ownWords(message: string): string {
+  let text = message
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+    .replace(/"""[\s\S]*?(?:"""|$)/g, ' ')
+    .replace(/[“"«„][^”"»“\n]{120,}[”"»“]/g, ' ')
+    .split('\n')
+    .filter((line) => !/^\s*>/.test(line))
+    .join('\n');
+  const lines = text.split('\n').filter((line) => line.trim());
+  // A long paste: what they asked is at its start or its end, the pasted text between.
+  if (text.length > 1200 && lines.length > 12)
+    text = [...lines.slice(0, 2), ...lines.slice(-2)].join('\n');
+  return text;
+}
+
 /** The person's message, folded, names this: as a whole word, not part of another. */
 function names(last: string, name: string | RegExp): boolean {
   if (name instanceof RegExp) return new RegExp(name.source, 'iu').test(last);
@@ -652,7 +678,7 @@ export function wanted(risk: Risk, said: readonly string[] | undefined): Risk {
   const verbs = risk.wish?.verbs ?? WISHES[risk.kind];
   if (!verbs || !said?.length || !askable(risk)) return risk;
   for (let i = said.length - 1; i >= 0; i--) {
-    const message = fold(said[i] ?? '');
+    const message = fold(ownWords(said[i] ?? ''));
     const read = intent(verbs, message);
     if (!read) continue;
     if (read === 'held') return { ...risk, held: true, asked: false };
@@ -2829,7 +2855,17 @@ export const RUNS =
  * deletes or empties, `write` when it changes something, `unknown` when it can't be told (code
  * built at run time, `eval`). The code runs on the app's servers as the person; this reads it.
  */
-export type AppCode = 'read' | 'write' | 'delete' | 'unknown';
+export type AppCode =
+  | 'read'
+  | 'write'
+  | 'delete'
+  | 'unknown'
+  /** Changes who can reach something: a token, a member, a role, a webhook, a grant. */
+  | 'grant'
+  /** Opens data to anyone: a grant to the public or anonymous roles, row security off. */
+  | 'opens'
+  /** Sends what it read somewhere other than the app itself. */
+  | 'egress';
 
 /** The first string an app's step gives under one of these names. */
 function argText(args: Record<string, unknown>, names: readonly string[]): string | undefined {
@@ -2842,6 +2878,61 @@ function argText(args: Record<string, unknown>, names: readonly string[]): strin
 
 const SQL_ARGS = ['query', 'sql', 'statement', 'statements', 'q'] as const;
 const CODE_ARGS = ['code', 'script', 'source', 'js', 'program'] as const;
+
+/**
+ * Functions a query may call and still only look (2026-10-27): counting, dates, text, JSON
+ * built from what it read. Anything else (a function of the database's own, an extension's)
+ * can do anything, so a SELECT that calls one can't be told.
+ */
+const PURE_SQL = new Set(
+  (
+    'count sum avg min max now date_trunc date_part extract coalesce nullif greatest least ' +
+    'json_agg jsonb_agg array_agg string_agg json_build_object jsonb_build_object ' +
+    'json_array_length jsonb_array_length array_length unnest generate_series to_char ' +
+    'to_timestamp to_date to_number age date timezone lower upper initcap length char_length ' +
+    'substring substr trim ltrim rtrim replace split_part concat concat_ws left right position ' +
+    'strpos round floor ceil ceiling abs mod power sqrt trunc random row_number rank dense_rank ' +
+    'ntile lag lead first_value last_value percentile_cont percentile_disc mode bool_and ' +
+    'bool_or every pg_size_pretty pg_total_relation_size pg_relation_size pg_database_size ' +
+    'pg_table_size pg_indexes_size current_setting md5 encode decode format cast'
+  ).split(' '),
+);
+
+/** Words SQL writes before a parenthesis that aren't calls: `IN (`, `AS (`, `numeric(10,2)`. */
+const SQL_NOT_CALLS = new Set(
+  (
+    'in as from join on and or not exists any all some values select where when then else ' +
+    'case over filter within group partition by having using lateral distinct window limit ' +
+    'offset into table with recursive returning numeric decimal varchar char character ' +
+    'timestamp timestamptz interval float double real int integer bigint smallint text time ' +
+    'array row is null like ilike between union intersect except order asc desc'
+  ).split(' '),
+);
+
+/** Calls that send what a query read elsewhere, or read the server's own files (2026-10-27). */
+const SQL_OUT =
+  /^(?:net\.http_\w+|http(?:_\w+)?|extensions\.http\w*|dblink\w*|pg_read_\w*file|pg_ls_dir|lo_import|lo_export|pg_file_write)$/;
+/** Calls that change whose rights a query runs with, or reload what the database allows. */
+const SQL_GRANTS = /^(?:set_config|set_role|pg_reload_conf)$/;
+/** Who can reach the data (2026-10-27): a grant, a role, row security off, a policy for all. */
+const SQL_GRANT =
+  /^(?:grant|revoke)\b|^(?:create|alter|drop)\s+(?:role|user|group)\b|^alter\s+default\s+privileges\b|^set\s+(?:session\s+)?role\b|\bdisable\s+row\s+level\s+security\b|\bno\s+force\s+row\s+level\s+security\b|^create\s+policy\b[\s\S]*\busing\s*\(\s*true\s*\)/;
+/** A grant that opens the data to anyone: the public or anonymous roles, or row security off. */
+const SQL_OPENS =
+  /\bto\s+(?:public|anon|anonymous|authenticated)\b|\bdisable\s+row\s+level\s+security\b|\busing\s*\(\s*true\s*\)/;
+
+/** From least to most a query can do: one statement's effect never makes the whole one less. */
+const CODE_ORDER: readonly AppCode[] = [
+  'read',
+  'write',
+  'unknown',
+  'grant',
+  'opens',
+  'egress',
+  'delete',
+];
+const worse = (a: AppCode, b: AppCode): AppCode =>
+  CODE_ORDER.indexOf(b) > CODE_ORDER.indexOf(a) ? b : a;
 
 /** SQL, its comments and quoted strings set aside, read statement by statement. */
 export function sqlEffect(sql: string): AppCode {
@@ -2859,8 +2950,30 @@ export function sqlEffect(sql: string): AppCode {
   if (!statements.length) return 'unknown';
   let effect: AppCode = 'read';
   for (const statement of statements) {
+    if (SQL_GRANT.test(statement)) {
+      effect = worse(effect, SQL_OPENS.test(statement) ? 'opens' : 'grant');
+      continue;
+    }
     if (/\b(?:drop|truncate|delete)\b/.test(statement)) return 'delete';
     if (/^update\b/.test(statement) && !/\bwhere\b/.test(statement)) return 'delete';
+    // COPY to a file or a program: what it read leaves the database.
+    if (/^copy\b[\s\S]*\b(?:program|to)\b/.test(statement)) return 'egress';
+    // Every call a statement makes, read by its name: a pure one only looks.
+    for (const m of statement.matchAll(/([a-z_][\w$]*(?:\.[a-z_][\w$]*)?)\s*\(/g)) {
+      const name = (m[1] ?? '').replace(/^(?:pg_catalog|public)\./, '');
+      if (SQL_OUT.test(name)) return 'egress';
+      // A table and its columns (`into notes(body)`, `references users(id)`) aren't a call; a
+      // function after FROM or JOIN is (`from dblink(…)`, `from cleanup()`).
+      if (
+        /\b(?:into|table|references|on|update|index|view|type)\s+$/.test(
+          statement.slice(0, m.index),
+        )
+      )
+        continue;
+      if (SQL_NOT_CALLS.has(name) || PURE_SQL.has(name)) continue;
+      if (SQL_OUT.test(name)) return 'egress';
+      effect = worse(effect, SQL_GRANTS.test(name) ? 'grant' : 'unknown');
+    }
     if (
       /^(?:select|with|explain|show|describe|desc|values|table|pragma)\b/.test(statement) &&
       !/\b(?:insert|update|merge|upsert|alter|create|grant|revoke|copy|call|do|vacuum|into)\b/.test(
@@ -2868,53 +2981,132 @@ export function sqlEffect(sql: string): AppCode {
       )
     )
       continue;
-    effect = 'write';
+    effect = worse(effect, /^(?:call|do)\b/.test(statement) ? 'unknown' : 'write');
   }
   return effect;
+}
+
+/** Paths an app's API keeps who can reach things under: tokens, members, roles, webhooks. */
+const GRANT_PATHS =
+  /\/(?:api_tokens|tokens|members|memberships|roles|role_assignments|webhooks|hooks|secrets|collaborators|invites|deploy_keys|keys|access)\b(?![_-])/i;
+
+/** The registered name of a host: "api.cloudflare.com" is "cloudflare". */
+function hostName(host: string): string {
+  const labels = host.toLowerCase().split('.').filter(Boolean);
+  // "foo.supabase.co", "api.example.co.uk": the label before the public suffix.
+  const two = /^(?:co|com|org|net|gov|ac|edu)$/.test(labels.at(-2) ?? '') && labels.length > 2;
+  return labels.at(two ? -3 : -2) ?? labels[0] ?? '';
 }
 
 /**
  * Code an app runs (Cloudflare's code mode, a script tool): it reads when every request it
  * makes is a GET, or a GraphQL query, and nothing calls an SDK's change or builds its method at
- * run time. Strict on purpose: a method it can't see is a change.
+ * run time. Strict on purpose (2026-10-27): a method it can't read, a property built from pieces
+ * (`api['del' + 'ete']`) or `eval` can't be told; a request to a site other than the app's own
+ * sends what it read away; a change under tokens, members, roles or webhooks is a grant.
  */
-export function codeEffect(code: string): AppCode {
-  if (/\b(?:eval|Function)\s*\(|\bimport\s*\(/.test(code)) return 'unknown';
+export function codeEffect(code: string, names: readonly string[] = []): AppCode {
+  if (
+    /\b(?:eval|Function)\s*\(|\bimport\s*\(|\bReflect\.|\b(?:globalThis|window|self|this)\s*\[/.test(
+      code,
+    )
+  )
+    return 'unknown';
+  // A method picked at run time and called: `x['del' + 'ete'](…)`, `x[verb](…)`. Reading
+  // `rows[i]` is fine; calling what a bracket names can't be told.
+  if (/\[[^\]\n]+\]\s*\(/.test(code)) return 'unknown';
+  // A request to a site that isn't the app's: what it read leaves for somewhere else.
+  const own = names.map((name) => name.toLowerCase().replace(/[\s_-]+|-\d+$/g, '')).filter(Boolean);
+  for (const m of code.matchAll(/\bhttps?:\/\/([a-z0-9.-]+)/gi)) {
+    const host = hostName(m[1] ?? '');
+    if (!own.length) return 'unknown';
+    if (!own.some((name) => host === name || host.replace(/[-_]/g, '') === name)) return 'egress';
+  }
   let effect: AppCode = 'read';
-  for (const m of code.matchAll(/\bmethod\s*:\s*(?:(['"`])([A-Za-z]+)\1)?/g)) {
+  // `method: 'GET'`, `"method": "DELETE"`, `method = "POST"`: every one is read.
+  for (const m of code.matchAll(/["'`]?\bmethod["'`]?\s*[:=]\s*(?:(['"`])([A-Za-z]+)\1)?/g)) {
     const method = m[2]?.toUpperCase();
-    if (!method) return 'write';
+    if (!method) return 'unknown';
     if (method === 'DELETE') return 'delete';
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') continue;
     // A GraphQL query rides on POST; a mutation is a change.
     if (method === 'POST' && /graphql/i.test(code) && !/\bmutation\b/.test(code)) continue;
+    if (!['POST', 'PUT', 'PATCH'].includes(method)) return 'unknown';
     effect = 'write';
   }
   if (
     /-X\s*DELETE\b/i.test(code) ||
-    /\.(?:delete|destroy|purge|remove)\s*\(/.test(code) ||
+    /\.(?:delete|destroy|purge|remove|del)\s*\(/.test(code) ||
     /\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate)\b/i.test(code)
   )
     return 'delete';
   if (
-    /\bmutation\b|\.(?:create|update|edit|put|patch|set|add|upsert|insert)\s*\(/.test(code) ||
+    /\bmutation\b|\.(?:create|update|edit|put|post|patch|set|add|upsert|insert)\s*\(/.test(code) ||
     /\b(?:insert\s+into|update\s+\w+\s+set|alter\s+table)\b/i.test(code)
   )
-    return 'write';
+    effect = 'write';
+  // A change under tokens, members, roles or webhooks changes who can reach things.
+  if (effect === 'write' && GRANT_PATHS.test(code)) return 'grant';
+  if (effect === 'write' && /\.(?:tokens|members|roles|webhooks|secrets)\.\w+\s*\(/.test(code))
+    return 'grant';
+  if (effect === 'write') return 'write';
   // A read needs something that reads: a request, a GraphQL query, an SDK's list or get.
   // Code that shows none ("x", a call by another name) can't be told, so it stays code.
   const reads =
     /\bfetch\s*\(|\.request\s*\(|graphql|\.(?:list|get|read|query|search|describe|retrieve|find|browse)\w*\s*\(/i;
-  return effect === 'read' && !reads.test(code) ? 'unknown' : effect;
+  return reads.test(code) ? 'read' : 'unknown';
 }
 
 /** What an app's code-running step does, by its query or its code. */
-export function appCodeEffect(args: Record<string, unknown>, tool: string): AppCode {
+export function appCodeEffect(
+  args: Record<string, unknown>,
+  tool: string,
+  names: readonly string[] = [],
+): AppCode {
   const sql = argText(args, SQL_ARGS);
   const code = argText(args, CODE_ARGS);
   if (sql && (/sql/i.test(tool) || !code)) return sqlEffect(sql);
-  if (code) return codeEffect(code);
+  if (code) return codeEffect(code, names);
   return 'unknown';
+}
+
+/** An app's tool by its parts: `mcp__cloudflare__execute` is server `cloudflare`, tool `execute`. */
+function appTool(toolName: string): { server?: string; tool: string } {
+  const mcp = /^mcp__(?!conch__)([a-z0-9_-]+?)__(.+)$/.exec(toolName);
+  return mcp
+    ? { server: mcp[1], tool: mcp[2] ?? '' }
+    : { tool: toolName.replace(/^mcp__conch__/, '') };
+}
+
+/**
+ * The rules read this app step for what it does (2026-10-27): it isn't code or a query, or its
+ * code or query was read as a lookup or an ordinary change. Only then may "nothing found" mean
+ * nothing there; for code it couldn't read, it means it couldn't tell.
+ */
+export function positivelyRead(toolName: string, input: unknown, app?: string): boolean {
+  const { server, tool } = appTool(toolName);
+  if (!RUNS.test(tool)) return true;
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const effect = appCodeEffect(
+    args,
+    tool,
+    [app, server].filter((n): n is string => Boolean(n)),
+  );
+  return effect === 'read' || effect === 'write';
+}
+
+/** The app step's code or query only looks, read by the rules (2026-10-27): nothing to review. */
+export function codeOnlyReads(toolName: string, input: unknown, app?: string): boolean {
+  const { server, tool } = appTool(toolName);
+  if (!RUNS.test(tool)) return false;
+  const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  return (
+    appCodeEffect(
+      args,
+      tool,
+      [app, server].filter((n): n is string => Boolean(n)),
+    ) === 'read'
+  );
 }
 
 /** Words for changing something in an app, said with the app's name (ADR 0128, 2026-10-27). */
@@ -2947,7 +3139,10 @@ export function askedInApp(
   const name = appNames(app, server);
   if (!name) return false;
   const change = moderate('infra', 'change something in one of your apps', true);
-  return Boolean(wanted({ ...change, wish: wish(APP_CHANGE_WORDS, name) }, said).asked);
+  // Only their latest message (2026-10-27): a change asked for turns ago doesn't stretch to
+  // whatever a later read suggests.
+  const latest = said?.length ? [said[said.length - 1] ?? ''] : said;
+  return Boolean(wanted({ ...change, wish: wish(APP_CHANGE_WORDS, name) }, latest).asked);
 }
 
 /** Shapes keys and tokens have, whatever they're called (ADR 0118). */
@@ -3126,22 +3321,45 @@ export function assessRisk(
     // Read by what its code or query does (2026-10-27): a SELECT or a GET only looks; a DELETE,
     // a DROP or an UPDATE without WHERE deletes; other changes are ordinary changes in the
     // person's own app; code that can't be read stays code it wrote.
-    const effect = appCodeEffect(args, tool);
+    const effect = appCodeEffect(
+      args,
+      tool,
+      [context.app, server].filter((n): n is string => Boolean(n)),
+    );
     if (effect === 'read') return undefined;
     if (effect === 'delete')
       return said({
         ...severe('app-delete', 'delete or empty something in one of your apps'),
         inApp: true,
       });
+    // What it read, sent to another site: never anyone's to ask for in passing.
+    if (effect === 'egress')
+      return {
+        ...moderate('egress', 'send what an app read to another site', true, NEVER),
+        inApp: true,
+      };
+    // Who can reach the person's things: asked for in words about access, never by a change word.
+    if (effect === 'opens')
+      return said({
+        ...severe('privilege', 'open data in one of your apps to anyone'),
+        inApp: true,
+      });
+    if (effect === 'grant')
+      return said({
+        ...moderate('privilege', 'change who can reach something in one of your apps'),
+        inApp: true,
+      });
+    // Code it couldn't read is only the review's to lift: no words ask for what can't be told.
+    if (effect === 'unknown')
+      return {
+        ...moderate('remote-code', 'run code it wrote in one of your apps', true, NOT_BY_WORDS),
+        inApp: true,
+      };
     const runs = wish(stems('run|execut|script|code\\b|quer(?:y|ies)\\b|sql\\b', ABROAD.run));
-    return inApp(
-      effect === 'write'
-        ? { ...moderate('infra', 'change something in one of your apps', true, runs), inApp: true }
-        : {
-            ...moderate('remote-code', 'run code it wrote in one of your apps', true, runs),
-            inApp: true,
-          },
-    );
+    return inApp({
+      ...moderate('infra', 'change something in one of your apps', true, runs),
+      inApp: true,
+    });
   }
   // A read that sends pages of text to the app's site: it could carry what was read.
   if (context.access === 'read' && step && wordsSent(args) > HEAVY_READ)
@@ -3157,6 +3375,74 @@ const SPEAK_WORDS = stems(
   'invit|einlad|uitnodig|convid|antwort|repond|respond|rispond|contest(?:a|ar)\\b|antwoord', // inviting, replying
   '(?:schreib\\w*|ecri\\w*|escrib\\w*|escrev\\w*|scriv\\w*|schrijf)\\s+(?:an|a|aan|para|al|alla?|ao|aux?)\\b', // writing to someone
 );
+
+/** Fields a send names its people or place by: who it goes to, the channel, the guests. */
+const RECIPIENT_FIELDS = new Set([
+  'to',
+  'cc',
+  'bcc',
+  'recipient',
+  'recipients',
+  'attendees',
+  'guests',
+  'invitees',
+  'emails',
+  'email',
+  'channel',
+  'channelName',
+  'channel_name',
+  'user',
+  'users',
+]);
+/** Fields that say a send answers a thread already there. */
+const THREAD_FIELDS = ['threadId', 'thread_ts', 'threadTs', 'inReplyTo', 'replyTo', 'replyToId'];
+
+/** Every person or place a send names, as written in its arguments. */
+function recipientsOf(args: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const walk = (value: unknown, depth: number, named: boolean) => {
+    if (depth > 4 || out.length > 100) return;
+    if (typeof value === 'string') {
+      if (named) out.push(...value.split(/[,;]\s*/).filter(Boolean));
+    } else if (Array.isArray(value)) for (const v of value) walk(v, depth + 1, named);
+    else if (value && typeof value === 'object')
+      for (const [key, v] of Object.entries(value))
+        walk(v, depth + 1, named || RECIPIENT_FIELDS.has(key) || (depth > 0 && key === 'email'));
+  };
+  for (const [key, value] of Object.entries(args))
+    if (RECIPIENT_FIELDS.has(key)) walk(value, 1, true);
+  return out;
+}
+
+/** The message names this person or place: the address, its name before the @, or a name in it. */
+function namesRecipient(message: string, recipient: string): boolean {
+  const text = fold(recipient).replace(/^[#@]/, '').trim();
+  if (!text) return false;
+  const email = /<?([^\s<>]+@[^\s<>]+)>?/.exec(text)?.[1];
+  const candidates = email
+    ? [email, email.split('@')[0] ?? '', ...(email.split('@')[0] ?? '').split(/[._+-]/)]
+    : [text, ...text.split(/[\s._-]+/)];
+  return candidates.some((name) => name.length >= 3 && names(message, name));
+}
+
+/**
+ * The person's latest message asks for exactly this send (2026-10-27): it asks to send, reply,
+ * post or invite, and names everyone it goes to, or it answers the thread already there and
+ * adds no one. When no review can run, these words decide; anything less shows the card.
+ */
+export function sendAsked(
+  said: readonly string[] | undefined,
+  args: Record<string, unknown>,
+): boolean {
+  const latest = said?.at(-1);
+  if (!latest) return false;
+  const send = moderate('egress', 'send something to other people', true, wish(SPEAK_WORDS));
+  if (!wanted(send, [latest]).asked) return false;
+  const message = fold(ownWords(latest));
+  const people = recipientsOf(args);
+  if (!people.length) return THREAD_FIELDS.some((field) => Boolean(args[field]));
+  return people.every((person) => namesRecipient(message, person));
+}
 
 /**
  * The circuit breaker no mode lifts, Full trust included (ADR 0100): deleting

@@ -98,12 +98,15 @@ import type { WorkPlace } from '../workplaces/types';
 import {
   askedInApp,
   assessRisk,
+  codeOnlyReads,
   NEVER,
+  positivelyRead,
   type Risk,
   breaksCircuit,
   riskAsks,
   riskClass,
   riskWords,
+  sendAsked,
   sendsMoreThanALookup,
   wantsSecondLook,
 } from './risk';
@@ -3864,6 +3867,9 @@ export class ConversationManager {
     ): Promise<string | null | undefined> => {
       if (allowed) return null;
       if (step.access === 'read' && !sendsMoreThanALookup(request.input)) return null;
+      // Code or a query the rules read as a lookup (2026-10-27): it only looks, whatever the
+      // server says the tool may do, so there's nothing to review and no card if review fails.
+      if (codeOnlyReads(request.toolName, request.input, step.app)) return null;
       const verdict = await review(request, { ...(risk && { risk }), step });
       if (typeof verdict !== 'object') return undefined;
       if (verdict.decision !== 'allow') return verdictWords(verdict, true);
@@ -3985,6 +3991,18 @@ export class ConversationManager {
           if (verdict)
             return askUser({ ...request, taint: verdict, remember: false }, abort.signal);
         }
+        // Nothing could review it (2026-10-27): in Auto, the person's latest words decide. A send
+        // they asked for, to the people they named or the thread being answered, goes.
+        if (
+          resolved.permissionMode === 'auto' &&
+          !request.explicit &&
+          !request.cost &&
+          ![...limitsSaid].some((limit) => request.taint?.includes(limit)) &&
+          sendAsked(this.#yourWords(live), request.input)
+        ) {
+          this.deps.judged?.('went_ahead');
+          return 'allow';
+        }
         return askUser({ ...request, remember: false }, abort.signal);
       }
       if (!request.taint) {
@@ -4053,8 +4071,13 @@ export class ConversationManager {
           const look = await judgeStep(request, step, risk, app.allowed);
           // Nothing could look: the person's own words decide (2026-10-27). A step they asked
           // for, by its words or the app's name and a change word, goes; anything else asks.
+          // Only for a step the rules could read (2026-10-27): code they couldn't is no one's.
           if (look === undefined)
-            judged = Boolean(risk?.asked) || (!risk && askedInApp(this.#yourWords(live), step.app));
+            judged =
+              Boolean(risk?.asked) ||
+              (!risk &&
+                positivelyRead(request.toolName, request.input, step.app) &&
+                askedInApp(this.#yourWords(live), step.app));
           else if (look) why = look;
         }
         if (judged) {
@@ -4705,7 +4728,12 @@ export class ConversationManager {
           if (look === null) sink = undefined;
           else if (look) sink = look;
           // Nothing could look: the person's own words decide (2026-10-27), as for a command.
-          else if (risk?.asked || (!risk && askedInApp(this.#yourWords(live), step.app)))
+          else if (
+            risk?.asked ||
+            (!risk &&
+              positivelyRead(request.toolName, request.input, step.app) &&
+              askedInApp(this.#yourWords(live), step.app))
+          )
             sink = undefined;
         }
       }
