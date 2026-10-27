@@ -58,3 +58,13 @@ the fallback's first model:
 - A new provider declares `tools` per model. That's all it needs for the badge, the offer and routing.
 - Nacre `ModelSwitchCard` is the offer. The picker's `ModelOption.chatOnly` is the badge.
 - A skill that doesn't say what it needs isn't treated as needing tools. Its instructions may only be words to follow.
+
+## Addendum, 2026-10-27: a long job, offered a model that calls tools itself
+
+A model that calls tools only in words (`tools: false`, e.g. a preset's `noTools`) can still do
+a job step by step, but one with native tool calls does a long job better. When a message reads
+as a job of many steps (`looksLong`: three things to do, two put in order, or a list of three),
+and there's a model already set up that calls tools itself, the message waits on the same card
+with `kind: 'job'`: **Switch to …** or **Keep …**. It's offered once a chat: kept or switched,
+it isn't asked again. Never automatic, never when there's nothing to switch to, never in a chat
+from a chat app.

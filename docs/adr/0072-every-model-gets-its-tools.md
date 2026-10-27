@@ -216,3 +216,9 @@ tools had simply been left off the list.
   and only then the one fix in Apps, instead of "don't try to work around it".
 - Tests: `engines/api/held.test.ts`, `integrations/missing.test.ts`,
   `conversations/app-permissions.test.ts` (an app whose tools didn't come).
+
+## Addendum, 2026-10-27: small steps for tools in words
+
+The prompted catalogue adds one line: on a job of many steps, take one small step at a time,
+read its response, check it worked, then the next. A model calling tools in words goes wrong one
+big step at a time. ADR 0050's addendum offers it a model with native tool calls for long jobs.

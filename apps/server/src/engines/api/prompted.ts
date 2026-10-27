@@ -71,6 +71,8 @@ export function catalogue(specs: readonly ToolSpec[], level: CatalogueLevel): st
     '- After your tool calls, stop writing. The results come back in the next message, inside <tool_response> blocks.',
     '- Never write a <tool_response> yourself, and never say a tool did something before you have its response.',
     '- When no tool is needed, just answer.',
+    // A long job in words goes wrong one big step at a time (2026-10-27): small steps, each checked.
+    '- On a job of many steps, take one small step at a time: call, read its response, check it worked, then the next.',
     '',
     `Tools (arguments marked ? are optional):`,
     ...specs.map((spec) => line(spec, level)),
