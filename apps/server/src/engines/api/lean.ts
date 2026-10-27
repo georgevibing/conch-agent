@@ -280,6 +280,55 @@ export function searchTools(
 /** How many tools a lean turn loads by itself from what the person said. */
 export const GUESS_LIMIT = 3;
 
+/** The app a tool belongs to, from its display name (`mcp__supabase__execute_sql`; `github-2` is GitHub). */
+function appOf(display: string): string | undefined {
+  const server = /^mcp__(.+?)__/.exec(display)?.[1];
+  if (!server || server === 'conch') return undefined;
+  return server.replace(/-\d+$/, '').toLowerCase();
+}
+
+/**
+ * The tools of an app the person's message names ("check Supabase for the slow queries"),
+ * best for the rest of what they said first, at most `limit` (ADR 0086, 2026-10-27). A small
+ * model told about one app would otherwise spend a `find_tools` round, or guess that it can't.
+ * The app's own name doesn't rank its tools; ties keep the app's own order.
+ */
+export function appToolsNamed(
+  said: string,
+  tools: readonly { name: string; display: string; description: string }[],
+  limit = GUESS_LIMIT,
+): string[] {
+  const asked = new Set(words(said));
+  const apps = new Set(
+    tools.flatMap((tool) => {
+      const app = appOf(tool.display);
+      const parts = app ? words(app) : [];
+      return app && parts.length && parts.every((w) => asked.has(w)) ? [app] : [];
+    }),
+  );
+  if (!apps.size) return [];
+  const appWords = new Set([...apps].flatMap((app) => words(app)));
+  const rest = new Set(
+    [...asked]
+      .filter((w) => !appWords.has(w))
+      .flatMap((w) => [w, ...(ALSO[w]?.split(' ') ?? [])])
+      .map(stem),
+  );
+  return tools
+    .flatMap((tool, order) => {
+      const app = appOf(tool.display);
+      if (!app || !apps.has(app)) return [];
+      const name = new Set(words(tool.display.replace(/^mcp__.+?__/, '')).map(stem));
+      const about = new Set(words(tool.description).map(stem));
+      let score = 0;
+      for (const w of rest) score += name.has(w) ? 3 : about.has(w) ? 1 : 0;
+      return [{ name: tool.name, score, order }];
+    })
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .slice(0, limit)
+    .map((s) => s.name);
+}
+
 /** What `find_tools` answers: each tool loaded, with what it does and what it takes. */
 export function foundText(found: readonly ToolSpec[], query: string): string {
   if (!found.length)

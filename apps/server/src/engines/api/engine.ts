@@ -91,6 +91,7 @@ import {
 import { describeOrSay, withSight } from './sight';
 import { UNREADABLE, UNREADABLE_MESSAGE } from './prompted';
 import {
+  appToolsNamed,
   FIND_TOOLS,
   findToolsSpec,
   GUESS_LIMIT,
@@ -468,9 +469,14 @@ function leanTools(
     if (tool) tools.set(wire, tool);
   }
   // A small model often says it did something rather than look for the tool to do it:
-  // the tools whose names the person's message names are loaded before it's asked.
-  for (const wire of searchTools(said.slice(0, 500), entries(all), GUESS_LIMIT, 3))
-    load(tools, all, session, wire);
+  // the tools of an app the person's message names, then the tools whose names it names,
+  // are loaded before it's asked: a few at most, so the list stays lean.
+  const listed = entries(all);
+  const guessed = new Set([
+    ...appToolsNamed(said.slice(0, 500), listed),
+    ...searchTools(said.slice(0, 500), listed, GUESS_LIMIT, 3),
+  ]);
+  for (const wire of [...guessed].slice(0, GUESS_LIMIT)) load(tools, all, session, wire);
   return tools;
 }
 
