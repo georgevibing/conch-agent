@@ -384,6 +384,15 @@ export interface TurnInput {
   /** Native engines: integrations to load, keyed by server name (tools become `mcp__<name>__<tool>`). */
   mcpServers?: Record<string, EngineMcpServer>;
   /**
+   * Native engines: apps that failed to start are looked at once more (working agreement
+   * 11). Gives the ones that work now, as they are now (a renewed sign-in), to load again
+   * this turn; `healed` is told which did, for a quiet note.
+   */
+  healMcp?: (failed: readonly { name: string; error: string }[]) => Promise<{
+    servers: Record<string, EngineMcpServer>;
+    healed: (names: readonly string[]) => void;
+  }>;
+  /**
    * Put pictures into words for a model that can't see them (ADR 0070), by a
    * model that can. Engines call it for a tool's screenshot, or a picture the
    * person attached, when the turn's model can't take pictures. Bound to this

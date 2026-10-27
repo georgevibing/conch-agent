@@ -1566,6 +1566,37 @@ export class IntegrationService {
     };
   }
 
+  /**
+   * For an engine that runs apps itself (Claude Code): the ones that didn't start are
+   * looked at once more, as `#healBridge` does, and those that work now come back as they
+   * are now (a renewed sign-in) for the engine to load this turn. What still fails is left
+   * for `turnFailed`.
+   */
+  async healNative(failed: readonly { name: string; error: string }[]): Promise<{
+    servers: Record<string, EngineMcpServer>;
+    healed: (names: readonly string[]) => void;
+  }> {
+    const items = await this.store.all();
+    const servers: Record<string, EngineMcpServer> = {};
+    const labels = new Map<string, string>();
+    for (const { name } of failed) {
+      const item = items.find((i) => i.server === name);
+      if (!item) continue;
+      const checked = await this.check(item.id).catch(() => undefined);
+      if (checked?.health.state !== 'ok' && checked?.health.state !== 'warning') continue;
+      const now = await this.#resolve(checked).catch(() => undefined);
+      if (!now) continue;
+      servers[name] = now.server;
+      labels.set(name, checked.name);
+    }
+    return {
+      servers,
+      healed: (names) => {
+        for (const name of names) this.deps.onHeal?.(`Reconnected ${labels.get(name) ?? name}`);
+      },
+    };
+  }
+
   /** The engine couldn't connect some integrations at the start of a turn. */
   async turnFailed(failed: { name: string; error: string }[]): Promise<IntegrationIssue[]> {
     const items = await this.store.all();
