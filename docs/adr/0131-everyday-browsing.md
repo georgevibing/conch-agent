@@ -132,3 +132,19 @@ A site's "Book", "Subscribe", "Cancel membership" or "Accept invitation" now goe
 review like "Send" (ADR 0014, addendum of this date): the resolved label and the page are the
 evidence, and the page must not change before the click. Paying keeps its card unless the
 person named a limit the page's own total is inside.
+
+Later the same day, from scoring Auto against scenarios:
+
+- **Paying by another name.** A plan's "$9.99/month", "€20 deposit" or "then $12.99" on the
+  page makes a reviewable "Subscribe" or "Book" paying (`showsCharge`), so it keeps its card;
+  before, only a line labelled total did, and a paid plan's Subscribe could pass the review.
+  Renew, upgrade, add funds, start or activate a plan are significant and paying.
+- **A site named is a sign-in asked for.** The person's own words naming the site's brand as a
+  word, or its address ("order the ink on Amazon"), lift the sign-in card (`namesSite`). Plain
+  labels (account, login, mail, shop…) name nothing; the fill still goes only to the item's own
+  site over https, and a lookalike is refused before any of this.
+- **Someone to answer, not someone in the chat.** A task from the chat and the owner's own chat
+  app (`ToolContext.attended`, ADR 0151) browse and settle cards as the chat does; a routine
+  doesn't.
+- **Not yet:** identity numbers still go to the person to type. Filling them from a saved
+  Identity item needs Passwords to match an item without a site, which is a change of its own.

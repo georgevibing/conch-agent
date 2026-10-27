@@ -182,18 +182,21 @@ Outside Full trust, Conch asks about the steps that need approval:
 
 In **Auto**, what you already said counts as your answer:
 
-- **A sign-in you asked for.** "Log in to my Hetzner account" signs in from Passwords
-  with no card, on that item's own site only.
+- **A site you named.** "Log in to my Hetzner account", or just "order the same ink on
+  Amazon", signs in from Passwords with no card, on that item's own site only. A site that
+  only looks like it is refused.
 - **Sending, booking, subscribing, cancelling, answering an invite.** Auto checks the
   button and the page against what you asked for, and goes ahead when they match. Paying
-  isn't one of these.
+  isn't one of these: a price a month, a deposit or a bill after a trial on the page makes
+  "Subscribe" or "Book" paying, and renewing, upgrading or adding funds is paying too.
 - **A limit you named.** "Buy it if it's under $50" places the order with no card when the
   total on the page is inside that limit, in the same currency. Over it, or with no limit
   named, it asks.
 - **One card per payment.** A yes to the order covers filling your saved card on that
   checkout, and the other way round.
 
-None of this applies after someone else has written in the chat, or in your own Chrome.
+The same holds in a task from that chat and when you write from your own chat app. None of
+this applies after someone else has written in the chat, in a routine, or in your own Chrome.
 
 In **Read only** mode it reads but never clicks, types or fills. In **Full trust** mode it
 skips action approvals, including significant actions, uploads and downloads, and signs
