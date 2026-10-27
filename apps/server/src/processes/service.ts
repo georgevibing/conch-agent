@@ -34,6 +34,12 @@ import {
 const MAX_WATCHED_MS = 7_200_000;
 /** Longest in a run nobody answers for (a routine). */
 const MAX_UNATTENDED_MS = 1_800_000;
+/**
+ * Longest `wait: true` holds the call (2026-10-27): under the 3 minutes a provider's MCP
+ * client lets a quiet call go (Claude Code's `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`), so a long
+ * keyed command hands back its id while it runs on instead of failing the call.
+ */
+const FOREGROUND_MS = 150_000;
 
 /** A managed command as a wait sees it (ADR 0125). */
 export interface ProcessPeek {
@@ -92,6 +98,8 @@ export class ProcessService {
       healed?: (message: string) => void;
       /** Saved keys put into a command's environment, unseen (ADR 0151). */
       secrets?: () => CommandSecrets;
+      /** How long `wait: true` holds the call (`FOREGROUND_MS`; tests make it short). */
+      foregroundMs?: number;
     },
   ) {
     this.#pace = new ResourcePace(deps.now);
@@ -426,7 +434,7 @@ export class ProcessService {
         name: 'process_start',
         row: true,
         description:
-          'Start or queue a managed shell command in this chat’s work folder and return its id immediately, or with wait: true run it to the end and return its output (use that for a command that needs a saved key in `secrets`). Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers, and for anything over 10 minutes (then wait_for it). Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 2 hours while a person can answer (30 minutes in a routine), belongs only to this chat, and stops when the chat is stopped or Conch closes. Sealed, a command reaches package registries, GitHub, GitLab, Bitbucket and the work folder’s own remotes over HTTPS; any other host, a private registry or a push needs dangerouslyDisableSandbox. Never enter passwords or secrets through stdin: a saved key goes in `secrets`, which puts it in the command’s environment without you seeing it.',
+          'Start or queue a managed shell command in this chat’s work folder and return its id immediately, or with wait: true run it in the foreground and return its output (use that for a command that needs a saved key in `secrets`); one still running after a couple of minutes comes back with its id to wait_for. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers, and for anything over 10 minutes (then wait_for it). Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 2 hours while a person can answer (30 minutes in a routine), belongs only to this chat, and stops when the chat is stopped or Conch closes. Sealed, a command reaches package registries, GitHub, GitLab, Bitbucket and the work folder’s own remotes over HTTPS; any other host, a private registry or a push needs dangerouslyDisableSandbox. Never enter passwords or secrets through stdin: a saved key goes in `secrets`, which puts it in the command’s environment without you seeing it.',
         input: {
           command: z.string().min(1).max(32_000),
           timeout_ms: z.number().int().min(1000).max(MAX_WATCHED_MS).default(600_000),
@@ -594,13 +602,24 @@ export class ProcessService {
           await this.#pump();
           if (args.wait !== true) return JSON.stringify(this.#view(session));
           // In the foreground: Conch's Bash with a saved key, for a provider whose own shell
-          // can't take one (ADR 0151). Stop still stops it.
-          while (session.status === 'running' || session.status === 'queued')
+          // can't take one (ADR 0151). Stop still stops it. Past `FOREGROUND_MS` it runs on,
+          // and the model waits for it instead of the call timing out.
+          const until = performance.now() + (this.deps.foregroundMs ?? FOREGROUND_MS);
+          while (
+            (session.status === 'running' || session.status === 'queued') &&
+            performance.now() < until
+          )
             await delay(100, undefined, { signal: ctx.signal });
           // What it printed marks the chat as process_read would.
           const source = taintFrom('process_read', { command });
           if (source) ctx.taint?.(source);
-          return JSON.stringify(this.#view(session));
+          const view = this.#view(session);
+          if (session.status === 'running' || session.status === 'queued')
+            return JSON.stringify({
+              ...view,
+              note: `It’s still running: wait_for this process (id ${session.id}) to be told when it ends, or process_read it for more output.`,
+            });
+          return JSON.stringify(view);
         },
       },
       {

@@ -34,6 +34,7 @@ async function setup(
     protectedPaths?: string[];
     resources?: () => Promise<ResourceSnapshot>;
     usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
+    foregroundMs?: number;
   } = {},
 ) {
   const cwd = await mkdtemp(join(tmpdir(), 'conch-process-'));
@@ -105,6 +106,18 @@ describe('managed commands', () => {
     expect(result.output).toContain('built');
     // What it printed marks the chat as process_read would.
     expect(taint).toHaveBeenCalledWith({ kind: 'download', label: 'news.example' });
+  });
+
+  it('hands a long wait back with its id while the command runs on', async () => {
+    const { run, ctx } = await setup({ foregroundMs: 200 });
+    const result = JSON.parse(
+      String(
+        await run('process_start', { command: 'sleep 5', timeout_ms: 10_000, wait: true }, ctx),
+      ),
+    ) as { id: string; status: string; note?: string };
+    expect(result.status).toBe('running');
+    expect(result.note).toContain('wait_for');
+    expect(result.note).toContain(result.id);
   });
 
   it('marks the chat by what a command reads, not by every output (ADR 0028, ADR 0117)', async () => {
