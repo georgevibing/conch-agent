@@ -9,8 +9,8 @@ import type { BrowserBox } from './BrowserWindow';
 
 export type BrowserApprovalKind = 'site' | 'high-stakes' | 'download' | 'fill' | 'upload';
 export type BrowserApprovalDecision = 'allow' | 'allow-always' | 'deny';
-/** What a fill does: sign in, fill a code, make a new password, or fill in a card. */
-export type BrowserFillKind = 'sign-in' | 'code' | 'new-password' | 'card';
+/** What a fill does: sign in, fill a code, make a new password, fill in a card, or your details. */
+export type BrowserFillKind = 'sign-in' | 'code' | 'new-password' | 'card' | 'identity';
 
 /** A saved item to pick, by name: never a value. */
 export interface BrowserFillAccount {
@@ -94,6 +94,8 @@ function fillDetail(fill: BrowserFillKind | undefined, name: string) {
       return `Conch makes it, saves it in your Passwords and types it in. ${name} never sees it.`;
     case 'card':
       return `Conch types the card in from your Passwords. ${name} never sees it.`;
+    case 'identity':
+      return `Conch types your details into this form from your Passwords, and nowhere else. ${name} never sees them.`;
     default:
       return `Conch types it into the page itself, from your Passwords. ${name} never sees it.`;
   }

@@ -157,4 +157,13 @@ describe('the person naming a site (2026-10-27)', () => {
     expect(namesSite('open the netflixparty page', 'netflix.com')).toBe(false);
     expect(namesSite('check my account', 'account.com')).toBe(false);
   });
+
+  it('needs a sign-in word beside a brand that is an everyday word, or a bank', () => {
+    expect(namesSite('chase down the invoice', 'chase.com')).toBe(false);
+    expect(namesSite('hit the target this week', 'target.com')).toBe(false);
+    expect(namesSite('discover what changed', 'discover.com')).toBe(false);
+    expect(namesSite('sign in to Chase and download the statement', 'chase.com')).toBe(true);
+    expect(namesSite('log into my Target account', 'target.com')).toBe(true);
+    expect(namesSite('get my statement from chase.com', 'chase.com')).toBe(true);
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classify, fillHost, type FieldFacts } from './fill';
+import { classify, fillHost, identityRoleOf, type FieldFacts } from './fill';
 
 let n = 0;
 function box(over: Partial<FieldFacts>): FieldFacts {
@@ -95,6 +95,33 @@ describe('which box is which (ADR 0130)', () => {
         box({ secret: 'identity', words: 'passport number' }),
       ]),
     ).toEqual([undefined, undefined, undefined, undefined]);
+  });
+});
+
+describe('which of your details a box asks for (ADR 0131, 2026-10-27)', () => {
+  const role = (over: Partial<FieldFacts>) => identityRoleOf(box(over));
+
+  it('reads autocomplete first, then the box’s words', () => {
+    expect(role({ autocomplete: 'given-name' })).toBe('firstName');
+    expect(role({ autocomplete: 'family-name' })).toBe('lastName');
+    expect(role({ autocomplete: 'bday' })).toBe('birthday');
+    expect(role({ autocomplete: 'address-line2' })).toBe('address2');
+    expect(role({ words: 'first name' })).toBe('firstName');
+    expect(role({ words: 'surname' })).toBe('lastName');
+    expect(role({ words: 'date of birth' })).toBe('birthday');
+    expect(role({ secret: 'identity', words: 'passport number' })).toBe('documentNumber');
+    expect(role({ words: 'phone' })).toBe('phone');
+  });
+
+  it('tells a passport’s dates from its number', () => {
+    expect(role({ words: 'passport expiry date' })).toBe('expiresOn');
+    expect(role({ words: 'passport issue date' })).toBe('issuedOn');
+  });
+
+  it('never a password box, or a box that asks for something else', () => {
+    expect(role({ type: 'password', words: 'first name' })).toBeUndefined();
+    expect(role({ words: 'promo code' })).toBeUndefined();
+    expect(role({ type: 'search', words: 'search' })).toBeUndefined();
   });
 });
 

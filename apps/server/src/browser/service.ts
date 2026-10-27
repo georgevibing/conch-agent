@@ -20,7 +20,7 @@ import type { Engine, HostTool } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { safeJoin } from '../lib/fs';
 import type { Heal } from '../lib/recover';
-import type { FillPolicy } from '../vault/service';
+import type { FillPolicy, FillWant } from '../vault/service';
 import type { WebAuthnCredential } from './passkeys';
 import {
   addressHost,
@@ -99,6 +99,8 @@ export interface PasswordFiller {
   }): { id: string; title: string; subtitle: string } | undefined;
   /** Saved payment cards, for a checkout (a card isn't tied to one site). */
   cards(): Promise<{ id: string; title: string; subtitle: string }[]>;
+  /** Saved identities and travel documents, for a form asking for your details. */
+  identities?(): Promise<{ id: string; title: string; subtitle: string }[]>;
   /** Passwords is locked: show the card that unlocks it, and wait (false: it stayed locked). */
   ensureOpen(show: (request: VaultRequest) => void, signal: AbortSignal): Promise<boolean>;
   isLocked?(): Promise<boolean>;
@@ -136,7 +138,7 @@ export interface PasswordFiller {
 export interface FillRequest {
   itemId: string;
   host: string;
-  want: 'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder';
+  want: FillWant;
 }
 
 export class BrowserService {

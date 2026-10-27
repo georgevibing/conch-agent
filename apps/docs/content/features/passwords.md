@@ -98,6 +98,7 @@ Your assistant sees names and sites, never a value. In [Conch's browser](./brows
 - It never fills a page without https, or a sign-in box from another site inside a page.
 - Each item sets how far your assistant may go, under **Your assistant** when you edit it: ask each time, fill without asking, or never.
 - A payment card always asks, and fills the card's boxes together.
+- **Your details:** a form asking for your name, date of birth, address or passport number fills from a saved identity, passport or licence. One card for the whole form says which item and which site; naming the item, such as _use my passport_, or Full trust, skips it. Your assistant never sees the values, even after they're on the page.
 - For a sign-in you haven't saved, a card in the chat asks you. What you type goes to Passwords, not the chat.
 - To read something itself, such as a PIN or a note, it asks: **Don’t**, **Always for this item** or **Allow once**.
 - **A key for a command**, such as a GitHub token for `git clone` or an API token for a cloud's command-line tool: Conch puts it into the command's environment itself, so your assistant never sees it, and blanks it from what the command prints. The card shows the command and asks: **Don’t**, **Always for this item** or **Allow in this chat**. After your assistant has read a web page, an email or another outside source in that chat, it asks every time.

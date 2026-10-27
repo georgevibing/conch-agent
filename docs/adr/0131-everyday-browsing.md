@@ -146,5 +146,18 @@ Later the same day, from scoring Auto against scenarios:
 - **Someone to answer, not someone in the chat.** A task from the chat and the owner's own chat
   app (`ToolContext.attended`, ADR 0151) browse and settle cards as the chat does; a routine
   doesn't.
-- **Not yet:** identity numbers still go to the person to type. Filling them from a saved
-  Identity item needs Passwords to match an item without a site, which is a change of its own.
+- **Your details, from Passwords** (round four). `browser_type` with `details: true` and an
+  empty text fills a form from a saved identity, passport or licence (`identityFill`): which
+  box is which by `autocomplete`, then the box's words (`identityRoleOf`); one card for the
+  whole form that names the item and the site, never "Always"; a yes covers that form on that
+  page for ten minutes. Only a secure page's own form (no frames from elsewhere), only that
+  item's fields, only boxes that ask for them, and every box filled stays masked in what the
+  model reads of the page. The person naming the item, or Full trust, needs no card; several
+  items and none named, the card asks which.
+- **A named site's sign-in through Google, Apple or Microsoft.** On the provider's page, in a
+  sign-in the named site started in that tab (ADR 0133's chain), the person's words naming that
+  site lift the card ("export my Notion workspace"); the fill still goes only to the provider's
+  own page.
+- **Brands that are everyday words, and banks.** "Chase down the invoice" isn't "sign in to
+  Chase": for chase, target, discover, square, apple, box, notion and the common banks, naming
+  the brand lifts a sign-in only beside a word for signing in, or the item's own title.

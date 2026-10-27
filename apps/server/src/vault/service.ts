@@ -184,7 +184,38 @@ export interface FillRequest {
 }
 
 export type FillWant =
-  'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder';
+  'password' | 'username' | 'totp' | 'cardNumber' | 'cvv' | 'expiry' | 'cardholder' | IdentityWant;
+
+/** What a saved identity or travel document fills into a form (ADR 0131, 2026-10-27). */
+export type IdentityWant =
+  | 'firstName'
+  | 'lastName'
+  | 'fullName'
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'address2'
+  | 'birthday'
+  | 'documentNumber'
+  | 'issuedOn'
+  | 'expiresOn';
+
+export const IDENTITY_WANTS: readonly IdentityWant[] = [
+  'firstName',
+  'lastName',
+  'fullName',
+  'email',
+  'phone',
+  'address',
+  'address2',
+  'birthday',
+  'documentNumber',
+  'issuedOn',
+  'expiresOn',
+];
+
+/** Items that hold a person's own details: an identity, a passport or another document. */
+const IDENTITY_TYPES = new Set<VaultItemType>(['identity', 'document', 'license']);
 
 /** Whether a fill may happen here, whether it asks first, and what the card says (ADR 0130). */
 export interface FillPolicy {
@@ -1966,6 +1997,17 @@ export class VaultService {
       }));
   }
 
+  /** Saved identities and travel documents, for a form that asks for your details (names only). */
+  async identities(): Promise<VaultItemSummary[]> {
+    if (await this.isLocked()) return [];
+    const { items } = await this.list();
+    const records = new Map((await this.#records()).map((r) => [r.id, r]));
+    return items.filter(
+      (i) =>
+        !i.deletedAt && IDENTITY_TYPES.has(i.type) && records.get(i.id)?.agentAccess !== 'never',
+    );
+  }
+
   async cards(): Promise<VaultItemSummary[]> {
     if (await this.isLocked()) return [];
     const { items } = await this.list();
@@ -2066,6 +2108,22 @@ export class VaultService {
         match: 'exact',
         type,
         has: ['cardNumber', 'cvv', 'expiry', 'cardholder'],
+      };
+    }
+    // Your details aren't for one site either: a secure page's form, one card each time.
+    if (IDENTITY_TYPES.has(type)) {
+      if (!/\./.test(request.host) && request.host !== 'localhost')
+        throw new VaultError('refused', 'Your details are only filled on a real website.');
+      const roles = new Set(
+        (record?.fields ?? []).filter((f) => f.role && f.value).map((f) => f.role as string),
+      );
+      return {
+        ask: true,
+        title,
+        site: request.host,
+        match: 'exact',
+        type,
+        has: record ? IDENTITY_WANTS.filter((w) => roles.has(w)) : [...IDENTITY_WANTS],
       };
     }
     const sites = record

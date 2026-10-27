@@ -283,3 +283,11 @@ only an administrator can install; Conch then shows the one command to run.
   click “Learn more”"_, or _"… and sign in"_ to see a handoff. Attach a file and say
   _"Open … and upload it to “CV”"_ for an upload, or _"… click “Our blog”, then go back to
   the first tab"_ for tabs.
+
+## Your details (2026-10-27)
+
+A form asking for your own details — a visa, a booking's traveller, an address — fills from a
+saved identity, passport or licence in Passwords. Your assistant asks with `details: true`;
+Conch shows one card for the whole form (which item, which site), fills only the boxes that ask
+for those details on a secure page's own form, and keeps every filled box masked in what the
+assistant reads. Naming the item ("use my passport"), or Full trust, needs no card.

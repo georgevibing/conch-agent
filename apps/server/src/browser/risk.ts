@@ -54,6 +54,8 @@ export function markSecretsInPage(attr: string): number {
     return parts.filter(Boolean).join(' ').toLowerCase();
   };
   let found = 0;
+  // A box Conch filled from a saved identity stays masked, whatever its label (2026-10-27).
+  const filledAttr = `${attr}-filled`;
   for (const el of Array.from(doc.querySelectorAll('input, textarea, [contenteditable]'))) {
     const type = (el.getAttribute('type') ?? '').toLowerCase();
     const auto = (el.getAttribute('autocomplete') ?? '').toLowerCase();
@@ -74,7 +76,10 @@ export function markSecretsInPage(attr: string): number {
       )
     ) {
       kind = 'payment';
-    } else if (/\bssn\b|social security|passport number|national id|tax id/.test(label)) {
+    } else if (
+      /\bssn\b|social security|passport number|national id|tax id/.test(label) ||
+      el.hasAttribute(filledAttr)
+    ) {
       kind = 'identity';
     }
     if (kind) {

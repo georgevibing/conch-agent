@@ -41,6 +41,13 @@ const pages = new Map<string, () => string>(
     <button type=button onclick="location.href='http://localhost:${port}/apple'">Continue with Apple</button>`,
     '/chooser': () => `<title>Choose an account</title><h1>Choose an account</h1>
     <a href="/google">Bob Builder bob@gmail.com</a><a href="/google">Ada Lovelace ada@gmail.com</a>`,
+    '/visa': () => `<title>Visa application</title><h1>Your details</h1><form>
+    <label>First name <input name=first></label>
+    <label>Surname <input name=last></label>
+    <label>Date of birth <input name=dob></label>
+    <label>Passport number <input name=passport></label>
+    <label>Promo code <input name=promo></label>
+    <button type=button>Continue</button></form>`,
     '/pk':
       () => `<title>Shop</title><form><label>Email <input type=email name=email autocomplete=username></label>
     <button type=button>Sign in with a passkey</button></form>`,
@@ -177,6 +184,7 @@ function harness(
   conversationId: string,
   answers: PermissionDecision[] = [],
   mode: PermissionMode = 'auto',
+  said: string[] = [],
 ) {
   const asked: AskRequest[] = [];
   const events: ConversationEventInput[] = [];
@@ -190,6 +198,7 @@ function harness(
       return Promise.resolve(answers.shift() ?? 'deny');
     },
     signal: new AbortController().signal,
+    said: () => said,
   };
   const tools = new Map(browser.tools(ctx).map((t) => [t.name, t]));
   const call = async (name: string, args: Record<string, unknown>) =>
@@ -502,3 +511,131 @@ describe.skipIf(!hasBrowser)('signing in another way, for real (ADR 0133)', () =
     },
   );
 });
+
+const PASSPORT = 'P' + '1234567';
+
+/** Passwords with one saved passport: names on the card, values only into the page. */
+function withPassport(): PasswordFiller & { filled: FillRequest[] } {
+  const base = passwordsWith([]);
+  const values: Record<string, string> = {
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    birthday: '1815-12-10',
+    documentNumber: PASSPORT,
+  };
+  return {
+    ...base,
+    identities: () =>
+      Promise.resolve([{ id: 'pp', title: 'My passport', subtitle: 'Ada Lovelace' }]),
+    fillPolicy: (request) =>
+      Promise.resolve({
+        ask: true,
+        title: 'My passport',
+        site: request.host,
+        match: 'exact',
+        type: 'document',
+        has: ['firstName', 'lastName', 'birthday', 'documentNumber'],
+      }),
+    fillValue: (request) => {
+      base.filled.push(request);
+      const value = values[request.want];
+      return value ? Promise.resolve(value) : Promise.reject(new Error('Nothing to fill.'));
+    },
+  };
+}
+
+describe.skipIf(!hasBrowser)(
+  'your details and a named site’s sign-in, for real (2026-10-27)',
+  () => {
+    it(
+      'a sign-in a named site started on Google’s page needs no card in Auto',
+      { timeout: 90_000 },
+      async () => {
+        browser.passwords = passwordsWith(items);
+        try {
+          const { call, asked } = harness('conv_named', [], 'auto', [
+            'export my Product Hunt data',
+          ]);
+          const opened = await call('browser_open', { url: `http://127.0.0.1:${port}/ph` });
+          await call('browser_click', {
+            ref: refOf(opened, /button "Continue with Google"/),
+            element: 'Continue with Google',
+          });
+          const google = await call('browser_read', {});
+          const filled = await call('browser_type', {
+            ref: refOf(google, /textbox "Enter your password"/),
+            element: 'Password',
+            text: '',
+          });
+          expect(asked).toHaveLength(0);
+          expect(filled).toContain('from the user’s saved item “Google”');
+          expect(filled).not.toContain(ADA);
+        } finally {
+          browser.passwords = undefined;
+        }
+      },
+    );
+
+    it(
+      'fills a form from a saved passport after one card, and never shows the model a value',
+      { timeout: 90_000 },
+      async () => {
+        const passwords = withPassport();
+        browser.passwords = passwords;
+        try {
+          const { call, asked } = harness('conv_visa', ['allow']);
+          const opened = await call('browser_open', { url: `http://127.0.0.1:${port}/visa` });
+          const filled = await call('browser_type', {
+            ref: refOf(opened, /textbox "First name"/),
+            element: 'First name',
+            text: '',
+            details: true,
+          });
+          expect(asked).toHaveLength(1);
+          expect(asked[0]?.browser).toMatchObject({ kind: 'fill', fill: 'identity' });
+          expect(filled).toContain('from the user’s saved “My passport”');
+          expect(filled).not.toContain(PASSPORT);
+          expect(filled).not.toContain('Lovelace');
+          expect(await call('browser_read', {})).not.toContain('Lovelace');
+          const tab = browser.tabIfOpen('conv_visa');
+          expect(await tab?.page.locator('input[name=first]').inputValue()).toBe('Ada');
+          expect(await tab?.page.locator('input[name=last]').inputValue()).toBe('Lovelace');
+          expect(await tab?.page.locator('input[name=passport]').inputValue()).toBe(PASSPORT);
+          expect(await tab?.page.locator('input[name=promo]').inputValue()).toBe('');
+          // Another box of the same form a moment later: no second card.
+          await tab?.page.locator('input[name=dob]').fill('');
+          const again = await call('browser_type', {
+            ref: refOf(await call('browser_read', {}), /textbox "Date of birth"/),
+            element: 'Date of birth',
+            text: '',
+            details: true,
+          });
+          expect(asked).toHaveLength(1);
+          expect(again).not.toContain('1815');
+        } finally {
+          browser.passwords = undefined;
+        }
+      },
+    );
+
+    it('asks again when the person says no, and fills nothing', { timeout: 60_000 }, async () => {
+      browser.passwords = withPassport();
+      try {
+        const { call, asked } = harness('conv_visa_no', ['deny']);
+        const opened = await call('browser_open', { url: `http://127.0.0.1:${port}/visa` });
+        const refused = await call('browser_type', {
+          ref: refOf(opened, /textbox "Passport number"/),
+          element: 'Passport number',
+          text: '',
+          details: true,
+        });
+        expect(asked).toHaveLength(1);
+        expect(refused).toContain('doesn’t want Conch to fill their details');
+        const tab = browser.tabIfOpen('conv_visa_no');
+        expect(await tab?.page.locator('input[name=passport]').inputValue()).toBe('');
+      } finally {
+        browser.passwords = undefined;
+      }
+    });
+  },
+);
