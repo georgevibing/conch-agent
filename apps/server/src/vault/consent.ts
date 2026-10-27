@@ -1,4 +1,5 @@
 import type { ToolContext } from '../conversations/manager';
+import { ownWords } from '../conversations/risk';
 
 /**
  * When Passwords needs no card to read an item or hand it to a command (ADR 0151,
@@ -29,7 +30,8 @@ export function consented(
   // Only the person's words: empty when someone else is in the chat, so a page or a
   // stranger naming the item never counts.
   const match = loose ? named : names;
-  if ((ctx.said?.() ?? []).some((message) => match(message, title))) return true;
+  // What they pasted in (a quoted email naming the item) isn't theirs (2026-10-27).
+  if ((ctx.said?.() ?? []).some((message) => match(ownWords(message), title))) return true;
   // Full trust still asks after someone else's words came in (`untrusted` leaves out
   // what a page said, since the person trusted the chat with that).
   return trust && !ctx.untrusted?.();

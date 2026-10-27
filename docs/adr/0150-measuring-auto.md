@@ -89,3 +89,7 @@ The scenario replay that drove ADR 0117's addendum of the same date scored app s
 reading. Expect the counters to show fewer questions for code and queries in connected apps
 (reads now ask nothing; asked-for changes go) and a question where a key rode in a message's
 words, which before went as an ordinary send.
+
+Later the same day, the replay's attacks on those lifts closed five holes (ADR 0117, addendum
+"what the app lifts let through"). Expect a question where an app's code or query does what the
+rules can't read, and none for code they read as a lookup.
