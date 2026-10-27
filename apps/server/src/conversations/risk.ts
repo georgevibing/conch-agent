@@ -640,6 +640,15 @@ export function ownWords(message: string): string {
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')
     .replace(/"""[\s\S]*?(?:"""|$)/g, ' ')
     .replace(/[“"«„][^”"»“\n]{120,}[”"»“]/g, ' ')
+    // A shorter quote of a sentence ("please update cloudflare") is someone else's words too;
+    // a quoted name ("feature/x", "my-app") stays.
+    .replace(/[“"«„][^”"»“\n]*\s[^”"»“\n]*\s[^”"»“\n]*[”"»“]/g, ' ')
+    .replace(/(^|\s)'[^'\n]*\s[^'\n]*\s[^'\n]*'(?=\s|[.,!?:;]|$)/g, '$1 ')
+    // What a message or a page says, reported: "it says…", "this email says…", "they wrote…".
+    .replace(
+      /\b(?:it|this(?:\s+\w+)?|that(?:\s+\w+)?|the\s+\w+|they|he|she)\s+(?:says?|said|wrote|writes)\b[^\n]*/gi,
+      ' ',
+    )
     .split('\n')
     .filter((line) => !/^\s*>/.test(line))
     .join('\n');
@@ -3188,7 +3197,8 @@ export function sqlEffect(sql: string): AppCode {
     if (/^copy\b[\s\S]*\b(?:program|to)\b/.test(statement)) return 'egress';
     // Every call a statement makes, read by its name: a pure one only looks.
     for (const m of statement.matchAll(/([a-z_][\w$]*(?:\.[a-z_][\w$]*)?)\s*\(/g)) {
-      const name = (m[1] ?? '').replace(/^(?:pg_catalog|public)\./, '');
+      // Only the database's own built-ins are trusted by name: `public.count()` is someone's.
+      const name = (m[1] ?? '').replace(/^pg_catalog\./, '');
       if (SQL_OUT.test(name)) return 'egress';
       // A table and its columns (`into notes(body)`, `references users(id)`) aren't a call; a
       // function after FROM or JOIN is (`from dblink(…)`, `from cleanup()`).
@@ -3198,7 +3208,7 @@ export function sqlEffect(sql: string): AppCode {
         )
       )
         continue;
-      if (SQL_NOT_CALLS.has(name) || PURE_SQL.has(name)) continue;
+      if (SQL_NOT_CALLS.has(name) || (PURE_SQL.has(name) && !name.includes('.'))) continue;
       if (SQL_OUT.test(name)) return 'egress';
       effect = worse(effect, SQL_GRANTS.test(name) ? 'grant' : 'unknown');
     }
@@ -3250,6 +3260,14 @@ export function codeEffect(code: string, names: readonly string[] = []): AppCode
     if (!own.length) return 'unknown';
     if (!own.some((name) => host === name || host.replace(/[-_]/g, '') === name)) return 'egress';
   }
+  // A read needs evidence (2026-10-27): options built elsewhere (`fetch(url, opts)`, a spread,
+  // a method override header) could carry any method, so the code can't be told.
+  if (
+    /X-HTTP-Method(?:-Override)?/i.test(code) ||
+    /\.\.\.\s*[A-Za-z_$]/.test(code) ||
+    /\b(?:fetch|request)\s*\(\s*[^,()]+,\s*[A-Za-z_$][\w$.]*\s*\)/.test(code)
+  )
+    return 'unknown';
   let effect: AppCode = 'read';
   // `method: 'GET'`, `"method": "DELETE"`, `method = "POST"`: every one is read.
   for (const m of code.matchAll(/["'`]?\bmethod["'`]?\s*[:=]\s*(?:(['"`])([A-Za-z]+)\1)?/g)) {

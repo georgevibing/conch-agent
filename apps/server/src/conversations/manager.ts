@@ -3880,7 +3880,9 @@ export class ConversationManager {
       if (step.access === 'read' && !sendsMoreThanALookup(request.input)) return null;
       // Code or a query the rules read as a lookup (2026-10-27): it only looks, whatever the
       // server says the tool may do, so there's nothing to review and no card if review fails.
-      if (codeOnlyReads(request.toolName, request.input, step.app)) return null;
+      // After reading, the review still looks: a backstop for what the rules misread.
+      if (!this.#tainted(live).length && codeOnlyReads(request.toolName, request.input, step.app))
+        return null;
       const verdict = await review(request, { ...(risk && { risk }), step });
       if (typeof verdict !== 'object') return undefined;
       if (verdict.decision !== 'allow') return verdictWords(verdict, true);

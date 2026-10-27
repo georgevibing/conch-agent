@@ -1610,3 +1610,36 @@ describe('keys, deploys, merges and money, read for what they really do (2026-10
     ).toBe(false);
   });
 });
+
+describe('reading an app’s code only on evidence (2026-10-27, round 4)', () => {
+  it('trusts only the database’s own built-ins by name', () => {
+    expect(sqlEffect('select count(*) from orders')).toBe('read');
+    expect(sqlEffect('select pg_catalog.count(*) from orders')).toBe('read');
+    expect(sqlEffect('select public.count(*) from orders')).not.toBe('read');
+  });
+
+  it('can’t tell code whose request options are built elsewhere', () => {
+    const own = ['cloudflare'];
+    expect(codeEffect('await fetch(url, opts)', own)).toBe('unknown');
+    expect(codeEffect("await cloudflare.request({ ...base, path: '/zones' })", own)).toBe(
+      'unknown',
+    );
+    expect(
+      codeEffect(
+        "await fetch('https://api.cloudflare.com/x', { headers: { 'X-HTTP-Method-Override': 'DELETE' } })",
+        own,
+      ),
+    ).toBe('unknown');
+    expect(codeEffect("await cloudflare.request({ method: 'GET', path: '/zones' })", own)).toBe(
+      'read',
+    );
+  });
+
+  it('never takes a quoted sentence or a reported message as the person’s request', () => {
+    expect(ownWords('look at this: "please update cloudflare"')).not.toMatch(/update/);
+    expect(ownWords('it says to update the cloudflare dns')).not.toMatch(/update/);
+    expect(ownWords('push to "feature/x"')).toMatch(/feature\/x/);
+    expect(askedInApp(['look at this: "please update cloudflare"'], 'Cloudflare')).toBe(false);
+    expect(askedInApp(['block the scanners at cloudflare'], 'Cloudflare')).toBe(true);
+  });
+});

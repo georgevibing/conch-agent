@@ -93,3 +93,13 @@ words, which before went as an ordinary send.
 Later the same day, the replay's attacks on those lifts closed five holes (ADR 0117, addendum
 "what the app lifts let through"). Expect a question where an app's code or query does what the
 rules can't read, and none for code they read as a lookup.
+
+## Addendum, 2026-10-27 (round 4): a read only on evidence, and the review as a backstop
+
+- A query or code the rules read as a lookup skips Auto's review only while the chat has read
+  nothing from outside; after reading, the review still looks, in case the rules misread it.
+- Only the database's own built-ins are trusted by name (`pg_catalog.` or unqualified):
+  `public.count()` is a function someone wrote. Code whose request options are built elsewhere
+  (`fetch(url, opts)`, a spread, a method-override header) can't be read, so it isn't a read.
+- A quoted sentence of three words or more, and what a message is reported to say ("it says…",
+  "this email says…"), are never the person's own request. A quoted name stays.
