@@ -82,3 +82,10 @@ Conch's rules, with a checkout.
 - The corpus benchmark stays in `risk.test.ts`. `replay.test.ts` checks the replay agrees with
   it (routine work never asks, before or after reading; the adversarial half always does) and
   prints the corpus as the replay sees it when `CONCH_AUTO_RATE=1`.
+
+## Addendum, 2026-10-27
+
+The scenario replay that drove ADR 0117's addendum of the same date scored app steps after
+reading. Expect the counters to show fewer questions for code and queries in connected apps
+(reads now ask nothing; asked-for changes go) and a question where a key rode in a message's
+words, which before went as an ordinary send.
