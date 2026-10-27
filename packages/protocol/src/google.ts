@@ -5,11 +5,14 @@ import { z } from 'zod';
  * first; each write is its own capability so a tool needs exactly one.
  * `mail-draft` and `mail-send` both come with Gmail's write access: Google's
  * compose permission allows either, and Conch asks before every one.
+ * `mail-organize` (archive, labels, read or unread, trash) comes with it too,
+ * asked of Google at the next sign-in; a sign-in without it still works.
  */
 export const GoogleCapability = z.enum([
   'mail-read',
   'mail-draft',
   'mail-send',
+  'mail-organize',
   'calendar-read',
   'calendar-write',
   'drive-read',
@@ -35,7 +38,10 @@ export const GOOGLE_LEVEL_CAPABILITIES: Record<
   GoogleProduct,
   Record<GoogleAccess, GoogleCapability[]>
 > = {
-  gmail: { read: ['mail-read'], write: ['mail-read', 'mail-draft', 'mail-send'] },
+  gmail: {
+    read: ['mail-read'],
+    write: ['mail-read', 'mail-draft', 'mail-send', 'mail-organize'],
+  },
   calendar: { read: ['calendar-read'], write: ['calendar-read', 'calendar-write'] },
   drive: { read: ['drive-read'], write: ['drive-read', 'drive-write'] },
 };

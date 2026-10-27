@@ -855,13 +855,37 @@ function appDraft(name: AppToolName, input: Input): Draft {
                   }
                 : name === 'google_mail_create_draft'
                   ? { kind: 'other', text: 'Saved a draft' }
-                  : undefined;
+                  : name === 'google_mail_organize'
+                    ? organizeEffect(str(input, 'action'))
+                    : name === 'google_mail_unsubscribe'
+                      ? { kind: 'other', text: 'Unsubscribed you from a mailing list' }
+                      : name === 'google_calendar_respond'
+                        ? { kind: 'schedule', text: 'Answered an invitation' }
+                        : undefined;
   return {
     family: 'connect',
     words: said,
     ...(query ? { subject: quote(query, 80) } : title ? { subject: clip(title, 300) } : {}),
     chips: [{ kind: 'app', label: APP_NAMES[w.app] ?? humanize(w.app) }],
     ...(effect && { effects: [effect] }),
+  };
+}
+
+/** What tidying mail did, by its action: a trash is a delete, the rest a change. */
+function organizeEffect(action: string | undefined): ActivityEffect {
+  const text: Record<string, string> = {
+    archive: 'Archived emails',
+    trash: 'Moved emails to the Trash',
+    untrash: 'Took emails out of the Trash',
+    inbox: 'Moved emails back to the inbox',
+    read: 'Marked emails as read',
+    unread: 'Marked emails as unread',
+    label: 'Labelled emails',
+    unlabel: 'Took a label off emails',
+  };
+  return {
+    kind: action === 'trash' ? 'delete' : 'other',
+    text: (action && text[action]) ?? 'Tidied your mail',
   };
 }
 

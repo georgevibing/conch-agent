@@ -11,7 +11,8 @@
  * asks before it runs. Saving a Gmail draft and sending an email show the
  * exact email and ask first, whatever the app's policy says, unless the
  * person set that one tool to Allow — and even then they ask once the chat
- * has read something from outside (ADR 0104). Every other change Conch makes
+ * has read something from outside (ADR 0104); tidying mail and unsubscribing
+ * are the same. Every other change Conch makes
  * in Google (calendar events, Drive files) asks every time, so it can be Ask
  * or Off only. Which accounts each app uses, and whether an account may
  * only read or also write there, is the person's choice per account
@@ -91,6 +92,27 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
       asksFirst: true,
       needs: 'mail-send',
     },
+    {
+      name: 'google_mail_organize',
+      title: 'Tidy your mail',
+      description:
+        'Archives, labels, marks read or unread, or moves emails to the Trash, which keeps them 30 days. Says how many first.',
+      access: 'write',
+      destructive: false,
+      asksFirst: true,
+      needs: 'mail-organize',
+    },
+    {
+      name: 'google_mail_unsubscribe',
+      title: 'Unsubscribe',
+      description:
+        'Leaves mailing lists the way each email itself offers: one click, or the email the list asks for. Shows you which first.',
+      access: 'write',
+      destructive: false,
+      asksFirst: true,
+      // Read and sent through Google's API: not offered on an app password (IMAP).
+      needs: 'mail-organize',
+    },
   ],
   'google-calendar': [
     {
@@ -125,6 +147,16 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
       description: 'Removes an event from your calendar. Asks every time.',
       access: 'write',
       destructive: true,
+      alwaysAsks: true,
+      needs: 'calendar-write',
+    },
+    {
+      name: 'google_calendar_respond',
+      title: 'Answer an invitation',
+      description:
+        'Accepts, declines or says maybe to an invitation, and tells the organizer. Asks every time.',
+      access: 'write',
+      destructive: false,
       alwaysAsks: true,
       needs: 'calendar-write',
     },
@@ -207,6 +239,12 @@ function summary(name: string, args: Record<string, unknown>): string {
       return 'send an email';
     case 'google_mail_create_draft':
       return 'save a Gmail draft';
+    case 'google_mail_organize':
+      return 'tidy your Gmail';
+    case 'google_mail_unsubscribe':
+      return 'unsubscribe you from a mailing list';
+    case 'google_calendar_respond':
+      return 'answer an invitation in your calendar';
     case 'google_calendar_create_event':
       return 'add an event to your calendar';
     case 'google_calendar_update_event':

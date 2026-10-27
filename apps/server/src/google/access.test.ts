@@ -134,6 +134,7 @@ describe('accounts, each with its own access', () => {
       'mail-read',
       'mail-draft',
       'mail-send',
+      'mail-organize',
       'calendar-read',
     ]);
     // Past it, Google must be asked: nothing is saved.
@@ -236,6 +237,7 @@ describe('accounts, each with its own access', () => {
       'mail-read',
       'mail-draft',
       'mail-send',
+      'mail-organize',
       'calendar-read',
     ]);
   });
@@ -951,5 +953,208 @@ describe('sending email, end to end (ADR 0104)', () => {
     expect(accounts.find((a) => a.via === 'app-password')?.access).toEqual({ gmail: 'write' });
     // Gmail has one account for the address: the one that can send.
     expect((await pickAccount(service, MockMail.ADDRESS, 'mail-send')).via).toBe('app-password');
+  });
+});
+
+describe('tidying mail, leaving lists and answering invitations', () => {
+  const tidy = ['mail-read', 'mail-draft', 'mail-send', 'mail-organize'] as const;
+  const json = (body: unknown) => new Response(JSON.stringify(body));
+
+  it('archives what a search finds, saying how many, in one change', async () => {
+    granted = scopesOf(...tidy);
+    await signIn([...tidy]);
+    fetcher.mockImplementation(async (url, init) =>
+      init?.method === 'POST'
+        ? new Response('')
+        : String(url).includes('/messages?')
+          ? json({ messages: [{ id: 'm1' }, { id: 'm2' }] })
+          : json({}),
+    );
+    const { ctx, ask } = context();
+    const organize = tool(googleTools(service, ctx), 'google_mail_organize');
+    const out = JSON.parse(text(await organize.run({ action: 'archive', query: 'from:noreply' })));
+    expect(out).toMatchObject({
+      state: 'confirmed',
+      receipt: { label: 'Archived 2 emails in Gmail' },
+    });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        once: true,
+        summary: expect.stringContaining('archive 2 emails matching “from:noreply”'),
+      }),
+    );
+    const [url, init] = calls('POST')[0] ?? [];
+    expect(String(url)).toContain('/gmail/v1/users/me/messages/batchModify');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      ids: ['m1', 'm2'],
+      removeLabelIds: ['INBOX'],
+    });
+  });
+
+  it('moves emails to the Trash one by one, and says the Trash keeps them', async () => {
+    granted = scopesOf(...tidy);
+    await signIn([...tidy]);
+    fetcher.mockImplementation(async () => json({}));
+    const { ctx, ask } = context();
+    const organize = tool(googleTools(service, ctx), 'google_mail_organize');
+    await organize.run({ action: 'trash', messageIds: ['m1', 'm2', 'm1'] });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.stringMatching(/move to the Trash 2 emails.*30 days/),
+      }),
+    );
+    // A few at a time, so in any order.
+    expect(
+      calls('POST')
+        .map(([url]) => new URL(String(url)).pathname)
+        .sort(),
+    ).toEqual(['/gmail/v1/users/me/messages/m1/trash', '/gmail/v1/users/me/messages/m2/trash']);
+  });
+
+  it('makes a label that isn’t there yet, then puts it on', async () => {
+    granted = scopesOf(...tidy);
+    await signIn([...tidy]);
+    fetcher.mockImplementation(async (url, init) =>
+      String(url).endsWith('/labels') && init?.method === 'POST'
+        ? json({ id: 'Label_7', name: 'Receipts' })
+        : String(url).includes('/labels')
+          ? json({ labels: [{ id: 'INBOX', name: 'INBOX' }] })
+          : json({}),
+    );
+    const { ctx, ask } = context();
+    const organize = tool(googleTools(service, ctx), 'google_mail_organize');
+    await organize.run({ action: 'label', messageIds: ['m1'], label: 'Receipts' });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: expect.stringContaining('“Receipts” (a new label)') }),
+    );
+    const modify = calls('POST').find(([url]) => String(url).includes('batchModify'));
+    expect(JSON.parse(String(modify?.[1]?.body))).toEqual({
+      ids: ['m1'],
+      addLabelIds: ['Label_7'],
+    });
+  });
+
+  it('an older sign-in is told to sign in again, before any card; one without it still connects', async () => {
+    granted = scopesOf('mail-send');
+    // Asked for tidying too, Google gave only sending: the sign-in still works.
+    await signIn([...tidy]);
+    const { ctx, ask } = context();
+    const organize = tool(googleTools(service, ctx), 'google_mail_organize');
+    await expect(organize.run({ action: 'archive', messageIds: ['m1'] })).rejects.toThrow(
+      /archive, label or trash Gmail.*Sign in again/,
+    );
+    expect(ask).not.toHaveBeenCalled();
+    expect(calls('POST')).toHaveLength(0);
+  });
+
+  it('unsubscribes only the way each email’s own header offers', async () => {
+    granted = scopesOf(...tidy);
+    await signIn([...tidy]);
+    const headers: Record<string, { name: string; value: string }[]> = {
+      news: [
+        { name: 'From', value: 'News <n@news.example>' },
+        { name: 'List-Unsubscribe', value: '<https://news.example/u/1>' },
+        { name: 'List-Unsubscribe-Post', value: 'List-Unsubscribe=One-Click' },
+      ],
+      club: [
+        { name: 'From', value: 'Club <c@club.example>' },
+        { name: 'List-Unsubscribe', value: '<mailto:leave@club.example?subject=leave%20me>' },
+      ],
+    };
+    fetcher.mockImplementation(async (url, init) => {
+      const id = /messages\/(\w+)\?/.exec(String(url))?.[1] ?? '';
+      return init?.method === 'POST'
+        ? json({ id: 'sent1', threadId: 't1' })
+        : json({ id, payload: { headers: headers[id] ?? [] } });
+    });
+    const posted: string[] = [];
+    const { ctx, ask } = context();
+    const unsubscribe = tool(
+      googleTools(service, ctx, undefined, {
+        oneClick: async (url) => {
+          posted.push(url);
+          return 200;
+        },
+      }),
+      'google_mail_unsubscribe',
+    );
+    const out = JSON.parse(text(await unsubscribe.run({ messageIds: ['news', 'club'] })));
+    expect(posted).toEqual(['https://news.example/u/1']);
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.stringMatching(
+          /2 mailing lists: News .* \(one click\), Club .* \(an email to leave@club\.example\)/,
+        ),
+      }),
+    );
+    const sent = calls('POST').find(([url]) => String(url).includes('/messages/send'));
+    const raw = Buffer.from(JSON.parse(String(sent?.[1]?.body)).raw, 'base64url').toString();
+    expect(raw).toContain('To: leave@club.example');
+    expect(out.receipt.label).toContain(
+      'Unsubscribed from News <n@news.example>, Club <c@club.example>',
+    );
+  });
+
+  it('a list that only has a web page is named for the browser, and nothing is sent', async () => {
+    granted = scopesOf(...tidy);
+    await signIn([...tidy]);
+    fetcher.mockImplementation(async () =>
+      json({
+        id: 'p',
+        payload: { headers: [{ name: 'List-Unsubscribe', value: '<https://shop.example/prefs>' }] },
+      }),
+    );
+    const { ctx, ask } = context();
+    const unsubscribe = tool(googleTools(service, ctx), 'google_mail_unsubscribe');
+    await expect(unsubscribe.run({ messageIds: ['p'] })).rejects.toThrow(
+      /only offer a web page.*https:\/\/shop\.example\/prefs/,
+    );
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('answers an invitation, keeping every other guest as they were', async () => {
+    granted = scopesOf('calendar-write');
+    await signIn(['calendar-write']);
+    const attendees = [
+      { email: 'bob@work.example', organizer: true, responseStatus: 'accepted' },
+      { email: 'ada@work.example', self: true, responseStatus: 'needsAction' },
+    ];
+    fetcher.mockImplementation(async (_url, init) =>
+      init?.method === 'PATCH'
+        ? new Response(String(init.body).replace('{', '{"id":"ev1","summary":"Demo",'))
+        : json({
+            id: 'ev1',
+            summary: 'Demo',
+            start: { dateTime: '2026-10-30T10:00:00Z' },
+            attendees,
+          }),
+    );
+    const { ctx, ask } = context();
+    const respond = tool(googleTools(service, ctx), 'google_calendar_respond');
+    const out = JSON.parse(text(await respond.run({ eventId: 'ev1', response: 'accepted' })));
+    expect(out.receipt.label).toBe('Answered accepted in Google Calendar');
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.stringMatching(/^accept “Demo”.*tells the organizer$/),
+      }),
+    );
+    const [url, init] = calls('PATCH')[0] ?? [];
+    expect(String(url)).toContain('sendUpdates=all');
+    expect(JSON.parse(String(init?.body)).attendees).toEqual([
+      attendees[0],
+      { ...attendees[1], responseStatus: 'accepted' },
+    ]);
+  });
+
+  it('an event the account isn’t invited to has nothing to answer', async () => {
+    granted = scopesOf('calendar-write');
+    await signIn(['calendar-write']);
+    fetcher.mockImplementation(async () => json({ id: 'ev2', summary: 'Mine', attendees: [] }));
+    const { ctx, ask } = context();
+    const respond = tool(googleTools(service, ctx), 'google_calendar_respond');
+    await expect(respond.run({ eventId: 'ev2', response: 'declined' })).rejects.toThrow(
+      /isn’t a guest of “Mine”/,
+    );
+    expect(ask).not.toHaveBeenCalled();
   });
 });
