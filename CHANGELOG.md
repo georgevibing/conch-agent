@@ -2,6 +2,13 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.19](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-26)
+
+### Fixed
+
+- Make approval cards clearer on phones
+- Describe app capabilities without claiming a deletion
+
 ## [0.1.0-alpha.18](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-26)
 
 ### New
