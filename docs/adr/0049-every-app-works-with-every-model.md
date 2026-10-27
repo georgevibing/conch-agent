@@ -128,6 +128,11 @@ turn with a quiet note. Mid-turn, `apps_check` lets the model have Conch run the
 one app or every broken one and get back, in words, whether it works, what it offers and what
 to do next. It never connects, turns on or changes an app.
 
+**Claude Code heals too (2026-10-27).** An app Claude Code couldn't start gets the same one more
+look as a bridged one (`IntegrationService.healNative`, `TurnInput.healMcp`): if it works now it's
+loaded again for the same turn, through `setMcpServers`, with a quiet "Reconnected X"; only what's
+still broken reaches `turnFailed` and the chat.
+
 ## Threat model
 
 - **The agent** may be steered by what it reads in Slack (Greshake et al., 2023; OWASP LLM01

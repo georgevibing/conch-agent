@@ -1052,11 +1052,29 @@ export class ClaudeCodeEngine implements Engine {
         for (const [name, server] of integrations) servers[name] = server;
         void Promise.race([
           q.setMcpServers(servers).then(
-            (result) => {
-              const failed = Object.entries(result.errors).map(([name, error]) => ({
+            async (result) => {
+              let failed = Object.entries(result.errors).map(([name, error]) => ({
                 name,
                 error,
               }));
+              // One more look at what didn't start, as Conch's own bridge does (working
+              // agreement 11); only what's still broken is reported.
+              if (failed.length && input.healMcp) {
+                const heal = await input.healMcp(failed).catch(() => undefined);
+                const back = Object.keys(heal?.servers ?? {});
+                if (heal && back.length) {
+                  const again = await q
+                    .setMcpServers({ ...servers, ...heal.servers })
+                    .catch(() => undefined);
+                  if (again) {
+                    const still = new Set(Object.keys(again.errors));
+                    heal.healed(back.filter((name) => !still.has(name)));
+                    failed = failed
+                      .filter((f) => still.has(f.name))
+                      .map((f) => ({ ...f, error: again.errors[f.name] ?? f.error }));
+                  }
+                }
+              }
               if (failed.length) mcpReport = { type: 'mcp-status', failed };
             },
             () => undefined,

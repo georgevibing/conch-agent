@@ -549,6 +549,11 @@ export interface TurnIntegrationsProvider {
     issues: IntegrationIssueInput[];
   }>;
   turnFailed(failed: { name: string; error: string }[]): Promise<IntegrationIssueInput[]>;
+  /** For engines with MCP of their own: the failed apps that work after one more look. */
+  healNative?(failed: readonly { name: string; error: string }[]): Promise<{
+    servers: Record<string, EngineMcpServer>;
+    healed: (names: readonly string[]) => void;
+  }>;
   /** For engines without MCP of their own: Conch connects and hands over the tools. */
   bridge(
     servers: Record<string, EngineMcpServer>,
@@ -5065,6 +5070,10 @@ export class ConversationManager {
         options: resolved,
         onModeChange: (listener) => modeListeners.push(listener),
         mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
+        ...(engine.integrations.mode === 'native' &&
+          integrations?.healNative && {
+            healMcp: integrations.healNative.bind(integrations),
+          }),
         disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
         ...(guest && { wordsOnly: true }),
         // A provider's own notes on each round of steps cost a small-model call: only when
