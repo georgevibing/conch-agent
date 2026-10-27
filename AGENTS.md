@@ -353,7 +353,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       replays commands or clears uncertainty. Providers without an injection hook
       receive updates through Conch tools and current context at the next turn.
     - **Leave useful, bounded evidence.** `recovery/` contains only allowlisted
-      timestamps, reasons and numeric resource measurements, never commands, tool
+      timestamps, reasons, numeric resource measurements and opaque chat and process ids
+      (`interrupted.json`: which commands a restart stopped), never commands, tool
       arguments, transcripts or credentials. It is protected from agent tools and
       excluded from backups. Add checks to the existing Health report and quiet
       repairs to `healed`; no second health dashboard or recurring error toast.
