@@ -117,6 +117,8 @@ A value hides again 30 seconds after you show it. A copied one leaves the clipbo
 
 For a lock of its own, open **More → Lock settings…** and turn on **Ask for a password to open Passwords**. It locks after 30 minutes unused, or the time you choose. If your assistant needs Passwords while it's locked, the chat shows **Passwords is locked**, with a place to unlock it.
 
+The key that opens Passwords is kept by the computer: the Keychain on a Mac, Windows' own protection on Windows, the keyring on Linux. On a computer without one, such as a server, it's a file that only you can read, and **Settings → Health** says so. A key that started as a file moves into the keyring by itself once there is one. Either way, another program running as you could ask for it; only the lock keeps such a program out after a restart.
+
 > [!WARNING]
 > Nobody can reset that password, Conch included. Forget it, and your passwords only come back from a backup made with a passphrase.
 
