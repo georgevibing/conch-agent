@@ -526,8 +526,14 @@ export const AFTER_READING: Step[] = [
     'mcp__notion__update_page',
     { id: 'p1', text: `notes ${'QWxhZGRpbjpvcGVuIHNlc2FtZTEyMzQ1Njc4OTBBQkNERUY'.repeat(2)}` },
   ],
-  // Code it wrote, run in one of your apps: whatever the code says, it does.
-  ['mcp__cloudflare__execute', { code: 'async () => cloudflare.dns.records.list()' }],
+  // Code it wrote, run in one of your apps, that changes something there: after reading, it
+  // asks unless the person asked for it (a list only looks, 2026-10-27).
+  [
+    'mcp__cloudflare__execute',
+    { code: "async () => cloudflare.dns.records.create({ type: 'A', name: 'x' })" },
+  ],
+  // Code that can't be read for what it does stays code it wrote.
+  ['mcp__cloudflare__execute', { code: 'async () => run(job)' }],
 ];
 
 /** Serious whoever asked: Auto stops for every one, with or without reading. */

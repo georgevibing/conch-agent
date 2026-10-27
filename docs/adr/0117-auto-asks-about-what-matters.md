@@ -348,3 +348,26 @@ Read 2026-10-09, for "make me a PDF":
   untrusted evidence."
 - Typosquatting on package registries (`crossenv` on npm, 2017; `colourama` and others on
   PyPI) is the reason a name one slip off a famous one still asks.
+
+## Addendum, 2026-10-27: an app's change, read for what it does
+
+A scenario replay of the Indiestand incident found Auto stopping on every write after one
+Cloudflare analytics read, and letting a key in a message's words pass as an ordinary send.
+
+- **A key in a step's words is a key leaving** (`assessRisk`): `carriesSecrets` is read before
+  what the step is called, so a token in a Slack message, a comment or a deletion's note is
+  exfiltration that no words lift, never "send something to other people".
+- **Code and queries an app runs are read for what they do** (`appCodeEffect`, `sqlEffect`,
+  `codeEffect`). A SELECT, a GET or a GraphQL query only looks: no risk. A DELETE, a DROP, a
+  TRUNCATE or an UPDATE without WHERE is `app-delete`. Other changes are a moderate `infra`
+  change in the person's own app. Code that can't be read (no request it can see, `eval`) stays
+  `remote-code`, marked `inApp`: it runs on the app's servers as the person, so Auto's review
+  may lift it (`reviewableRisk`). A method it can't see counts as a change.
+- **The person's words name the app**: a change word with the app's name ("block those scanner
+  IPs at Cloudflare") makes that app's code-run or change `asked` (`askedInApp`). Saying not to
+  still holds.
+- **The review lifts an app's step as it lifts a command** (`serves`, for Conch's apps and
+  connected ones): only what `contextualRisk` allows, so what asks whatever was read, money and
+  keys never.
+- **With nothing to review it**, the person's own words decide: a step they asked for, by its
+  words or the app's name and a change word, goes; anything else asks as before.

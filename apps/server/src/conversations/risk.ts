@@ -99,6 +99,12 @@ export interface Risk {
    * said otherwise since (ADR 0128): a boundary, so it asks before reading too.
    */
   held?: boolean;
+  /**
+   * The step runs in one of the person's apps, on its own servers and as their account
+   * (ADR 0118, 2026-10-27): code a Cloudflare or Supabase tool runs, not code on this computer.
+   * Auto's review may lift it as it lifts other work in service of the request.
+   */
+  inApp?: boolean;
 }
 
 /** What a person says to ask for a step: the verbs, and what their message must name. */
@@ -135,6 +141,8 @@ export interface RiskContext {
   treeClean?: (dir?: string) => boolean | undefined;
   /** Fresh local evidence that a remote keeps the same destination. */
   sameRemote?: (dir: string | undefined, remote: string, target: string) => boolean;
+  /** For an app's step: the app by its name ("Cloudflare"), for the person to name too. */
+  app?: string;
 }
 
 /**
@@ -2509,6 +2517,133 @@ export const GRANTS =
 export const RUNS =
   /(?:^|_|-)(?:execute|exec|eval|run_code|run_script|run_sql|query_sql|sql)(?:_|-|$)/i;
 
+/**
+ * What the code or query an app's step runs does, read from its own words (ADR 0118,
+ * 2026-10-27): `read` when it only looks (a SELECT, a GET, a GraphQL query), `delete` when it
+ * deletes or empties, `write` when it changes something, `unknown` when it can't be told (code
+ * built at run time, `eval`). The code runs on the app's servers as the person; this reads it.
+ */
+export type AppCode = 'read' | 'write' | 'delete' | 'unknown';
+
+/** The first string an app's step gives under one of these names. */
+function argText(args: Record<string, unknown>, names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const value = args[name];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
+}
+
+const SQL_ARGS = ['query', 'sql', 'statement', 'statements', 'q'] as const;
+const CODE_ARGS = ['code', 'script', 'source', 'js', 'program'] as const;
+
+/** SQL, its comments and quoted strings set aside, read statement by statement. */
+export function sqlEffect(sql: string): AppCode {
+  const text = sql
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(/"(?:[^"]|"")*"/g, '""')
+    .replace(/\$\$[\s\S]*?\$\$/g, "''")
+    .toLowerCase();
+  const statements = text
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!statements.length) return 'unknown';
+  let effect: AppCode = 'read';
+  for (const statement of statements) {
+    if (/\b(?:drop|truncate|delete)\b/.test(statement)) return 'delete';
+    if (/^update\b/.test(statement) && !/\bwhere\b/.test(statement)) return 'delete';
+    if (
+      /^(?:select|with|explain|show|describe|desc|values|table|pragma)\b/.test(statement) &&
+      !/\b(?:insert|update|merge|upsert|alter|create|grant|revoke|copy|call|do|vacuum|into)\b/.test(
+        statement,
+      )
+    )
+      continue;
+    effect = 'write';
+  }
+  return effect;
+}
+
+/**
+ * Code an app runs (Cloudflare's code mode, a script tool): it reads when every request it
+ * makes is a GET, or a GraphQL query, and nothing calls an SDK's change or builds its method at
+ * run time. Strict on purpose: a method it can't see is a change.
+ */
+export function codeEffect(code: string): AppCode {
+  if (/\b(?:eval|Function)\s*\(|\bimport\s*\(/.test(code)) return 'unknown';
+  let effect: AppCode = 'read';
+  for (const m of code.matchAll(/\bmethod\s*:\s*(?:(['"`])([A-Za-z]+)\1)?/g)) {
+    const method = m[2]?.toUpperCase();
+    if (!method) return 'write';
+    if (method === 'DELETE') return 'delete';
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') continue;
+    // A GraphQL query rides on POST; a mutation is a change.
+    if (method === 'POST' && /graphql/i.test(code) && !/\bmutation\b/.test(code)) continue;
+    effect = 'write';
+  }
+  if (
+    /-X\s*DELETE\b/i.test(code) ||
+    /\.(?:delete|destroy|purge|remove)\s*\(/.test(code) ||
+    /\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate)\b/i.test(code)
+  )
+    return 'delete';
+  if (
+    /\bmutation\b|\.(?:create|update|edit|put|patch|set|add|upsert|insert)\s*\(/.test(code) ||
+    /\b(?:insert\s+into|update\s+\w+\s+set|alter\s+table)\b/i.test(code)
+  )
+    return 'write';
+  // A read needs something that reads: a request, a GraphQL query, an SDK's list or get.
+  // Code that shows none ("x", a call by another name) can't be told, so it stays code.
+  const reads =
+    /\bfetch\s*\(|\.request\s*\(|graphql|\.(?:list|get|read|query|search|describe|retrieve|find|browse)\w*\s*\(/i;
+  return effect === 'read' && !reads.test(code) ? 'unknown' : effect;
+}
+
+/** What an app's code-running step does, by its query or its code. */
+export function appCodeEffect(args: Record<string, unknown>, tool: string): AppCode {
+  const sql = argText(args, SQL_ARGS);
+  const code = argText(args, CODE_ARGS);
+  if (sql && (/sql/i.test(tool) || !code)) return sqlEffect(sql);
+  if (code) return codeEffect(code);
+  return 'unknown';
+}
+
+/** Words for changing something in an app, said with the app's name (ADR 0128, 2026-10-27). */
+const APP_CHANGE_WORDS = stems(
+  'block|unblock|ban|allow|fix|update|add|set|create|change|apply|configure|enable|disable|turn\\s+(?:on|off)|rotate|deploy|edit|insert|write|rate[- ]?limit|protect|mitigat|run|execut|quer(?:y|ies)\\b',
+  ABROAD.update,
+  ABROAD.deploy,
+  ABROAD.change,
+  ABROAD.run,
+);
+
+/** The names a person calls an app by: its own, and its server's ("cloudflare", "github-2"). */
+function appNames(app: string | undefined, server: string | undefined): RegExp | undefined {
+  const names = [app, server?.replace(/-\d+$/, '')]
+    .map((name) => fold(name ?? '').trim())
+    .filter((name) => name.length >= 3)
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s_-]+/g, '[\\s_-]*'));
+  return names.length ? new RegExp(`\\b(?:${[...new Set(names)].join('|')})\\b`) : undefined;
+}
+
+/**
+ * The person asked for a change in this app in their own words: a change word and the app's
+ * name together in a message of theirs ("block those scanner IPs at Cloudflare", ADR 0128).
+ */
+export function askedInApp(
+  said: readonly string[] | undefined,
+  app: string | undefined,
+  server?: string,
+): boolean {
+  const name = appNames(app, server);
+  if (!name) return false;
+  const change = moderate('infra', 'change something in one of your apps', true);
+  return Boolean(wanted({ ...change, wish: wish(APP_CHANGE_WORDS, name) }, said).asked);
+}
+
 /** Shapes keys and tokens have, whatever they're called (ADR 0118). */
 const SECRET_SHAPES = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
@@ -2620,8 +2755,31 @@ export function assessRisk(
   )
     return severe('exfiltration', 'send something to an address made for catching data');
   // An app's step (your MCP apps, Conch's own Google, Slack and apps): what it deletes stays deleted.
-  const app = /^mcp__(?!conch__)[a-z0-9_-]+?__(.+)$/.exec(toolName)?.[1];
+  const mcp = /^mcp__(?!conch__)([a-z0-9_-]+?)__(.+)$/.exec(toolName);
+  const app = mcp?.[2];
+  const server = mcp?.[1];
   const step = app ?? (/^(?:google|slack|app)_/.test(bare) ? bare : '');
+  // A key, a token or an encoded blob sent to an app, read or change (ADR 0118): nothing a
+  // lookup or an ordinary change needs, and the shape of a chat's secrets leaving it. Read
+  // before what the step is called, so a key in a message, a comment or a deletion's note
+  // never passes as one of those (2026-10-27).
+  const carried = step ? carriesSecrets(args) : undefined;
+  if (carried === 'key')
+    return severe(
+      'exfiltration',
+      'send something that looks like a key or token to an app',
+      false,
+      NEVER,
+    );
+  if (carried === 'blob')
+    return severe('exfiltration', 'send a long block of encoded data to an app', false, NEVER);
+  // The person's words naming this app with a change word ask for its change too (ADR 0128,
+  // 2026-10-27): "block those scanner IPs at Cloudflare".
+  const inApp = (risk: Risk): Risk => {
+    const read = said(risk) ?? risk;
+    if (read.asked || read.held || !askedInApp(context.said, context.app, server)) return read;
+    return { ...read, asked: true };
+  };
   // The person's words lift an app's step too (ADR 0128): "delete the old entries", "send it
   // to the team", "give Bo access". Money and keys are nobody's to ask for this way.
   if (DELETES.test(step)) return said(severe('app-delete', 'delete something in one of your apps'));
@@ -2649,27 +2807,27 @@ export function assessRisk(
   // Who can reach the person's things, and code run as they say (ADR 0118): after reading.
   if (context.access === 'write' && step && GRANTS.test(tool))
     return said(moderate('privilege', 'change who can reach something in one of your apps'));
-  if (step && RUNS.test(tool))
-    return said(
-      moderate(
-        'remote-code',
-        'run code it wrote in one of your apps',
-        true,
-        wish(stems('run|execut|script|code\\b|quer(?:y|ies)\\b|sql\\b', ABROAD.run)),
-      ),
+  if (step && RUNS.test(tool)) {
+    // Read by what its code or query does (2026-10-27): a SELECT or a GET only looks; a DELETE,
+    // a DROP or an UPDATE without WHERE deletes; other changes are ordinary changes in the
+    // person's own app; code that can't be read stays code it wrote.
+    const effect = appCodeEffect(args, tool);
+    if (effect === 'read') return undefined;
+    if (effect === 'delete')
+      return said({
+        ...severe('app-delete', 'delete or empty something in one of your apps'),
+        inApp: true,
+      });
+    const runs = wish(stems('run|execut|script|code\\b|quer(?:y|ies)\\b|sql\\b', ABROAD.run));
+    return inApp(
+      effect === 'write'
+        ? { ...moderate('infra', 'change something in one of your apps', true, runs), inApp: true }
+        : {
+            ...moderate('remote-code', 'run code it wrote in one of your apps', true, runs),
+            inApp: true,
+          },
     );
-  // A key, a token or an encoded blob sent to an app, read or change (ADR 0118): nothing a
-  // lookup or an ordinary change needs, and the shape of a chat's secrets leaving it.
-  const carried = step ? carriesSecrets(args) : undefined;
-  if (carried === 'key')
-    return severe(
-      'exfiltration',
-      'send something that looks like a key or token to an app',
-      false,
-      NEVER,
-    );
-  if (carried === 'blob')
-    return severe('exfiltration', 'send a long block of encoded data to an app', false, NEVER);
+  }
   // A read that sends pages of text to the app's site: it could carry what was read.
   if (context.access === 'read' && step && wordsSent(args) > HEAVY_READ)
     return moderate('egress', 'send a lot of text from this chat to an app’s website', true, NEVER);

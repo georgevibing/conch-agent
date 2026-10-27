@@ -85,9 +85,12 @@ export function reviewableRisk(risk: Risk | undefined): boolean {
     !risk.critical &&
     !risk.held &&
     risk.wish !== NEVER &&
-    ['install', 'egress', 'publish', 'infra', 'app-delete', 'history', 'wipe', 'disrupt'].includes(
+    (['install', 'egress', 'publish', 'infra', 'app-delete', 'history', 'wipe', 'disrupt'].includes(
       risk.kind,
-    )
+    ) ||
+      // Code an app runs on its own servers, as the person (2026-10-27): not a stranger's code
+      // on this computer, so the review may lift it like any other change in their app.
+      (risk.kind === 'remote-code' && risk.inApp === true))
   );
 }
 
