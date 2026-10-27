@@ -189,3 +189,12 @@ animation; failed, declined and uncertain sends keep their distinct outcomes.
 Narrow mail cards stack their actions with Send first, hide the keyboard hint,
 and constrain attachment tiles to their available width. A narrow Storybook
 journey checks the card and Send button bounds with a long attachment filename.
+
+## Addendum, 2026-10-27: a file from the work folder goes with an email
+
+`google_mail_send`'s `attachments` take a work-folder path as well as a chat file's `att_…` id
+(`google/mail-files.ts`). Conch reads the path before the card shows: inside the work folder
+only (not the chat's attachment folders, not Conch's own places), never through a link or a
+hard-linked file, and never past what one email carries. The card names each file with its
+size. A Google Drive file isn't attached: Drive is connected with metadata access only
+(`drive.metadata.readonly`), so its bytes can't be read; the model shares its link instead.

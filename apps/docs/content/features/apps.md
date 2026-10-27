@@ -217,7 +217,7 @@ If a popup is blocked, press **Open Google sign-in**. A sign-in expires after te
 
 **Read & write** adds, shown to you first:
 
-- **Gmail:** save a draft or send an email or reply, with files from the chat up to about 18 MB. It sends from the account you name, otherwise the first that can, shown under **From**. Replies keep the thread, reply address and subject. No labels, deleting or settings.
+- **Gmail:** save a draft or send an email or reply, with files from the chat or from its work folder up to about 18 MB, each shown with its size before it goes. It sends from the account you name, otherwise the first that can, shown under **From**. Replies keep the thread, reply address and subject. No labels, deleting or settings.
 - **Google Calendar:** add, change or delete an event. Guests are emailed only when you say so.
 - **Google Drive:** make a new Google Doc or text file. Conch can only touch files it made.
 

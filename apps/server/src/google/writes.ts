@@ -217,6 +217,13 @@ export function mailSentView(
 export const findInGmail = (email: string, messageId: string) =>
   `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#search/${encodeURIComponent(`rfc822msgid:${messageId.replace(/^<|>$/g, '')}`)}`;
 
+/** A file's size on the send card: "240 KB", "1.4 MB". */
+function sizeWords(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 /** What the person may change on an email's card: its words and who it goes to. */
 const MAIL_FIELDS = ['to', 'cc', 'subject', 'body', 'attachments'] as const;
 
@@ -500,7 +507,9 @@ export function googleWriteTools(
       .array(z.string().min(1).max(200))
       .max(10)
       .optional()
-      .describe('Files from this chat to attach, by their ids (att_…).'),
+      .describe(
+        'Files to attach: this chat’s own by id (att_…), or a file in the work folder by its path (e.g. "reports/statement.pdf").',
+      ),
     sourceMessageId: resourceId.optional(),
     threadId: resourceId.optional(),
   };
@@ -515,7 +524,7 @@ export function googleWriteTools(
     capability: 'mail-send',
     row: true,
     description:
-      'Send an email from a connected Gmail account, as the person. Use it whenever the person asks you to send an email (an app-password account sends too). accountId is the account it goes from: the one the person names (an email from google_accounts); left out, the first account that can send is used and shown to them. The person sees this exact email (From, To, subject, text and files) before it goes, unless they allowed sending in Apps. To attach files, put their ids in attachments (the att_… ids file_make, image_generate, publish_file or list_attachments gave), never a path. For a reply, pass sourceMessageId from google_mail_read: the recipients and subject must match the original, and it is threaded. Plain text. Use google_mail_create_draft instead only when the person wants to edit or send it themselves. Never retry an uncertain send.',
+      'Send an email from a connected Gmail account, as the person. Use it whenever the person asks you to send an email (an app-password account sends too). accountId is the account it goes from: the one the person names (an email from google_accounts); left out, the first account that can send is used and shown to them. The person sees this exact email (From, To, subject, text and files) before it goes, unless they allowed sending in Apps. To attach files, put them in attachments: their ids (the att_… ids file_make, image_generate, publish_file or list_attachments gave), or the path of a file in the work folder; Conch reads it and shows it on the card. A file in Google Drive can’t be attached: share its link in the text instead. For a reply, pass sourceMessageId from google_mail_read: the recipients and subject must match the original, and it is threaded. Plain text. Use google_mail_create_draft instead only when the person wants to edit or send it themselves. Never retry an uncertain send.',
     input: SendInput,
     pick: (ref) => pickSender(service, ref),
     identity: (a) => [
@@ -551,9 +560,14 @@ export function googleWriteTools(
         );
       return { ...(reply && { reply }), files, ids: [...new Set(a.attachments)] };
     },
-    // The names for the card, and the ids beside them, so a file can be taken off there.
+    // The names and sizes for the card, and the ids beside them, so a file can be taken off there.
     shows: ({ files, ids }) =>
-      files.length ? { files: files.map((f) => f.name), fileIds: ids.slice(0, files.length) } : {},
+      files.length
+        ? {
+            files: files.map((f) => `${f.name} · ${sizeWords(f.bytes.length)}`),
+            fileIds: ids.slice(0, files.length),
+          }
+        : {},
     edit(a, change) {
       const same = (x: string[], y: string[]) =>
         x.map((v) => v.toLowerCase()).join() === y.map((v) => v.toLowerCase()).join();

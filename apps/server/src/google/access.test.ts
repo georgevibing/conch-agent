@@ -684,7 +684,7 @@ describe('sending email, end to end (ADR 0104)', () => {
         input: expect.objectContaining({
           accountEmail: MockMail.ADDRESS,
           to: ['sam@example.org'],
-          files: ['invoice.pdf'],
+          files: [`invoice.pdf · ${PDF.length} B`],
         }),
         summary: expect.stringContaining(`from ${MockMail.ADDRESS}`),
       }),
@@ -765,7 +765,7 @@ describe('sending email, end to end (ADR 0104)', () => {
     const removing = answering(['att_a1']);
     const result = await removing.send.run(args);
     expect(removing.ask.mock.calls[0]?.[0].input).toMatchObject({
-      files: ['plan.pdf', 'budget.xlsx'],
+      files: ['plan.pdf · 6 B', 'budget.xlsx · 6 B'],
     });
     expect(files).toHaveBeenLastCalledWith(['att_a1']);
     const raw = Buffer.from(
