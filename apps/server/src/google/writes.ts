@@ -1,7 +1,8 @@
 /**
  * The changes Conch can make in a Google account, once the person has given
  * that account write access (Apps → a Google app → Accounts): send an email,
- * add, change or delete a calendar event, make a file in Drive.
+ * tidy mail (archive, labels, read, the Trash) or leave a mailing list, add,
+ * change, delete or answer a calendar event, make a file in Drive.
  *
  * Every one asks first, every time, with exactly what will happen and from
  * which account (`ctx.ask` with `once`), whatever the app's policy says. The
@@ -40,6 +41,7 @@ import {
   pickSender,
   type MailFile,
 } from './accounts';
+import { oneClick, unsubscribeWay, type OneClick, type Unsubscribe } from './unsubscribe';
 import { agendaView, filesView } from './views';
 
 type Reconciled =
@@ -58,6 +60,18 @@ const resourceId = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 /** Google's event ids: base32hex letters, and `_` with a time for one occurrence of a series. */
 const eventId = z.string().regex(/^[A-Za-z0-9_]{1,1024}$/);
 const calendarId = z.string().trim().min(1).max(300).default('primary');
+/** What tidying mail can do to a set of emails (`google_mail_organize`). */
+const TidyAction = z.enum([
+  'archive',
+  'inbox',
+  'read',
+  'unread',
+  'trash',
+  'untrash',
+  'label',
+  'unlabel',
+]);
+type TidyAction = z.infer<typeof TidyAction>;
 /** A time with its offset, or a whole day. */
 const When = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
 /**
@@ -288,6 +302,8 @@ export interface GoogleWriteOptions {
   chosen?: (toolName: string) => 'allow' | 'ask' | undefined;
   /** The chat's own files by id (`att_…`), for an email to carry. Never a path. */
   files?: (ids: readonly string[]) => Promise<MailFile[]>;
+  /** The one-click unsubscribe request (tests: a pretend list). */
+  oneClick?: OneClick;
 }
 
 /**
@@ -711,6 +727,328 @@ export function googleWriteTools(
     },
   });
 
+  // ── Gmail: tidy ────────────────────────────────────────────────────────
+
+  /** Gmail's most at once: one search page, and what one batch change takes. */
+  const TIDY_MAX = 500;
+  const Label = z.object({ id: z.string(), name: z.string(), type: z.string().optional() });
+  const Labels = z.object({ labels: z.array(Label).optional() });
+  const TIDY: Record<
+    TidyAction,
+    { verb: string; done: string; add?: readonly string[]; remove?: readonly string[] }
+  > = {
+    archive: { verb: 'archive', done: 'Archived', remove: ['INBOX'] },
+    inbox: { verb: 'move back to the inbox', done: 'Moved back to the inbox', add: ['INBOX'] },
+    read: { verb: 'mark as read', done: 'Marked as read', remove: ['UNREAD'] },
+    unread: { verb: 'mark as unread', done: 'Marked as unread', add: ['UNREAD'] },
+    trash: { verb: 'move to the Trash', done: 'Moved to the Trash' },
+    untrash: { verb: 'take out of the Trash', done: 'Took out of the Trash' },
+    label: { verb: 'label', done: 'Labelled' },
+    unlabel: { verb: 'take a label off', done: 'Took a label off' },
+  };
+  const emails = (n: number) => `${n.toLocaleString('en')} email${n === 1 ? '' : 's'}`;
+  const findLabel = async (accountId: string, name: string) => {
+    const { labels = [] } = Labels.parse(
+      await service.api(accountId, 'mail-read', '/gmail/v1/users/me/labels'),
+    );
+    const wanted = name.trim().toLowerCase();
+    return labels.find((l) => l.name.toLowerCase() === wanted || l.id.toLowerCase() === wanted);
+  };
+  const OrganizeInput = {
+    accountId: accountRef,
+    action: TidyAction,
+    messageIds: z.array(resourceId).min(1).max(TIDY_MAX).optional(),
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('A Gmail search, as in its search box: "from:noreply older_than:30d".'),
+    label: oneLine(100)
+      .pipe(z.string().min(1))
+      .optional()
+      .describe('For label and unlabel: the label’s name.'),
+  };
+  const organize = write<
+    typeof OrganizeInput,
+    { ids: string[]; more: boolean; label?: { id?: string; name: string } }
+  >({
+    name: 'google_mail_organize',
+    noun: 'changed',
+    capability: 'mail-organize',
+    description:
+      'Tidy Gmail, after the person approves it: archive, move back to the inbox, mark read or unread, move to the Trash or take out of it, or add or take off a label. Use this, not the browser, for "archive these", "delete those promo emails", "label them Receipts". Pass messageIds from google_mail_search, or a Gmail search query (up to 500 emails at once; the card shows how many). The Trash keeps emails for 30 days and untrash puts them back; nothing is deleted for good. A label that doesn’t exist yet is made.',
+    input: OrganizeInput,
+    identity: (a) => [
+      a.accountId,
+      a.action,
+      a.messageIds ? [...a.messageIds].sort() : (a.query ?? null),
+      a.label?.toLowerCase() ?? null,
+    ],
+    async prepare(a, account) {
+      if (!a.messageIds && !a.query)
+        throw new GoogleError('invalid', 'Say which emails: messageIds, or a Gmail search query.');
+      const labelled = a.action === 'label' || a.action === 'unlabel';
+      if (labelled && !a.label) throw new GoogleError('invalid', 'Say which label, by its name.');
+      let ids = a.messageIds ? [...new Set(a.messageIds)] : [];
+      let more = false;
+      if (!a.messageIds && a.query) {
+        const list = MailList.parse(
+          await service.api(account.id, 'mail-read', '/gmail/v1/users/me/messages', {
+            query: {
+              q: a.query,
+              maxResults: String(TIDY_MAX),
+              ...(a.action === 'untrash' && { includeSpamTrash: 'true' }),
+            },
+          }),
+        );
+        ids = (list.messages ?? []).map((m) => m.id);
+        more = Boolean(list.nextPageToken);
+      }
+      if (!ids.length)
+        throw new GoogleError(
+          'invalid',
+          `No emails match “${a.query ?? ''}”. Search again with google_mail_search to see what’s there.`,
+        );
+      if (!labelled || !a.label) return { ids, more };
+      const found = await findLabel(account.id, a.label);
+      if (!found && a.action === 'unlabel')
+        throw new GoogleError('invalid', `There’s no label “${a.label}” in this Gmail.`);
+      return { ids, more, label: { ...(found && { id: found.id }), name: found?.name ?? a.label } };
+    },
+    shows: (p) => ({ count: p.ids.length, ...(p.more && { more: true }) }),
+    summary: (a, account, p) => {
+      const which = a.query ? ` matching “${a.query}”` : '';
+      const first = p.more ? `the first ${emails(p.ids.length)}` : emails(p.ids.length);
+      const what =
+        a.action === 'label'
+          ? `label ${first}${which} “${p.label?.name}”${p.label?.id ? '' : ' (a new label)'}`
+          : a.action === 'unlabel'
+            ? `take the label “${p.label?.name}” off ${first}${which}`
+            : `${TIDY[a.action].verb} ${first}${which}`;
+      const after =
+        a.action === 'trash'
+          ? ' (the Trash keeps them for 30 days, and they can be put back)'
+          : a.action === 'archive'
+            ? ' (they stay in All Mail)'
+            : '';
+      return `${what} in ${account.email}’s Gmail${after}`;
+    },
+    async perform(a, account, run) {
+      const { ids, label } = run.prepared;
+      const options = {
+        method: 'POST' as const,
+        signal: run.signal,
+        authorization: run.authorization,
+      };
+      let done = ids.length;
+      if (a.action === 'trash' || a.action === 'untrash') {
+        // One by one, a few at a time: Gmail has no batch for the Trash.
+        done = 0;
+        for (let i = 0; i < ids.length; i += 10) {
+          const batch = ids.slice(i, i + 10);
+          try {
+            await Promise.all(
+              batch.map((id) =>
+                service.api(
+                  account.id,
+                  'mail-organize',
+                  `/gmail/v1/users/me/messages/${encodeURIComponent(id)}/${a.action}`,
+                  options,
+                ),
+              ),
+            );
+          } catch (error) {
+            if (!done) throw error;
+            const why = error instanceof Error ? error.message : 'Gmail stopped answering';
+            return {
+              receipt: {
+                provider: 'google',
+                id: `${a.action}:${done}`,
+                label: `${TIDY[a.action].done} ${emails(done)} of ${ids.length} in Gmail, then it stopped: ${why}`,
+              },
+            };
+          }
+          done += batch.length;
+        }
+      } else {
+        let labelId = label?.id;
+        if (label && !labelId) {
+          const made = await service.request(
+            account.id,
+            'mail-organize',
+            '/gmail/v1/users/me/labels',
+            {
+              ...options,
+              body: {
+                name: label.name,
+                labelListVisibility: 'labelShow',
+                messageListVisibility: 'show',
+              },
+              // Made meanwhile (an earlier try): it's there, so use it.
+              expect: [409],
+            },
+          );
+          labelId =
+            made.status === 409
+              ? (await findLabel(account.id, label.name))?.id
+              : Label.parse(made.data).id;
+          if (!labelId)
+            throw new GoogleError('not-executed', `The label “${label.name}” couldn’t be made.`);
+        }
+        const change = TIDY[a.action];
+        const add = a.action === 'label' && labelId ? [labelId] : change.add;
+        const remove = a.action === 'unlabel' && labelId ? [labelId] : change.remove;
+        await service.api(account.id, 'mail-organize', '/gmail/v1/users/me/messages/batchModify', {
+          ...options,
+          body: {
+            ids,
+            ...(add && { addLabelIds: add }),
+            ...(remove && { removeLabelIds: remove }),
+          },
+        });
+      }
+      const words =
+        a.action === 'label'
+          ? `Labelled ${emails(done)} “${label?.name}” in Gmail`
+          : a.action === 'unlabel'
+            ? `Took “${label?.name}” off ${emails(done)} in Gmail`
+            : `${TIDY[a.action].done} ${emails(done)} in Gmail`;
+      return { receipt: { provider: 'google', id: `${a.action}:${done}`, label: words } };
+    },
+    // Each of these sets the same labels again: repeating it does no harm.
+    reconcile: async () => ({ state: 'absent' }),
+  });
+
+  // ── Gmail: leave a mailing list ────────────────────────────────────────
+
+  const Header = z.object({ name: z.string(), value: z.string() });
+  const Metadata = z.object({
+    id: resourceId,
+    payload: z.object({ headers: z.array(Header).optional() }).optional(),
+  });
+  interface ListToLeave {
+    id: string;
+    from: string;
+    way: Unsubscribe;
+  }
+  const leave = options.oneClick ?? oneClick();
+  const UnsubscribeInput = {
+    accountId: accountRef,
+    messageIds: z.array(resourceId).min(1).max(50),
+  };
+  const unsubscribe = write<typeof UnsubscribeInput, ListToLeave[]>({
+    name: 'google_mail_unsubscribe',
+    noun: 'unsubscribed',
+    capability: 'mail-send',
+    description:
+      'Unsubscribe the person from mailing lists, after they approve it, using only each email’s own List-Unsubscribe header (one click, or the email the list asks for): never a link from the email’s text. Use this, not the browser, for "unsubscribe me from these". Pass messageIds from google_mail_search, one email per list. Lists that only offer a web page are named in the answer, for the browser.',
+    input: UnsubscribeInput,
+    identity: (a) => [a.accountId, [...a.messageIds].sort()],
+    async prepare(a, account) {
+      if (account.via === 'app-password')
+        throw new GoogleError(
+          'scope',
+          `${account.email} is signed in with a Gmail app password, so Conch can’t read the unsubscribe headers. Add the same address with Google sign-in in Apps, or unsubscribe in Gmail.`,
+        );
+      const seen = new Set<string>();
+      const lists: ListToLeave[] = [];
+      for (const id of [...new Set(a.messageIds)]) {
+        const meta = Metadata.parse(
+          await service.api(
+            account.id,
+            'mail-read',
+            `/gmail/v1/users/me/messages/${encodeURIComponent(id)}`,
+            { query: { format: 'metadata' } },
+          ),
+        );
+        const header = (name: string) =>
+          meta.payload?.headers?.find((h) => h.name.toLowerCase() === name)?.value;
+        const way = unsubscribeWay(header('list-unsubscribe'), header('list-unsubscribe-post'));
+        const key = way.kind === 'mail' ? way.to : way.kind === 'none' ? id : way.url;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lists.push({ id, from: (header('from') ?? 'a sender').slice(0, 200), way });
+      }
+      if (!lists.some((l) => l.way.kind === 'post' || l.way.kind === 'mail')) {
+        const pages = lists.flatMap((l) =>
+          l.way.kind === 'page' ? [`${l.from}: ${l.way.url}`] : [],
+        );
+        throw new GoogleError(
+          'invalid',
+          pages.length
+            ? `These lists only offer a web page to leave, so nothing was sent. Open it with the browser: ${pages.join('; ')}`
+            : 'These emails don’t say how to unsubscribe (no List-Unsubscribe header). Look for the link in the email with google_mail_read, and open it with the browser.',
+        );
+      }
+      return lists;
+    },
+    shows: (lists) => ({
+      lists: lists.map((l) => ({
+        from: l.from,
+        how:
+          l.way.kind === 'post'
+            ? 'one click'
+            : l.way.kind === 'mail'
+              ? `an email to ${l.way.to}`
+              : 'not here',
+      })),
+    }),
+    summary: (_a, account, lists) => {
+      const going = lists.filter((l) => l.way.kind === 'post' || l.way.kind === 'mail');
+      const named = going
+        .map(
+          (l) => `${l.from} (${l.way.kind === 'mail' ? `an email to ${l.way.to}` : 'one click'})`,
+        )
+        .join(', ');
+      return `unsubscribe ${account.email} from ${going.length === 1 ? 'a mailing list' : `${going.length} mailing lists`}: ${named}`;
+    },
+    async perform(_a, account, run) {
+      const left: string[] = [];
+      const failed: string[] = [];
+      const pages: string[] = [];
+      for (const [i, list] of run.prepared.entries()) {
+        const { way } = list;
+        try {
+          if (way.kind === 'post') {
+            const status = await leave(way.url, run.signal);
+            if (status < 200 || status > 299) throw new Error(`the list answered ${status}`);
+          } else if (way.kind === 'mail') {
+            const raw = composeRaw(
+              { to: [way.to], subject: way.subject, body: way.body },
+              { messageId: sendMessageId(`${run.operationId}:${i}`, account.email) },
+            );
+            await service.api(account.id, 'mail-send', '/gmail/v1/users/me/messages/send', {
+              method: 'POST',
+              signal: run.signal,
+              authorization: run.authorization,
+              body: { raw: Buffer.from(raw).toString('base64url') },
+            });
+          } else {
+            if (way.kind === 'page') pages.push(`${list.from}: ${way.url}`);
+            continue;
+          }
+          left.push(list.from);
+        } catch (error) {
+          failed.push(`${list.from} (${error instanceof Error ? error.message : 'it failed'})`);
+        }
+      }
+      if (!left.length)
+        throw new GoogleError('not-executed', `Couldn’t unsubscribe: ${failed.join('; ')}.`);
+      const label = [
+        `Unsubscribed from ${left.join(', ')}`,
+        failed.length && `not from ${failed.join('; ')}`,
+        pages.length && `these only offer a web page: ${pages.join('; ')}`,
+      ]
+        .filter(Boolean)
+        .join('; ');
+      return { receipt: { provider: 'google', id: `unsubscribe:${left.length}`, label } };
+    },
+    // An email to a list can't be found again by Conch: never sent twice on a guess.
+    reconcile: async () => ({ state: 'unknown' }),
+  });
+
   // ── Google Calendar: add, change, delete ───────────────────────────────
 
   const eventPath = (calendar: string, id?: string) =>
@@ -980,6 +1318,103 @@ export function googleWriteTools(
     },
   });
 
+  const Attendee = z.looseObject({
+    email: z.string().optional(),
+    self: z.boolean().optional(),
+    organizer: z.boolean().optional(),
+    responseStatus: z.string().optional(),
+    comment: z.string().optional(),
+  });
+  const Attendees = z.looseObject({ attendees: z.array(Attendee).optional() });
+  const ANSWER = { accepted: 'accept', declined: 'decline', tentative: 'say maybe to' } as const;
+  const answered = (response: keyof typeof ANSWER) =>
+    `Answered ${response === 'tentative' ? 'maybe' : response} in Google Calendar`;
+  const respond = write({
+    name: 'google_calendar_respond',
+    noun: 'answered',
+    capability: 'calendar-write',
+    description:
+      'Answer an invitation in Google Calendar, after the person approves it: accepted, declined or tentative (maybe), with an optional note. Use this, not the browser, for "accept the meeting from Bob". Pass the eventId from google_calendar_briefing. Google tells the organizer unless notify is false.',
+    input: {
+      accountId: accountRef,
+      calendarId,
+      eventId,
+      response: z.enum(['accepted', 'declined', 'tentative']),
+      comment: oneLine(500).optional(),
+      notify: z.boolean().default(true),
+    },
+    identity: (a) => [a.accountId, a.calendarId, a.eventId, a.response, a.comment ?? null],
+    async prepare(a, account) {
+      const event = await readEvent(account.id, a.calendarId, a.eventId);
+      if (!event || event.status === 'cancelled')
+        throw new GoogleError(
+          'invalid',
+          'That event isn’t in this calendar any more. Read the calendar again for its eventId.',
+        );
+      const attendees = Attendees.parse(event).attendees ?? [];
+      if (!attendees.some((p) => p.self))
+        throw new GoogleError(
+          'invalid',
+          `${account.email} isn’t a guest of “${event.summary ?? 'this event'}”, so there’s no invitation to answer (it may be their own event).`,
+        );
+      return { event, attendees };
+    },
+    summary: (a, account, { event }) =>
+      `${ANSWER[a.response]} “${event.summary ?? 'an event'}” (${whenText(startOf(event), endOf(event))}) on ${account.email}’s calendar${a.comment ? `, saying “${a.comment}”` : ''}${a.notify ? ', and Google tells the organizer' : ''}`,
+    async perform(a, account, run) {
+      // Google takes the whole guest list: everyone as they were, only this account's answer new.
+      const attendees = run.prepared.attendees.map((p) =>
+        p.self
+          ? {
+              ...p,
+              responseStatus: a.response,
+              ...(a.comment !== undefined && { comment: a.comment }),
+            }
+          : p,
+      );
+      const data = await service.api(
+        account.id,
+        'calendar-write',
+        eventPath(a.calendarId, a.eventId),
+        {
+          method: 'PATCH',
+          signal: run.signal,
+          authorization: run.authorization,
+          query: { sendUpdates: a.notify ? 'all' : 'none' },
+          body: { attendees },
+        },
+      );
+      const event = Event.parse(data);
+      const url = eventLink(event);
+      return {
+        receipt: {
+          provider: 'google',
+          id: event.id ?? a.eventId,
+          label: answered(a.response),
+          ...(url && { url }),
+        },
+        view: eventView(event),
+      };
+    },
+    async reconcile(a, account) {
+      const event = await readEvent(account.id, a.calendarId, a.eventId);
+      if (!event || event.status === 'cancelled') return { state: 'unknown' };
+      const self = Attendees.parse(event).attendees?.find((p) => p.self);
+      // Not answered yet: giving the same answer again does no harm.
+      if (self?.responseStatus !== a.response) return { state: 'absent' };
+      const url = eventLink(event);
+      return {
+        state: 'confirmed',
+        receipt: {
+          provider: 'google',
+          id: event.id ?? a.eventId,
+          label: answered(a.response),
+          ...(url && { url }),
+        },
+      };
+    },
+  });
+
   // ── Google Drive: make a file ──────────────────────────────────────────
 
   const File = z.object({
@@ -1072,5 +1507,5 @@ export function googleWriteTools(
     },
   });
 
-  return [send, createEvent, updateEvent, deleteEvent, createFile];
+  return [send, organize, unsubscribe, createEvent, updateEvent, deleteEvent, respond, createFile];
 }

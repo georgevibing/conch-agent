@@ -387,10 +387,14 @@ describe('a Google app’s page', () => {
     renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/apps/gmail' });
     const abilities = await screen.findByRole('list', { name: /What Gmail does/ });
     expect(within(abilities).getByText('Draft & send')).toBeInTheDocument();
+    expect(within(abilities).getByText('Tidy & unsubscribe')).toBeInTheDocument();
+    // Each thing that changes mail says how to allow it.
     expect(
-      within(abilities).getByText(/Choose Read & write on one under Google accounts/),
-    ).toBeInTheDocument();
-    await userEvent.click(within(abilities).getByRole('button', { name: 'Allow' }));
+      within(abilities).getAllByText(/Choose Read & write on one under Google accounts/),
+    ).toHaveLength(2);
+    const [allow] = within(abilities).getAllByRole('button', { name: 'Allow' });
+    if (!allow) throw new Error('no Allow');
+    await userEvent.click(allow);
     expect(screen.getByRole('heading', { name: 'Google accounts' })).toHaveFocus();
   });
 

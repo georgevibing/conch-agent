@@ -17,10 +17,13 @@ export const GoogleToolName = z.enum([
   'google_mail_read',
   'google_mail_create_draft',
   'google_mail_send',
+  'google_mail_organize',
+  'google_mail_unsubscribe',
   'google_calendar_briefing',
   'google_calendar_create_event',
   'google_calendar_update_event',
   'google_calendar_delete_event',
+  'google_calendar_respond',
   'google_drive_search',
   'google_drive_read',
   'google_drive_create_file',
@@ -45,6 +48,12 @@ export const APP_TOOL_WORDS: Record<AppToolName, AppToolWords> = {
   google_mail_read: { app: 'gmail', doing: 'Reading an email', done: 'Read an email' },
   google_mail_create_draft: { app: 'gmail', doing: 'Saving a draft', done: 'Saved a draft' },
   google_mail_send: { app: 'gmail', doing: 'Sending an email', done: 'Sent an email' },
+  google_mail_organize: { app: 'gmail', doing: 'Tidying your mail', done: 'Tidied your mail' },
+  google_mail_unsubscribe: {
+    app: 'gmail',
+    doing: 'Unsubscribing you',
+    done: 'Unsubscribed you',
+  },
   google_calendar_briefing: {
     app: 'google-calendar',
     doing: 'Looking at your calendar',
@@ -64,6 +73,11 @@ export const APP_TOOL_WORDS: Record<AppToolName, AppToolWords> = {
     app: 'google-calendar',
     doing: 'Deleting an event',
     done: 'Deleted an event',
+  },
+  google_calendar_respond: {
+    app: 'google-calendar',
+    doing: 'Answering an invitation',
+    done: 'Answered an invitation',
   },
   google_drive_search: { app: 'google-drive', doing: 'Searching Drive', done: 'Searched Drive' },
   google_drive_create_file: {

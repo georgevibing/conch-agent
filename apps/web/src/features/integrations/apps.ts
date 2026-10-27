@@ -340,6 +340,14 @@ const GROUPS: Record<
       tools: ['google_mail_create_draft', 'google_mail_send'],
       note: 'Asks every time, with the exact email.',
     },
+    {
+      id: 'tidy',
+      title: 'Tidy & unsubscribe',
+      description:
+        'Archive, label, mark read or move to the Trash (kept 30 days), and leave mailing lists the way each email offers.',
+      tools: ['google_mail_organize', 'google_mail_unsubscribe'],
+      note: 'Says how many, and asks first.',
+    },
   ],
   slack: [
     {
@@ -365,11 +373,13 @@ const GROUPS: Record<
     {
       id: 'write',
       title: 'Change events',
-      description: 'Add, move or delete events, and invite people only when you say so.',
+      description:
+        'Add, move or delete events, answer invitations, and invite people only when you say so.',
       tools: [
         'google_calendar_create_event',
         'google_calendar_update_event',
         'google_calendar_delete_event',
+        'google_calendar_respond',
       ],
       note: 'Asks every time.',
     },

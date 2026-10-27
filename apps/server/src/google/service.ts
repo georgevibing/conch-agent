@@ -29,14 +29,16 @@ import { type GoogleStore, type Credential, type GoogleData, type GoogleLimits }
 const AUTH = 'https://www.googleapis.com/auth/';
 /**
  * What Conch asks Google for, per capability: the narrowest scopes that do
- * the job. Write asks for Gmail's compose (drafts and sending), Calendar's
- * events and Drive's per-file access (only files Conch makes), never a whole
- * Drive or a whole mailbox's settings.
+ * the job. Write asks for Gmail's compose (drafts and sending) and modify
+ * (archive, labels, trash: never deleting for good), Calendar's events and
+ * Drive's per-file access (only files Conch makes), never a whole Drive or a
+ * whole mailbox's settings.
  */
 export const SCOPES: Record<GoogleCapability, string[]> = {
   'mail-read': [`${AUTH}gmail.readonly`],
   'mail-draft': [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
   'mail-send': [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
+  'mail-organize': [`${AUTH}gmail.modify`],
   'calendar-read': [`${AUTH}calendar.events.readonly`],
   'calendar-write': [`${AUTH}calendar.events`],
   'drive-read': [`${AUTH}drive.metadata.readonly`],
@@ -58,6 +60,7 @@ const SATISFIED_BY: Record<GoogleCapability, string[][]> = {
     [`${AUTH}gmail.modify`],
     ['https://mail.google.com/'],
   ],
+  'mail-organize': [[`${AUTH}gmail.modify`], ['https://mail.google.com/']],
   'calendar-read': [
     [`${AUTH}calendar.events.readonly`],
     [`${AUTH}calendar.events`],
@@ -74,6 +77,12 @@ const SATISFIED_BY: Record<GoogleCapability, string[][]> = {
   'drive-write': [[`${AUTH}drive.metadata.readonly`, `${AUTH}drive.file`], [`${AUTH}drive`]],
 };
 const ALL_CAPABILITIES = Object.keys(SCOPES) as GoogleCapability[];
+/**
+ * Asked of Google with Gmail's write access, but not needed for it: a sign-in
+ * where the person unticked it still connects, and only tidying mail says
+ * "sign in again to allow it".
+ */
+const OPTIONAL: ReadonlySet<GoogleCapability> = new Set(['mail-organize']);
 /** Whether these scopes do this job. */
 export const satisfies = (scopes: readonly string[], capability: GoogleCapability) =>
   SATISFIED_BY[capability].some((set) => set.every((s) => scopes.includes(s)));
@@ -90,6 +99,7 @@ export const DOING: Record<GoogleCapability, string> = {
   'mail-read': 'read Gmail',
   'mail-draft': 'save Gmail drafts',
   'mail-send': 'send email',
+  'mail-organize': 'archive, label or trash Gmail',
   'calendar-read': 'read Google Calendar',
   'calendar-write': 'change Google Calendar',
   'drive-read': 'look in Google Drive',
@@ -119,7 +129,11 @@ export function accountsOf(data: GoogleData): GoogleAccount[] {
     ...Object.values(data.accounts).map((a) =>
       shape(a.profile, accessOf(capabilities(a.credential.scopes))),
     ),
-    ...Object.values(data.passwords).map((p) => shape(p.profile, PASSWORD_GRANTS)),
+    // An app password reaches Gmail over IMAP, which Conch doesn't tidy with.
+    ...Object.values(data.passwords).map((p) => {
+      const account = shape(p.profile, PASSWORD_GRANTS);
+      return { ...account, capabilities: account.capabilities.filter((c) => !OPTIONAL.has(c)) };
+    }),
   ];
 }
 /** One account as `accountsOf` describes it. */
@@ -129,6 +143,11 @@ export function notAllowed(account: GoogleAccount, capability: GoogleCapability)
   const product = productOf(capability);
   if (account.via === 'app-password' && product !== 'gmail')
     return new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
+  if (account.via === 'app-password' && capability === 'mail-organize')
+    return new GoogleError(
+      'scope',
+      `${account.email} is signed in with a Gmail app password, which can’t archive, label or trash. Add the same address with Google sign-in in Apps to do that; until then, Gmail itself can.`,
+    );
   const granted = levelRank(account.granted?.[product]);
   const needed = capability.endsWith('-read') ? 1 : 2;
   return new GoogleError(
@@ -328,7 +347,7 @@ export interface ApiOptions {
 }
 /** What may be read: Gmail's messages and drafts, calendars' events, Drive's files. */
 const READS =
-  /^\/(gmail\/v1\/users\/me\/(messages|drafts)(\/|$)|calendar\/v3\/calendars\/|drive\/v3\/files)/;
+  /^\/(gmail\/v1\/users\/me\/(messages|drafts|labels)(\/|$)|calendar\/v3\/calendars\/|drive\/v3\/files)/;
 const SEGMENT = '[A-Za-z0-9_.%@-]{1,1100}';
 /** Every change Conch can make at Google, and the one capability each needs. */
 const WRITES: { method: ApiOptions['method']; path: RegExp; capability: GoogleCapability }[] = [
@@ -340,6 +359,18 @@ const WRITES: { method: ApiOptions['method']; path: RegExp; capability: GoogleCa
     path: /^\/upload\/gmail\/v1\/users\/me\/messages\/send$/,
     capability: 'mail-send',
   },
+  // Tidying: labels on many at once (archive, read, labels), the Trash one by one, a new label.
+  {
+    method: 'POST',
+    path: /^\/gmail\/v1\/users\/me\/messages\/batchModify$/,
+    capability: 'mail-organize',
+  },
+  {
+    method: 'POST',
+    path: /^\/gmail\/v1\/users\/me\/messages\/[A-Za-z0-9_-]{1,200}\/(trash|untrash)$/,
+    capability: 'mail-organize',
+  },
+  { method: 'POST', path: /^\/gmail\/v1\/users\/me\/labels$/, capability: 'mail-organize' },
   {
     method: 'POST',
     path: new RegExp(`^/calendar/v3/calendars/${SEGMENT}/events$`),
@@ -867,7 +898,7 @@ export class GoogleService {
           'Google returned a different account. Start sign-in again.',
         );
       const granted = capabilities(info.scopes);
-      if (!flow.capabilities.every((c) => granted.includes(c)))
+      if (!flow.capabilities.every((c) => OPTIONAL.has(c) || granted.includes(c)))
         throw new GoogleError(
           'scope',
           'Google did not allow everything needed for this job. Reconnect and allow the requested access.',

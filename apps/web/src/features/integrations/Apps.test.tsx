@@ -249,7 +249,10 @@ describe('one app, one card (ADR 0052)', () => {
       tools: hosted('gmail').tools.filter((t) => t.access === 'read'),
     });
     expect(toolGroups(reading).map((g) => g.title)).toEqual(['Read & search']);
-    expect(unsetGroups(reading).map((g) => g.title)).toEqual(['Draft & send']);
+    expect(unsetGroups(reading).map((g) => g.title)).toEqual([
+      'Draft & send',
+      'Tidy & unsubscribe',
+    ]);
   });
 
   it('the gallery has one tile per app: Slack’s chat tile is Slack’s, and nothing you have is offered again', () => {
