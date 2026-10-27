@@ -11,12 +11,15 @@ import type { Download, Locator, Page, Response } from 'playwright-core';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
+import { ownWords } from '../conversations/risk';
 import { consented, names } from '../vault/consent';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
 import {
+  asksDownload,
   capFrom,
+  namesDocument,
   namesSite,
   PaymentYes,
   reviewableClick,
@@ -454,6 +457,10 @@ export function browserTools(
       if (!untrusted && !own && (await service.store.trusts(site))) return;
     }
     if ((kind === 'download' || kind === 'upload') && goesAhead) return;
+    // A download the person's own latest words asked for goes after reading too: it lands in
+    // Conch's downloads, read as untrusted. An upload sends their files out, so it still asks.
+    if (kind === 'download' && browsing && asksDownload(ownWords(ctx.said?.().at(-1) ?? '')))
+      return;
     const picture = request.picture === false ? undefined : await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
     const title = await tab.page.title().catch(() => '');
@@ -559,7 +566,12 @@ export function browserTools(
           );
         },
         // Your details: the person named the saved identity or passport, or Full trust.
-        identity: (title) => yoursToSay() && consented(ctx, title),
+        identity: (title) =>
+          yoursToSay() &&
+          (consented(ctx, title) ||
+            (ctx.permissionMode === 'auto' &&
+              !ctx.untrusted?.() &&
+              (ctx.said?.() ?? []).some((message) => namesDocument(ownWords(message), title)))),
         payment: async (host) => {
           if (!yoursToSay()) return false;
           const site = siteOf(`https://${host}`) ?? host;

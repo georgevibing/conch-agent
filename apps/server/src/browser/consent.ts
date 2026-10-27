@@ -257,7 +257,35 @@ export function namesSite(message: string, site: string): boolean {
   const brand = brandOf(site);
   if (!brand || PLAIN.has(brand)) return false;
   if (!new Set(folded.split(/[^\p{L}\p{N}]+/u)).has(brand)) return false;
-  return !EVERYDAY.has(brand) || SIGN_IN.test(folded);
+  if (!EVERYDAY.has(brand) || SIGN_IN.test(folded)) return true;
+  // Held as theirs ("my Chase", "at Chase", "the Chase card"), never "chase down".
+  const b = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `\\b(?:my|our|on|at|from|into|with)\\s+${b}\\b|\\b${b}\\s+(?:card|account|bill|statement|balance|login|app|bank|credit|checking|savings)\\b`,
+  ).test(folded);
+}
+
+/** The person's words name their own document ("my passport details" names "Passport"). */
+const DOCUMENTS =
+  /\b(passport|licen[cs]e|id\s+card|identity\s+card|national\s+id|residence\s+permit|visa)\b/g;
+export function namesDocument(message: string, title: string): boolean {
+  const plain = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/licen[cs]e/g, 'licen')
+      .replace(/\s+/g, ' ');
+  const kept = plain(title);
+  // Every document the message names ("the visa form with my passport details"), any of them.
+  return [...message.toLowerCase().matchAll(DOCUMENTS)].some((m) =>
+    kept.includes(plain(m[1] ?? '')),
+  );
+}
+
+/** The person's latest words ask to download or save something ("download the boarding pass"). */
+export function asksDownload(message: string): boolean {
+  return /\b(?:download|save|export|grab|get)\b[^.!?\n]{0,60}\b(?:pdf|file|invoice|receipt|statement|ticket|boarding\s+pass|report|document|copy|csv|export|backup|photo|picture|it)\b|\bdownload\b/i.test(
+    message,
+  );
 }
 
 /**

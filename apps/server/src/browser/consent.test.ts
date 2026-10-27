@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  asksDownload,
   asksSignIn,
   capFrom,
+  namesDocument,
   namesSite,
   PaymentYes,
   PAYMENT_WINDOW_MS,
@@ -165,5 +167,25 @@ describe('the person naming a site (2026-10-27)', () => {
     expect(namesSite('sign in to Chase and download the statement', 'chase.com')).toBe(true);
     expect(namesSite('log into my Target account', 'target.com')).toBe(true);
     expect(namesSite('get my statement from chase.com', 'chase.com')).toBe(true);
+  });
+});
+
+describe('round 5: your own bank, your own document, a download you asked for (2026-10-27)', () => {
+  it('takes a bank named as yours, never an everyday verb', () => {
+    expect(namesSite('pay my Chase card bill', 'chase.com')).toBe(true);
+    expect(namesSite('check the balance at chase', 'chase.com')).toBe(true);
+    expect(namesSite('chase down the invoice', 'chase.com')).toBe(false);
+  });
+
+  it('names a saved document by what it is', () => {
+    expect(namesDocument('fill the visa form with my passport details', 'Passport')).toBe(true);
+    expect(namesDocument('use my driver’s license', 'Driver’s licence')).toBe(true);
+    expect(namesDocument('fill the form', 'Passport')).toBe(false);
+  });
+
+  it('reads a download the person asked for', () => {
+    expect(asksDownload('check me in and download the boarding pass')).toBe(true);
+    expect(asksDownload('save the invoice PDF')).toBe(true);
+    expect(asksDownload('look at the flight times')).toBe(false);
   });
 });
