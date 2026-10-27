@@ -20,3 +20,22 @@ export function treeClean(dir: string, timeoutMs = 3_000): Promise<boolean | und
     }
   });
 }
+
+/** The branch checked out in a repository; undefined when detached, unknown or too slow. */
+export function currentBranch(dir: string, timeoutMs = 3_000): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    try {
+      execFile(
+        'git',
+        ['-C', dir, 'rev-parse', '--abbrev-ref', 'HEAD'],
+        { timeout: timeoutMs, maxBuffer: 1 << 16, windowsHide: true },
+        (error, stdout) => {
+          const name = stdout.trim();
+          resolve(error || !name || name === 'HEAD' ? undefined : name);
+        },
+      );
+    } catch {
+      resolve(undefined);
+    }
+  });
+}

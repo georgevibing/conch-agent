@@ -122,7 +122,7 @@ import {
 import { askReason, type AskReason } from './ask-reason';
 import { proposeRule, ruleMatches, ruleWords, RULE_TOOLS, sameRule, validRule } from './lifts';
 import type { AutoLifts } from './lifts';
-import { treeClean } from './tree';
+import { currentBranch, treeClean } from './tree';
 import { knownRemotes } from './git-remotes';
 import {
   carriesData,
@@ -3427,6 +3427,7 @@ export class ConversationManager {
         said: this.#yourWords(live),
         treeClean: await cleanFor(request.input),
         sameRemote: await remotesFor(request.input),
+        currentBranch: await branchFor(request.input),
       });
       // Something serious enough to ask before reading too offers no "always", as a class
       // lift never does (ADR 0100): its card says why, and the person answers it each time.
@@ -3624,6 +3625,15 @@ export class ConversationManager {
       return (dir) =>
         known.get(dir ? resolve(workspace, dir.replace(/^["']|["']$/g, '')) : workspace);
     };
+    // The branch checked out, for "force-push my branch": looked up only for a push.
+    const branchFor = async (
+      input: Record<string, unknown>,
+    ): Promise<((dir?: string) => string | undefined) | undefined> => {
+      const command = typeof input.command === 'string' ? input.command : '';
+      if (!/\bgit\b[^|;&\n]*\spush\b/.test(command)) return undefined;
+      const branch = await currentBranch(workspace);
+      return (dir) => (dir ? undefined : branch);
+    };
     /** A class of step the person lifted for every chat (ADR 0128), or for this one. */
     const lifted = (cls: string) =>
       live.waived.has(cls) || settings.preferences.autoAllowed.includes(cls);
@@ -3818,6 +3828,7 @@ export class ConversationManager {
         said: this.#yourWords(live),
         treeClean: await cleanFor(request.input),
         sameRemote: await remotesFor(request.input),
+        currentBranch: await branchFor(request.input),
       });
     /** That step as the reviewer sees it: an app's, or Gmail's with its connector-verified sender. */
     const hostStep = (request: AskRequest): ReviewStep | undefined => {
@@ -4350,6 +4361,7 @@ export class ConversationManager {
         ...(resolved.permissionMode === 'auto' && { said: this.#yourWords(live) }),
         treeClean: await cleanFor(request.input),
         sameRemote: await remotesFor(request.input),
+        currentBranch: await branchFor(request.input),
       });
     /** A step in one of your connected apps, as the reviewer sees it. */
     const guardStep = (
