@@ -29,6 +29,7 @@ import {
   type SecretEnvironment,
   type SecretRef,
 } from '../vault/secrets';
+import type { InterruptedProcesses } from './interrupted';
 
 /** Longest a command runs while a person can answer for it: a long build, a big test run. */
 const MAX_WATCHED_MS = 7_200_000;
@@ -100,6 +101,8 @@ export class ProcessService {
       secrets?: () => CommandSecrets;
       /** How long `wait: true` holds the call (`FOREGROUND_MS`; tests make it short). */
       foregroundMs?: number;
+      /** Where what a restart stopped is written down, for each chat's next turn (ADR 0094). */
+      interrupted?: Pick<InterruptedProcesses, 'record'>;
     },
   ) {
     this.#pace = new ResourcePace(deps.now);
@@ -126,6 +129,13 @@ export class ProcessService {
     return this.#pump();
   }
   close() {
+    // What's still running or waiting to run is stopped now: its chat hears so next time.
+    const stopped = Date.now();
+    this.deps.interrupted?.record(
+      [...this.#sessions.values()]
+        .filter((s) => s.status === 'running' || s.status === 'queued')
+        .map((s) => ({ chat: s.owner, process: s.id, startedAt: s.at, stoppedAt: stopped })),
+    );
     this.#closed = true;
     this.pauseAdmission('Conch is closing.');
     this.stopAll();

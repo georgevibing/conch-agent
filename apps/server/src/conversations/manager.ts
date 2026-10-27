@@ -1322,6 +1322,11 @@ export class ConversationManager {
             take(): string | undefined;
           }
         | undefined;
+      /**
+       * What a restart stopped in this chat, said once on its next turn (ADR 0094): which
+       * commands were cut off, so the model checks them and runs them again on purpose.
+       */
+      interrupted?: (conversationId: string) => string | undefined;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
       /** Saved keys put into Conch's own Bash's environment, unseen (ADR 0151). */
@@ -5095,6 +5100,7 @@ export class ConversationManager {
               apps.offers.map((o) => o.name),
             ),
             missingAppsNote(missingApps),
+            this.deps.interrupted?.(conversationId),
             live.room,
             resources === ROOM_NOTE ? undefined : resources,
             // Another chat working in this folder, say, or a message from one (ADR 0134).
