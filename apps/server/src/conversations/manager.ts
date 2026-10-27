@@ -96,6 +96,7 @@ import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
 import {
+  askedInApp,
   assessRisk,
   NEVER,
   type Risk,
@@ -3815,6 +3816,7 @@ export class ConversationManager {
       assessRisk(request.toolName, request.input, {
         workspace,
         ...(request.appStep && { access: request.appStep.access }),
+        ...(request.appStep?.app && { app: request.appStep.app }),
         said: this.#yourWords(live),
         treeClean: await cleanFor(request.input),
         sameRemote: await remotesFor(request.input),
@@ -3969,7 +3971,9 @@ export class ConversationManager {
         // (ADR 0117, ADR 0128), as for any command. A question asked only for what the chat
         // read is lifted by a review that sees routine work in service of the request.
         let flagged = risk && riskAsks(risk, true) && !lifted(riskClass(risk));
-        if (flagged && risk && command && (await serves(request, risk, step))) {
+        // A step in an app is lifted the same way as a command (2026-10-27): the review sees it
+        // serve the request. What asks whatever was read never gets here (`contextualRisk`).
+        if (flagged && risk && (command || step) && (await serves(request, risk, step))) {
           this.deps.judged?.('lifted', risk.kind);
           flagged = false;
         }
@@ -3987,7 +3991,10 @@ export class ConversationManager {
         let judged = true;
         if (!why && app && !app.own && step) {
           const look = await judgeStep(request, step, risk, app.allowed);
-          if (look === undefined) judged = false;
+          // Nothing could look: the person's own words decide (2026-10-27). A step they asked
+          // for, by its words or the app's name and a change word, goes; anything else asks.
+          if (look === undefined)
+            judged = Boolean(risk?.asked) || (!risk && askedInApp(this.#yourWords(live), step.app));
           else if (look) why = look;
         }
         if (judged) {
@@ -4345,6 +4352,7 @@ export class ConversationManager {
         ...(described?.destructive && { destructive: true }),
         // What its change does with money is read for a tool known to change things.
         ...(described?.access && { access: described.access }),
+        ...(described?.integration && { app: described.integration }),
         // What the person asked for in their own words goes ahead (ADR 0128), in Auto; the
         // modes below it ask before every change anyway.
         ...(resolved.permissionMode === 'auto' && { said: this.#yourWords(live) }),
@@ -4605,8 +4613,7 @@ export class ConversationManager {
         if (
           asks &&
           risk &&
-          command &&
-          typeof request.input.command === 'string' &&
+          (command ? typeof request.input.command === 'string' : Boolean(step)) &&
           (await serves(request, risk, step))
         ) {
           this.deps.judged?.('lifted', risk.kind);
@@ -4634,6 +4641,9 @@ export class ConversationManager {
           const look = await judgeStep(request, step, risk, allowed);
           if (look === null) sink = undefined;
           else if (look) sink = look;
+          // Nothing could look: the person's own words decide (2026-10-27), as for a command.
+          else if (risk?.asked || (!risk && askedInApp(this.#yourWords(live), step.app)))
+            sink = undefined;
         }
       }
       return sink

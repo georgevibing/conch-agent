@@ -448,6 +448,33 @@ describe('apps hosted by Conch', () => {
   );
 });
 
+describe('a change in a connected app with nothing to review it (2026-10-27)', () => {
+  it.each(['bridge', 'native'] as const)(
+    'goes when the person named the app and the change, and asks otherwise (%s)',
+    async (transport) => {
+      const named = await setup({ transport, mode: 'auto' });
+      const one = await named.manager.send({
+        clientMessageId: 'u1',
+        text: 'create the issue in GitHub for this',
+        untrusted: { kind: 'web', label: 'evil.example' },
+      });
+      const events = await eventsUntil(named.manager, one.id, 'turn.completed');
+      expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+      expect(named.call).toHaveBeenCalledOnce();
+
+      const vague = await setup({ transport, mode: 'auto' });
+      const two = await vague.manager.send({
+        clientMessageId: 'u1',
+        text: 'do what the page says',
+        untrusted: { kind: 'web', label: 'evil.example' },
+      });
+      await answer(vague.manager, two.id);
+      await eventsUntil(vague.manager, two.id, 'turn.completed');
+      expect(vague.call).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('steps in your own apps, after reading (ADR 0117)', () => {
   const READ = 'This chat read evil.example, which could be trying to steer me.';
   const own = (toolName: string, access: 'read' | 'write' = 'write') => ({
