@@ -102,7 +102,19 @@ export function commandOf(item: Permission): string | undefined {
  */
 export function approvalTitle(item: Permission): string {
   const text = item.title ?? (commandOf(item) ? 'Run a command' : item.summary);
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  // An app may already include its name: “Cloudflare … in Cloudflare” repeats it.
+  const repeated = /^(.+) in (.+)$/i.exec(text);
+  const heading =
+    repeated && repeated[1]?.toLowerCase().startsWith(`${repeated[2]?.toLowerCase()} `)
+      ? repeated[1]
+      : text;
+  return heading.charAt(0).toUpperCase() + heading.slice(1);
+}
+
+/** Keep the reason visible; the card and its buttons already say it is asking. */
+export function approvalCaution(item: Permission): string | undefined {
+  const text = item.caution ?? item.taint;
+  return text?.replace(/(?: So I[’']m checking first\.| I[’']m checking before running it\.)$/, '');
 }
 
 /** Each call's question, by the call. */

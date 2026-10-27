@@ -77,8 +77,9 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
   await composer.press('Enter');
   const card = page.getByRole('group', { name: /asks first/ });
   await expect(card).toContainText(
-    'This chat is held to the “Quick setup” skill’s list, and it doesn’t say it needs to run this command. So I’m checking first.',
+    'This chat is held to the “Quick setup” skill’s list, and it doesn’t say it needs to run this command.',
   );
+  await expect(card).not.toContainText('So I’m checking first.');
   await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(0);
   // While it's waiting on you, stopping waits too.
   await expect(line.getByRole('button', { name: stop })).toBeDisabled();

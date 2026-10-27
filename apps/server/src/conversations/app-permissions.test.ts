@@ -276,7 +276,9 @@ describe.each(['native', 'bridge'] as const)('app permissions over %s', (transpo
       const events = await eventsUntil(manager, convo.id, 'permission.requested');
       const asked = events.find((e) => e.type === 'permission.requested');
       if (options.destructive)
-        expect(asked).toMatchObject({ taint: expect.stringContaining('delete something') });
+        expect(asked).toMatchObject({
+          taint: 'This tool can change or delete app data. I’m checking before running it.',
+        });
       await answer(manager, convo.id);
       await eventsUntil(manager, convo.id, 'turn.completed');
       expect(call).not.toHaveBeenCalled();

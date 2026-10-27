@@ -6,9 +6,11 @@
     --nc-sheen-hover: 0.16;
 
     position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-3);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--nc-space-2-5) var(--nc-space-3);
+    container-type: inline-size;
     max-inline-size: var(--nc-chat-card-width);
     padding: var(--nc-chat-card-pad);
     border-radius: var(--nc-chat-card-radius);
@@ -36,11 +38,7 @@
   }
 
   .body {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: var(--nc-space-2-5);
-    min-inline-size: 0;
+    display: contents;
   }
 
   .text {
@@ -61,7 +59,7 @@
     font-weight: var(--nc-weight-semibold);
     line-height: var(--nc-leading-snug);
     color: var(--nc-text);
-    text-wrap: balance;
+    text-wrap: wrap;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -69,6 +67,14 @@
   }
 
   /* The command beside a small title: code a step smaller than in the sheet. */
+  .command,
+  .preview,
+  .caution,
+  .actions,
+  .ruleRow {
+    grid-column: 1 / -1;
+  }
+
   .card .command {
     --ac-size: var(--nc-text-sm);
     --ac-pad-block: var(--nc-space-2);
@@ -99,24 +105,15 @@
     min-inline-size: 0;
   }
 
-  /* Why to look twice: one quiet line, a small tinted shield, no box. */
+  /* One explanation at the full card width, with no second warning icon. */
   .caution {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
     margin: 0;
-    font-size: var(--nc-text-xs);
-    line-height: var(--nc-leading-snug);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
     color: var(--nc-text-muted);
-    text-wrap: pretty;
-  }
-
-  .caution > svg {
-    flex: none;
-    inline-size: 0.8125rem;
-    block-size: 0.8125rem;
-    margin-block-start: 0.0625rem;
-    color: light-dark(oklch(0.58 0.12 var(--nc-warning-h)), oklch(0.8 0.1 var(--nc-warning-h)));
+    overflow-wrap: anywhere;
+    text-wrap: wrap;
   }
 
   .actions {
@@ -124,6 +121,25 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--nc-space-2);
+  }
+
+  @media (pointer: coarse) {
+    .card button {
+      min-block-size: var(--nc-control-lg);
+    }
+  }
+
+  @container (inline-size < 30rem) {
+    .actions > button {
+      flex: 1 1 auto;
+      max-inline-size: 100%;
+      block-size: auto;
+      min-block-size: var(--nc-control-lg);
+      padding-block: var(--nc-space-2);
+      line-height: var(--nc-leading-snug);
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
   }
 
   /* The narrower Always allow (ADR 0149): one command, quiet, on a line of its own. */

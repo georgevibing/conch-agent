@@ -167,3 +167,25 @@ The new-recipient heuristic and the once-only mail gate were forcing approval be
 Threat model: model-supplied sender metadata must not clear the preflight; only the connector overwrites accountEmail from its account record. A page can supply data but cannot authorize recipients, CC/BCC or unrelated attachments. Prior user instructions are retained for review instead of only the final two messages; oversized contexts fail closed. No permission or durable allowlist is saved by a favorable verdict. Both native preflight and direct Conch-tool paths use the shared manager.
 
 Source reviewed: [OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html), retrieved 2026-10-18: separate instructions from untrusted data, validate tool parameters, and retain defense in depth around external effects. Manager regression tests cover requested delivery, risky/unavailable/malformed verdicts, explicit Ask, Ask first and provider preflight.
+
+## Capability hints and approval wording (2026-10-26)
+
+MCP's `destructiveHint` means a tool **may** perform destructive updates, not that
+every invocation deletes data. General executors such as Cloudflare's `execute`
+can list accounts through GET as well as change infrastructure. `assessRisk` keeps
+the same severe, lasting `app-delete` gate for the hint, but marks the effect as
+possible. The card describes the capability without asserting a deletion or
+irreversibility for this invocation. A deletion action still gets the concrete
+deletion warning, whether or not the server supplies a hint. Auto's reviewer and
+its cache key retain this distinction.
+
+The threat is an executor hiding a destructive operation behind GET-looking code
+or an app supplying misleading annotations. No code-string inspection clears the
+gate, and no tool is reclassified as read-only. Ask, Off, review failure, mode and
+trust checks are unchanged; this adds no setting or power to the security checkup.
+Tests cover read-looking, destructive and computed-method executor arguments,
+concrete deletion actions, and approval events on native and bridged providers.
+
+Source: [MCP ToolAnnotations](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations),
+read 2026-10-26: annotations are hints, not guaranteed behavior, and
+`destructiveHint` says the tool “may perform destructive updates.”

@@ -162,6 +162,7 @@ const payloadOf = (action: AutoAction): string | undefined => {
             kind: action.risk.kind,
             harm: action.risk.harm,
             lasting: action.risk.lasting,
+            ...(action.risk.possible && { possible: true }),
           }
         : 'nothing',
       ownerMessages: action.ownerMessages.map((text, id) => ({ id, text })),
@@ -378,6 +379,7 @@ export async function reviewKey(
     harm: action.risk.harm,
     lasting: action.risk.lasting,
     reason: action.risk.reason,
+    possible: Boolean(action.risk.possible),
     asked: Boolean(action.risk.asked),
     held: Boolean(action.risk.held),
     critical: Boolean(action.risk.critical),

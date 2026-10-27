@@ -26,6 +26,8 @@ Unless you asked for it, it also asks before deploying an app, applying to a clu
 
 These questions offer no **Always allow**.
 
+Some app tools can both read and change data, such as a cloud API executor. If Conch only knows the tool can make destructive changes, its card describes that capability. It does not mean this particular call deletes anything. The approval check still applies. Approval cards show the reason below the title, with larger buttons on phones.
+
 Everyday work never asks, outside the sealed box too:
 
 - checking, pulling and fetching with git;

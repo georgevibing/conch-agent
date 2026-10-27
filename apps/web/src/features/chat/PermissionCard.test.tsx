@@ -17,6 +17,38 @@ const asked = (
   ...patch,
 });
 
+describe('a concise app approval', () => {
+  it('names the app once and drops only the repeated asking sentence', () => {
+    renderApp(
+      <PermissionCard
+        item={asked({
+          toolName: 'mcp__cloudflare__execute',
+          summary: 'Cloudflare API Code Executor in Cloudflare',
+          taint: 'This tool can change or delete app data. I’m checking before running it.',
+        })}
+        name="Conch"
+        onRespond={() => {}}
+      />,
+    );
+    const card = screen.getByRole('group', {
+      name: 'Conch asks first: Cloudflare API Code Executor',
+    });
+    expect(card).toHaveTextContent('This tool can change or delete app data.');
+    expect(card).not.toHaveTextContent('I’m checking');
+  });
+
+  it('keeps the risk, conditions and instructions of a longer caution', () => {
+    const caution =
+      'This would delete a database, and that can’t be undone. So I’m checking first.';
+    renderApp(
+      <PermissionCard item={asked({ taint: caution })} name="Conch" onRespond={() => {}} />,
+    );
+    expect(
+      screen.getByText('This would delete a database, and that can’t be undone.'),
+    ).toBeVisible();
+  });
+});
+
 describe('a command’s card (ADR 0028)', () => {
   it('says what it does in a few words, and the exact command under it', () => {
     renderApp(
