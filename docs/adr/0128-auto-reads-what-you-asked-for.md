@@ -127,6 +127,19 @@ answer is the context. Only a person's press grants it; nothing is learned by it
 ADR 0100's provider table said Claude Code used its own classifier beside Conch's hook; since
 ADR 0118 it runs as `default` and Conch answers. The row now says so.
 
+### Addendum, 2026-10-27: more of what people say, and the branch they're on
+
+Replaying a hundred everyday requests through the rules found pushes asked for in other words
+asking after reading. Now:
+
+- **A pull request asks for its push.** "Open a PR", "raise a pull request", "ship it" and
+  "release it" are push words (`PUSH_WORDS`); a deploy branch still has to be named.
+- **"My branch" names the one checked out** (`RiskContext.currentBranch`, read with
+  `git rev-parse` only for a push): "force-push my branch" asks for that force-push, and a
+  `git push --force` with no branch named is judged by the branch it pushes. A branch others
+  share (`main`, `release/*`) still has to be named, and still asks.
+- **"Make sure it's live"** and "goes live" ask for a deploy (`DEPLOY_WORDS`).
+
 ## Consequences
 
 - "Force-push my branch", "deploy it with fly", "delete the old stack", "install nginx with

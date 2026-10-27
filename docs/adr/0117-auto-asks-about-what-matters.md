@@ -282,6 +282,33 @@ way of asking, and most of it asks before reading too. It covers a page saying "
 index or `git+` URL a page gave, squatted names, `rm -rf ~`, a credentials read and then a
 send, `.zshrc` and `/etc/hosts` writes, and a force-push.
 
+### Addendum, 2026-10-27: commands judged as what they do
+
+A replay of everyday requests found serious steps going silently because of how they were
+started, and a key's way out the guard couldn't see (`risk.ts`):
+
+- **A vendor's CLI through a package runner is the CLI.** `npx wrangler deploy`, `pnpm dlx
+vercel`, `bunx supabase` are read as `wrangler`, `vercel`, `supabase` (`runnerInner`,
+  `VENDOR_CLIS`): a look (`wrangler tail`) is routine, a production deploy asks unless named.
+  The CLIs join the well-known npm list.
+- **A package script is what it runs.** `npm run deploy` reads the work folder's own
+  `package.json` script, one level deep (`scriptBody`).
+- **Databases.** `prisma migrate reset`, `--force-reset`, `drizzle-kit push --force` wipe;
+  `UPDATE … SET` without `WHERE` changes every row; `wrangler d1 execute --remote` is read as a
+  database's SQL; `supabase db push` changes the linked project (asks after reading); a
+  production URL in a variable (`$PROD_DATABASE_URL`) counts as production.
+- **Money and workflows.** A live Stripe refund, charge, payout or transfer is `spend`, asked
+  for only by naming its id; `gh workflow run` starts someone else's machine, severe when it
+  deploys or releases.
+- **Keys leaving.** A key-shaped or Passwords-injected variable (`secrets`, ADR 0151) in a
+  command that reaches anywhere but that kind of service's own address asks after reading
+  (`leaksKey`, `KEY_HOMES`); other password managers printing a secret (`op read`, `bw get`,
+  `pass show`, `vault kv get`) read keys into the chat.
+- **Speaking on GitHub.** `gh issue|pr comment`, `gh pr review` and `gh api` writes post in the
+  person's name: they ask after reading unless asked for, and never carry a key or a command's
+  output. A new issue or pull request of the repository's own stays routine.
+- **Typosquats of short names**: a letter doubled (`zodd`) is one slip from `zod`.
+
 ## Consequences
 
 - In Auto, a person's own Conch apps read and change things without a word, before and after
