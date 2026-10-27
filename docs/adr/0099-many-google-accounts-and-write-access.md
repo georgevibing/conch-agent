@@ -189,3 +189,33 @@ animation; failed, declined and uncertain sends keep their distinct outcomes.
 Narrow mail cards stack their actions with Send first, hide the keyboard hint,
 and constrain attachment tiles to their available width. A narrow Storybook
 journey checks the card and Send button bounds with a long attachment filename.
+
+## 2026-10-27: Tidying mail, leaving lists and answering invitations
+
+Without these, a request like "archive the noreply emails", "unsubscribe me" or
+"accept Bob's meeting" sent the model to the browser and a Google sign-in card.
+They are Conch's own write tools now, with the same once-card, account checks
+and receipts as sending:
+
+- **`google_mail_organize`**: archive, back to the inbox, read or unread, the
+  Trash and back, a label on or off (a new label is made). By `messageIds` or a
+  Gmail query, up to 500; the card says how many. It needs a new capability,
+  `mail-organize` (`gmail.modify`), which Gmail's Read & write now asks Google
+  for. It's optional at sign-in: a person who unticks it still connects, and an
+  older sign-in is told "sign in again" before any card. `gmail.modify` never
+  deletes for good; the Trash keeps a message for 30 days. App-password
+  accounts (IMAP) aren't offered it.
+- **`google_mail_unsubscribe`**: only the email's own `List-Unsubscribe` header
+  (RFC 2369), never a link in its body. RFC 8058 one-click is one fixed POST,
+  public https only, every resolved address checked as it connects
+  (`guardedLookup`), no redirect followed; a `mailto:` is an email sent with
+  the account's send access, its subject held to one line. A page-only list is
+  named, not opened. Reconciled as unknown: an email to a list is never sent
+  twice on a guess.
+- **`google_calendar_respond`**: accepted, declined or tentative on the
+  account's own attendee entry, every other guest kept as it was; Google tells
+  the organizer unless `notify` is false.
+
+Tidying and unsubscribing speak for the person like sending (Ask by default,
+Allow theirs to choose); answering an invitation asks every time like the other
+calendar changes.
