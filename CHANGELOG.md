@@ -2,6 +2,22 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
+
+### New
+
+- Process_start runs a keyed command to the end, and lasts two hours while you can answer
+- A task or your own chat app uses a saved key as a chat does, and a yes stays in the chat's log
+- What you said on a site settles it in Auto: a sign-in you asked for, a booking
+- A long job on a model that calls tools in words is offered one that calls them itself
+- An email carries a file from the work folder, its size on the card
+- Gmail tidies, unsubscribes and Calendar answers invitations itself, not through the browser
+- "force-push my branch" names the branch checked out
+
+### Fixed
+
+- A booking beside a total to pay keeps its card, as paying does
+
 ## [0.1.0-alpha.19](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-26)
 
 ### Fixed
