@@ -125,3 +125,10 @@ the person's to do, through **Your turn**.
   judges its words, but a question that hides its meaning ("Continue?") is answered OK on a site
   the person allowed. That is no different from the click that raised it, which was judged
   already.
+
+## Addendum, 2026-10-27
+
+A site's "Book", "Subscribe", "Cancel membership" or "Accept invitation" now goes through Auto's
+review like "Send" (ADR 0014, addendum of this date): the resolved label and the page are the
+evidence, and the page must not change before the click. Paying keeps its card unless the
+person named a limit the page's own total is inside.

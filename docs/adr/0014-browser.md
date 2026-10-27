@@ -174,3 +174,21 @@ The agent's browser runs as you on your machine, so it is treated as untrusted:
   the agent read on it through URLs it navigates to. Per-site approval,
   high-stakes confirmation and the secrets rule limit the blast radius. They don't
   remove it.
+
+## Addendum, 2026-10-27: what the person said settles it in Auto
+
+Scored against everyday errands (book a table, cancel a membership, order the same ink), Auto
+asked where the person's words had already answered. Now (`browser/consent.ts`):
+
+- A sign-in the person's own message asked for (the item by name, or the site's brand with a
+  sign-in word) fills with no card in Auto, and in Full trust; still only on the item's own site,
+  over https, never in a frame from another origin. Several accounts still ask which one.
+- Auto's review weighs bookings, subscriptions, cancellations and invites as it already weighed
+  sending (`reviewableClick`). A label about money never qualifies (`spendsMoney`).
+- A limit in the person's words ("buy it if under $50") lets the order click go when the
+  total read from the page, never the model, is inside it in the same currency (`capFrom`,
+  `totalOnPage`).
+- One card per payment: a yes to the order or to the saved card covers the other on that site for
+  ten minutes (`PaymentYes`).
+
+None applies with someone else's words in the chat, unattended, or in the person's own Chrome.
