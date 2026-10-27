@@ -101,3 +101,29 @@ giotiskl". Both are the answer the card would get, so the card is noise (`vault/
   Full trust reads them without one; into a command unseen, naming is enough.
 - **Read only, Ask first** and unattended runs ask as before; an item set to **never** is refused
   in every mode.
+
+## Addendum, 2026-10-27: wherever a person answers, and remembered
+
+The scenarios played against the code (helpers that need a key, the owner on Telegram, a
+restart mid-job, Claude Code's own shell) found keys refused or asked for again where a person
+was there to answer:
+
+- **Answered elsewhere is answered** (`ToolContext.attended`): a task sent from a chat a person is
+  in, or your own chat app (not a guest), where questions are relayed to you, a stranger's
+  included. These ask with the card as a chat does, and `said` carries the person's words from
+  the chat a task came from (marked as from there). A routine, a pinned app, another app or an
+  agent has nobody: only an item set to be used without asking (`agentRead: 'allow'`) goes, never
+  after reading something untrusted, and never with Passwords locked.
+- **Plainer words for a command** (`named`): a word of the title beside a word for a secret ("my
+  Stripe key"), or a secret word of the title beside one saying it's kept ("the PAT I saved",
+  "the token in Passwords"). Only for `secrets`, where the model never sees the value;
+  `passwords_read` keeps the strict rule.
+- **Remembered by the chat's log** (`vaultAnswered`): "Allow in this chat" is read back from the
+  chat's own `permission.requested`/`permission.resolved` events (the item's title, field and
+  variable), so a restart or a switch of provider doesn't ask again.
+- **One call for every provider:** `process_start` takes `wait: true` and returns the output
+  like a shell, so a model whose own shell can't take `secrets` (Claude Code, Codex CLI, ACP
+  agents) uses a key in one step. It lasts two hours while a person can answer, half an hour in a
+  routine.
+- `passwords_read` in a routine refuses rather than waiting an hour, and its card carries the
+  chat's taint so a chat app routes it to you, never to the stranger who wrote.
