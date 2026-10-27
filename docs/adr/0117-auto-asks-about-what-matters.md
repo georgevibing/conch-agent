@@ -422,3 +422,19 @@ A second replay attacked the lifts above, and five got through. Each is closed i
 - **Code the rules read as a lookup isn't reviewed** (`codeOnlyReads`): no delay, and no card when
   the review can't run. **A send with no review** goes only when the latest words ask for it and
   name everyone it goes to, or it answers the thread and adds no one (`sendAsked`).
+
+## Addendum, 2026-10-27 (round 3): keys, deploys, merges and money, read for what they do
+
+- A saved key sent as data (`-d`, `-f`, `--body`, a JSON body, a query) is a way out wherever it
+  goes and no words lift it; signing in with it (`Authorization`, `-u`, `x-access-token@`) is how
+  it's used. Its own service's token exchange is too.
+- Each vendor's key belongs at that vendor (`VENDOR_KEYS`): a Stripe key at Slack is never lifted.
+  A host is named by its brand's registered domain ("slack" names `hooks.slack.com`, never
+  `slack.evil.com`).
+- Row changes with a `WHERE` are moderate and lasting; pruning stays routine. A named vendor's
+  API changed by `curl` counts as asked ("rotate the cloudflare token").
+- A push to a deploy branch is a deploy; `gh pr merge` into a shared branch is severe history.
+- A live Stripe call is known by its key too (`--api-key`, `STRIPE_API_KEY=` in front); Stripe's
+  API called by hand moves the same money.
+- "Force push" names the branch checked out; "squash … and push" asks for a lease on it;
+  "release v1.2" names `v1.2.0`. A comment's issue and repository are the person's to name.
