@@ -34,7 +34,7 @@ import {
   VaultCryptoError,
   wrapKey,
 } from './crypto';
-import type { Keystore, KeystoreKind } from './keystore';
+import { SettledKeystore, type Keystore, type KeystoreKind } from './keystore';
 
 export const Use = z.object({
   at: z.number(),
@@ -171,8 +171,12 @@ export class VaultStore {
 
   /** How the vault on disk is locked (or will be, once made). */
   async protection(): Promise<KeystoreKind> {
+    const keystore = await this.keystore();
+    // Where the key is now: one moved into the keychain (ADR 0152) isn't in a file any more,
+    // whatever the vault file said when it was written.
+    if (keystore instanceof SettledKeystore && keystore.known) return keystore.kind;
     const file = this.#file ?? (await this.#read().catch(() => undefined));
-    return file?.keystore ?? (await this.keystore()).kind;
+    return file?.keystore ?? keystore.kind;
   }
 
   /**

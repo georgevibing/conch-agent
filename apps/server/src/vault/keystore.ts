@@ -11,15 +11,17 @@
  * The device key always travels on stdin, never as an argument (`ps` shows
  * arguments to every user). Where none of these is available (a headless
  * server, a test run) the device key is a 0600 file next to the vault, and
- * Conch says so in plain words rather than pretending.
+ * Conch says so in plain words rather than pretending. A file key moves into
+ * the operating system's store once it's there (`SettledKeystore`, ADR 0152).
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile, rm } from 'node:fs/promises';
+import { access, readFile, rm } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { join } from 'node:path';
 
 import { writeFileAtomic } from '../lib/fs';
-import { findExecutable, run } from '../lib/proc';
+import { agentEnv, findExecutable, run } from '../lib/proc';
+import { Sealed, unwrapKey } from './crypto';
 
 export type KeystoreKind = 'keychain' | 'file';
 
@@ -31,6 +33,17 @@ export interface Keystore {
   store(key: Buffer): Promise<void>;
   forget(): Promise<void>;
 }
+
+/**
+ * The operating system's store, read without making a key (ADR 0152): the key, `undefined`
+ * when none is kept there, and a throw when the store can't be reached right now.
+ */
+export interface OsKeystore extends Keystore {
+  peek(): Promise<Buffer | undefined>;
+}
+
+/** Can't be reached right now: a locked or missing keyring, no session bus. */
+class Unreachable extends Error {}
 
 const SERVICE = 'Conch vault';
 const KEY_BYTES = 32;
@@ -55,8 +68,13 @@ export class FileKeystore implements Keystore {
     return join(this.dir, 'device.key');
   }
 
+  /** The key in the file, if there is one. */
+  peek(): Promise<Buffer | undefined> {
+    return readFile(this.#path, 'utf8').then(decodeKey, () => undefined);
+  }
+
   async deviceKey(): Promise<Buffer> {
-    const existing = await readFile(this.#path, 'utf8').then(decodeKey, () => undefined);
+    const existing = await this.peek();
     if (existing) return existing;
     const key = randomBytes(KEY_BYTES);
     await this.store(key);
@@ -73,7 +91,7 @@ export class FileKeystore implements Keystore {
 }
 
 /** macOS login Keychain. `security -i` reads its commands from stdin. */
-class MacKeychain implements Keystore {
+class MacKeychain implements OsKeystore {
   readonly kind = 'keychain' as const;
   constructor(
     private readonly security: string,
@@ -86,7 +104,14 @@ class MacKeychain implements Keystore {
       ['find-generic-password', '-s', SERVICE, '-a', this.account, '-w'],
       { timeout: 10_000 },
     );
-    return result.code === 0 ? decodeKey(result.stdout) : undefined;
+    if (result.code === 0) return decodeKey(result.stdout);
+    // 44: no such item. Anything else (a locked keychain, a dialog dismissed) can't be told.
+    if (result.code === 44) return undefined;
+    throw new Unreachable('The Keychain can’t be reached right now.');
+  }
+
+  peek(): Promise<Buffer | undefined> {
+    return this.#read();
   }
 
   async deviceKey(): Promise<Buffer> {
@@ -101,7 +126,7 @@ class MacKeychain implements Keystore {
     // Interactive mode: the secret is in the command text on stdin, not in argv.
     const command = `add-generic-password -U -s "${SERVICE}" -a "${this.account}" -l "${SERVICE}" -w ${key.toString('hex')}\n`;
     const result = await run(this.security, ['-i'], { input: command, timeout: 10_000 });
-    const back = await this.#read();
+    const back = await this.#read().catch(() => undefined);
     if (result.code !== 0 || !back?.equals(key))
       throw new Error('The Keychain wouldn’t keep the key for your passwords.');
   }
@@ -114,22 +139,33 @@ class MacKeychain implements Keystore {
 }
 
 /** Linux Secret Service. `secret-tool store` reads the secret from stdin. */
-class SecretService implements Keystore {
+class SecretService implements OsKeystore {
   readonly kind = 'keychain' as const;
   constructor(
     private readonly tool: string,
     private readonly account: string,
+    /** The session bus, found even where the variable isn't set (ADR 0152). */
+    private readonly bus: string,
   ) {}
+
+  get #env() {
+    return agentEnv({ DBUS_SESSION_BUS_ADDRESS: this.bus });
+  }
 
   async #read(): Promise<Buffer | undefined> {
     const result = await run(
       this.tool,
       ['lookup', 'service', 'conch-vault', 'account', this.account],
-      {
-        timeout: 10_000,
-      },
+      { timeout: 10_000, env: this.#env },
     );
-    return result.code === 0 ? decodeKey(result.stdout) : undefined;
+    if (result.code === 0) return decodeKey(result.stdout);
+    // Nothing kept is a quiet 1; a keyring that can't be reached says why.
+    if (!result.stderr.trim()) return undefined;
+    throw new Unreachable('The keyring can’t be reached right now.');
+  }
+
+  peek(): Promise<Buffer | undefined> {
+    return this.#read();
   }
 
   async deviceKey(): Promise<Buffer> {
@@ -144,9 +180,9 @@ class SecretService implements Keystore {
     await run(
       this.tool,
       ['store', `--label=${SERVICE}`, 'service', 'conch-vault', 'account', this.account],
-      { input: key.toString('hex'), timeout: 10_000 },
+      { input: key.toString('hex'), timeout: 10_000, env: this.#env },
     );
-    const back = await this.#read();
+    const back = await this.#read().catch(() => undefined);
     if (!back?.equals(key))
       throw new Error('The keyring wouldn’t keep the key for your passwords.');
   }
@@ -154,6 +190,7 @@ class SecretService implements Keystore {
   async forget(): Promise<void> {
     await run(this.tool, ['clear', 'service', 'conch-vault', 'account', this.account], {
       timeout: 10_000,
+      env: this.#env,
     });
   }
 }
@@ -174,7 +211,7 @@ $out = [Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, 'CurrentU
 [Convert]::ToBase64String($out)`;
 
 /** Windows DPAPI: only this Windows user can unwrap the blob. */
-class Dpapi implements Keystore {
+class Dpapi implements OsKeystore {
   readonly kind = 'keychain' as const;
   constructor(
     private readonly powershell: string,
@@ -194,16 +231,20 @@ class Dpapi implements Keystore {
     return result.code === 0 ? result.stdout.trim() : undefined;
   }
 
-  async deviceKey(): Promise<Buffer> {
+  async peek(): Promise<Buffer | undefined> {
     const blob = await readFile(this.#path, 'utf8').catch(() => undefined);
-    if (blob) {
-      const plain = await this.#ps(UNPROTECT, blob);
-      if (plain) {
-        const key = Buffer.from(plain, 'base64');
-        if (key.length === KEY_BYTES) return key;
-      }
-      throw new Error('Windows wouldn’t open the key for your passwords.');
+    if (!blob) return undefined;
+    const plain = await this.#ps(UNPROTECT, blob);
+    if (plain) {
+      const key = Buffer.from(plain, 'base64');
+      if (key.length === KEY_BYTES) return key;
     }
+    throw new Unreachable('Windows wouldn’t open the key for your passwords.');
+  }
+
+  async deviceKey(): Promise<Buffer> {
+    const existing = await this.peek();
+    if (existing) return existing;
     const key = randomBytes(KEY_BYTES);
     await this.store(key);
     return key;
@@ -218,6 +259,167 @@ class Dpapi implements Keystore {
   async forget(): Promise<void> {
     await rm(this.#path, { force: true });
   }
+}
+
+/** Says the key to this vault now lives with the operating system (ADR 0152). No secret in it. */
+const MOVED = 'device.moved';
+const MOVED_TEXT = 'The key to these passwords is kept by the operating system.\n';
+
+/** What `vault.json` says about its key: which keystore wrapped it, and the wrap to try a key on. */
+async function recorded(dir: string): Promise<{ kind?: KeystoreKind; wrap?: Sealed }> {
+  try {
+    const file = JSON.parse(await readFile(join(dir, 'vault.json'), 'utf8')) as {
+      keystore?: unknown;
+      wrap?: unknown;
+    };
+    const wrap = Sealed.safeParse(file.wrap);
+    return {
+      ...((file.keystore === 'file' || file.keystore === 'keychain') && { kind: file.keystore }),
+      ...(wrap.success && { wrap: wrap.data }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Whether this key opens the vault: `undefined` with no wrap to try it on (none yet, or locked). */
+function opens(key: Buffer, wrap: Sealed | undefined): boolean | undefined {
+  if (!wrap) return undefined;
+  try {
+    unwrapKey(key, wrap).fill(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The operating system's keystore, settled (ADR 0152): a key in the file moves into it the first
+ * time it's reachable, checked against the vault before the file goes; and while it can't be
+ * reached, a key that already lives there is never replaced by a new one in a file.
+ */
+export class SettledKeystore implements Keystore {
+  #kind: KeystoreKind | undefined;
+
+  constructor(
+    private readonly os: OsKeystore,
+    private readonly file: FileKeystore,
+    private readonly dir: string,
+    private readonly onMoved?: () => void,
+  ) {}
+
+  /** Where the key is, as of the last time it was read (the keychain until it's been read). */
+  get kind(): KeystoreKind {
+    return this.#kind ?? 'keychain';
+  }
+
+  /** Whether `kind` comes from reading the key, not a guess. */
+  get known(): boolean {
+    return this.#kind !== undefined;
+  }
+
+  get #marker() {
+    return join(this.dir, MOVED);
+  }
+
+  #moved(): Promise<boolean> {
+    return access(this.#marker).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  /** The file's key into the keyring: kept there and read back, then the file goes. */
+  async #move(key: Buffer): Promise<Buffer> {
+    try {
+      await this.os.store(key);
+      await writeFileAtomic(this.#marker, MOVED_TEXT, 0o600);
+      await this.file.forget();
+      this.#kind = 'keychain';
+      this.onMoved?.();
+    } catch {
+      // The keyring wouldn't keep it: the file still opens everything, as before.
+      this.#kind = 'file';
+    }
+    return key;
+  }
+
+  async deviceKey(): Promise<Buffer> {
+    const inFile = await this.file.peek();
+    let kept: Buffer | undefined;
+    try {
+      kept = await this.os.peek();
+    } catch {
+      if (inFile) {
+        this.#kind = 'file';
+        return inFile;
+      }
+      // The key lives in the keyring: a new one here would open nothing (ADR 0152).
+      if (await this.#moved())
+        throw new Error(
+          'The keyring that keeps the key to your passwords can’t be reached right now. Conch tries again by itself; unlocking the keyring brings them back.',
+        );
+      this.#kind = 'file';
+      return this.file.deviceKey();
+    }
+    if (inFile && kept && !inFile.equals(kept)) {
+      // Two keys: the one that opens the vault is the one, whichever place it's in.
+      const vault = await recorded(this.dir);
+      if (opens(inFile, vault.wrap) ?? vault.kind === 'file') return this.#move(inFile);
+      this.#kind = 'keychain';
+      return kept;
+    }
+    if (inFile) {
+      // A file key that doesn't open the vault isn't moved: it's left as it was found.
+      if (opens(inFile, (await recorded(this.dir)).wrap) === false) {
+        this.#kind = 'file';
+        return inFile;
+      }
+      return this.#move(inFile);
+    }
+    if (kept) {
+      this.#kind = 'keychain';
+      return kept;
+    }
+    const key = await this.os.deviceKey();
+    await writeFileAtomic(this.#marker, MOVED_TEXT, 0o600);
+    this.#kind = 'keychain';
+    return key;
+  }
+
+  async store(key: Buffer): Promise<void> {
+    const reachable = await this.os.peek().then(
+      () => true,
+      () => false,
+    );
+    if (!reachable) {
+      await this.file.store(key);
+      this.#kind = 'file';
+      return;
+    }
+    await this.os.store(key);
+    await writeFileAtomic(this.#marker, MOVED_TEXT, 0o600);
+    await this.file.forget();
+    this.#kind = 'keychain';
+  }
+
+  async forget(): Promise<void> {
+    await this.os.forget().catch(() => undefined);
+    await this.file.forget();
+    await rm(this.#marker, { force: true });
+  }
+}
+
+/** The person's session bus, where a service manager didn't pass it on (ADR 0152). */
+async function sessionBus(): Promise<string | undefined> {
+  if (process.env.DBUS_SESSION_BUS_ADDRESS) return process.env.DBUS_SESSION_BUS_ADDRESS;
+  const uid = process.getuid?.();
+  if (uid === undefined) return undefined;
+  const path = `/run/user/${uid}/bus`;
+  return access(path).then(
+    () => `unix:path=${path}`,
+    () => undefined,
+  );
 }
 
 /**
@@ -264,22 +466,25 @@ export async function chooseKeystore(
   dir: string,
   home: string,
   mode: 'auto' | 'file' = 'auto',
+  { onMoved }: { onMoved?: () => void } = {},
 ): Promise<Keystore> {
   const file = new FileKeystore(dir);
   if (mode === 'file') return file;
   const account = accountFor(home);
   const os = platform();
+  const settled = (store: OsKeystore) => new SettledKeystore(store, file, dir, onMoved);
   try {
     if (os === 'darwin') {
       const security = await findExecutable('security', { extraDirs: ['/usr/bin'] });
-      if (security) return new MacKeychain(security, account);
+      if (security) return settled(new MacKeychain(security, account));
     } else if (os === 'win32') {
       const powershell = await findExecutable('powershell');
-      if (powershell) return new Dpapi(powershell, dir);
+      if (powershell) return settled(new Dpapi(powershell, dir));
     } else {
       const tool = await findExecutable('secret-tool');
       // A Secret Service needs a session bus; a headless server has none.
-      if (tool && process.env.DBUS_SESSION_BUS_ADDRESS) return new SecretService(tool, account);
+      const bus = tool ? await sessionBus() : undefined;
+      if (tool && bus) return settled(new SecretService(tool, account, bus));
     }
   } catch {
     // Fall through to the file.
