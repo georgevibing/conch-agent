@@ -50,14 +50,13 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
   await expect(page.getByText('I found 3 results').first()).toBeVisible();
   await expect(page.getByText('Notion', { exact: true }).first()).toBeVisible();
 
-  // Changing something asks first, in plain words.
+  // A change the person asked for by name goes in Auto without a card (ADR 0128, 2026-10-27).
   await page.getByRole('textbox').first().fill('create a page in notion');
   await page.keyboard.press('Enter');
+  await expect(page.getByText('I created Notes from Conch')).toBeVisible();
   await expect(
     page.getByRole('group', { name: /asks first: Create a page in Notion/ }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  await expect(page.getByText('I created Notes from Conch')).toBeVisible();
+  ).toHaveCount(0);
 
   // The sign-in stops working: the chat says so, with the fix right there.
   const list = await (await request.get('/api/integrations')).json();
