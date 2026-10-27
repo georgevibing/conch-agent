@@ -207,9 +207,46 @@ const PLAIN = new Set([
 ]);
 
 /**
+ * Brands that are everyday words, and banks (2026-10-27): "chase down the invoice" isn't
+ * "sign in to Chase". Naming one lifts a sign-in only beside a word for signing in (or the
+ * saved item's own title, which the caller checks).
+ */
+const EVERYDAY = new Set([
+  'chase',
+  'target',
+  'discover',
+  'square',
+  'apple',
+  'box',
+  'notion',
+  'ally',
+  'capital',
+  'citizens',
+  'wise',
+  'chime',
+  'current',
+  'monzo',
+  'revolut',
+  'schwab',
+  'fidelity',
+  'vanguard',
+  'citi',
+  'wells',
+  'barclays',
+  'hsbc',
+  'santander',
+  'paypal',
+  'venmo',
+  'coinbase',
+  'kraken',
+  'robinhood',
+]);
+
+/**
  * The person's message names this site, by its brand as a word or by its address: "order the
  * ink on Amazon", "post this on LinkedIn", "cancel my Netflix". Signing in there is part of
- * what they asked for; the fill still only goes to the item's own site.
+ * what they asked for; the fill still only goes to the item's own site. A brand that's an
+ * everyday word, or a bank's, also needs a word for signing in.
  */
 export function namesSite(message: string, site: string): boolean {
   const folded = message
@@ -219,7 +256,8 @@ export function namesSite(message: string, site: string): boolean {
   if (folded.includes(site.toLowerCase())) return true;
   const brand = brandOf(site);
   if (!brand || PLAIN.has(brand)) return false;
-  return new Set(folded.split(/[^\p{L}\p{N}]+/u)).has(brand);
+  if (!new Set(folded.split(/[^\p{L}\p{N}]+/u)).has(brand)) return false;
+  return !EVERYDAY.has(brand) || SIGN_IN.test(folded);
 }
 
 /**
