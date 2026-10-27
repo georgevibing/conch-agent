@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { chunkFor, estimateTokens, SUMMARY_SYSTEM } from './context';
 import {
+  appToolsNamed,
   findToolsSpec,
   foundText,
   isLean,
@@ -141,6 +142,31 @@ describe('lean mode (ADR 0086)', () => {
         { name: 'Read', display: 'Read', description: 'Read a text file in the work folder.' },
       ])[0],
     ).toBe('mcp__conch__browser_open');
+  });
+
+  it('loads a few tools of an app the person names, the best for what they asked first', () => {
+    const app = (server: string, tool: string, description: string) => ({
+      name: `${server}__${tool}`,
+      display: `mcp__${server}__${tool}`,
+      description,
+    });
+    const tools = [
+      ...TOOLS,
+      app('supabase', 'list_projects', 'List your projects.'),
+      app('supabase', 'get_logs', 'Read the logs of a service.'),
+      app('supabase', 'execute_sql', 'Run a SQL query against the database.'),
+      app('supabase', 'get_advisors', 'Security and performance advice.'),
+      app('supabase', 'deploy_function', 'Deploy an edge function.'),
+      app('cloudflare-2', 'execute', 'Run code against the Cloudflare API.'),
+    ];
+    const picked = appToolsNamed('check Supabase for slow queries in the logs', tools);
+    expect(picked).toHaveLength(3);
+    expect(picked).toEqual(expect.arrayContaining(['supabase__get_logs', 'supabase__execute_sql']));
+    // A second copy of an app is the same app; nothing named, nothing loaded.
+    expect(appToolsNamed('look at cloudflare', tools)).toEqual(['cloudflare-2__execute']);
+    expect(appToolsNamed('what did I save earlier', tools)).toEqual([]);
+    // Conch's own tools aren't an app.
+    expect(appToolsNamed('ask conch to remember this', tools)).toEqual([]);
   });
 
   it('answers with each tool’s schema, and says plainly when nothing matched', () => {

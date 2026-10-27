@@ -199,6 +199,7 @@ import { setToolsHome } from './setup/release';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
+import { mailFiles } from './google/mail-files';
 import { GoogleService } from './google/service';
 import { GoogleStore } from './google/store';
 import { googleTools } from './google/tools';
@@ -1469,8 +1470,14 @@ export class Services {
                   {
                     // Allow or Ask, as the person set "Send an email" and "Save a draft" (ADR 0104).
                     chosen: (name) => this.googleApps.chosen(name),
-                    // An email's files: this chat's own, by id (as message_user sends them).
-                    files: (ids) => filesOf(this.attachments, ids, ctx.conversationId),
+                    // An email's files: this chat's own by id (as message_user sends them), or
+                    // one in its work folder by path, read before the card shows it.
+                    files: (refs) =>
+                      mailFiles(refs, {
+                        chat: (ids) => filesOf(this.attachments, ids, ctx.conversationId),
+                        folder: () => this.#fileAccess(ctx),
+                        signal: ctx.signal,
+                      }),
                   },
                 ),
                 ctx,

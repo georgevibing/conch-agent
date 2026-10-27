@@ -84,3 +84,11 @@ line now says, when the browser is there, that Conch's browser reaches the web.
   description share no word with how someone asks for it needs `find_tools` with
   other words. A server that hides its window is assumed big until it says "too
   long".
+
+## Addendum, 2026-10-27: an app named is an app loaded
+
+A small model told "check Supabase for slow queries" used to spend a `find_tools` round, or
+say it couldn't. A lean turn now also loads the tools of an app the person's message names
+(`appToolsNamed`, the server in `mcp__<server>__…`, a second copy such as `github-2` the same
+app), best for the rest of the message first. With the name guesses, at most `GUESS_LIMIT` (3)
+are loaded, inside `LOADED_MAX`; Conch's own tools are never "an app".

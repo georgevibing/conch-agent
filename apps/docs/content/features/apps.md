@@ -217,7 +217,7 @@ If a popup is blocked, press **Open Google sign-in**. A sign-in expires after te
 
 **Read & write** adds, shown to you first:
 
-- **Gmail:** save a draft or send an email or reply, with files from the chat up to about 18 MB. It sends from the account you name, otherwise the first that can, shown under **From**. Replies keep the thread, reply address and subject.
+- **Gmail:** save a draft or send an email or reply, with files from the chat or from its work folder up to about 18 MB, each shown with its size before it goes. It sends from the account you name, otherwise the first that can, shown under **From**. Replies keep the thread, reply address and subject. No labels, deleting or settings.
 - **Gmail, tidying:** archive, label, mark read or unread, or move to the Trash, up to 500 emails at once; the card says how many. The Trash keeps them for 30 days and they can be put back. Nothing is deleted for good, and no settings change. Google sign-ins made before this asks Google once more: **Sign in again** on the account.
 - **Gmail, unsubscribing:** leaves a mailing list the way its own email offers, in one click or with the email the list asks for, never by a link in the email's text. A list that only has a web page is named, for you or the browser.
 - **Google Calendar:** add, change or delete an event, or accept, decline or say maybe to an invitation. Guests are emailed only when you say so; answering an invitation tells its organizer.
