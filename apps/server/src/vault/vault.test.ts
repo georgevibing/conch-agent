@@ -571,7 +571,10 @@ describe('Repair everything', () => {
     expect(items[0]).toMatchObject({
       id: 'passwords:vault',
       state: 'ok',
-      message: '1 saved, encrypted on this computer.',
+      // The key is a file in tests: said plainly, with the lock offered (ADR 0152).
+      message:
+        '1 saved, encrypted, with the key in a file on this computer: any program running as you could open them. Turn on the lock to need your password after a restart.',
+      action: { kind: 'open', place: 'passwords' },
     });
     expect(items.find((i) => i.id === 'passwords:bitwarden')).toMatchObject({
       state: 'needs-you',

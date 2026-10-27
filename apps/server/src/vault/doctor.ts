@@ -72,12 +72,16 @@ export function vaultCheck(vault: VaultService): DoctorCheck {
       else
         out.push(
           item('vault', TITLE, {
-            // A key in a file isn't a warning: without a keychain there's nothing to do about it.
+            // A key in a file isn't a warning, but it's said plainly, with the one thing that
+            // keeps another program running as you out: the lock (ADR 0152).
             state: 'ok',
             message:
-              status.protection === 'file'
-                ? `${count} saved, encrypted on this computer.`
-                : `${count} saved, encrypted, with the key in this computer’s keychain.`,
+              status.protection !== 'file'
+                ? `${count} saved, encrypted, with the key in this computer’s keychain.`
+                : status.lock.enabled
+                  ? `${count} saved, encrypted, and locked with your password.`
+                  : `${count} saved, encrypted, with the key in a file on this computer: any program running as you could open them. Turn on the lock to need your password after a restart.`,
+            ...(status.protection === 'file' && !status.lock.enabled && { action: open }),
           }),
         );
       for (const source of status.sources) {
