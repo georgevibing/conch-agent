@@ -88,6 +88,25 @@ async function until<T>(read: () => Promise<T>, matches: (value: T) => boolean) 
 }
 
 describe('managed commands', () => {
+  it('runs to the end with wait, returning what it printed, as a shell would (ADR 0151)', async () => {
+    const { run, ctx } = await setup();
+    const taint = vi.fn();
+    const result = JSON.parse(
+      String(
+        await run(
+          'process_start',
+          { command: 'echo built && echo https://news.example/x', timeout_ms: 5000, wait: true },
+          { ...ctx, taint },
+        ),
+      ),
+    ) as { status: string; output: string; exitCode: number | null };
+    expect(result.status).toBe('exited');
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('built');
+    // What it printed marks the chat as process_read would.
+    expect(taint).toHaveBeenCalledWith({ kind: 'download', label: 'news.example' });
+  });
+
   it('marks the chat by what a command reads, not by every output (ADR 0028, ADR 0117)', async () => {
     const { start, read, ctx } = await setup();
     const taint = vi.fn();

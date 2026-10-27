@@ -185,10 +185,16 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
         return error instanceof VaultError ? error.message : 'That item couldn’t be read.';
       }
       if (policy.ask && !consented(ctx, policy.title, { grave: policy.grave })) {
+        // A routine has nobody to ask: only an item set to be read without asking goes.
+        if (ctx.unattended && !ctx.attended)
+          return `Nobody is here to agree to reading “${policy.title}”, so this run can’t. Do it without it, or leave it for the user.`;
+        // Someone else's words in the chat: the question goes to the person, never to them.
+        const tainted = ctx.untrusted?.();
         const decision = await ctx.ask({
           toolName: 'passwords_read',
           input: { item: policy.title, field: policy.field.label },
           summary: `read the ${policy.field.label.toLowerCase()} of “${policy.title}”`,
+          ...(tainted && { taint: tainted }),
           vault: {
             action: 'read',
             itemTitle: policy.title,

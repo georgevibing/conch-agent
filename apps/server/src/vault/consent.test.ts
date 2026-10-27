@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { consented, names } from './consent';
+import { consented, named, names } from './consent';
 
 describe('the person naming a saved item', () => {
   it('reads every word of the title, in any case and order', () => {
@@ -29,5 +29,31 @@ describe('no card for a saved item', () => {
   it('in Full trust, grave or not', () => {
     const trust = { permissionMode: 'bypassPermissions' as const, fullTrust: () => true };
     expect(consented(trust, 'Travel Visa', { grave: true })).toBe(true);
+  });
+});
+
+describe('naming a key for a command, unseen', () => {
+  it('takes a word of the title beside a word for a secret', () => {
+    expect(named('use my saved Stripe key to list charges', 'Stripe live key')).toBe(true);
+    expect(named('query it with the cloudflare token', 'CLOUDFLARE_API_TOKEN')).toBe(true);
+  });
+
+  it('takes a secret word of the title beside one saying they keep it', () => {
+    expect(named('clone the private repo with the PAT I saved', 'Gh pat giotiskl')).toBe(true);
+    expect(named('use the token in Passwords', 'Vercel token')).toBe(true);
+  });
+
+  it('needs more than a passing word', () => {
+    expect(named('check stripe for last week', 'Stripe live key')).toBe(false);
+    expect(named('use a key', 'Stripe live key')).toBe(false);
+    // Reading a value into the model keeps the strict rule.
+    expect(names('use my saved Stripe key', 'Stripe live key')).toBe(false);
+  });
+
+  it('a task from a watched chat counts as answered, a routine doesn’t', () => {
+    const said = () => ['use the gh pat giotiskl'];
+    const task = { permissionMode: 'auto' as const, unattended: true, attended: true, said };
+    expect(consented(task, 'Gh pat giotiskl')).toBe(true);
+    expect(consented({ ...task, attended: false }, 'Gh pat giotiskl')).toBe(false);
   });
 });

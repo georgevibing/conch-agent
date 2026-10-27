@@ -19,6 +19,7 @@ function fakeVault({ ask = true }: { ask?: boolean } = {}) {
   const allowRead = vi.fn(async () => {});
   const vault = {
     ensureOpen: async () => true,
+    isLocked: async () => false,
     readPolicy: async (item: string) => {
       if (item !== 'pw_gh') throw new Error('There’s no saved item with that id.');
       return {
@@ -182,6 +183,71 @@ describe('a saved key in a command (ADR 0151)', () => {
     const always = context({ ask: async () => 'allow-always' });
     await secrets.environment(always.ctx, ref, { command: 'git clone x', tool: 'Bash' });
     expect(allowRead).toHaveBeenCalledWith('pw_gh');
+  });
+
+  it('asks a task from a watched chat, or your own chat app, as a chat does', async () => {
+    const { vault } = fakeVault();
+    const secrets = new CommandSecrets(vault);
+    const ref = [{ name: 'GH_TOKEN', item: 'pw_gh' }];
+    const run = { command: 'gh api user', tool: 'process_start' };
+    const task = context({ unattended: true, attended: true });
+    expect((await secrets.environment(task.ctx, ref, run)).env).toEqual({ GH_TOKEN: TOKEN });
+    expect(task.asked).toHaveLength(1);
+    // The person's words from the chat it came from count, through their marking.
+    const named = context({
+      conversationId: 'c2',
+      unattended: true,
+      attended: true,
+      permissionMode: 'auto',
+      said: () => ['[Said in the chat this task came from] clone it with the gh pat giotiskl'],
+    });
+    await secrets.environment(named.ctx, ref, run);
+    expect(named.asked).toHaveLength(0);
+  });
+
+  it('gives a routine only an item set to be used without asking, and never after reading', async () => {
+    const ref = [{ name: 'GH_TOKEN', item: 'pw_gh' }];
+    const run = { command: 'gh api user', tool: 'process_start' };
+    const free = new CommandSecrets(fakeVault({ ask: false }).vault);
+    const routine = context({ unattended: true });
+    expect((await free.environment(routine.ctx, ref, run)).env).toEqual({ GH_TOKEN: TOKEN });
+    expect(routine.asked).toHaveLength(0);
+    const read = context({ unattended: true, untrusted: () => 'I read an email.' });
+    await expect(free.environment(read.ctx, ref, run)).rejects.toThrow(/Nobody is here/);
+  });
+
+  it('remembers a yes from the chat’s own log, across a restart or another provider', async () => {
+    const secrets = new CommandSecrets(fakeVault().vault);
+    const seen: unknown[] = [];
+    const { ctx, asked } = context({
+      answeredBefore: (q) => {
+        seen.push(q);
+        return true;
+      },
+    });
+    await secrets.environment(ctx, [{ name: 'GH_TOKEN', item: 'pw_gh' }], {
+      command: 'gh api user',
+      tool: 'process_start',
+    });
+    expect(asked).toHaveLength(0);
+    expect(seen[0]).toEqual({
+      itemTitle: 'Gh pat giotiskl',
+      fieldLabel: 'Key',
+      envName: 'GH_TOKEN',
+    });
+  });
+
+  it('takes “the PAT I saved” as naming it, for a command only', async () => {
+    const secrets = new CommandSecrets(fakeVault().vault);
+    const { ctx, asked } = context({
+      permissionMode: 'auto',
+      said: () => ['clone the private repo with the PAT I saved'],
+    });
+    await secrets.environment(ctx, [{ name: 'GH_TOKEN', item: 'pw_gh' }], {
+      command: 'gh repo clone x',
+      tool: 'process_start',
+    });
+    expect(asked).toHaveLength(0);
   });
 
   it('gives an unattended run nothing, and refuses bad names before asking', async () => {
