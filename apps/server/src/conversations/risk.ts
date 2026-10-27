@@ -1070,6 +1070,37 @@ function hostOf(word: string): string | undefined {
   return m?.[1]?.toLowerCase();
 }
 
+/**
+ * A host as a person names it (2026-10-27): the address itself, or the brand its registered
+ * domain carries ("slack" names hooks.slack.com). Only that main label counts, never a label in
+ * front of it, so "slack" doesn't name slack.evil.com.
+ */
+function hostName(host: string | undefined): RegExp | undefined {
+  if (!host) return undefined;
+  const labels = host.split('.');
+  const second = /^(?:co|com|org|net|ac|gov|edu)$/.test(labels.at(-2) ?? '') && labels.length > 2;
+  const brand = labels.at(second ? -3 : -2);
+  const quoted = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const also = brand ? BRAND_ALIASES[brand] : undefined;
+  return brand && brand.length >= 3 && !/^(?:www|api|app)$/.test(brand)
+    ? new RegExp(`\\b(?:${quoted}|${brand}${also ? `|${also}` : ''})\\b`)
+    : new RegExp(`\\b${quoted}\\b`);
+}
+/** What people call a vendor besides its domain's name. */
+const BRAND_ALIASES: Readonly<Record<string, string>> = {
+  cloudflare: 'cf',
+  github: 'gh',
+  githubusercontent: 'github|gh',
+  amazonaws: 'aws|amazon',
+  googleapis: 'google|gcp|gcloud',
+};
+/** Changing something at a vendor the person named ("rotate the Cloudflare token"). */
+const VENDOR_CHANGE = stems(
+  'block|unblock|fix|updat|add|set|creat|chang|appl|configur|enabl|disabl|rotat|renew|refresh|regenerat|revok|turn\\s+(?:on|off)|whitelist|allowlist|purg',
+  ABROAD.update,
+  ABROAD.change,
+);
+
 interface Places {
   workspace: string;
   home: string;
@@ -1079,6 +1110,8 @@ interface Places {
   treeClean?: RiskContext['treeClean'];
   sameRemote?: RiskContext['sameRemote'];
   currentBranch?: RiskContext['currentBranch'];
+  /** A Stripe key that isn't a test one is set in front of a command (`STRIPE_API_KEY=… stripe …`). */
+  stripeLive?: boolean;
   secretNames?: readonly string[];
   /** How deep in a package script this part is: one level is read, no more. */
   depth?: number;
@@ -1241,7 +1274,7 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
     const mine = (branch: string | undefined) =>
       branch && branch === here && !PROTECTED_BRANCH.test(branch)
         ? new RegExp(
-            `\\b${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b|\\b(?:my|this|the|current|our|that)\\s+(?:own\\s+)?(?:feature\\s+|working\\s+|local\\s+)?branch\\b`,
+            `\\b${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b|\\b(?:my|this|the|current|our|that)\\s+(?:own\\s+)?(?:feature\\s+|working\\s+|local\\s+)?branch\\b|\\bforce[- ]?push\\w*\\b`,
           )
         : branch;
     if (deleting) {
@@ -1253,15 +1286,24 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         : moderate('history', `delete the ${named[0] ?? 'remote'} branch`, true, asks);
     }
     if (force || plus) {
+      // "Squash my last commits and push": a lease only replaces what this branch had.
+      const lease = flags.some((f) => /^--force-with-lease(?:=|$)/.test(f)) && !plus;
+      // On this branch, "squash my last commits and push" is the lease's own words.
+      const squashed = /\b(?:squash|amend|rebas|fixup|reword)\w*\b[^.!?\n]{0,60}\bpush/;
+      const verbs = stems(
+        'force[- ]?push|push\\w*\\s+(?:--force|-f)\\b|overwrit|rewrit',
+        ABROAD.forcePush,
+        ABROAD.overwrite,
+      );
+      const branch = mine(named[0]);
+      const leased = lease && named[0] === here && branch instanceof RegExp;
       const asks = own
-        ? wish(
-            stems(
-              'force[- ]?push|push\\w*\\s+(?:--force|-f)\\b|overwrit|rewrit',
-              ABROAD.forcePush,
-              ABROAD.overwrite,
-            ),
-            mine(named[0]),
-          )
+        ? leased
+          ? wish(
+              new RegExp(`${verbs.source}|${squashed.source}`),
+              new RegExp(`${branch.source}|${squashed.source}`),
+            )
+          : wish(verbs, branch)
         : NEVER;
       return shared
         ? severe(
@@ -1274,12 +1316,35 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
           )
         : moderate('history', `force-push over ${named[0] ?? 'a branch'}`, true, asks);
     }
-    return moderate(
-      'egress',
-      'push code to a remote',
-      true,
-      own ? wish(PUSH_WORDS, ...named.filter((r) => DEPLOY_BRANCH.test(r))) : NEVER,
-    );
+    // A branch that publishes or deploys when pushed to (`HEAD:production`, `gh-pages`): a
+    // deploy, asked for by naming it (2026-10-27).
+    const ships = named.find((r) => DEPLOY_BRANCH.test(r));
+    if (ships)
+      return severe(
+        'infra',
+        `deploy by pushing to ${ships}`,
+        true,
+        own ? wish(new RegExp(`${DEPLOY_WORDS.source}|${PUSH_WORDS.source}`), ships) : NEVER,
+      );
+    // A version tag ("release v1.2" pushes v1.2.0): the release words, and the version named.
+    const tag = named.find((r) => /^v?\d+(?:\.\d+){0,3}$/.test(r));
+    if (tag && own) {
+      const full = tag.replace(/^v/, '');
+      const short = full.replace(/(?:\.0)+$/, '');
+      const version = new RegExp(
+        `\\bv?(?:${[...new Set([full, short])].map((v) => v.replace(/\./g, '\\.')).join('|')})(?![\\d.]*\\d)`,
+      );
+      return moderate(
+        'egress',
+        'push a release tag to a remote',
+        true,
+        wish(
+          new RegExp(`${PUSH_WORDS.source}|${stems('release|tag', ABROAD.publish).source}`),
+          version,
+        ),
+      );
+    }
+    return moderate('egress', 'push code to a remote', true, own ? wish(PUSH_WORDS) : NEVER);
   }
   // Where pushes go: a new or repointed remote is a new way out, before reading too, unless
   // the person named it (Claude Code asks the same way).
@@ -1385,12 +1450,33 @@ const INFRA_CHANGE = stems(
   ABROAD.run,
 );
 
+/** Whether the work folder's Wrangler setup deploys nowhere but production (bounded read). */
+function onlyProduction(places: Places | undefined): boolean {
+  if (!places) return false;
+  for (const name of ['wrangler.toml', 'wrangler.jsonc', 'wrangler.json']) {
+    const file = join(places.workspace, name);
+    try {
+      if (!existsSync(file) || statSync(file).size > 256 * 1024) continue;
+      const text = readFileSync(file, 'utf8');
+      const envs = name.endsWith('.toml')
+        ? [...text.matchAll(/^\s*\[env\.([\w-]+)\]/gm)].map((m) => m[1] ?? '')
+        : [...text.matchAll(/"env"\s*:\s*\{([\s\S]*)/g)].flatMap((m) =>
+            [...(m[1] ?? '').matchAll(/^\s*"([\w-]+)"\s*:\s*\{/gm)].map((e) => e[1] ?? ''),
+          );
+      return envs.length > 0 && envs.every((env) => /^(?:prod|production|live)$/i.test(env));
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 /**
  * Cloud, clusters, infrastructure as code, deploys and databases: someone else's systems, so
  * a change asks before reading too, unless the person named it (ADR 0128); production must be
  * named as such. Claude Code blocks the same by default and clears them by name.
  */
-function infraRisk(part: string, prog: string, words: string[]): Risk | undefined {
+function infraRisk(part: string, prog: string, words: string[], places?: Places): Risk | undefined {
   // The words that say what to do, not the names of things or flags' values: `pod/delete-worker`,
   // `s3://my-delete-bucket`, `-out=apply.plan`, `--bucket my-delete-bucket` and `data-set` aren't verbs.
   const verbs = ` ${words
@@ -1485,8 +1571,13 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
     if (/\b(?:d1\s+execute|db\s+(?:query|execute))\b/.test(sub) && !/--local\b/.test(sub)) {
       if (DESTRUCTIVE_SQL.test(part))
         return severe('infra', 'delete data in a hosted database', true, destroy);
-      if (/\b(?:UPDATE|INSERT|ALTER|CREATE|REPLACE)\b/i.test(part))
-        return moderate('infra', 'change data in a hosted database', true, wish(INFRA_CHANGE));
+      if (/\b(?:UPDATE|INSERT|ALTER|CREATE|REPLACE|DELETE)\b/i.test(part))
+        return moderate(
+          'infra',
+          'change data in a hosted database',
+          true,
+          wish(new RegExp(`${INFRA_CHANGE.source}|${DESTROY_WORDS.source}`)),
+        );
       return undefined;
     }
     if (/\bsecret\s+(?:put|delete|bulk)\b|\benv\s+(?:add|rm|remove)\b/.test(sub))
@@ -1501,13 +1592,20 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
       /^\s(?:logs?|status|info|list|ls|apps|whoami|version|help|open|ps|releases|domains|inspect|describe|show|get|history|dashboard|monitor|tail|env|config)\s/.test(
         verbs,
       );
+    // Where `--prod` is the ordinary deploy (Vercel, Netlify), or production is the project's
+    // only place to deploy, "deploy it" names it (2026-10-27).
+    const only =
+      /^(?:vercel|netlify)$/.test(prog) || (prog === 'wrangler' && onlyProduction(places));
+    const ships = only
+      ? wish(DEPLOY_WORDS, new RegExp(`${PROD_WORDS.source}|\\b(?:${prog}|site|it|app|worker)\\b`))
+      : deploy;
     if (
       /\b(?:deploy|publish|up|release|promote)\b/.test(sub) ||
       (prod && !reads) ||
       (words.length === 1 && /^(?:vercel|surge)$/.test(prog))
     )
       return prod
-        ? severe('infra', 'deploy to production', true, deploy)
+        ? severe('infra', 'deploy to production', true, ships)
         : severe('infra', 'deploy where people can reach it', true, deploy);
   }
   if (prog === 'gh') {
@@ -1582,6 +1680,11 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         );
       if (carriesSecrets({ text: part }))
         return severe('exfiltration', 'post a key where people can read it', true, NEVER);
+      // When the person names an issue or a repository, it's that one (2026-10-27): "reply on
+      // issue 42" doesn't ask for a comment on 99 in another repository.
+      const number = /\b(?:issue|pr)\s+(?:comment|review)\s+#?(\d+)\b/.exec(sub)?.[1];
+      const repo = /(?:^|\s)(?:-R|--repo)[\s=]+([\w.-]+\/[\w.-]+)/.exec(` ${sub}`)?.[1];
+      const ISSUE = '(?:#|\\b(?:issue|pr|pull\\s+request|ticket)\\s+#?)\\d+';
       return moderate(
         'egress',
         'write on GitHub where other people read it',
@@ -1590,6 +1693,12 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
           new RegExp(
             `${SPEAK_WORDS.source}|${stems('review|approv|request\\s+changes|(?:open|file|create|raise|report)\\s+(?:an?\\s+|the\\s+)?(?:new\\s+)?(?:issue|bug)').source}`,
           ),
+          number &&
+            new RegExp(
+              `(?:#|\\b(?:issue|pr|pull\\s+request|ticket)\\s+#?)${number}\\b|^(?![\\s\\S]*${ISSUE})`,
+            ),
+          // Another repository is the person's to name, whatever else they said.
+          repo && new RegExp(`\\b${repo.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`),
         ),
       );
     }
@@ -1676,6 +1785,19 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
           stems('updat|chang|set\\s+(?:all|every)|reset|overwrit', ABROAD.update, ABROAD.change),
         ),
       );
+    // Some rows changed or deleted (2026-10-27): yours to ask for, asked after reading if not.
+    // Pruning what expired (`WHERE expires_at < now()`) is housekeeping, and stays routine.
+    const pruning =
+      /\bDELETE\s+FROM\b[^;]*\bWHERE\b[^;]*(?:\bnow\s*\(|\bcurrent_(?:date|timestamp)\b|\binterval\b|\bexpire|\bdatetime\s*\(|\bdate\s*\()/i.test(
+        part,
+      );
+    if (!prod && !pruning && /\b(?:DELETE\s+FROM|UPDATE)\b[^;]*\bWHERE\b/i.test(part))
+      return moderate(
+        'infra',
+        'change or delete rows in a database',
+        true,
+        wish(new RegExp(`${INFRA_CHANGE.source}|${DESTROY_WORDS.source}`)),
+      );
     if (prod && /\b(?:UPDATE|DELETE|INSERT|ALTER|CREATE|GRANT)\b/i.test(part))
       return severe(
         'infra',
@@ -1703,18 +1825,47 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
  * transfers, subscriptions. Stripe's CLI works on test data unless told `--live`, so only a
  * live call counts; it's asked for only by naming what it acts on (`ch_…`, `sub_…`).
  */
-function moneyRisk(prog: string, words: string[]): Risk | undefined {
+function moneyRisk(
+  prog: string,
+  words: string[],
+  part = words.join(' '),
+  places?: Places,
+): Risk | undefined {
+  // Stripe's own API, called by hand: the same money, whatever the program (2026-10-27).
+  if (
+    /^(?:curl|http|https|xh|httpie|wget)$/.test(prog) &&
+    /\bapi\.stripe\.com\/v1\/(?:refunds|charges|payouts|transfers|subscriptions|payment_intents|invoices|topups)\b/.test(
+      part,
+    ) &&
+    !/\b[sr]k_test_/.test(part) &&
+    (/\s(?:-d|--data\S*|-F|--form|--json)\b|\s-X\s*(?:POST|DELETE)\b|--request\s+(?:POST|DELETE)\b/i.test(
+      part,
+    ) ||
+      /^(?:POST|DELETE)$/i.test(words[1] ?? ''))
+  )
+    return stripeSpend(words);
   if (prog !== 'stripe') return undefined;
   const line = words.slice(1).join(' ');
   const moves =
     /\b(?:refunds|charges|payouts|transfers|subscriptions|subscription_schedules|payment_intents|invoices|topups)\s+(?:create|cancel|update|delete|pay|capture|void|finalize|confirm)\b/.test(
       line,
     ) || /^(?:post|delete)\s+\/v1\//i.test(line);
-  if (!moves || !/(?:^|\s)--live\b|\b[sr]k_live_/.test(line)) return undefined;
+  // Live when it says so, or signs in with a key that isn't a test one (2026-10-27).
+  const live =
+    /(?:^|\s)--live\b|\b[sr]k_live_/.test(line) ||
+    (!/\b[sr]k_test_/.test(line) && /(?:^|\s)--api-key(?:=|\s+)\S/.test(line)) ||
+    /\bSTRIPE_(?:API|SECRET)_KEY=(?!["']?[sr]k_test_)\S/.test(part) ||
+    places?.stripeLive === true;
+  if (!moves || !live) return undefined;
+  return stripeSpend(words);
+}
+
+/** Moving money with Stripe: asked for only by naming what it acts on (`ch_…`, `sub_…`). */
+function stripeSpend(words: string[]): Risk {
   const id = words
     .map(
       (w) =>
-        /(?:^|=)((?:ch|re|py|po|tr|sub|sub_sched|pi|in|cus|si|tu)_[A-Za-z0-9]{6,})/.exec(w)?.[1],
+        /(?:^|=|\/)((?:ch|re|py|po|tr|sub|sub_sched|pi|in|cus|si|tu)_[A-Za-z0-9]{6,})/.exec(w)?.[1],
     )
     .find(Boolean);
   return severe(
@@ -1738,24 +1889,91 @@ const KEY_HOMES =
   /(?:^|\.)(?:github\.com|githubusercontent\.com|ghcr\.io|gitlab\.com|bitbucket\.org|cloudflare\.com|stripe\.com|supabase\.co|supabase\.com|vercel\.com|netlify\.com|fly\.io|heroku\.com|amazonaws\.com|googleapis\.com|azure\.com|digitalocean\.com|openai\.com|anthropic\.com|npmjs\.org|npmjs\.com|pypi\.org|docker\.io|docker\.com|slack\.com|linear\.app|notion\.com|sentry\.io|twilio\.com|sendgrid\.com|resend\.com|hetzner\.cloud|render\.com|railway\.app|openrouter\.ai|huggingface\.co)$/;
 
 /**
- * A saved key put in a command that reaches somewhere other than its own service (2026-10-27):
- * the way a page that steers the model would take a key it can't see. Moderate and lasting, so
- * it asks after reading, unless the person named that address themselves.
+ * Each vendor's keys by the names people give them, and that vendor's own addresses
+ * (2026-10-27): a GitHub token belongs at GitHub, not at Slack, even though both are
+ * services keys usually go to.
  */
-function leaksKey(part: string, places: Places): Risk | undefined {
-  const keys = [...part.matchAll(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g)]
-    .map((m) => m[1] ?? '')
-    .filter((v) => places.secretNames?.includes(v) || KEY_VAR.test(v));
+const VENDOR_KEYS: readonly [RegExp, RegExp][] = [
+  [/^(?:GH|GITHUB)_/, /(?:^|\.)(?:github\.com|githubusercontent\.com|ghcr\.io)$/],
+  [/^(?:CF|CLOUDFLARE)_/, /(?:^|\.)cloudflare\.com$/],
+  [/^STRIPE_/, /(?:^|\.)stripe\.com$/],
+  [/^SUPABASE_/, /(?:^|\.)supabase\.(?:co|com)$/],
+  [/^VERCEL_/, /(?:^|\.)vercel\.com$/],
+  [/^NETLIFY_/, /(?:^|\.)netlify\.com$/],
+  [/^AWS_/, /(?:^|\.)amazonaws\.com$/],
+  [/^(?:GOOGLE|GCP|GCLOUD)_/, /(?:^|\.)googleapis\.com$/],
+  [/^OPENAI_/, /(?:^|\.)openai\.com$/],
+  [/^ANTHROPIC_/, /(?:^|\.)anthropic\.com$/],
+  [/^SLACK_/, /(?:^|\.)slack\.com$/],
+  [/^(?:NPM|NODE_AUTH)_/, /(?:^|\.)npmjs\.(?:org|com)$/],
+  [/^(?:GITLAB|GL)_/, /(?:^|\.)gitlab\.com$/],
+  [/^(?:HF|HUGGINGFACE)_/, /(?:^|\.)huggingface\.co$/],
+  [/^OPENROUTER_/, /(?:^|\.)openrouter\.ai$/],
+];
+/** Whether a key, by its variable's name, belongs at this host. */
+const homeOf = (variable: string, host: string) => {
+  const vendor = VENDOR_KEYS.find(([name]) => name.test(variable));
+  return vendor ? vendor[1].test(host) : KEY_HOMES.test(host);
+};
+/** Flags whose value is data sent on, not a way of signing in (`-H Authorization`, `-u`). */
+const DATA_FLAG =
+  /^(?:-d|--data(?:-raw|-binary|-urlencode|-ascii)?|-F|--form(?:-string)?|-f|--field|--raw-field|--body|--json|--input|--post-data)$/;
+
+/**
+ * A saved key put in a command that sends it somewhere other than its own service
+ * (2026-10-27): the way a page that steers the model would take a key it can't see. Moderate
+ * and lasting, so it asks after reading. Sent as what's said (a body, a field, a web address's
+ * query) it's a way out wherever it goes, and no words lift it; sent to sign in at another
+ * address, only naming that address does.
+ */
+function leaksKey(part: string, words: string[], places: Places): Risk | undefined {
+  const isKey = (v: string) => places.secretNames?.includes(v) || KEY_VAR.test(v);
+  const keysIn = (text: string) =>
+    [...text.matchAll(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g)].map((m) => m[1] ?? '').filter(isKey);
+  const keys = keysIn(part);
   if (!keys.length) return undefined;
-  const away = [...part.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/(?:[^@/\s'"]*@)?([^/:\s?#'"@]+)/gi)]
+  const hosts = [...part.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/(?:[^@/\s'"]*@)?([^/:\s?#'"@]+)/gi)]
     .map((m) => (m[1] ?? '').toLowerCase())
-    .filter((host) => !LOOPBACK.test(host) && !KEY_HOMES.test(host));
+    .filter((host) => !LOOPBACK.test(host));
+  // As data: the value of a data flag, a JSON body, or a web address's query.
+  const said = words.flatMap((w, i) => {
+    const flag = /^(--?[\w-]+)=(.*)$/.exec(w);
+    if (flag && DATA_FLAG.test(flag[1] ?? '')) return keysIn(flag[2] ?? '');
+    if (DATA_FLAG.test(words[i - 1] ?? '')) return keysIn(w);
+    if (/^["']?\{/.test(w) || /[?&][\w.-]+=[^\s]*\$/.test(w)) return keysIn(w);
+    return [];
+  });
+  // Its own service's sign-in exchange (`-d client_secret=$KEY` to its token address) is how
+  // that key is meant to be used.
+  const exchange =
+    hosts.length > 0 &&
+    said.every((key) => hosts.every((host) => homeOf(key, host))) &&
+    /\/(?:oauth\d?|token|tokens|login|auth)(?:[/?\s'"]|$)/i.test(part);
+  if (said.length && !exchange)
+    return moderate(
+      'exfiltration',
+      `send a saved key (${said[0]}) as data, where it can be read`,
+      true,
+      NEVER,
+    );
+  const away = hosts.filter((host) => !keys.every((key) => homeOf(key, host)));
   if (!away.length) return undefined;
+  // A Stripe key at Slack: one vendor's key at another's address is never how it's used.
+  const elsewhere = away.some(
+    (host) => KEY_HOMES.test(host) && keys.some((key) => VENDOR_KEYS.some(([n]) => n.test(key))),
+  );
+  if (elsewhere)
+    return moderate(
+      'exfiltration',
+      `send a saved key (${keys[0]}) to ${away[0]}, another service than its own`,
+      true,
+      NEVER,
+    );
   return moderate(
     'exfiltration',
     `send a saved key (${keys[0]}) to ${away[0]}, which isn’t that service’s own address`,
     true,
-    wish(WISHES.egress as RegExp, away[0]),
+    wish(WISHES.egress as RegExp, hostName(away[0])),
   );
 }
 
@@ -2382,7 +2600,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (prog !== 'net' || /\b(?:user|localgroup)\b/i.test(part))
       return severe('privilege', 'change who can use this computer or what they may do');
   }
-  const leak = leaksKey(part, places);
+  const leak = leaksKey(part, words, places);
   if (leak) return leak;
   if (prog === 'git') return gitRisk(words, places);
   if (prog === 'csrutil' && /\bdisable\b/.test(part))
@@ -2477,9 +2695,9 @@ function partRisk(part: string, places: Places): Risk | undefined {
     return severe('exfiltration', 'open this computer to the internet', false, tunnel);
   if (prog === 'ssh' && sshFlags(words).some((w) => /^-\w*R/.test(w)))
     return severe('exfiltration', 'open this computer to another one', false, tunnel);
-  const money = moneyRisk(prog, words);
+  const money = moneyRisk(prog, words, part, places);
   if (money) return money;
-  const infra = infraRisk(part, prog, words);
+  const infra = infraRisk(part, prog, words, places);
   if (infra) return infra;
   const publish = publishRisk(prog, words);
   if (publish) return publish;
@@ -2506,7 +2724,15 @@ function partRisk(part: string, places: Places): Risk | undefined {
       return host?.includes('.') ? host.toLowerCase() : undefined;
     })
     .find(Boolean);
-  const sends = wish(WISHES.egress as RegExp, to);
+  // A vendor's own API, named by the person with what to change there, is theirs to ask for
+  // (2026-10-27): "rotate the Cloudflare token" with `curl -X PUT api.cloudflare.com/…`.
+  const vendor = to !== undefined && KEY_HOMES.test(to);
+  const sends = wish(
+    vendor
+      ? new RegExp(`${(WISHES.egress as RegExp).source}|${VENDOR_CHANGE.source}`)
+      : (WISHES.egress as RegExp),
+    hostName(to),
+  );
   if (NETWORK.test(prog)) {
     // What a command prints, put in an address or a name to look up: a way out for anything.
     if (/\$\(|`/.test(part))
@@ -2579,6 +2805,8 @@ export function commandRisk(command: string, context: RiskContext, depth = 0): R
     ...(context.currentBranch && { currentBranch: context.currentBranch }),
     ...(context.secretNames?.length && { secretNames: context.secretNames }),
     ...(depth > 0 && { depth }),
+    // Unwrapping takes `VAR=…` off each part, so what it said is read from the whole line.
+    ...(/\bSTRIPE_(?:API|SECRET)_KEY=(?!["']?[sr]k_test_)\S/.test(command) && { stripeLive: true }),
   };
   const risks: (Risk | undefined)[] = [];
   for (const script of scriptsOf(command)) {
