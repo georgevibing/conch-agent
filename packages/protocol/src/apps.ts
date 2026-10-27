@@ -95,8 +95,12 @@ export function appsModel(
 
 /** Something a message needs that a chat-only model can't use: an app, or a skill's tools. */
 export const AppNeed = z.object({
-  kind: z.enum(['app', 'skill']),
-  /** The app's or the skill's name, as people know it. */
+  /**
+   * An app, a skill's tools, or (2026-10-27) a long job for a model that calls tools only in
+   * words: one with native tool calls does it better, so it's offered once per chat.
+   */
+  kind: z.enum(['app', 'skill', 'job']),
+  /** The app's or the skill's name, as people know it ("a long job" for a job). */
   name: z.string().max(200),
   /** The catalog entry, for its mark. */
   catalogId: z.string().max(100).optional(),

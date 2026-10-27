@@ -59,6 +59,16 @@ export const ASkill: Story = {
   args: { needs: [{ name: 'Weekly review', kind: 'skill' }] },
 };
 
+/** A job of many steps for a model that calls tools only in words: one offer a chat. */
+export const ALongJob: Story = {
+  name: 'A long job',
+  args: { needs: [{ name: 'a long job', kind: 'job' }], switchTo: { label: 'GPT-6.1' } },
+};
+
+export const KeptForALongJob: Story = {
+  args: { needs: [{ name: 'a long job', kind: 'job' }], state: 'answered' },
+};
+
 /** No model you set up can use apps: one next step. */
 export const NoneCan: Story = {
   args: { switchTo: undefined, onConnect: () => {} },
