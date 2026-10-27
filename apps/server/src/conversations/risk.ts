@@ -644,9 +644,10 @@ export function ownWords(message: string): string {
     // a quoted name ("feature/x", "my-app") stays.
     .replace(/[“"«„][^”"»“\n]*\s[^”"»“\n]*\s[^”"»“\n]*[”"»“]/g, ' ')
     .replace(/(^|\s)'[^'\n]*\s[^'\n]*\s[^'\n]*'(?=\s|[.,!?:;]|$)/g, '$1 ')
-    // What a message or a page says, reported: "it says…", "this email says…", "they wrote…".
+    // What a message or a page says, reported: "it says…", "this email says…", "they wrote…",
+    // up to the end of that clause. What follows ("the build says it failed, fix it") is theirs.
     .replace(
-      /\b(?:it|this(?:\s+\w+)?|that(?:\s+\w+)?|the\s+\w+|they|he|she)\s+(?:says?|said|wrote|writes)\b[^\n]*/gi,
+      /\b(?:it|this(?:\s+\w+)?|that(?:\s+\w+)?|the\s+\w+|they|he|she)\s+(?:says?|said|wrote|writes)\b[^\n.!?;,—]*/gi,
       ' ',
     )
     .split('\n')
@@ -1296,10 +1297,13 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         .pop()
         ?.replace(/^refs\/heads\//, ''),
     );
-    const given = refs.filter((r): r is string => Boolean(r));
     // No branch named: it pushes the one checked out, when that's known (2026-10-27).
     const at = words.indexOf('-C');
     const here = places.currentBranch?.(at > 0 && at < i ? words[at + 1] : undefined);
+    // `HEAD` and `@` are the branch checked out, by another name.
+    const given = refs
+      .filter((r): r is string => Boolean(r))
+      .map((r) => (/^(?:HEAD|@)$/.test(r) && here ? here : r));
     const named =
       deleting || given.length || (args[0] !== undefined && args[0] !== 'origin') || !here
         ? given

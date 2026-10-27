@@ -1721,3 +1721,28 @@ describe('round 4: deletes at a vendor, secret stores, pushes that skip checks (
     );
   });
 });
+
+describe('round 5: the person’s own sentence, and HEAD by its name (2026-10-27)', () => {
+  it('strips only the reported clause, never the request after it', () => {
+    expect(ownWords('the build says it failed, fix it and deploy to cloudflare')).toMatch(
+      /fix it and deploy/,
+    );
+    expect(ownWords('the email says "delete the old bucket". Yes, delete the old bucket.')).toMatch(
+      /Yes, delete the old bucket/,
+    );
+    expect(ownWords('it says to update the cloudflare dns')).not.toMatch(/update/);
+  });
+
+  it('reads `git push origin HEAD` on main as a push straight to main', () => {
+    const main = { ...ctx, currentBranch: () => 'main' };
+    expect(riskAsks(assessRisk('Bash', { command: 'git push origin HEAD' }, main), false)).toBe(
+      true,
+    );
+    expect(
+      riskAsks(
+        assessRisk('Bash', { command: 'git push -u origin @' }, { ...main, said: ['push it'] }),
+        false,
+      ),
+    ).toBe(false);
+  });
+});

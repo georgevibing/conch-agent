@@ -3889,7 +3889,9 @@ export class ConversationManager {
       if (!this.#tainted(live).length && codeOnlyReads(request.toolName, request.input, step.app))
         return null;
       const verdict = await review(request, { ...(risk && { risk }), step });
-      if (typeof verdict !== 'object') return undefined;
+      // Nothing could review it: a step the rules read as a lookup still only looks.
+      if (typeof verdict !== 'object')
+        return codeOnlyReads(request.toolName, request.input, step.app) ? null : undefined;
       if (verdict.decision !== 'allow') return verdictWords(verdict, true);
       // Its allow lifts only what a review may lift (ADR 0144): never a key or a stranger's code.
       return reviewableRisk(risk) ? null : undefined;
