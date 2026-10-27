@@ -1370,6 +1370,15 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         ),
       );
     }
+    // Skipping the repository's own checks on the way to a shared branch: the person's to ask
+    // for, before reading too (2026-10-27, round 4). "Push", "ship it", "push to main" still do.
+    if (flags.includes('--no-verify') && named.some((r) => PROTECTED_BRANCH.test(r)))
+      return severe(
+        'history',
+        `push straight to ${named.find((r) => PROTECTED_BRANCH.test(r))}, skipping its checks (--no-verify)`,
+        true,
+        own ? wish(PUSH_WORDS) : NEVER,
+      );
     return moderate('egress', 'push code to a remote', true, own ? wish(PUSH_WORDS) : NEVER);
   }
   // Where pushes go: a new or repointed remote is a new way out, before reading too, unless
@@ -1606,13 +1615,6 @@ function infraRisk(part: string, prog: string, words: string[], places?: Places)
         );
       return undefined;
     }
-    if (/\bsecret\s+(?:put|delete|bulk)\b|\benv\s+(?:add|rm|remove)\b/.test(sub))
-      return severe(
-        'infra',
-        'change the secrets a deployed app runs with',
-        true,
-        wish(stems('secret|key|token|env|variable', ABROAD.secret)),
-      );
     // Reading what's there (`fly logs -a api-prod`) changes nothing, production or not.
     const reads =
       /^\s(?:logs?|status|info|list|ls|apps|whoami|version|help|open|ps|releases|domains|inspect|describe|show|get|history|dashboard|monitor|tail|env|config)\s/.test(
@@ -1658,14 +1660,14 @@ function infraRisk(part: string, prog: string, words: string[], places?: Places)
           );
     }
     if (
-      /\b(?:repo\s+delete|release\s+delete|secret\s+(?:set|delete)|variable\s+set)\b/.test(sub) ||
+      /\b(?:repo\s+delete|release\s+delete)\b/.test(sub) ||
       /\bapi\b.*(?:\s(?:-X|--method)\s*=?\s*DELETE\b)/i.test(` ${sub}`)
     )
       return severe(
         'infra',
-        'delete a repository or change its secrets',
+        'delete a repository or a release',
         true,
-        wish(stems('delet|remov|secret|variable', ABROAD.delete, ABROAD.secret)),
+        wish(stems('delet|remov', ABROAD.delete)),
       );
     if (
       /\brepo\s+(?:edit\b.*--visibility\s*=?\s*public|create\b.*--public)|gist\s+create\b.*--public/.test(
@@ -1686,6 +1688,16 @@ function infraRisk(part: string, prog: string, words: string[], places?: Places)
         'change who can push or what protects a branch',
         true,
         wish(GRANT_WORDS),
+      );
+    // Which branch is the default: "rename the default branch to trunk" (2026-10-27, round 4).
+    if (/\bapi\b/.test(sub) && /\bdefault_branch=/.test(sub))
+      return moderate(
+        'history',
+        'change the repository’s default branch',
+        true,
+        wish(
+          stems('renam|default\\s+branch|set\\s+(?:the\\s+)?default|switch\\s+(?:the\\s+)?default'),
+        ),
       );
     // A comment or a review in the person's name where others read it (2026-10-27). A new issue
     // or pull request of the repository's own stays routine, as its corpus says.
@@ -2000,6 +2012,47 @@ function leaksKey(part: string, words: string[], places: Places): Risk | undefin
     `send a saved key (${keys[0]}) to ${away[0]}, which isn’t that service’s own address`,
     true,
     wish(WISHES.egress as RegExp, hostName(away[0])),
+  );
+}
+
+/** What a deployed app's secret store is called, per program, and the flags that pick its target. */
+const SECRET_STORES: readonly [RegExp, RegExp, RegExp | undefined][] = [
+  [
+    /^gh$/,
+    /^(?:secret\s+(?:set|delete|remove)|variable\s+(?:set|delete))\b/,
+    /^(?:-R|--repo|-o|--org)$/,
+  ],
+  [/^wrangler$/, /^secret\s+(?:put|delete|bulk)\b/, /^--name$/],
+  [/^vercel$/, /^env\s+(?:add|rm|remove)\b/, /^--scope$/],
+  [/^(?:netlify|netlify-cli)$/, /^env:(?:set|unset|import)\b/, /^--site$/],
+  [/^(?:fly|flyctl)$/, /^secrets\s+(?:set|unset|import)\b/, /^(?:-a|--app)$/],
+  [/^heroku$/, /^config:(?:set|unset|add|remove)\b/, /^(?:-a|--app)$/],
+  [/^supabase$/, /^secrets\s+(?:set|unset)\b/, /^--project-ref$/],
+  [/^railway$/, /^variables?\b.*(?:--set|\bset\b|\bdelete\b)/, /^(?:-s|--service)$/],
+];
+
+/**
+ * Changing the secrets a deployed app runs with (`gh secret set`, `wrangler secret put`,
+ * `fly secrets set`…), one rule for every vendor (2026-10-27, round 4). The key it carries is
+ * used there, not sent away, so the leak check stays out. The person's words lift it only for
+ * the folder's own app, or for the target they named (`-R`, `-a`, `--project-ref`): a steered
+ * `gh secret set TOKEN -R someone/else` is never theirs.
+ */
+function secretStoreRisk(prog: string, words: string[]): Risk | undefined {
+  const rest = words.slice(1);
+  const sub = rest.filter((w) => !w.startsWith('-')).join(' ');
+  const store = SECRET_STORES.find(([name, verbs]) => name.test(prog) && verbs.test(sub));
+  if (!store) return undefined;
+  const flag = store[2];
+  const i = flag ? rest.findIndex((w) => flag.test(w.split('=')[0] ?? '')) : -1;
+  const target = i < 0 ? undefined : (rest[i]?.split('=')[1] ?? rest[i + 1]);
+  return severe(
+    'infra',
+    target
+      ? `change the secrets ${target} runs with`
+      : 'change the secrets a deployed app runs with',
+    true,
+    wish(stems('secret|key|token|env|variable|credential', ABROAD.secret), target),
   );
 }
 
@@ -2626,6 +2679,9 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (prog !== 'net' || /\b(?:user|localgroup)\b/i.test(part))
       return severe('privilege', 'change who can use this computer or what they may do');
   }
+  // A deployed app's own secret store is where a key is meant to go: used, not sent (round 4).
+  const store = secretStoreRisk(prog, words);
+  if (store) return store;
   const leak = leaksKey(part, words, places);
   if (leak) return leak;
   if (prog === 'git') return gitRisk(words, places);
@@ -2780,8 +2836,22 @@ function partRisk(part: string, places: Places): Risk | undefined {
         part,
       ) ||
       (/^(?:http|https|xh)$/.test(prog) && /^(?:POST|PUT|PATCH|DELETE)$/i.test(words[1] ?? ''))
-    )
+    ) {
+      // Deleting at a vendor (a zone, a token, the whole cache) is a delete, asked for only in
+      // the person's delete words, never by "block" or "fix" (2026-10-27, round 4).
+      const deletes =
+        /\s(?:-X|--request)\s*=?\s*DELETE\b|--method=DELETE\b/i.test(` ${part}`) ||
+        (/^(?:http|https|xh)$/.test(prog) && /^DELETE$/i.test(words[1] ?? '')) ||
+        /\/(?:delete|purge_everything)(?:[/?\s'"]|$)/i.test(part);
+      if (vendor && deletes)
+        return severe(
+          'app-delete',
+          `delete something in your account at ${to}`,
+          true,
+          wish(WISHES['app-delete'] as RegExp, hostName(to)),
+        );
       return moderate('egress', 'send data to an address on the internet', true, sends);
+    }
   }
   if (
     /Invoke-(?:WebRequest|RestMethod)\b.*-Method\s+(?:Post|Put|Patch|Delete)|-InFile\b/i.test(part)
