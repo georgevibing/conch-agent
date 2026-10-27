@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../conversations/manager';
-import { ProcessService } from './service';
+import { InterruptedProcesses, interruptedNote } from './interrupted';
+import { ProcessService, foregroundFor } from './service';
 import {
   resourcePolicy,
   sampleTrees,
@@ -35,6 +36,7 @@ async function setup(
     resources?: () => Promise<ResourceSnapshot>;
     usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
     foregroundMs?: number;
+    interrupted?: Pick<InterruptedProcesses, 'record'>;
   } = {},
 ) {
   const cwd = await mkdtemp(join(tmpdir(), 'conch-process-'));
@@ -659,5 +661,53 @@ describe('managed commands', () => {
       String(await run('process_read', { id, offset: result.nextOffset })),
     ) as { offset: number };
     expect(next.offset).toBe(56000);
+  });
+});
+
+describe('commands a restart stopped (ADR 0094, 2026-10-27)', () => {
+  it('writes down what was still running as Conch closes, and tells that chat once', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-interrupted-'));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const kept = new InterruptedProcesses(home);
+    const { service, start } = await setup({ interrupted: kept });
+    const { id } = await start('sleep 30', undefined, 60_000);
+    await new Promise((r) => setTimeout(r, 200));
+    service.close();
+    // After the restart: a new list read from the file.
+    const after = new InterruptedProcesses(home);
+    const told = after.take('one');
+    expect(told.map((i) => i.process)).toEqual([id]);
+    expect(after.take('one')).toEqual([]);
+    expect(new InterruptedProcesses(home).take('one')).toEqual([]);
+    // Never the command itself.
+    expect(await readFile(join(home, 'recovery', 'interrupted.json'), 'utf8')).not.toContain(
+      'sleep',
+    );
+  });
+
+  it('keeps only ids and times, and says what to do in words', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-interrupted-'));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const kept = new InterruptedProcesses(home, () => 10 * 60_000);
+    kept.record([
+      { chat: 'c_1', process: 'p1', startedAt: 0, stoppedAt: 10 * 60_000 },
+      { chat: 'c 1; rm -rf', process: 'p2', startedAt: 0, stoppedAt: 1 } as never,
+    ]);
+    const told = new InterruptedProcesses(home, () => 10 * 60_000).take('c_1');
+    expect(told).toHaveLength(1);
+    const note = interruptedNote(told);
+    expect(note).toMatch(/process p1 \(it had run 10 min\)/);
+    expect(note).toMatch(/nothing was run again/);
+    expect(note).toMatch(/process_start/);
+    expect(interruptedNote([])).toBeUndefined();
+  });
+});
+
+describe('how long wait holds, per provider (2026-10-27)', () => {
+  it('waits for the end where Conch runs the call, and stays under a provider’s limit', () => {
+    expect(foregroundFor(undefined, 600_000)).toBe(600_000);
+    expect(foregroundFor(180_000, 600_000)).toBe(150_000);
+    expect(foregroundFor(60_000, 600_000)).toBe(30_000);
+    expect(foregroundFor(180_000, 20_000)).toBe(20_000);
   });
 });

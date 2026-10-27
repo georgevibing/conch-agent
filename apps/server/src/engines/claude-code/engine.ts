@@ -43,6 +43,7 @@ import type {
 import { checkHostArgs, lenientSchema, withNotes } from '../tools/args';
 import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
+import { CALL_IDLE_MS } from '../../integrations/limits';
 import { openRelay } from '../../workplaces/relay';
 import { forbiddenPlaces } from '../host';
 import { sealedHosts } from '../../conversations/sandbox';
@@ -203,6 +204,8 @@ export class ClaudeCodeEngine implements Engine {
    * limits); Conch doesn't second-guess a coding session from outside (ADR 0085).
    */
   readonly turnBudget = 'own' as const;
+  /** Its MCP client lets a quiet call go after `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` (`env.ts`). */
+  readonly toolCallLimitMs = CALL_IDLE_MS;
   /** Its tool-use summaries, one after each round of tool calls (ADR 0103). */
   readonly narration = 'provider' as const;
   /**

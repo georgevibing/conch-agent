@@ -278,3 +278,16 @@ moment ago, it is one chat at a time, and waiting for an idle machine left it st
 as long as a build or a CI runner kept the load up. Only memory running out, or Conch
 recovering itself, holds it (`GatewayRecovery.allowsPlanned`). A chat a crash cut off
 still waits for room, as before.
+
+## Addendum, 2026-10-27: what a restart stopped, told to its chat
+
+When Conch closes, each managed command still running or queued is written to
+`recovery/interrupted.json`: its chat's id, its process id and two times, never the command,
+its arguments, its output or a key (`processes/interrupted.ts`, allowlisted on read and on
+write, at most 50, a week at most). The chat's next turn gets a note naming the stopped
+process ids and saying nothing ran again, so the model checks what they left and starts them
+again on purpose. It replays nothing; `recovery/` stays out of agent tools and backups.
+
+`process_start` with `wait: true` holds to the command's own limit where Conch runs the call
+(the model APIs, Codex's host tools), and under `Engine.toolCallLimitMs` where a provider's
+MCP client has one (Claude Code, the ACP programs).

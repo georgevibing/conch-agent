@@ -375,6 +375,8 @@ export class AcpEngine implements Engine {
     signInHint: 'Conch connects these apps itself — add them, and sign in to them, in Apps.',
   };
   readonly hostTools = true;
+  /** The program's own MCP client times a quiet call out; three minutes is the common bound. */
+  readonly toolCallLimitMs = 180_000;
   /** Its commands are the door's, so they run where the chat's work runs (ADR 0106). */
   readonly places = true;
   readonly attachments = { images: true, files: true };

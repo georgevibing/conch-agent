@@ -228,3 +228,10 @@ only (not the chat's attachment folders, not Conch's own places), never through 
 hard-linked file, and never past what one email carries. The card names each file with its
 size. A Google Drive file isn't attached: Drive is connected with metadata access only
 (`drive.metadata.readonly`), so its bytes can't be read; the model shares its link instead.
+
+## Addendum, 2026-10-27: suggesting another time
+
+Google's Calendar API has no way for a guest to propose a new time (only its own pages do).
+`google_calendar_respond` takes `proposedStart` and `proposedEnd`, checked like an event's
+span, and says the suggestion in the note on the answer ("Could we move it to …?"), which
+Google shows the organizer. It's the same reviewed answer, and the card shows the words.

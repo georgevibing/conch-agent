@@ -66,6 +66,7 @@ import { productTools } from './research/products';
 import { musicTools } from './research/music';
 import { videoTools } from './research/video';
 import { faviconFetcher, Favicons } from './favicons/favicons';
+import { InterruptedProcesses, interruptedNote } from './processes/interrupted';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
 import { recoveryHistoryCheck } from './recovery/doctor';
@@ -388,6 +389,8 @@ export class Services {
   /** What attachment readers lean on, for turns and for previews (ADR 0017). */
   readonly readerDeps: ReaderDeps;
   readonly processes: ProcessService;
+  /** What a restart stopped, for each chat's next turn (ADR 0094). */
+  readonly interrupted: InterruptedProcesses;
   readonly images: ImageService;
   /** Documents, spreadsheets, slides and charts made for any provider; a browser prints them. */
   readonly files: FileMaker;
@@ -633,8 +636,10 @@ export class Services {
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'), {
       drafted: (now) => this.drafts.held(now),
     });
+    this.interrupted = new InterruptedProcesses(config.CONCH_HOME);
     this.processes = new ProcessService({
       protectedPaths: protectedPaths(config.CONCH_HOME),
+      interrupted: this.interrupted,
       sealed: async () => (await this.settings.get()).preferences.sealedCommands,
       healed: (message) => void this.healed.note('gateway', message),
       // Made with Passwords, below: a saved key into a command, unseen (ADR 0151).
@@ -1603,6 +1608,7 @@ export class Services {
         },
       }),
       stopProcesses: (id) => this.processes.stopAll(id),
+      interrupted: (id) => interruptedNote(this.interrupted.take(id)),
       // Another chat changing files in this one's folder (ADR 0134).
       elsewhere: (id, turn) => this.together.reader(id, turn),
       recovery: {
