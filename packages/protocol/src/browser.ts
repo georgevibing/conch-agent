@@ -231,7 +231,7 @@ export const BrowserFillAccount = z.object({
 export type BrowserFillAccount = z.infer<typeof BrowserFillAccount>;
 
 /** What a fill does: sign in (username, password, a code), make a new password, or pay. */
-export const BrowserFillKind = z.enum(['sign-in', 'code', 'new-password', 'card']);
+export const BrowserFillKind = z.enum(['sign-in', 'code', 'new-password', 'card', 'identity']);
 export type BrowserFillKind = z.infer<typeof BrowserFillKind>;
 
 /**

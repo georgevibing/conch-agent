@@ -558,6 +558,8 @@ export function browserTools(
             )
           );
         },
+        // Your details: the person named the saved identity or passport, or Full trust.
+        identity: (title) => yoursToSay() && consented(ctx, title),
         payment: async (host) => {
           if (!yoursToSay()) return false;
           const site = siteOf(`https://${host}`) ?? host;
@@ -942,11 +944,12 @@ export function browserTools(
     element: typeof Element;
     text: z.ZodString;
     submit: z.ZodOptional<z.ZodBoolean>;
+    details: z.ZodOptional<z.ZodBoolean>;
     item: z.ZodOptional<z.ZodString>;
   }> = {
     name: 'browser_type',
     description:
-      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. Signing in, signing up or paying: give an empty text on the username, password, new password, one-time code or card field, and Conch fills it from the user’s Passwords (after asking them, and asking which account if there are several), makes and saves a strong password on a sign-up or change form, or hands the field to the user. When the account signs in another way (Continue with Google, a company’s single sign-on, a passkey, an emailed link), Conch says which of the page’s buttons to press instead; on the provider’s own page, the same empty text fills the provider’s saved login. You never see or type those values yourself.',
+      'Type into a field by its ref (replacing what’s there). Set `submit` to press Enter after. Signing in, signing up or paying: give an empty text on the username, password, new password, one-time code or card field, and Conch fills it from the user’s Passwords (after asking them, and asking which account if there are several), makes and saves a strong password on a sign-up or change form, or hands the field to the user. When the account signs in another way (Continue with Google, a company’s single sign-on, a passkey, an emailed link), Conch says which of the page’s buttons to press instead; on the provider’s own page, the same empty text fills the provider’s saved login. A form asking for the user’s own details (a visa, a booking’s traveller, a sign-up’s address): set `details` with an empty text and Conch fills the form from their saved identity or passport. You never see or type those values yourself.',
     input: {
       ref: Ref,
       element: Element,
@@ -957,6 +960,12 @@ export function browserTools(
           'What to type. For a username, password, new password, code or card field, leave it empty: Conch fills it.',
         ),
       submit: z.boolean().optional().describe('Press Enter afterwards (e.g. to search).'),
+      details: z
+        .boolean()
+        .optional()
+        .describe(
+          'A form asking for the user’s own details (name, email, phone, address, date of birth, passport or ID number and its dates): true with an empty text, and Conch fills this box and the rest of the form from their saved identity or passport in Passwords, after one question. You never see the values.',
+        ),
       item: z
         .string()
         .max(300)
@@ -965,15 +974,15 @@ export function browserTools(
           'Only if the user named one: the id of the saved item to fill from (from passwords_find). Omit it and Conch finds the one saved for this site, and asks the user which when there are several.',
         ),
     },
-    run: ({ ref, element, text, submit, item }) =>
+    run: ({ ref, element, text, submit, item, details }) =>
       step(
         'type',
         { running: `Typing in “${element}”`, done: `Typed in “${element}”` },
         async (tab) => {
           await markSecrets(tab.page);
           const target = await present(tab, ref);
-          const secret = await secretOf(target);
-          // Passwords fills sign-ins, codes, cards and new passwords, with the person's OK.
+          const secret = details && !text ? 'identity' : await secretOf(target);
+          // Passwords fills sign-ins, codes, cards, your details and new passwords, with the person's OK.
           const deps = secret || !text ? fillDeps(tab) : undefined;
           if (deps) acting();
           const filled = deps

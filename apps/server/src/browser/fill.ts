@@ -13,7 +13,12 @@ import type { Frame, Locator, Page } from 'playwright-core';
 
 import type { AskRequest } from '../conversations/manager';
 import type { PermissionDecision } from '../engines/types';
-import type { FillPolicy, FillWant } from '../vault/service';
+import {
+  IDENTITY_WANTS,
+  type FillPolicy,
+  type FillWant,
+  type IdentityWant,
+} from '../vault/service';
 import { registrable } from '../vault/match';
 import { SECRET_ATTR, type SecretKind } from './risk';
 import type { PasswordFiller } from './service';
@@ -363,7 +368,7 @@ async function put(at: Around, mark: string, value: string, secret = true): Prom
   const box = at.frame.locator(`[${FILL_ATTR}="${mark}"]`).first();
   if (secret) {
     const masked = await box.getAttribute(SECRET_ATTR, { timeout: 1_000 }).catch(() => null);
-    if (masked !== 'password' && masked !== 'payment') return false;
+    if (masked !== 'password' && masked !== 'payment' && masked !== 'identity') return false;
   }
   return box.fill(value, { timeout: 4_000 }).then(
     () => true,
@@ -713,6 +718,8 @@ export interface AgentFillDeps {
    */
   consent?: {
     signIn: (title: string, host: string) => boolean;
+    /** The person's own words named this saved identity or document, or Full trust. */
+    identity?: (title: string) => boolean;
     payment: (host: string) => Promise<boolean>;
     paid: (host: string) => void;
   };
@@ -740,7 +747,7 @@ export async function agentFill(
   options: { secret?: SecretKind; text: string; item?: string; element: string },
 ): Promise<AgentFill> {
   const { passwords, check } = deps;
-  if (options.secret === 'identity') return { kind: 'handoff' };
+  if (options.secret === 'identity') return await identityFill(deps, tab, target, options);
   // Only an empty username box is Conch's: anything the agent types goes in as usual.
   if (!options.secret && options.text) return { kind: 'type' };
   const at = await around(tab.page, target);
@@ -886,7 +893,11 @@ export async function agentFill(
       choices.length <= 1 &&
       (card
         ? Boolean(await deps.consent?.payment(at.host))
-        : Boolean(deps.consent?.signIn(policy.title, at.host)));
+        : Boolean(deps.consent?.signIn(policy.title, at.host)) ||
+          // On Google's, Apple's or Microsoft's page in a sign-in the site the person named
+          // started in this tab ("export my Notion workspace"): that site is what they asked
+          // for. The fill still goes only to the provider's own page (`chainHere`).
+          Boolean(chain && deps.consent?.signIn(chain.fromTitle, chain.fromSite)));
     const asking = !settled && (choices.length > 1 || (policy.ask && !covered) || card);
     if (asking) {
       let picked = chosen;
@@ -1454,3 +1465,248 @@ export async function personFill(
     await unmark(at.frame);
   }
 }
+
+// ── Your details (ADR 0131, 2026-10-27) ─────────────────────────────────────
+
+/**
+ * What a box asks for of a person's own details: its `autocomplete` first, then its words,
+ * in the languages forms most often speak. A date says what it's the date of first, so
+ * "passport expiry date" is when it expires, not the passport's number.
+ */
+export function identityRoleOf(
+  f: Pick<FieldFacts, 'autocomplete' | 'words' | 'type'>,
+): IdentityWant | undefined {
+  if (f.type === 'password' || f.type === 'hidden') return undefined;
+  const auto = f.autocomplete;
+  const w = f.words;
+  if (/\bgiven-name\b/.test(auto)) return 'firstName';
+  if (/\bfamily-name\b/.test(auto)) return 'lastName';
+  if (/\bbday\b/.test(auto)) return 'birthday';
+  if (/\baddress-line2\b/.test(auto)) return 'address2';
+  if (/\b(?:street-address|address-line1)\b/.test(auto)) return 'address';
+  if (/\btel\b/.test(auto)) return 'phone';
+  if (/\bemail\b/.test(auto)) return 'email';
+  if (/(?:^|\s)name\b/.test(auto)) return 'fullName';
+  if (
+    /date of birth|birth ?date|birthday|\bdob\b|geburtsdatum|date de naissance|fecha de nacimiento/.test(
+      w,
+    )
+  )
+    return 'birthday';
+  if (/expir|valid (?:until|thru)|ablauf|date d.expiration|vencimiento/.test(w)) return 'expiresOn';
+  if (
+    /date of issue|issue date|issued|ausstellungsdatum|date de d.livrance|fecha de expedici/.test(w)
+  )
+    return 'issuedOn';
+  if (
+    /passport|document (?:number|no)|national id|id (?:card )?number|licen[cs]e number|reisepass|passeport|pasaporte/.test(
+      w,
+    )
+  )
+    return 'documentNumber';
+  if (/first name|given name|forename|vorname|pr.nom|\bnombre\b/.test(w)) return 'firstName';
+  if (/last name|surname|family name|nachname|nom de famille|apellido/.test(w)) return 'lastName';
+  if (/full name|your name|name as (?:it appears|in|on)|^name$/.test(w)) return 'fullName';
+  if (/e-?mail|courriel|correo/.test(w)) return 'email';
+  if (/phone|mobile|telephone|telefon|t.l.phone|tel.fono/.test(w)) return 'phone';
+  if (/address line 2|apartment|\bapt\b|suite|\bunit\b/.test(w)) return 'address2';
+  if (/street|address|adresse|direcci/.test(w)) return 'address';
+  return undefined;
+}
+
+/** What filled, said to the agent: never a value. */
+const IDENTITY_WORDS: Record<IdentityWant, string> = {
+  firstName: 'the first name',
+  lastName: 'the last name',
+  fullName: 'the full name',
+  email: 'the email',
+  phone: 'the phone number',
+  address: 'the address',
+  address2: 'the second address line',
+  birthday: 'the date of birth',
+  documentNumber: 'the document number',
+  issuedOn: 'the date of issue',
+  expiresOn: 'the expiry date',
+};
+
+/** A box filled with a person's details stays masked in what the model reads of the page. */
+async function keepMasked(at: Around, mark: string): Promise<void> {
+  await at.frame
+    .locator(`[${FILL_ATTR}="${mark}"]`)
+    .first()
+    .evaluate((el: { setAttribute(n: string, v: string): void }, attr: string) => {
+      el.setAttribute(attr, 'identity');
+      el.setAttribute(`${attr}-filled`, '');
+    }, SECRET_ATTR)
+    .catch(() => undefined);
+}
+
+/** How long one yes to a form's details covers the rest of that form, on that page. */
+const IDENTITY_WINDOW_MS = 10 * 60_000;
+const identityYes = new WeakMap<Tab, { origin: string; itemId: string; until: number }>();
+
+/**
+ * Fill a form's boxes from a saved identity or travel document (ADR 0131, 2026-10-27): one
+ * card for the whole form, saying which item and the site; the values go from the gateway
+ * into the page, never to the model. Only on a secure page's own form (no frames from
+ * elsewhere), only that item's fields, and only boxes that ask for them.
+ */
+async function identityFill(
+  deps: AgentFillDeps,
+  tab: Tab,
+  target: Locator,
+  options: { text: string; item?: string; element: string },
+): Promise<AgentFill> {
+  const { passwords, check } = deps;
+  if (options.text) return { kind: 'handoff' };
+  const at = await around(tab.page, target);
+  if (!at) return { kind: 'handoff' };
+  if ('blocked' in at)
+    return {
+      kind: 'handoff',
+      reason:
+        at.blocked === 'frame'
+          ? 'This form comes from another site inside the page, so Conch won’t fill your details into it. Type them yourself only if you trust it, then hand the browser back.'
+          : 'This page isn’t secure (no https), so Conch won’t fill your details here. Type them yourself only if you trust it, then hand the browser back.',
+    };
+  const boxes = at.fields
+    .map((f) => ({ f, role: identityRoleOf(f) }))
+    .filter((b): b is { f: FieldFacts; role: IdentityWant } => Boolean(b.role));
+  const mine = boxes.find((b) => b.f.target);
+  if (!mine)
+    return {
+      kind: 'said',
+      label: `Didn’t fill “${options.element}”`,
+      text: 'Conch can’t tell which of the user’s details this box asks for. Type it if they told you, or hand the field to them.',
+    };
+  if (deps.permissionMode === 'plan')
+    return {
+      kind: 'said',
+      label: 'Read only',
+      text: 'This chat is in Read only mode, so you can read pages but not fill them. Tell the user what you’d do instead.',
+    };
+  if (!(await deps.unlock()))
+    return {
+      kind: 'said',
+      label: 'Passwords stayed locked',
+      text: 'The user’s Passwords is locked and wasn’t unlocked. Ask them to unlock it, or hand the field to them.',
+    };
+  check();
+  const saved = (await passwords.identities?.().catch(() => [])) ?? [];
+  if (!saved.length)
+    return {
+      kind: 'handoff',
+      reason: 'Type your details into the form yourself, then hand the browser back.',
+      note: 'The user has no identity or passport saved in Passwords, so they typed their details themselves (you never see them).',
+    };
+  const kept = identityYes.get(tab);
+  const earlier =
+    kept &&
+    kept.origin === at.origin &&
+    kept.until > Date.now() &&
+    saved.some((i) => i.id === kept.itemId)
+      ? kept.itemId
+      : undefined;
+  let chosen =
+    (options.item && saved.some((i) => i.id === options.item) ? options.item : undefined) ??
+    earlier ??
+    (saved.length === 1 ? saved[0]?.id : undefined);
+  const first = chosen ?? saved[0]?.id;
+  if (!first) return { kind: 'handoff' };
+  let policy: FillPolicy;
+  try {
+    policy = await passwords.fillPolicy({ itemId: first, host: at.host, want: mine.role });
+  } catch (error) {
+    return {
+      kind: 'said',
+      label: `Didn’t fill “${options.element}”`,
+      text: `${(error as Error).message} Hand the field to the user instead, or ask them.`,
+    };
+  }
+  // A yes to this form a moment ago, or the person's own words naming the item (or Full
+  // trust): no second card. Several items and none named: the card asks which.
+  const settled = Boolean(chosen && (earlier || deps.consent?.identity?.(policy.title)));
+  if (!settled) {
+    let picked = chosen;
+    const accounts =
+      saved.length > 1 && !chosen
+        ? saved.slice(0, 8).map(({ id, title, subtitle }) => ({
+            id,
+            title,
+            ...(subtitle && { account: subtitle }),
+          }))
+        : undefined;
+    const picture = await deps.picture(target);
+    const untrusted = deps.untrusted?.();
+    const action = accounts
+      ? 'Fill in your details'
+      : `Fill in your details from “${policy.title}”`;
+    const decision = await deps.ask({
+      toolName: 'browser_fill',
+      input: { site: at.host, item: accounts ? '' : policy.title, field: 'identity' },
+      summary: `${action.charAt(0).toLowerCase()}${action.slice(1)} on ${at.host}`,
+      browser: {
+        kind: 'fill',
+        site: at.host,
+        url: tab.page.url(),
+        title: await tab.page.title().catch(() => ''),
+        action,
+        fill: 'identity',
+        ...(picture.box && { box: picture.box }),
+        ...(picture.shot && { shot: picture.shot }),
+        ...(accounts && { accounts }),
+      },
+      ...(untrusted && { taint: `${untrusted} So I’m checking before I fill it.` }),
+      ...(accounts && {
+        choose: (id: string) => {
+          if (!accounts.some((a) => a.id === id)) throw new Error('Not one of the choices.');
+          picked = id;
+        },
+      }),
+    });
+    if (decision === 'deny')
+      return {
+        kind: 'said',
+        label: `You didn’t fill “${options.element}”`,
+        text: 'The user doesn’t want Conch to fill their details here. Ask them how they’d like to continue.',
+      };
+    chosen = picked ?? first;
+    if (chosen !== first)
+      policy = await passwords.fillPolicy({ itemId: chosen, host: at.host, want: mine.role });
+  }
+  chosen ??= first;
+  identityYes.set(tab, {
+    origin: at.origin,
+    itemId: chosen,
+    until: Date.now() + IDENTITY_WINDOW_MS,
+  });
+  check();
+  const done: IdentityWant[] = [];
+  for (const { f, role } of boxes) {
+    if (!f.empty && !f.target) continue;
+    if (!policy.has.includes(role)) continue;
+    const value = await passwords
+      .fillValue({ itemId: chosen, host: at.host, want: role })
+      .catch(() => undefined);
+    check();
+    if (value && (await put(at, f.mark, value, f.secret === 'identity'))) {
+      done.push(role);
+      await keepMasked(at, f.mark);
+    }
+  }
+  if (!done.length)
+    return {
+      kind: 'said',
+      label: `Couldn’t fill “${options.element}”`,
+      text: `“${policy.title}” has nothing saved for this box. Ask the user, or hand the field to them.`,
+    };
+  const words = [...new Set(done)].map((r) => IDENTITY_WORDS[r]);
+  return {
+    kind: 'filled',
+    label: 'Filled your details from Passwords',
+    text: `Conch filled ${words.join(', ')} from the user’s saved “${policy.title}” (you never see them). Check the form for any box left empty, then carry on.`,
+  };
+}
+
+/** Every detail a saved identity can fill. */
+export const IDENTITY_FILLS: readonly IdentityWant[] = IDENTITY_WANTS;
