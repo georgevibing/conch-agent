@@ -254,6 +254,18 @@ const AGENT_CONFIG = SHARED_CONFIG;
 const OPEN_WRITES = ['/usr/local', '/opt/homebrew', '/opt/local'].filter((p) => existsSync(p));
 
 /**
+ * Codex CLI's own shell is sandboxed and its requests to leave it are declined (`escapes`),
+ * which the model only sees as "declined" (2026-10-27). So it's told the way that works on
+ * every provider: Conch's own `process_start`, through the same guard as any command.
+ */
+export const AGENT_ROUTE =
+  'Your own commands run in a sandbox (the work folder; no saved keys, no ~/.ssh), and Conch declines a request to run one outside it. For what needs more (a push over SSH, a saved key, another folder, a host the sandbox blocks), call process_start instead: with dangerouslyDisableSandbox: true, or with secrets and wait: true. Conch’s guard then asks the person or lets it through, as for any command. Don’t retry the same command in your own shell.';
+
+/** Where the decline's words point: the person reads them as a notice. */
+const ROUTE =
+  ' It can run through Conch’s process_start instead, which asks you or lets it through.';
+
+/**
  * Why an approval request asks for more than "do this, in the sandbox": the
  * network, lasting write access somewhere else, or a retry outside the
  * sandbox after it blocked the command. Conch never grants any of these
@@ -269,16 +281,16 @@ export function escapes(
   if (method !== 'item/commandExecution/requestApproval') return undefined;
   const amendments = params.proposedNetworkPolicyAmendments;
   if (params.networkApprovalContext || (Array.isArray(amendments) && amendments.length))
-    return 'Codex asked to reach the network. Its commands have no network in Conch.';
+    return `Codex asked to reach the network. Its commands have no network in Conch.${ROUTE}`;
   if (alreadyAsked)
-    return 'Codex asked to run that again outside its sandbox. Conch never allows that.';
+    return `Codex asked to run that again outside its sandbox. Conch never allows that.${ROUTE}`;
   const reason = typeof params.reason === 'string' ? params.reason : '';
   if (
     /sandbox|escalat|outside|unrestricted|network|without (?:the )?(?:sandbox|restrictions)/i.test(
       reason,
     )
   )
-    return 'Codex asked to run a command outside its sandbox. Conch never allows that.';
+    return `Codex asked to run a command outside its sandbox. Conch never allows that.${ROUTE}`;
   return undefined;
 }
 
@@ -796,7 +808,9 @@ export class CodexEngine implements Engine {
       // `use_tool`, the same set every turn so the thread carries on (ADR 0072).
       const held = holdBack(all, { stable: true });
       const tools = held.tools;
-      const systemAppend = held.note ? `${input.systemAppend}\n\n${held.note}` : input.systemAppend;
+      const systemAppend = [input.systemAppend, agent ? AGENT_ROUTE : '', held.note ?? '']
+        .filter(Boolean)
+        .join('\n\n');
       // The thread this chat had, carried on while its tools are the same (Codex
       // can't be given new ones: ADR 0036). Otherwise a new one, with the handoff.
       const toolsKey = toolsDigest(
