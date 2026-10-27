@@ -1746,3 +1746,16 @@ describe('round 5: the person’s own sentence, and HEAD by its name (2026-10-27
     ).toBe(false);
   });
 });
+
+describe('the GitHub app onto main, as the CLI (2026-10-27, round 5)', () => {
+  const app = (tool: string, input: Record<string, unknown>, said: string[] = []) =>
+    riskAsks(assessRisk(tool, input, { ...ctx, access: 'write', said }), false);
+  it('asks before a merge or a commit straight onto main, unless the person asked', () => {
+    expect(app('mcp__github__merge_pull_request', { pullNumber: 12 })).toBe(true);
+    expect(app('mcp__github__merge_pull_request', { pullNumber: 12 }, ['merge it'])).toBe(false);
+    const commit = { branch: 'main', path: 'README.md', content: 'x', message: 'x' };
+    expect(app('mcp__github__create_or_update_file', commit)).toBe(true);
+    expect(app('mcp__github__create_or_update_file', commit, ['push the fix to main'])).toBe(false);
+    expect(app('mcp__github__create_or_update_file', { ...commit, branch: 'fix/x' })).toBe(false);
+  });
+});

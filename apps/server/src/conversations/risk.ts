@@ -3619,6 +3619,22 @@ export function assessRisk(
     if (read.asked || read.held || !askedInApp(context.said, context.app, server)) return read;
     return { ...read, asked: true };
   };
+  // A pull request merged, or a file committed, straight onto a branch others build from
+  // through an app (the GitHub app's tools): the same as `gh pr merge` or a push to main
+  // (2026-10-27), whichever way the model reached for it.
+  const onto = [args.branch, args.base].find((b): b is string => typeof b === 'string');
+  const shipping = new RegExp(`${MERGE_WORDS.source}|${PUSH_WORDS.source}`);
+  if (step && /merge_(?:pull_request|pr)\b/.test(step))
+    return said(
+      severe('history', 'merge a pull request into a shared branch', true, wish(shipping)),
+    );
+  if (
+    step &&
+    /(?:^|_)(?:create_or_update_file|push_files|delete_file|create_commit)$/.test(step) &&
+    onto &&
+    PROTECTED_BRANCH.test(onto)
+  )
+    return said(severe('history', `commit straight to ${onto}`, true, wish(shipping)));
   // The person's words lift an app's step too (ADR 0128): "delete the old entries", "send it
   // to the team", "give Bo access". Money and keys are nobody's to ask for this way.
   if (DELETES.test(step)) return said(severe('app-delete', 'delete something in one of your apps'));
