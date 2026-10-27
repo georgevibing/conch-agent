@@ -53,6 +53,11 @@ const pages: Record<string, string> = {
     <button onclick="document.title='Booked'">Book a table</button>`,
   '/table': `<title>Trattoria</title><h1>A table for two at 8</h1>
     <button onclick="document.title='Booked'">Book a table</button>`,
+  '/plan': `<title>Pro</title><h1>Pro plan</h1><p>$9.99/month, cancel any time</p>
+    <button onclick="document.title='Subscribed'">Subscribe</button>
+    <button onclick="document.title='Renewed'">Renew now</button>`,
+  '/letter': `<title>Weekly</title><h1>Our weekly letter</h1><p>Free, every Friday</p>
+    <button onclick="document.title='Subscribed'">Subscribe</button>`,
   '/cookies': `<title>News</title><div id="onetrust-banner-sdk" class="cookie-consent">We use cookies
     <button id="onetrust-reject-all-handler" onclick="this.parentElement.remove();document.title='Rejected'">Reject all</button>
     <button id="onetrust-accept-btn-handler">Accept all</button></div><h1>Today’s news</h1>`,
@@ -103,10 +108,12 @@ function harness(
   mode: PermissionMode = 'default',
   conversationId = 'conv_test',
   said: readonly string[] = [],
+  who: Pick<ToolContext, 'unattended' | 'attended'> = {},
 ) {
   const asked: AskRequest[] = [];
   const events: ConversationEventInput[] = [];
   const ctx: ToolContext = {
+    ...who,
     conversationId,
     append: (event) => events.push(event),
     engine: { hostTools: true } as unknown as Engine,
@@ -789,4 +796,53 @@ describe.skipIf(!hasBrowser)('what the person already said, in Auto (ADR 0131, 2
     expect(h.asked[1]?.revalidate).toBeUndefined();
     expect(h.asked[2]?.revalidate).toBeUndefined();
   });
+
+  it(
+    'keeps a card on a paid plan’s Subscribe and on Renew, never the review',
+    { timeout: 60_000 },
+    async () => {
+      const h = harness(['deny', 'deny', 'deny'], 'auto', 'conv_review_plan');
+      let page = await h.call('browser_open', { url: `${origin}/plan` });
+      await h.call('browser_click', { ref: refOf(page, /Subscribe/), element: 'Subscribe' });
+      await h.call('browser_click', { ref: refOf(page, /Renew now/), element: 'Renew now' });
+      page = await h.call('browser_open', { url: `${origin}/letter` });
+      await h.call('browser_click', { ref: refOf(page, /Subscribe/), element: 'Subscribe' });
+      expect(h.asked.map((a) => a.browser?.kind)).toEqual([
+        'high-stakes',
+        'high-stakes',
+        'high-stakes',
+      ]);
+      // "$9.99/month" is paying: its card, not the review. The free letter goes to the review.
+      expect(h.asked[0]?.revalidate).toBeUndefined();
+      expect(h.asked[1]?.revalidate).toBeUndefined();
+      expect(h.asked[2]?.revalidate).toBeTypeOf('function');
+    },
+  );
+
+  it(
+    'takes the owner’s words in their own chat app as in the chat, never a routine’s',
+    { timeout: 60_000 },
+    async () => {
+      const owner = harness([], 'auto', 'conv_cap_owner', ['buy the pearl mug if under £20'], {
+        unattended: true,
+        attended: true,
+      });
+      let page = await owner.call('browser_open', { url: `${origin}/checkout` });
+      await owner.call('browser_click', {
+        ref: refOf(page, /Place order/),
+        element: 'Place order',
+      });
+      expect(owner.asked).toHaveLength(0);
+
+      const routine = harness(['deny'], 'auto', 'conv_cap_routine', ['buy it if under £20'], {
+        unattended: true,
+      });
+      page = await routine.call('browser_open', { url: `${origin}/checkout` });
+      await routine.call('browser_click', {
+        ref: refOf(page, /Place order/),
+        element: 'Place order',
+      });
+      expect(routine.asked.map((a) => a.browser?.kind)).toEqual(['high-stakes']);
+    },
+  );
 });

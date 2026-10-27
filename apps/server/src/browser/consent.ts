@@ -12,7 +12,7 @@ const REVIEWABLE =
 
 /** Money on a control or in its words: these keep their card (or a limit the person named). */
 const MONEY =
-  /\b(?:buy|purchase|pay|payment|checkout|check out|order|donate|donation|transfer|withdraw|tip|deposit|top up|kaufen|bestellen|bezahlen|zahlen|spenden|acheter|payer|commander|comprar|pagar|acquista|paga|kopen|betalen|afrekenen)\b|[$€£¥₹]|\d[.,]\d{2}\b/i;
+  /\b(?:buy|purchase|pay|payment|checkout|check out|order|donate|donation|transfer|withdraw|tip|deposit|top up|add funds|renew|renewal|upgrade|activate (?:plan|subscription|membership)|start (?:plan|my plan|subscription|membership)|kaufen|bestellen|bezahlen|zahlen|spenden|verlängern|acheter|payer|commander|renouveler|comprar|pagar|renovar|acquista|paga|rinnova|kopen|betalen|afrekenen|verlengen)\b|[$€£¥₹]|\d[.,]\d{2}\b/i;
 
 /** Is clicking this resolved label something Auto's review may decide, rather than a card? */
 export function reviewableClick(label: string): boolean {
@@ -143,6 +143,28 @@ export function showsTotal(text: string): boolean {
   return totals(text).length > 0;
 }
 
+const PRICE = `(?:${SYMBOL}\\s*${AMOUNT}|${AMOUNT}\\s*(?:${SYMBOL}|${CODE})(?![\\p{L}\\p{N}])|${CODE}\\s*${AMOUNT})`;
+
+/** A price that recurs or is taken now: "$9.99/month", "€120 per year", "€20 deposit". */
+const CHARGE_AFTER = new RegExp(
+  `${PRICE}\\s*(?:\\/\\s*(?:mo|mth|month|yr|year|wk|week|user|seat)\\b|(?:per|a|an|each)\\s+(?:month|year|week|user|seat)\\b|(?:monthly|yearly|annually|weekly|deposit|due today|billed|today)\\b|pro (?:monat|jahr)\\b|par mois\\b|al mes\\b|im monat\\b)`,
+  'iu',
+);
+
+/** The same, the words first: "deposit of €20", "billed $99", "free for 7 days, then $9.99". */
+const CHARGE_BEFORE = new RegExp(
+  `\\b(?:deposit(?: of)?|due today|billed(?: (?:monthly|yearly|annually|today))?|then|renews? (?:at|for)|charged|you(?:'ll| will) be charged|anzahlung|acompte|depósito)\\b[^\\n\\d$€£¥₹]{0,24}?${PRICE}`,
+  'iu',
+);
+
+/**
+ * The page asks for money for this click, though no line says "total": a plan's price per
+ * month, a deposit, what's billed after a trial. A "Subscribe" or "Book now" there is paying.
+ */
+export function showsCharge(text: string): boolean {
+  return showsTotal(text) || CHARGE_AFTER.test(text) || CHARGE_BEFORE.test(text);
+}
+
 /** The page's total is inside the person's limit, in the same currency. */
 export function withinCap(cap: Cap, total: { amount: number; currency: string }): boolean {
   if (cap.currency !== total.currency) return false;
@@ -157,6 +179,47 @@ const SIGN_IN =
 export function brandOf(site: string): string | undefined {
   const label = site.toLowerCase().split('.')[0];
   return label && label.length >= 3 ? label : undefined;
+}
+
+/** Labels too plain to be anyone's brand: naming them names no site. */
+const PLAIN = new Set([
+  'www',
+  'app',
+  'apps',
+  'web',
+  'my',
+  'login',
+  'signin',
+  'account',
+  'accounts',
+  'auth',
+  'secure',
+  'portal',
+  'mail',
+  'email',
+  'online',
+  'shop',
+  'store',
+  'home',
+  'bank',
+  'pay',
+  'cloud',
+]);
+
+/**
+ * The person's message names this site, by its brand as a word or by its address: "order the
+ * ink on Amazon", "post this on LinkedIn", "cancel my Netflix". Signing in there is part of
+ * what they asked for; the fill still only goes to the item's own site.
+ */
+export function namesSite(message: string, site: string): boolean {
+  const folded = message
+    .normalize('NFKD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase();
+  if (folded.includes(site.toLowerCase())) return true;
+  const brand = brandOf(site);
+  if (!brand || PLAIN.has(brand)) return false;
+  return new Set(folded.split(/[^\p{L}\p{N}]+/u)).has(brand);
 }
 
 /**

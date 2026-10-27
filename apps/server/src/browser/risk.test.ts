@@ -44,6 +44,12 @@ describe('isHighStakes', () => {
       'Confirm booking',
       'Subscribe',
       '🛒 Buy',
+      'Renew now',
+      'Renew domain',
+      'Upgrade plan',
+      'Confirm and pay',
+      'Add funds',
+      'Start plan',
     ]) {
       expect(isHighStakes(name), name).toBe(true);
     }
