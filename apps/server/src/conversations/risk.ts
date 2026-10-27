@@ -30,7 +30,7 @@
  * Pure functions. `risk.test.ts` holds the corpus, benign and serious, and
  * measures the false positive rate.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
@@ -133,6 +133,16 @@ export interface RiskContext {
   treeClean?: (dir?: string) => boolean | undefined;
   /** Fresh local evidence that a remote keeps the same destination. */
   sameRemote?: (dir: string | undefined, remote: string, target: string) => boolean;
+  /**
+   * The branch checked out in the work folder, or the folder a command names (2026-10-27):
+   * what "my branch" means for a force-push or a deleted remote branch. Undefined when unknown.
+   */
+  currentBranch?: (dir?: string) => string | undefined;
+  /**
+   * Variables a command gets from Passwords through its `secrets` (ADR 0151): a key that
+   * leaves for anywhere but its own service asks after reading, whatever was said.
+   */
+  secretNames?: readonly string[];
 }
 
 /**
@@ -964,7 +974,7 @@ const PROTECTED_BRANCH =
   /^(?:main|master|trunk|develop|dev|default|stable|production|prod|live|release(?:[/-].*)?|gh-pages|HEAD)$/i;
 
 /** Production named on the command line. */
-const PROD = /(?:^|[\s=/:_.-])(?:prod|production|prd|live)(?:$|[\s/:_.-])|--prod\b/i;
+const PROD = /(?:^|[\s=/:_.${-])(?:prod|production|prd|live)(?:$|[\s/:_.}-])|--prod\b/i;
 
 /** Hosts whose whole purpose is catching what's sent to them. */
 const DROP_BOXES =
@@ -1056,6 +1066,10 @@ interface Places {
   said?: readonly string[];
   treeClean?: RiskContext['treeClean'];
   sameRemote?: RiskContext['sameRemote'];
+  currentBranch?: RiskContext['currentBranch'];
+  secretNames?: readonly string[];
+  /** How deep in a package script this part is: one level is read, no more. */
+  depth?: number;
 }
 
 const inside = (root: string, path: string) => {
@@ -1145,7 +1159,13 @@ function deletesIn(folders: string[], places: Places): Risk | undefined {
 const DEPLOY_BRANCH = /^(?:stable|production|prod|live|release(?:[/-].*)?|gh-pages)$/i;
 
 /** "Push it", "pousse sur main", "sube los cambios", "pushen" (ADR 0145). */
-const PUSH_WORDS = stems('push(?:es|ed|ing|en|e|t|st)?\\b', ABROAD.push);
+const PUSH_WORDS = stems(
+  'push(?:es|ed|ing|en|e|t|st)?\\b',
+  // A pull request needs the branch on the remote: asking for one asks for the push (2026-10-27).
+  '(?:open|create|raise|make|submit|send|put\\s+up|file)\\s+(?:a\\s+|an\\s+|the\\s+)?(?:new\\s+|draft\\s+)?(?:pr|pull\\s+request|mr|merge\\s+request)\\b',
+  'ship(?:\\s+it)?\\b|release\\s+it\\b',
+  ABROAD.push,
+);
 /** Merging a pull request is asked by "merge it", or by "push to main" when main takes PRs. */
 const MERGE_WORDS = new RegExp(
   `${stems('merg', ABROAD.merge).source}|${PUSH_WORDS.source}[^.!?\\n]{0,30}\\b(?:main|master|trunk)\\b`,
@@ -1196,11 +1216,25 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
         .pop()
         ?.replace(/^refs\/heads\//, ''),
     );
-    const named = refs.filter((r): r is string => Boolean(r));
+    const given = refs.filter((r): r is string => Boolean(r));
+    // No branch named: it pushes the one checked out, when that's known (2026-10-27).
+    const at = words.indexOf('-C');
+    const here = places.currentBranch?.(at > 0 && at < i ? words[at + 1] : undefined);
+    const named =
+      deleting || given.length || (args[0] !== undefined && args[0] !== 'origin') || !here
+        ? given
+        : [here];
     const shared = !named.length || named.some((r) => PROTECTED_BRANCH.test(r));
+    // "my branch", "this branch" names the one checked out, when others don't share it.
+    const mine = (branch: string | undefined) =>
+      branch && branch === here && !PROTECTED_BRANCH.test(branch)
+        ? new RegExp(
+            `\\b${branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b|\\b(?:my|this|the|current|our|that)\\s+(?:own\\s+)?(?:feature\\s+|working\\s+|local\\s+)?branch\\b`,
+          )
+        : branch;
     if (deleting) {
       const asks = own
-        ? wish(stems('delet|remov|drop|prune|clean', ABROAD.delete), named[0])
+        ? wish(stems('delet|remov|drop|prune|clean', ABROAD.delete), mine(named[0]))
         : NEVER;
       return shared
         ? severe('history', `delete the ${named[0] ?? 'remote'} branch others rely on`, true, asks)
@@ -1214,7 +1248,7 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
               ABROAD.forcePush,
               ABROAD.overwrite,
             ),
-            named[0],
+            mine(named[0]),
           )
         : NEVER;
       return shared
@@ -1306,7 +1340,7 @@ function gitRisk(words: string[], places: Places): Risk | undefined {
 /** Cloud, clusters, infrastructure as code, deploys and databases. */
 /** Words that ask for a deploy or a change to infrastructure; production must be named too. */
 const DEPLOY_WORDS = stems(
-  'deploy|ship|release|roll\\s*out|go\\s+live|put\\s+(?:it\\s+)?(?:up|live|online)|apply|launch|publish|provision|update|upgrade|scale|promote|push\\s+(?:it\\s+)?(?:up|out|to)',
+  "deploy|ship|release|roll\\s*out|go\\s+live|(?:is|are|it'?s|goes|be|being|going)\\s+live|make\\s+sure\\b[^.!?\\n]{0,40}\\blive|put\\s+(?:it\\s+)?(?:up|live|online)|apply|launch|publish|provision|update|upgrade|scale|promote|push\\s+(?:it\\s+)?(?:up|out|to)",
   ABROAD.deploy,
   ABROAD.publish,
   ABROAD.update,
@@ -1325,6 +1359,18 @@ const GRANT_WORDS = stems(
   ABROAD.grant,
   ABROAD.public,
   'partag|compart|compartilh|partilh|condivid|sch(?:u|ue)tz|proteg|bescherm', // sharing, protecting
+);
+
+/** SQL that deletes for good: a dropped table, everything truncated, a DELETE with no WHERE. */
+const DESTRUCTIVE_SQL =
+  /\b(?:DROP\s+(?:DATABASE|SCHEMA|TABLE|COLLECTION)|TRUNCATE\b|FLUSHALL|FLUSHDB|dropDatabase\s*\(|DELETE\s+FROM\s+[\w."`]+\s*(?:;|"|'|$))/i;
+/** Words that ask to change data or settings somewhere. */
+const INFRA_CHANGE = stems(
+  'updat|chang|insert|add|creat|alter|fix|set|apply|migrat|run\\b|execut',
+  ABROAD.update,
+  ABROAD.change,
+  ABROAD.migrate,
+  ABROAD.run,
 );
 
 /**
@@ -1423,6 +1469,21 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
   ) {
     if (/\b(?:destroy|remove|rm|delete|apps:destroy|pg:reset|\w+:delete)\b/.test(sub))
       return severe('infra', 'delete a deployed app or its data', true, destroy);
+    // A hosted database's own SQL (`wrangler d1 execute --remote`), read as a database's (2026-10-27).
+    if (/\b(?:d1\s+execute|db\s+(?:query|execute))\b/.test(sub) && !/--local\b/.test(sub)) {
+      if (DESTRUCTIVE_SQL.test(part))
+        return severe('infra', 'delete data in a hosted database', true, destroy);
+      if (/\b(?:UPDATE|INSERT|ALTER|CREATE|REPLACE)\b/i.test(part))
+        return moderate('infra', 'change data in a hosted database', true, wish(INFRA_CHANGE));
+      return undefined;
+    }
+    if (/\bsecret\s+(?:put|delete|bulk)\b|\benv\s+(?:add|rm|remove)\b/.test(sub))
+      return severe(
+        'infra',
+        'change the secrets a deployed app runs with',
+        true,
+        wish(stems('secret|key|token|env|variable', ABROAD.secret)),
+      );
     // Reading what's there (`fly logs -a api-prod`) changes nothing, production or not.
     const reads =
       /^\s(?:logs?|status|info|list|ls|apps|whoami|version|help|open|ps|releases|domains|inspect|describe|show|get|history|dashboard|monitor|tail|env|config)\s/.test(
@@ -1438,6 +1499,28 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         : severe('infra', 'deploy where people can reach it', true, deploy);
   }
   if (prog === 'gh') {
+    // A workflow run is someone else's machine doing whatever it says; a deploy, production.
+    if (/\bworkflow\s+run\b/.test(sub) || /\bapi\b.*\/dispatches\b/.test(sub)) {
+      const ships = /\b(?:deploy\w*|release\w*|publish\w*|prod\w*|live)\b/i.test(sub);
+      return ships
+        ? severe(
+            'infra',
+            'start a workflow that deploys or releases',
+            true,
+            wish(DEPLOY_WORDS, prod ? PROD_WORDS : undefined),
+          )
+        : moderate(
+            'infra',
+            'start a workflow on GitHub',
+            true,
+            wish(
+              stems(
+                'run|trigger|start|dispatch|kick\\s+off|rerun|re-run|workflow|action',
+                ABROAD.run,
+              ),
+            ),
+          );
+    }
     if (
       /\b(?:repo\s+delete|release\s+delete|secret\s+(?:set|delete)|variable\s+set)\b/.test(sub) ||
       /\bapi\b.*(?:\s(?:-X|--method)\s*=?\s*DELETE\b)/i.test(` ${sub}`)
@@ -1468,6 +1551,36 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
         true,
         wish(GRANT_WORDS),
       );
+    // A comment or a review in the person's name where others read it (2026-10-27). A new issue
+    // or pull request of the repository's own stays routine, as its corpus says.
+    const field = /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)\b/.test(` ${sub}`);
+    const method = /(?:^|\s)(?:-X|--method)\s*=?\s*(POST|PUT|PATCH|GET)\b/i.exec(` ${sub}`)?.[1];
+    const writes =
+      /\b(?:issue|pr)\s+(?:comment|review)\b/.test(sub) ||
+      (/\bapi\b/.test(sub) &&
+        (method ? method.toUpperCase() !== 'GET' : field) &&
+        (!/\bgraphql\b/.test(sub) || /\bmutation\b/i.test(sub)));
+    if (writes) {
+      if (/\$\(|`/.test(part))
+        return moderate(
+          'egress',
+          'post what a command printed where people can read it',
+          true,
+          NEVER,
+        );
+      if (carriesSecrets({ text: part }))
+        return severe('exfiltration', 'post a key where people can read it', true, NEVER);
+      return moderate(
+        'egress',
+        'write on GitHub where other people read it',
+        true,
+        wish(
+          new RegExp(
+            `${SPEAK_WORDS.source}|${stems('review|approv|request\\s+changes|(?:open|file|create|raise|report)\\s+(?:an?\\s+|the\\s+)?(?:new\\s+)?(?:issue|bug)').source}`,
+          ),
+        ),
+      );
+    }
     if (/\brelease\s+create\b/.test(sub))
       return severe(
         'publish',
@@ -1485,10 +1598,37 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
       );
   }
   if (
-    /^(?:supabase|prisma|rails|rake|alembic|knex|sequelize|flyway|liquibase|dbmate)$/.test(prog)
+    /^(?:supabase|prisma|rails|rake|alembic|knex|sequelize|flyway|liquibase|dbmate|drizzle-kit)$/.test(
+      prog,
+    )
   ) {
-    if (/\b(?:db\s+reset|migrate\s+reset|db:drop|db:reset|db:schema:load|drop)\b/.test(sub))
+    if (
+      /\b(?:db\s+reset|migrate\s+reset|db:drop|db:reset|db:schema:load|drop)\b/.test(sub) ||
+      /--force-reset\b|--accept-data-loss\b/.test(sub) ||
+      (prog === 'drizzle-kit' && /\bpush\b/.test(sub) && /--force\b/.test(sub))
+    )
       return severe('infra', 'wipe a database', true, destroy);
+    // `supabase db push` changes the project it's linked to, production or not (2026-10-27).
+    if (
+      prog === 'supabase' &&
+      /\bdb\s+push\b/.test(sub) &&
+      !prod &&
+      !/--dry-run\b|--local\b/.test(sub)
+    )
+      return moderate(
+        'infra',
+        'change the database of the Supabase project this folder is linked to',
+        true,
+        wish(
+          stems(
+            'migrat|push|apply|deploy|sync|updat|chang',
+            ABROAD.migrate,
+            ABROAD.update,
+            ABROAD.change,
+            ABROAD.push,
+          ),
+        ),
+      );
     if (/\b(?:migrate|db:migrate|upgrade|db\s+push)\b/.test(sub) && prod)
       return severe(
         'infra',
@@ -1512,12 +1652,18 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
   ) {
     if (/^(?:dropdb|dropuser)$/.test(prog))
       return severe('infra', 'delete a database', true, destroy);
-    if (
-      /\b(?:DROP\s+(?:DATABASE|SCHEMA|TABLE|COLLECTION)|TRUNCATE\b|FLUSHALL|FLUSHDB|dropDatabase\s*\(|DELETE\s+FROM\s+[\w."`]+\s*(?:;|"|'|$))/i.test(
-        part,
-      )
-    )
+    if (DESTRUCTIVE_SQL.test(part))
       return severe('infra', 'delete data in a database', true, destroy);
+    // Every row changed at once: `UPDATE users SET role='admin'` with no WHERE.
+    if (/\bUPDATE\s+[\w."`]+\s+SET\b(?![^;]*\bWHERE\b)/i.test(part))
+      return severe(
+        'infra',
+        'change every row of a table in a database',
+        true,
+        wish(
+          stems('updat|chang|set\\s+(?:all|every)|reset|overwrit', ABROAD.update, ABROAD.change),
+        ),
+      );
     if (prod && /\b(?:UPDATE|DELETE|INSERT|ALTER|CREATE|GRANT)\b/i.test(part))
       return severe(
         'infra',
@@ -1538,6 +1684,67 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
       );
   }
   return undefined;
+}
+
+/**
+ * Money moved with a payment provider's own CLI (2026-10-27): refunds, charges, payouts,
+ * transfers, subscriptions. Stripe's CLI works on test data unless told `--live`, so only a
+ * live call counts; it's asked for only by naming what it acts on (`ch_…`, `sub_…`).
+ */
+function moneyRisk(prog: string, words: string[]): Risk | undefined {
+  if (prog !== 'stripe') return undefined;
+  const line = words.slice(1).join(' ');
+  const moves =
+    /\b(?:refunds|charges|payouts|transfers|subscriptions|subscription_schedules|payment_intents|invoices|topups)\s+(?:create|cancel|update|delete|pay|capture|void|finalize|confirm)\b/.test(
+      line,
+    ) || /^(?:post|delete)\s+\/v1\//i.test(line);
+  if (!moves || !/(?:^|\s)--live\b|\b[sr]k_live_/.test(line)) return undefined;
+  const id = words
+    .map(
+      (w) =>
+        /(?:^|=)((?:ch|re|py|po|tr|sub|sub_sched|pi|in|cus|si|tu)_[A-Za-z0-9]{6,})/.exec(w)?.[1],
+    )
+    .find(Boolean);
+  return severe(
+    'spend',
+    'move real money with Stripe',
+    true,
+    id
+      ? wish(
+          stems('refund|charg|pay|cancel|transfer|captur|void|invoic|subscri|bill|finaliz|confirm'),
+          id,
+        )
+      : NEVER,
+  );
+}
+
+/** Variables that hold a key, by the names people give them. */
+const KEY_VAR =
+  /^(?:[A-Z0-9]+_)*(?:TOKEN|API_?KEY|SECRET(?:_KEY)?|PASSWORD|PASSWD|PAT|ACCESS_KEY(?:_ID)?|PRIVATE_KEY|AUTH)$/;
+/** The services a key is normally sent to: its own API, registry or git host (2026-10-27). */
+const KEY_HOMES =
+  /(?:^|\.)(?:github\.com|githubusercontent\.com|ghcr\.io|gitlab\.com|bitbucket\.org|cloudflare\.com|stripe\.com|supabase\.co|supabase\.com|vercel\.com|netlify\.com|fly\.io|heroku\.com|amazonaws\.com|googleapis\.com|azure\.com|digitalocean\.com|openai\.com|anthropic\.com|npmjs\.org|npmjs\.com|pypi\.org|docker\.io|docker\.com|slack\.com|linear\.app|notion\.com|sentry\.io|twilio\.com|sendgrid\.com|resend\.com|hetzner\.cloud|render\.com|railway\.app|openrouter\.ai|huggingface\.co)$/;
+
+/**
+ * A saved key put in a command that reaches somewhere other than its own service (2026-10-27):
+ * the way a page that steers the model would take a key it can't see. Moderate and lasting, so
+ * it asks after reading, unless the person named that address themselves.
+ */
+function leaksKey(part: string, places: Places): Risk | undefined {
+  const keys = [...part.matchAll(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g)]
+    .map((m) => m[1] ?? '')
+    .filter((v) => places.secretNames?.includes(v) || KEY_VAR.test(v));
+  if (!keys.length) return undefined;
+  const away = [...part.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/(?:[^@/\s'"]*@)?([^/:\s?#'"@]+)/gi)]
+    .map((m) => (m[1] ?? '').toLowerCase())
+    .filter((host) => !LOOPBACK.test(host) && !KEY_HOMES.test(host));
+  if (!away.length) return undefined;
+  return moderate(
+    'exfiltration',
+    `send a saved key (${keys[0]}) to ${away[0]}, which isn’t that service’s own address`,
+    true,
+    wish(WISHES.egress as RegExp, away[0]),
+  );
 }
 
 /** Packages and releases going out to everyone. */
@@ -1983,11 +2190,95 @@ function sshFlags(words: string[]): string[] {
 }
 
 /** One piece of a command line. */
+/**
+ * Vendors' own command-line tools, run through a package runner (`npx wrangler`, `pnpm dlx
+ * vercel`, `bunx supabase`), by their npm name: each is judged as itself (2026-10-27), so a
+ * deploy is a deploy and `wrangler tail` a look, not an install of something unknown.
+ */
+const VENDOR_CLIS: Record<string, string> = {
+  wrangler: 'wrangler',
+  vercel: 'vercel',
+  netlify: 'netlify',
+  'netlify-cli': 'netlify',
+  supabase: 'supabase',
+  prisma: 'prisma',
+  'firebase-tools': 'firebase',
+  firebase: 'firebase',
+  'drizzle-kit': 'drizzle-kit',
+  '@railway/cli': 'railway',
+  railway: 'railway',
+  heroku: 'heroku',
+  'aws-cdk': 'cdk',
+  cdk: 'cdk',
+  serverless: 'serverless',
+  sst: 'sst',
+  surge: 'surge',
+};
+
+/** Shell-quotes a word that needs it, to rebuild a command from its words. */
+const quoted = (word: string) =>
+  /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
+
+/** The vendor CLI command a package runner runs, as if typed bare; undefined for anything else. */
+function runnerInner(prog: string, words: string[]): string | undefined {
+  let at = 1;
+  if (/^(?:pnpm|yarn|bun)$/.test(prog) && /^(?:exec|dlx|x)$/.test(words[1] ?? '')) at = 2;
+  else if (prog === 'npm' && /^(?:exec|x)$/.test(words[1] ?? '')) at = 2;
+  else if (prog === 'yarn' && VENDOR_CLIS[words[1] ?? '']) at = 1;
+  else if (!/^(?:npx|bunx)$/.test(prog)) return undefined;
+  // Their own flags first (`npx -y`, `npm exec --`); a `--package` names something else to fetch.
+  while (at < words.length && /^-/.test(words[at] ?? '')) {
+    if (/^(?:-p|--package)(?:=|$)/.test(words[at] ?? '')) return undefined;
+    at++;
+  }
+  // A name and at most a version: `wrangler@3`, never an address or another package's alias.
+  const spec = /^(@?[\w.-]+(?:\/[\w.-]+)?)(?:@[\w.^~<>=*-]+)?$/.exec(words[at] ?? '');
+  const cli = spec?.[1] ? VENDOR_CLIS[spec[1]] : undefined;
+  if (!cli) return undefined;
+  return [cli, ...words.slice(at + 1)].map(quoted).join(' ');
+}
+
+/** Bigger than any package.json people write by hand: not read. */
+const MAX_MANIFEST = 512 * 1024;
+
+/**
+ * The script `npm run <name>` (`pnpm run`, `yarn run`, `bun run`) runs, from the work folder's
+ * own package.json, one level deep: what `pnpm run deploy` does is what its script says.
+ * Undefined when it's not a script run, it runs elsewhere (`--filter`, `--prefix`), or the
+ * script can't be read.
+ */
+function scriptBody(prog: string, words: string[], places: Places): string | undefined {
+  if ((places.depth ?? 0) >= 1 || !/^(?:npm|pnpm|yarn|bun)$/.test(prog)) return undefined;
+  if (!/^(?:run|run-script)$/.test(words[1] ?? '')) return undefined;
+  if (words.some((w) => /^(?:--filter|-F|--prefix|-C|--dir|--cwd|-w|--workspace)(?:=|$)/.test(w)))
+    return undefined;
+  const name = words.slice(2).find((w) => !w.startsWith('-'));
+  if (!name) return undefined;
+  try {
+    const file = join(places.workspace, 'package.json');
+    if (statSync(file).size > MAX_MANIFEST) return undefined;
+    const json = JSON.parse(readFileSync(file, 'utf8')) as { scripts?: Record<string, unknown> };
+    const body = json.scripts?.[name];
+    return typeof body === 'string' && body.length < 4000 ? body : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function partRisk(part: string, places: Places): Risk | undefined {
   const words = wordsOf(part);
   const prog = program(part);
   if (!prog) return undefined;
   words[0] = prog;
+  // `npx wrangler deploy` is `wrangler deploy`: a vendor's own CLI, judged by its own rule.
+  const run = runnerInner(prog, words);
+  if (run) return partRisk(run, places);
+  // `npm run deploy` does what its script says: read it, one level deep.
+  const script = scriptBody(prog, words, places);
+  if (script) {
+    const inner = commandRisk(script, places, (places.depth ?? 0) + 1);
+    if (inner) return { ...inner, reason: `${inner.reason} (what its script runs)` };
+  }
   // `… | xargs rm -rf`: what it deletes is only known when it runs.
   if (prog === 'xargs') {
     const inner = unwrap(
@@ -2079,6 +2370,8 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (prog !== 'net' || /\b(?:user|localgroup)\b/i.test(part))
       return severe('privilege', 'change who can use this computer or what they may do');
   }
+  const leak = leaksKey(part, places);
+  if (leak) return leak;
   if (prog === 'git') return gitRisk(words, places);
   if (prog === 'csrutil' && /\bdisable\b/.test(part))
     return severe('safety-off', 'turn off your Mac’s system protection');
@@ -2125,6 +2418,14 @@ function partRisk(part: string, places: Places): Risk | undefined {
         part,
       )) ||
     (prog === 'az' && /\bget-access-token\b/.test(part)) ||
+    // Another password manager's secret, printed (2026-10-27): a command's `secrets` keeps it unseen.
+    (prog === 'op' &&
+      (/\bread\b/.test(part) || /\bitem\s+get\b.*(?:--reveal|--fields)/.test(part))) ||
+    (prog === 'bw' && /\bget\b/.test(part)) ||
+    (prog === 'pass' && /\bshow\b/.test(part)) ||
+    (prog === 'vault' && /\b(?:kv\s+get|read)\b/.test(part)) ||
+    (prog === 'heroku' && /\bauth:token\b/.test(part)) ||
+    (prog === 'doctl' && /\bauth\b.*\btoken\b/.test(part)) ||
     /169\.254\.169\.254|metadata\.google\.internal|fd00:ec2::254/.test(part)
   )
     return severe('credentials', 'print a sign-in token into the chat');
@@ -2164,6 +2465,8 @@ function partRisk(part: string, places: Places): Risk | undefined {
     return severe('exfiltration', 'open this computer to the internet', false, tunnel);
   if (prog === 'ssh' && sshFlags(words).some((w) => /^-\w*R/.test(w)))
     return severe('exfiltration', 'open this computer to another one', false, tunnel);
+  const money = moneyRisk(prog, words);
+  if (money) return money;
   const infra = infraRisk(part, prog, words);
   if (infra) return infra;
   const publish = publishRisk(prog, words);
@@ -2253,7 +2556,7 @@ function worst(risks: (Risk | undefined)[]): Risk | undefined {
 }
 
 /** What a command line could do, at its worst. */
-export function commandRisk(command: string, context: RiskContext): Risk | undefined {
+export function commandRisk(command: string, context: RiskContext, depth = 0): Risk | undefined {
   const places: Places = {
     workspace: resolve(context.workspace),
     home: context.home ?? homedir(),
@@ -2261,6 +2564,9 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     ...(context.said && { said: context.said }),
     ...(context.treeClean && { treeClean: context.treeClean }),
     ...(context.sameRemote && { sameRemote: context.sameRemote }),
+    ...(context.currentBranch && { currentBranch: context.currentBranch }),
+    ...(context.secretNames?.length && { secretNames: context.secretNames }),
+    ...(depth > 0 && { depth }),
   };
   const risks: (Risk | undefined)[] = [];
   for (const script of scriptsOf(command)) {
@@ -2584,7 +2890,16 @@ export function assessRisk(
     (toolName === 'Bash' || toolName === 'PowerShell' || /^process_start$/.test(bare)) &&
     typeof args.command === 'string'
   )
-    return commandRisk(args.command, context);
+    return commandRisk(args.command, {
+      ...context,
+      ...(Array.isArray(args.secrets) && {
+        secretNames: args.secrets.flatMap((ref: unknown) =>
+          ref && typeof ref === 'object' && typeof (ref as { name?: unknown }).name === 'string'
+            ? [(ref as { name: string }).name]
+            : [],
+        ),
+      }),
+    });
   const said = (risk: Risk | undefined) => (risk ? wanted(risk, context.said) : undefined);
   if (FILE_WRITERS.has(toolName)) {
     const raw = String(args.file_path ?? args.notebook_path ?? '');

@@ -67,6 +67,7 @@ const NPM = words(`
   openai @anthropic-ai/sdk langchain
   create-vite create-next-app create-react-app create-svelte create-astro shadcn degit serve
   http-server live-server npm-check-updates pnpm yarn npm corepack
+  wrangler vercel netlify-cli supabase firebase-tools aws-cdk serverless sst surge
 `);
 
 /** Scopes only their owners publish under: a name in one is theirs, not a squatter's. */
@@ -175,6 +176,13 @@ export function wellKnown(registry: Registry, name: string): boolean {
   return LISTS[registry].has(key);
 }
 
+/** `long` is `short` with one letter typed twice. */
+function doubled(long: string, short: string): boolean {
+  for (let i = 1; i < long.length; i++)
+    if (long[i] === long[i - 1] && long.slice(0, i) + long.slice(i + 1) === short) return true;
+  return false;
+}
+
 /** Edits between two names, a swap of neighbours counting as one (Damerau). Stops past 2. */
 function distance(a: string, b: string): number {
   if (Math.abs(a.length - b.length) > 1) return 2;
@@ -210,6 +218,8 @@ export function imitates(registry: Registry, name: string): string | undefined {
     if (known === key) continue;
     if (known.replace(/[-_.]/g, '') === bare) return known;
     if (key.length >= 5 && known.length >= 5 && distance(key, known) === 1) return known;
+    // A short name with one of its letters doubled (`zodd`, `yupp`): a slip, not another name.
+    if (known.length < 5 && key.length === known.length + 1 && doubled(key, known)) return known;
   }
   return undefined;
 }
