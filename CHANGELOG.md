@@ -4,49 +4,19 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
 
+### New
 
-### Features
+- Process_start runs a keyed command to the end, and lasts two hours while you can answer
+- A task or your own chat app uses a saved key as a chat does, and a yes stays in the chat's log
+- What you said on a site settles it in Auto: a sign-in you asked for, a booking
+- A long job on a model that calls tools in words is offered one that calls them itself
+- An email carries a file from the work folder, its size on the card
+- Gmail tidies, unsubscribes and Calendar answers invitations itself, not through the browser
+- "force-push my branch" names the branch checked out
 
-* **nacre:** the model switch card offers a long job a model that calls tools itself ([e2a621e](https://github.com/georgevibing/conch-agent/commit/e2a621ecf9b9f2131b532c427a36d4ce566bdd84))
-* **server:** "force-push my branch" names the branch checked out ([ddaad7e](https://github.com/georgevibing/conch-agent/commit/ddaad7e8fc3c444ec1c49e3e15a70a3121baedab))
-* **server:** a form fills from your saved passport after one card, and a named site's Google sign-in needs none ([93e1111](https://github.com/georgevibing/conch-agent/commit/93e1111f5d2108bd0abc727a22666678bf55143a))
-* **server:** a long job on a model that calls tools in words is offered one that calls them itself, once a chat ([2cbe38a](https://github.com/georgevibing/conch-agent/commit/2cbe38ada2f60cd51239d9447ffff08f7d7b766d))
-* **server:** a task or your own chat app uses a saved key as a chat does, and a yes stays in the chat's log ([001f94d](https://github.com/georgevibing/conch-agent/commit/001f94d17d85aa1f0d3a7a6b0ab7c94e45c561cc))
-* **server:** an email carries a file from the work folder, its size on the card ([058bd0e](https://github.com/georgevibing/conch-agent/commit/058bd0eda8cb8a13e759cfc3635fd4e23ebe398f))
-* **server:** answering an invitation can suggest another time, said on the answer ([7606757](https://github.com/georgevibing/conch-agent/commit/7606757fcbd2b5a51e063f08402660cee62b1bf5))
-* **server:** Gmail tidies, unsubscribes and Calendar answers invitations itself, not through the browser ([e5ba95a](https://github.com/georgevibing/conch-agent/commit/e5ba95aa829ec09942160f517ea671cc1bd2e670))
-* **server:** process_start runs a keyed command to the end, and lasts two hours while you can answer ([d77d14c](https://github.com/georgevibing/conch-agent/commit/d77d14c29761b580f1984885580e185c19dded69))
-* **server:** what you said on a site settles it in Auto: a sign-in you asked for, a booking, an order inside your limit ([98aeedd](https://github.com/georgevibing/conch-agent/commit/98aeedd5f9da24a2deeb38724106283b456e1478))
+### Fixed
 
-
-### Bug Fixes
-
-* **server:** a booking beside a total to pay keeps its card, as paying does ([0943516](https://github.com/georgevibing/conch-agent/commit/09435168a374c2faf52ea89ac30473fbfe65cfba))
-* **server:** a brand that's an everyday word, or a bank's, lifts a sign-in only beside sign-in words ([da3bae8](https://github.com/georgevibing/conch-agent/commit/da3bae84c4aaa72d67219d3dac79aa562dad17ad))
-* **server:** a chat hears which of its commands a restart stopped, and nothing reruns by itself ([2c28399](https://github.com/georgevibing/conch-agent/commit/2c28399574477ed5c9b74f1dd6b3ab44a4240f52))
-* **server:** a crash tells a chat which of its commands it cut off, as a restart does ([738b18c](https://github.com/georgevibing/conch-agent/commit/738b18c2db3e3a3c34bad42ee2a4d2870867feba))
-* **server:** a keyed command waits to its end where Conch runs the call, and under the limit where a provider's client has one ([05df880](https://github.com/georgevibing/conch-agent/commit/05df8805e431607421d29262ea9d9f5603a5a82e))
-* **server:** a long keyed command comes back with its id to wait for, not a timed-out call ([1e16bec](https://github.com/georgevibing/conch-agent/commit/1e16becaacf50030cff89bcf0796d6a9940e2f25))
-* **server:** a plan's price a month or a renewal keeps its card; naming a site signs in; the owner's chat app browses as the chat ([f739b91](https://github.com/georgevibing/conch-agent/commit/f739b91fca8644e535efca388b3fc7a9d0067596))
-* **server:** a saved key is named by its site or one clear word, and a yes holds for that item since the last clear ([464eeaa](https://github.com/georgevibing/conch-agent/commit/464eeaa518bd8c3309dfce99f7efc63472e1868b))
-* **server:** a small model told about an app has that app's tools loaded ([2381a15](https://github.com/georgevibing/conch-agent/commit/2381a1575034ed0db3906e738f6551050719858e))
-* **server:** a vendor delete needs delete words, every secret store is one rule, a push skipping checks asks ([40ed10d](https://github.com/georgevibing/conch-agent/commit/40ed10d2b5e767df3b9453ee5d2140eae9399c51))
-* **server:** an app's code and queries are read for what they do, and a key in a message never passes as one ([a0076af](https://github.com/georgevibing/conch-agent/commit/a0076afc4206136415a079b95bb7ea3ff6a3f7a3))
-* **server:** an app's code or query asks unless the rules can read it, and pasted words ask for nothing ([e266c4d](https://github.com/georgevibing/conch-agent/commit/e266c4d0227853153ce6dbf12fc2f2179f6efd39))
-* **server:** Auto doesn't push or merge onto main unless you asked ([a895484](https://github.com/georgevibing/conch-agent/commit/a8954847279210371ea39b14389df9e8cc0c0997))
-* **server:** Auto judges a command by what it does: vendor CLIs, scripts, databases, money, keys ([6bfebb1](https://github.com/georgevibing/conch-agent/commit/6bfebb1d1cb48aa111ff46fac149b8b3147ecd52))
-* **server:** Auto keeps the person's sentence after a reported one, reads HEAD as the branch, and lets a lookup go when nothing could review it ([7176688](https://github.com/georgevibing/conch-agent/commit/7176688ed1ed653aab7f21eefaf885f0f507bb9a))
-* **server:** Auto reads a PIN you named, as your own e2e journey expects ([11f891f](https://github.com/georgevibing/conch-agent/commit/11f891f8a6dc5086837c9a1467123ffa22936134))
-* **server:** Auto reads an app's step as a lookup only on evidence, and the review stays a backstop after reading ([f22b705](https://github.com/georgevibing/conch-agent/commit/f22b705ca7a30f55df8570bf6dc6b6877529b05b))
-* **server:** Auto reads keys as data, deploy branches, merges and live Stripe calls for what they do ([21ebb9a](https://github.com/georgevibing/conch-agent/commit/21ebb9a5147bb50d20708db4d67bb06299cd10ad))
-* **server:** Auto still asks before a card's PIN or a recovery phrase enters the model ([69d23ec](https://github.com/georgevibing/conch-agent/commit/69d23ecf03ee39d4de07fcaa4bd4136c88d69859))
-* **server:** Auto's review lifts an app's step as it does a command, and your words decide when nothing can review ([f49031e](https://github.com/georgevibing/conch-agent/commit/f49031eff5c0ec84c581f5be200d9542cf275dc3))
-* **server:** Claude Code takes one more look at an app that didn't start ([1f0a51b](https://github.com/georgevibing/conch-agent/commit/1f0a51b414ab45567ddfb6b15f2637d04fcc9667))
-* **server:** Codex CLI is told the way past its sandbox is Conch's process_start ([0051999](https://github.com/georgevibing/conch-agent/commit/0051999301fd5b5c92b0e7ff91dd7cc69773e2d6))
-* **server:** Health says when the key to your passwords is a file, and offers the lock ([6786ba1](https://github.com/georgevibing/conch-agent/commit/6786ba1af76f84309e63a0063739879486a5d77e))
-* **server:** the browser takes your own bank, your own passport and a download you asked for at your word ([5689f6e](https://github.com/georgevibing/conch-agent/commit/5689f6efd11a029906e19c7dcf83e9fd3ab10874))
-* **server:** the GitHub app's merges and commits onto main ask like the CLI's ([24aa005](https://github.com/georgevibing/conch-agent/commit/24aa005a707051245ddfca1caf6bee8d2dd2a69f))
-* **server:** the key to your passwords moves into the keychain once it's there, and is never replaced while it can't be reached ([56b7312](https://github.com/georgevibing/conch-agent/commit/56b731284916a82f10ff72e813b0926ca285d653))
+- A booking beside a total to pay keeps its card, as paying does
 
 ## [0.1.0-alpha.19](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-26)
 
