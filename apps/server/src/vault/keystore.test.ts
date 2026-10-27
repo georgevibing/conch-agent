@@ -8,9 +8,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { wrapKey } from './crypto';
 import { FileKeystore, SettledKeystore, type OsKeystore } from './keystore';
 
+interface FakeOs extends OsKeystore {
+  kept: Buffer | undefined;
+  reachable: boolean;
+  keeps: boolean;
+}
+
 /** A pretend keychain: what it keeps, whether it can be reached, whether it keeps what it's given. */
-function fakeOs({ reachable = true, keeps = true } = {}) {
-  const os = {
+function fakeOs({ reachable = true, keeps = true } = {}): FakeOs {
+  const os: FakeOs = {
     kept: undefined as Buffer | undefined,
     reachable,
     keeps,
@@ -33,7 +39,7 @@ function fakeOs({ reachable = true, keeps = true } = {}) {
     async forget() {
       os.kept = undefined;
     },
-  } satisfies OsKeystore & Record<string, unknown>;
+  };
   return os;
 }
 
