@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +36,8 @@ async function setup(
     resources?: () => Promise<ResourceSnapshot>;
     usage?: (roots: number[]) => Promise<Map<number, TreeUsage>>;
     foregroundMs?: number;
-    interrupted?: Pick<InterruptedProcesses, 'record'>;
+    interrupted?: Pick<InterruptedProcesses, 'record'> &
+      Partial<Pick<InterruptedProcesses, 'started' | 'ended'>>;
   } = {},
 ) {
   const cwd = await mkdtemp(join(tmpdir(), 'conch-process-'));
@@ -709,5 +710,47 @@ describe('how long wait holds, per provider (2026-10-27)', () => {
     expect(foregroundFor(180_000, 600_000)).toBe(150_000);
     expect(foregroundFor(60_000, 600_000)).toBe(30_000);
     expect(foregroundFor(180_000, 20_000)).toBe(20_000);
+  });
+
+  it('tells a chat what a crash cut off, though Conch never closed', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-interrupted-'));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const kept = new InterruptedProcesses(home, Date.now, 10);
+    const { start } = await setup({ interrupted: kept });
+    const { id } = await start('sleep 30', undefined, 60_000);
+    await new Promise((r) => setTimeout(r, 100));
+    // The process dies with Conch: no close. The next Conch reads what was running.
+    const after = new InterruptedProcesses(home);
+    expect(after.take('one').map((i) => i.process)).toEqual([id]);
+    expect(new InterruptedProcesses(home).take('one')).toEqual([]);
+    expect(await readFile(join(home, 'recovery', 'running.json'), 'utf8')).not.toContain('sleep');
+  });
+
+  it('lets go of a command that ended, or was stopped, before anything went wrong', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-interrupted-'));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const kept = new InterruptedProcesses(home, Date.now, 10);
+    const { start, run } = await setup({ interrupted: kept });
+    await start('true', undefined, 60_000);
+    const { id } = await start('sleep 30', undefined, 60_000);
+    await run('process_stop', { id });
+    await new Promise((r) => setTimeout(r, 300));
+    kept.flush();
+    expect(new InterruptedProcesses(home).take('one')).toEqual([]);
+  });
+
+  it('writes what runs a moment later, once for a burst, and drops a damaged list', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-interrupted-'));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const kept = new InterruptedProcesses(home, Date.now, 60_000);
+    for (let i = 0; i < 20; i++) kept.started({ chat: 'c_1', process: `p${i}`, startedAt: 1 });
+    // Not written yet: a crash right now loses at most this moment's starts.
+    await expect(readFile(join(home, 'recovery', 'running.json'), 'utf8')).rejects.toThrow();
+    kept.flush();
+    expect(JSON.parse(await readFile(join(home, 'recovery', 'running.json'), 'utf8'))).toHaveLength(
+      20,
+    );
+    await writeFile(join(home, 'recovery', 'running.json'), '{not json');
+    expect(new InterruptedProcesses(home).take('c_1')).toEqual([]);
   });
 });

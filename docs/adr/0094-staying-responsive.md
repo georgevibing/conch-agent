@@ -291,3 +291,13 @@ again on purpose. It replays nothing; `recovery/` stays out of agent tools and b
 `process_start` with `wait: true` holds to the command's own limit where Conch runs the call
 (the model APIs, Codex's host tools), and under `Engine.toolCallLimitMs` where a provider's
 MCP client has one (Claude Code, the ACP programs).
+
+## Addendum, 2026-10-27: a crash leaves the same note as a restart
+
+`close()` is never reached when Conch crashes, is killed or loses power, so what was running is
+also kept as it starts: `recovery/running.json`, each command's chat id, process id and start
+time (never the command, its output or a key), written a second later so a burst of commands
+is one write, and let go as each ends or is stopped. When Conch starts again, the supervisor's
+restart included, anything still listed was cut off: it joins `interrupted.json` and the chat's
+next turn, a resumed one too, hears which commands stopped. Nothing runs again by itself; a
+damaged list is dropped.

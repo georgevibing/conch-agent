@@ -109,7 +109,8 @@ export class ProcessService {
       /** How long `wait: true` holds the call (`FOREGROUND_MS`; tests make it short). */
       foregroundMs?: number;
       /** Where what a restart stopped is written down, for each chat's next turn (ADR 0094). */
-      interrupted?: Pick<InterruptedProcesses, 'record'>;
+      interrupted?: Pick<InterruptedProcesses, 'record'> &
+        Partial<Pick<InterruptedProcesses, 'started' | 'ended'>>;
     },
   ) {
     this.#pace = new ResourcePace(deps.now);
@@ -355,6 +356,7 @@ export class ProcessService {
   #stop(session: Session, status: 'stopped' | 'timed-out' = 'stopped') {
     if (session.status !== 'running' && session.status !== 'queued') return;
     session.status = status;
+    if (!this.#closed) this.deps.interrupted?.ended?.(session.id);
     clearTimeout(session.timer);
     session.cancel();
     this.#changed(session.id);
@@ -578,6 +580,7 @@ export class ProcessService {
               child.once('error', () => {
                 collect('The command supervisor could not start.', true);
                 if (session.status === 'running') session.status = 'exited';
+                this.deps.interrupted?.ended?.(session.id);
                 session.exitCode = 1;
                 clearTimeout(session.timer);
                 session.cancel();
@@ -587,6 +590,8 @@ export class ProcessService {
               child.once('close', (code) => {
                 collect('', true);
                 if (session.status === 'running') session.status = 'exited';
+                // Closing, it's written down as stopped instead (`close`).
+                if (!this.#closed) this.deps.interrupted?.ended?.(session.id);
                 session.exitCode = code ?? session.exitCode;
                 clearTimeout(session.timer);
                 session.cancel();
@@ -614,6 +619,12 @@ export class ProcessService {
             timer: setTimeout(() => this.#stop(session, 'timed-out'), timeout).unref(),
           };
           this.#sessions.set(session.id, session);
+          // Kept as it starts, so a crash still leaves its chat the note (ADR 0094).
+          this.deps.interrupted?.started?.({
+            chat: session.owner,
+            process: session.id,
+            startedAt: session.at,
+          });
           ctx.signal.addEventListener('abort', onAbort, { once: true });
           this.#watch();
           await this.#pump();
