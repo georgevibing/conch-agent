@@ -833,6 +833,8 @@ export const AnswerVaultRequestBody = z.object({
 export const VaultPermission = z.object({
   /** `use`: put it into a command's environment, unseen by the assistant (ADR 0151). */
   action: z.enum(['read', 'fill', 'use']),
+  /** Which item, so a later yes is matched by it and not by a title two items share. */
+  itemId: z.string().max(300).optional(),
   itemTitle: z.string(),
   itemType: VaultItemType,
   fieldLabel: z.string(),

@@ -12,7 +12,14 @@ import { SettingsStore } from '../../settings/store';
 import { fakeCodexApp } from '../../test/fakeCodexApp';
 import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
-import { CodexEngine, codexPlan, codexProblem, codexUsage, escapes } from './app-engine';
+import {
+  AGENT_ROUTE,
+  CodexEngine,
+  codexPlan,
+  codexProblem,
+  codexUsage,
+  escapes,
+} from './app-engine';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -735,6 +742,18 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     expect(config).toContain('features.apps=false');
   });
 
+  it('tells its model the way past its own sandbox: Conch’s process_start', async () => {
+    const { engine, fake, turn } = await agent({});
+    await collect(engine.runTurn(turn({})));
+    const thread = (await fake.calls()).find((c) => c.method === 'thread/start')?.params as {
+      developerInstructions?: string;
+    };
+    expect(thread.developerInstructions).toContain(AGENT_ROUTE);
+    expect(escapes('item/commandExecution/requestApproval', { itemId: 'c' }, true)).toContain(
+      'process_start',
+    );
+  });
+
   it('names each path once, so Codex never refuses its own profile as a duplicate key', async () => {
     const { engine, fake, turn, home } = await agent({});
     const vault = join(home, 'vault');
@@ -968,7 +987,9 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     expect(events2).toContainEqual({
       type: 'notice',
       code: 'sandbox',
-      message: 'Codex asked to reach the network. Its commands have no network in Conch.',
+      message: expect.stringMatching(
+        /^Codex asked to reach the network\. Its commands have no network in Conch\. It can run through Conch’s process_start/,
+      ),
     });
   });
 

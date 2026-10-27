@@ -48,3 +48,29 @@ describe('a Passwords yes kept in the chat’s log (ADR 0151)', () => {
     expect(vaultAnswered([asked('p1'), answered('p1', 'allow')], question)).toBe(false);
   });
 });
+
+describe('a Passwords yes, by the item and since the last clear', () => {
+  const withId = (permissionId: string, itemId: string) => {
+    const event = asked(permissionId, 'GH_TOKEN') as unknown as {
+      vault: Record<string, unknown>;
+    };
+    return { ...event, vault: { ...event.vault, itemId } } as unknown as ConversationEvent;
+  };
+
+  it('matches by id where the question kept one', () => {
+    const log = [withId('p1', 'pw_a'), answered('p1', 'allow')];
+    expect(vaultAnswered(log, { ...question, itemId: 'pw_a' })).toBe(true);
+    // Another item saved under the same title isn't the one allowed.
+    expect(vaultAnswered(log, { ...question, itemId: 'pw_b' })).toBe(false);
+  });
+
+  it('forgets a yes from before the chat was cleared', () => {
+    const cleared = { type: 'context.cleared', seq: 3, at: 0, conversationId: 'c1' };
+    const log = [
+      asked('p1', 'GH_TOKEN'),
+      answered('p1', 'allow'),
+      cleared as unknown as ConversationEvent,
+    ];
+    expect(vaultAnswered(log, question)).toBe(false);
+  });
+});

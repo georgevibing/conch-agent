@@ -50,6 +50,24 @@ describe('naming a key for a command, unseen', () => {
     expect(names('use my saved Stripe key', 'Stripe live key')).toBe(false);
   });
 
+  it('names an item by its site, and not by a secret word another item shares', () => {
+    expect(named('use my github token', 'Gh pat giotiskl', { sites: ['github.com'] })).toBe(true);
+    expect(named('use my github token', 'Gh pat giotiskl')).toBe(false);
+    const saved = { others: ['Stripe live key'] };
+    expect(named('use my saved key for the API', 'House key code', saved)).toBe(false);
+    // The only item whose title has "pat": "the PAT I saved" is that one.
+    expect(named('the PAT I saved', 'Gh pat giotiskl', saved)).toBe(true);
+    expect(named('the PAT I saved', 'Gh pat giotiskl', { others: ['Old PAT'] })).toBe(false);
+  });
+
+  it('weighs the item’s sites and the other items when asked for a command', () => {
+    const said = () => ['use my saved key for the API'];
+    const ctx = { permissionMode: 'auto' as const, said };
+    expect(consented(ctx, 'House key code', { loose: { others: ['Stripe live key'] } })).toBe(
+      false,
+    );
+  });
+
   it('a task from a watched chat counts as answered, a routine doesn’t', () => {
     const said = () => ['use the gh pat giotiskl'];
     const task = { permissionMode: 'auto' as const, unattended: true, attended: true, said };

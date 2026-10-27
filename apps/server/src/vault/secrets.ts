@@ -161,6 +161,10 @@ export class CommandSecrets {
       );
     const env: Record<string, string> = {};
     let longest = 0;
+    // Names, kinds and sites only: what `named` weighs the person's words against.
+    const known = await Promise.resolve()
+      .then(() => this.vault.forAgent())
+      .catch(() => []);
     for (const ref of wanted) {
       let policy: Awaited<ReturnType<VaultService['readPolicy']>>;
       try {
@@ -176,10 +180,17 @@ export class CommandSecrets {
         throw new Error(
           `Nobody is here to agree to using “${policy.title}”, so this run can’t use it. Do it without the key, or leave it for the user. (They can let the assistant use it without asking, under the item’s Your assistant setting.)`,
         );
-      const yes = consented(ctx, policy.title, { loose: true });
+      const mine = known.find((item) => item.id === ref.item);
+      const yes = consented(ctx, policy.title, {
+        loose: {
+          sites: mine?.sites ?? [],
+          others: known.filter((item) => item.id !== ref.item).map((item) => item.title),
+        },
+      });
       const before =
         this.#isAllowed(ctx.conversationId, key) ||
         (ctx.answeredBefore?.({
+          itemId: ref.item,
           itemTitle: policy.title,
           fieldLabel: policy.field.label,
           envName: ref.name,
@@ -192,6 +203,7 @@ export class CommandSecrets {
           summary: `use the ${policy.field.label.toLowerCase()} of “${policy.title}” in a command`,
           vault: {
             action: 'use',
+            itemId: ref.item,
             itemTitle: policy.title,
             itemType: policy.type,
             fieldLabel: policy.field.label,

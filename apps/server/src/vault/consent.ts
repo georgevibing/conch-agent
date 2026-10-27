@@ -20,8 +20,11 @@ export function consented(
   {
     loose = false,
   }: {
-    /** Into a command, unseen: "the PAT I saved" or "my Stripe key" names it too (`named`). */
-    loose?: boolean;
+    /**
+     * Into a command, unseen: "the PAT I saved" or "my Stripe key" names it too (`named`),
+     * given the item's sites and the titles of the person's other items.
+     */
+    loose?: boolean | Kept;
   } = {},
 ): boolean {
   if (ctx.unattended && !ctx.attended) return false;
@@ -29,9 +32,11 @@ export function consented(
   if (!trust && ctx.permissionMode !== 'auto') return false;
   // Only the person's words: empty when someone else is in the chat, so a page or a
   // stranger naming the item never counts.
-  const match = loose ? named : names;
+  const kept = loose === true ? {} : loose || undefined;
   // What they pasted in (a quoted email naming the item) isn't theirs (2026-10-27).
-  if ((ctx.said?.() ?? []).some((message) => match(ownWords(message), title))) return true;
+  const match = (message: string) =>
+    kept ? named(ownWords(message), title, kept) : names(ownWords(message), title);
+  if ((ctx.said?.() ?? []).some(match)) return true;
   // Full trust still asks after someone else's words came in (`untrusted` leaves out
   // what a page said, since the person trusted the chat with that).
   return trust && !ctx.untrusted?.();
@@ -71,19 +76,51 @@ export function names(message: string, title: string): boolean {
   return wanted.length > 1 || SECRETS.test([...said].join(' '));
 }
 
+/** What else Passwords knows about an item, for `named`. */
+export interface Kept {
+  /** The item's own sites ("github.com"): "my github token" names it. */
+  sites?: readonly string[];
+  /** The titles of the person's other items: a word shared with one of them names neither. */
+  others?: readonly string[];
+}
+
+/** The part of a site people say: "github" for github.com, "cloudflare" for dash.cloudflare.com. */
+function brand(site: string): string | undefined {
+  const labels =
+    site
+      .toLowerCase()
+      .replace(/^\w+:\/\//, '')
+      .split('/')[0]
+      ?.split('.') ?? [];
+  // The label before the suffix, two labels back for a short country one ("bbc.co.uk").
+  const tail = labels.length > 2 && (labels.at(-2)?.length ?? 0) <= 3 ? 3 : 2;
+  const name = labels.at(-tail);
+  return name && name.length >= 3 ? name : undefined;
+}
+
 /**
  * Named for a command that never shows it to the model (ADR 0151, 2026-10-27): as `names`
- * does, or a word of the title beside a word for a secret ("my Stripe key" for "Stripe live
- * key", "the cloudflare token"), or a secret word of the title beside one that says they
- * keep it ("the PAT I saved" for "Gh pat giotiskl", "the token in Passwords").
+ * does, or a distinctive word of the title or of its site beside a word for a secret ("my
+ * Stripe key" for "Stripe live key", "my github token" for an item at github.com), or a
+ * secret word of the title beside one that says they keep it ("the PAT I saved" for "Gh pat
+ * giotiskl"), but only when no other item's title has that secret word: "my saved key" is
+ * no one key when "House key code" and "Stripe live key" are both saved (2026-10-27).
  */
-export function named(message: string, title: string): boolean {
+export function named(
+  message: string,
+  title: string,
+  { sites = [], others = [] }: Kept = {},
+): boolean {
   if (names(message, title)) return true;
   const wanted = words(title);
   const said = new Set(words(message));
   const secret = [...said].some((word) => SECRET_WORD.test(word));
-  const own = wanted.filter((word) => word.length >= 3 && !SECRET_WORD.test(word));
+  const own = [
+    ...wanted.filter((word) => word.length >= 3 && !SECRET_WORD.test(word)),
+    ...sites.map(brand).filter((word): word is string => Boolean(word)),
+  ];
   if (secret && own.some((word) => said.has(word))) return true;
-  const kept = [...said].some((word) => KEPT.test(word));
-  return kept && wanted.some((word) => SECRET_WORD.test(word) && said.has(word));
+  if (![...said].some((word) => KEPT.test(word))) return false;
+  const elsewhere = new Set(others.flatMap(words));
+  return wanted.some((word) => SECRET_WORD.test(word) && said.has(word) && !elsewhere.has(word));
 }
