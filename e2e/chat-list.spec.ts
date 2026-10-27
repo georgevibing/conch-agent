@@ -133,6 +133,10 @@ test('a chat started from a folder is in it from its first message', async ({ pa
 
   // Plain New chat after it starts a chat outside every folder again.
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  // The folder label is already absent in the old chat. Wait for navigation
+  // and the new composer's focus effect before typing into it.
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeFocused();
   await expect(page.getByText('New chat in Trips')).toHaveCount(0);
   const loose = await newChat(page, new Set([...before, inside.id]), () =>
     say(page, 'What to read next', /Ask me to/),
