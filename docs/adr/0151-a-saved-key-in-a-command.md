@@ -127,3 +127,20 @@ was there to answer:
   routine.
 - `passwords_read` in a routine refuses rather than waiting an hour, and its card carries the
   chat's taint so a chat app routes it to you, never to the stranger who wrote.
+
+## Addendum, 2026-10-27 (later): naming, the log, and long keyed commands
+
+- **Loose naming is narrower and wider at once** (`named`). A distinctive word of the title, or
+  of the item's own site ("github" for an item at github.com), beside a word for a secret names
+  it. A secret word of the title beside a saving word ("the PAT I saved") names it only when no
+  other item's title has that word, so "my saved key" isn't "House key code" when "Stripe live
+  key" is saved too. `CommandSecrets` reads the names and sites from `forAgent`, never a value.
+- **A yes in the log is this item's, since the last clear.** The card keeps the item's id
+  (`VaultPermission.itemId`); `vaultAnswered` matches by it (by title only for older cards) and
+  only after the last `context.cleared`, as clearing drops what was allowed (ADR 0128).
+- **`wait: true` holds the call for at most 150 seconds**, under the three minutes a provider's
+  MCP client lets a quiet call go. A command still running comes back with its id and a note to
+  `wait_for` it; it carries on under the same queue and Stop.
+- **Codex CLI is told the way past its sandbox.** Its own shell can't take a key and its
+  requests to leave the sandbox are declined, which its model only sees as "declined". Its
+  instructions (`AGENT_ROUTE`) and the decline's notice point at `process_start`.
