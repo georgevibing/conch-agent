@@ -398,3 +398,27 @@ Cloudflare analytics read, and letting a key in a message's words pass as an ord
   keys never.
 - **With nothing to review it**, the person's own words decide: a step they asked for, by its
   words or the app's name and a change word, goes; anything else asks as before.
+
+### Addendum, 2026-10-27 (later): what the app lifts let through, closed
+
+A second replay attacked the lifts above, and five got through. Each is closed in `risk.ts`:
+
+- **Code is read strictly.** `codeEffect` reads a method written as a quoted key
+  (`"method":"DELETE"`); a method it can't read, a method picked at run time and called
+  (`x['del' + 'ete'](…)`), or `eval` is code it can't tell, never a read. A request to a site
+  that isn't the app's own is `egress` no words or review lift.
+- **A query is read by its calls.** A SELECT that calls anything beyond counting, dates, text and
+  JSON can't be told; `net.http_*`, `dblink`, `pg_read_file`, `COPY … TO/PROGRAM` send what it
+  read away (`egress`); `set_config` and a GRANT, a role or row security change who can reach the
+  data (`privilege`, severe when it opens it to the public or anonymous roles).
+- **Code it can't read is only the review's**: no words ask for it (`NOT_BY_WORDS`), and with no
+  review the fallback goes only for a step the rules positively read (`positivelyRead`).
+- **A grant is never a change word's.** Tokens, members, roles and webhooks in an app's code are
+  `privilege`, lifted only by words about access.
+- **What the person pasted isn't theirs.** `ownWords` sets aside fenced, triple-quoted and
+  `>`-quoted text and the middle of a long paste before their words are read, everywhere words
+  decide (`wanted`, `askedInApp`, Passwords' naming); `askedInApp` reads only their latest
+  message.
+- **Code the rules read as a lookup isn't reviewed** (`codeOnlyReads`): no delay, and no card when
+  the review can't run. **A send with no review** goes only when the latest words ask for it and
+  name everyone it goes to, or it answers the thread and adds no one (`sendAsked`).
