@@ -184,7 +184,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
       } catch (error) {
         return error instanceof VaultError ? error.message : 'That item couldn’t be read.';
       }
-      if (policy.ask && !consented(ctx, policy.title)) {
+      if (policy.ask && !consented(ctx, policy.title, { grave: policy.grave })) {
         const decision = await ctx.ask({
           toolName: 'passwords_read',
           input: { item: policy.title, field: policy.field.label },

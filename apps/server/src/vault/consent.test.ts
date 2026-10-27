@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { names } from './consent';
+import { consented, names } from './consent';
 
 describe('the person naming a saved item', () => {
   it('reads every word of the title, in any case and order', () => {
@@ -16,5 +16,18 @@ describe('the person naming a saved item', () => {
 
   it('never matches an empty title', () => {
     expect(names('use the password', '—')).toBe(false);
+  });
+});
+
+describe('no card for a saved item', () => {
+  const said = () => ['read the PIN of Travel Visa'];
+  it('in Auto when named, but not for a grave value read into the model', () => {
+    expect(consented({ permissionMode: 'auto', said }, 'Travel Visa')).toBe(true);
+    expect(consented({ permissionMode: 'auto', said }, 'Travel Visa', { grave: true })).toBe(false);
+  });
+
+  it('in Full trust, grave or not', () => {
+    const trust = { permissionMode: 'bypassPermissions' as const, fullTrust: () => true };
+    expect(consented(trust, 'Travel Visa', { grave: true })).toBe(true);
   });
 });
