@@ -11,7 +11,7 @@ Ask something that needs current information. Conch searches the web and reads p
 
 ## What stays private
 
-- Searches go to Bing. Pages are read without your cookies or sign-ins.
+- Searches go to Bing, or to Keenable's search API when `CONCH_WEB_SEARCH=keenable` is set (Bing answers when Keenable doesn't). Pages are read without your cookies or sign-ins.
 - Sites that need JavaScript, a sign-in or a browser check go through the [browser](./browser.md).
 - Only public HTTPS addresses. Nothing on this computer or your network.
 - A page's words never become instructions or permission to act.
