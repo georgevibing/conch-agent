@@ -6,6 +6,7 @@ import type { ToolContext } from '../conversations/manager';
 import { createFetcher } from '../conchapps/fetcher';
 import type { AppFetcher } from '../conchapps/types';
 import type { HostTool } from '../engines/types';
+import { USER_AGENT } from './outside';
 
 const strip = (html: string) =>
   convert(html, {
@@ -162,6 +163,8 @@ export function researchTools(
           accept: 'application/json',
           'content-type': 'application/json',
           'x-keenable-title': 'Conch',
+          // Conch's name, not the fetcher's default, which carries the conversation's id.
+          'user-agent': USER_AGENT,
           // As `authorization`, which the fetcher never carries to another host.
           ...(key ? { authorization: `Bearer ${key}` } : {}),
         },

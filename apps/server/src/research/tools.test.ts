@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../conversations/manager';
 import type { AppFetcher } from '../conchapps/types';
+import { USER_AGENT } from './outside';
 import { keenableResults, researchTools, searchResults, publicWebFetcher } from './tools';
 
 const ctx = { conversationId: 'one', signal: new AbortController().signal } as ToolContext;
@@ -95,9 +96,14 @@ describe('public research', () => {
       expect(request).toMatchObject({
         url: 'https://api.keenable.ai/v1/search/public',
         method: 'POST',
-        headers: { 'x-keenable-title': 'Conch', 'content-type': 'application/json' },
       });
-      expect(request?.headers).not.toHaveProperty('authorization');
+      // Only these: no key, and nothing naming the person or the conversation.
+      expect(request?.headers).toEqual({
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-keenable-title': 'Conch',
+        'user-agent': USER_AGENT,
+      });
       expect(JSON.parse(request?.body ?? '')).toEqual({ query: 'tides today', max_results: 10 });
       const text = typeof result === 'object' ? JSON.parse(result.text) : {};
       expect(text).toMatchObject({
