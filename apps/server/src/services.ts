@@ -1441,7 +1441,10 @@ export class Services {
               ...documentTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
-              ...researchTools(ctx, fetchPublicWeb),
+              ...researchTools(ctx, fetchPublicWeb, {
+                engine: config.CONCH_WEB_SEARCH,
+                keenableKey: config.KEENABLE_API_KEY,
+              }),
               weatherTool(ctx, fetchPublicWeb),
               ...chartTools(),
               ...recipeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
