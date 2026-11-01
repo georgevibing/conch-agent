@@ -113,7 +113,7 @@
 
   /* ── Detail ──────────────────────────────────────────────────────── */
   /* Icon, words, then the switch and its buttons; on a phone (a header narrower
-     than 30rem) those go under the words, where they start. */
+     than 30rem) those get their own row, with the full width for touch controls. */
   .detailHeader {
     display: flex;
     flex-wrap: wrap;
@@ -124,16 +124,6 @@
 
   .detailHeader > .detailIcon {
     flex: none;
-  }
-
-  @container (inline-size < 30rem) {
-    .detailTitle {
-      flex-basis: calc(100% - 3rem - var(--nc-space-4));
-    }
-
-    .detailActions {
-      margin-inline-start: calc(3rem + var(--nc-space-4));
-    }
   }
 
   .detailIcon {
@@ -152,6 +142,22 @@
     flex: 1;
     min-inline-size: 0;
     overflow-wrap: anywhere;
+  }
+
+  .detailActions {
+    flex-wrap: wrap;
+    max-inline-size: 100%;
+  }
+
+  /* Keep this after the flex shorthand above, which resets flex-basis. */
+  @container (inline-size < 30rem) {
+    .detailTitle {
+      flex-basis: calc(100% - 3rem - var(--nc-space-4));
+    }
+
+    .detailActions {
+      flex-basis: 100%;
+    }
   }
 
   /* Who does it, in the line under the title: its face sits on the text. */

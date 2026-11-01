@@ -114,7 +114,7 @@ test('a routine’s page fits a phone, details open, however long its words', as
   const made = [
     await request.post('/api/routines', {
       data: {
-        title: 'Weekly fitness recap',
+        title: 'Monthly wealth check-in',
         summary: 'Food, runs and sleep from the week, in a few lines.',
         prompt: long,
         schedule: { type: 'weekly', days: ['sun'], time: '18:00' },
@@ -146,6 +146,25 @@ test('a routine’s page fits a phone, details open, however long its words', as
     expect(res.ok()).toBe(true);
     const { id } = (await res.json()) as { id: string };
     await page.goto(`/routines/${id}`);
+    // A page can avoid horizontal overflow while squeezing its title to one letter
+    // per line. Check usable title space and actions below the words as well.
+    for (const width of [320, 390, 430]) {
+      await page.setViewportSize({ width, height: 844 });
+      const heading = page.getByRole('heading', { level: 1 });
+      await expect(heading).toBeVisible();
+      const words = await heading.locator('..').boundingBox();
+      const actions = await page
+        .getByRole('button', { name: /^(Run now|Try it now)$/ })
+        .boundingBox();
+      if (!words || !actions) throw new Error('Routine heading or controls have no layout box');
+      expect(words.width).toBeGreaterThan(width * 0.55);
+      expect(actions.y).toBeGreaterThanOrEqual(words.y + words.height);
+      expect(actions.x + actions.width).toBeLessThanOrEqual(width);
+      const title = await heading.boundingBox();
+      if (!title) throw new Error('Routine title has no layout box');
+      expect(title.height).toBeLessThan(140);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Details' }).click();
     await expect(page.getByText('Permissions')).toBeVisible();
     // Nothing on it scrolls the page sideways: long words wrap, code scrolls in its own box.
