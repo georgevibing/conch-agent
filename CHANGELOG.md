@@ -2,6 +2,12 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.21](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-11-01)
+
+### Fixed
+
+- Give routine titles and controls room on phones
+
 ## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
 
 ### New
