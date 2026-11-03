@@ -48,6 +48,8 @@ export const Env = z.object({
   CONCH_DNS_SERVERS: z.string().optional(),
   CONCH_APP: z.string().optional(),
   CONCH_APP_UPDATES: AppUpdates.optional(),
+  CONCH_WEB_SEARCH: z.enum(['bing', 'keenable']).optional(),
+  KEENABLE_API_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof Env>;
@@ -188,6 +190,16 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
       'install when the desktop app can replace itself with a new version; download when the person installs it (an unsigned Mac app, a .deb). The app sets it.',
     unset: 'download',
     internal: true,
+  },
+  CONCH_WEB_SEARCH: {
+    about:
+      'Where web_search sends a query: bing reads Bing’s search feed; keenable asks Keenable’s search API, which needs no key, and Bing answers whenever Keenable doesn’t.',
+    unset: 'bing',
+  },
+  KEENABLE_API_KEY: {
+    about:
+      'Only with CONCH_WEB_SEARCH=keenable: a Keenable key that lifts the limit on searches without one (1,000 an hour from one address). Searches work without it.',
+    unset: 'searches without a key',
   },
 };
 
