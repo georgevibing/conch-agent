@@ -304,6 +304,25 @@ describe('which way makes the picture', () => {
     );
     expect(spend).toHaveBeenCalledWith(expect.objectContaining({ outputTokens: 9 }), 'openai');
   });
+  it.each(['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'])(
+    'uses %s for transparent images before retiring models',
+    async (model) => {
+      const { run, fetcher } = await setup({}, ['openai']);
+      fetcher.mockImplementationOnce(async () =>
+        Response.json({ data: [{ id: 'gpt-image-1.5' }, { id: model }] }),
+      );
+      expect(text(await run({ background: 'transparent' }))).toMatchObject({
+        by: 'OpenAI',
+        model,
+      });
+      const posted = fetcher.mock.calls.find((c) => c[1]?.method === 'POST');
+      expect(JSON.parse(String(posted?.[1]?.body))).toMatchObject({
+        model,
+        background: 'transparent',
+        size: '1024x1024',
+      });
+    },
+  );
   it('uses a Gemini key when there is no OpenAI one', async () => {
     const { run, fetcher } = await setup({}, ['gemini', 'openrouter']);
     expect(text(await run({ aspect_ratio: '3:4' }))).toMatchObject({
