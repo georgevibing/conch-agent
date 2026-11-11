@@ -254,9 +254,10 @@ export function openAiBackend(
     prepare: async (input, signal) => {
       const ids = await list(signal);
       const transparent = input.background === 'transparent';
-      // Prefer current GPT Image models for transparent output.
+      // GPT Image 2 makes no transparent backgrounds. The 2.6 models do; the retiring
+      // 1.5 and 1-mini stay last so an account without 2.6 still gets one until they go.
       const preferred = transparent
-        ? ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare']
+        ? ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-1.5', 'gpt-image-1-mini']
         : ['gpt-image-2', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'];
       const model =
         input.model ??

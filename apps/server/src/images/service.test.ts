@@ -323,6 +323,19 @@ describe('which way makes the picture', () => {
       });
     },
   );
+  it.each(['gpt-image-1.5', 'gpt-image-1-mini'])(
+    'still makes transparent images with %s when the account has no 2.6 model',
+    async (model) => {
+      const { run, fetcher } = await setup({}, ['openai']);
+      fetcher.mockImplementationOnce(async () =>
+        Response.json({ data: [{ id: 'gpt-image-2' }, { id: model }] }),
+      );
+      expect(text(await run({ background: 'transparent' }))).toMatchObject({
+        by: 'OpenAI',
+        model,
+      });
+    },
+  );
   it('uses a Gemini key when there is no OpenAI one', async () => {
     const { run, fetcher } = await setup({}, ['gemini', 'openrouter']);
     expect(text(await run({ aspect_ratio: '3:4' }))).toMatchObject({
