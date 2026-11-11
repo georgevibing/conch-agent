@@ -254,14 +254,19 @@ export function openAiBackend(
     prepare: async (input, signal) => {
       const ids = await list(signal);
       const transparent = input.background === 'transparent';
-      // GPT Image 2 makes no transparent backgrounds; the one before it does.
+      // Prefer current GPT Image models for transparent output.
       const preferred = transparent
-        ? ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini']
-        : ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini'];
+        ? ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare']
+        : ['gpt-image-2', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'];
       const model =
-        input.model ?? preferred.find((id) => ids.includes(id)) ?? ids[0] ?? 'gpt-image-1';
+        input.model ??
+        preferred.find((id) => ids.includes(id)) ??
+        ids[0] ??
+        'gpt-image-2.6-sunburst';
       if (transparent && model === 'gpt-image-2')
-        throw new Unfit('gpt-image-2 makes no transparent backgrounds. Choose gpt-image-1.5.');
+        throw new Unfit(
+          'gpt-image-2 makes no transparent backgrounds. Choose gpt-image-2.6-sunburst.',
+        );
       const cost = aboutCost(model);
       return {
         model,
