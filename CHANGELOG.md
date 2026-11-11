@@ -2,6 +2,15 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.21](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-11-11)
+
+
+### Bug Fixes
+
+* **server:** keep transparent images working after model retirement ([#44](https://github.com/georgevibing/conch-agent/issues/44)) ([072abe0](https://github.com/georgevibing/conch-agent/commit/072abe01d102efc0ecbf3067dcaf5d8f9ac29ad6))
+* **server:** keep transparent images working on accounts without GPT Image 2.6 ([502e574](https://github.com/georgevibing/conch-agent/commit/502e5740979a58d6c527bd3ed253e27b6f9ca912))
+* **web:** give routine titles and controls room on phones ([d9c491a](https://github.com/georgevibing/conch-agent/commit/d9c491a304a8b732d420b0b74aa53e0ec1ad75bb))
+
 ## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
 
 ### New
