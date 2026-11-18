@@ -4,20 +4,11 @@ Every release, newest first. Conch shows the same notes in Settings â†’ Health â
 
 ## [0.1.0-alpha.21](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-11-18)
 
+### Fixed
 
-### Features
-
-* **server:** hand routines to another agent without the back-and-forth ([e4fd25a](https://github.com/georgevibing/conch-agent/commit/e4fd25a90fa822f30244340cfb4193309d175100))
-
-
-### Bug Fixes
-
-* **server:** keep transparent images working after model retirement ([#44](https://github.com/georgevibing/conch-agent/issues/44)) ([072abe0](https://github.com/georgevibing/conch-agent/commit/072abe01d102efc0ecbf3067dcaf5d8f9ac29ad6))
-* **server:** keep transparent images working on accounts without GPT Image 2.6 ([502e574](https://github.com/georgevibing/conch-agent/commit/502e5740979a58d6c527bd3ed253e27b6f9ca912))
-* **server:** making an access key no longer signs anyone out ([e4fd25a](https://github.com/georgevibing/conch-agent/commit/e4fd25a90fa822f30244340cfb4193309d175100))
-* **web:** give routine titles and controls room on phones ([d9c491a](https://github.com/georgevibing/conch-agent/commit/d9c491a304a8b732d420b0b74aa53e0ec1ad75bb))
-* **web:** keep a document's title and kind on one line on phones ([1c0be3c](https://github.com/georgevibing/conch-agent/commit/1c0be3c899b26ce888f27e7a95724696d32731ba))
-* **web:** the usage meter follows the limit for the chat's model ([22ab780](https://github.com/georgevibing/conch-agent/commit/22ab780fd41eb2cf8e8061e2fd5df750f745a6c3))
+- The usage meter follows the limit for the chat's model
+- Give routine titles and controls room on phones
+- Making an access key no longer signs anyone out
 
 ## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
 
