@@ -61,6 +61,7 @@ const access = (patch: Partial<AccessFile> = {}): AccessFile => ({
   version: 1,
   method: 'none',
   keys: [],
+  scriptKeys: [],
   passkeys: [],
   hellos: [],
   sessions: [],

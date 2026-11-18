@@ -7,6 +7,7 @@ import {
   Page,
   Pearl,
   RoutineCard,
+  RoutineRequestCard,
   RoutinesPaused,
   Skeleton,
   Stack,
@@ -26,7 +27,14 @@ import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
 import { NewRoutine } from './NewRoutine';
 import { PlanRoomSection } from './PlanRoomSection';
 import { RoutineEditor } from './RoutineEditor';
-import { useKeepPaused, useRoutines, useRoutineSpending, useUpdateRoutine } from './queries';
+import {
+  useAnswerRequest,
+  useKeepPaused,
+  useRoutineRequests,
+  useRoutines,
+  useRoutineSpending,
+  useUpdateRoutine,
+} from './queries';
 import styles from './Routines.module.css';
 
 function needsYou(r: Routine) {
@@ -88,6 +96,9 @@ export function RoutinesView() {
     return { name: agent.name, avatar: agent.avatar };
   };
   const keepPaused = useKeepPaused();
+  // Another agent asks to pause some (ADR 0154): only a press here answers.
+  const { data: requests } = useRoutineRequests();
+  const answer = useAnswerRequest();
   const openSettings = useUi((s) => s.openSettings);
   const raiseLimit = () => openSettings('usage', ROUTINES_SPEND_FOCUS);
   // Say what routines spend only once there's something to say.
@@ -112,6 +123,7 @@ export function RoutinesView() {
         scheduleText={r.scheduleText}
         {...(r.when && { waitingText: WAITING_TEXT })}
         {...(watchProblem(r) && { problem: watchProblem(r) })}
+        {...(r.status === 'paused' && r.pausedBecause && { pausedNote: r.pausedBecause.reason })}
         status={r.status}
         nextRunAt={r.nextRunAt}
         icon={routineIcon(r.schedule, r.when)}
@@ -151,6 +163,21 @@ export function RoutinesView() {
           </Button>
         )}
       </header>
+
+      {requests?.map((request) => (
+        <RoutineRequestCard
+          key={request.id}
+          id={`request-${request.id}`}
+          from={request.from}
+          via={request.via}
+          routines={request.routines}
+          reason={request.reason}
+          {...(request.unmatched && { unmatched: request.unmatched })}
+          busy={answer.isPending && answer.variables.id === request.id}
+          onApprove={() => answer.mutate({ id: request.id, approve: true })}
+          onDecline={() => answer.mutate({ id: request.id, approve: false })}
+        />
+      ))}
 
       {spending?.paused && !spending.paused.dismissed && (
         <RoutinesPaused

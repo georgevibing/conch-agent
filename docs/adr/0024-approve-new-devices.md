@@ -112,7 +112,7 @@ approval on, a key used from another device needs approval _as that key_, one
 approval-required` with the code and the command. Once approved, the key works
 from anywhere until the device is removed or the key is revoked. Otherwise a
 stolen key would skip approval through the API. On this computer a key needs
-no approval.
+no approval. A key made in this computer's terminal comes approved (ADR 0153).
 
 **Limits:**
 

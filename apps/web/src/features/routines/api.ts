@@ -3,6 +3,8 @@ import {
   MailPeople,
   Routine,
   RoutineDetail,
+  RoutineExportView,
+  RoutineRequest,
   RoutineRun,
   RoutineSpending,
   SchedulePreview,
@@ -59,6 +61,16 @@ export const routinesApi = {
       body: { timezone },
     }),
   people: () => request(MailPeople, '/api/routines/people'),
+  /** Other agents' requests to pause routines, waiting for your answer (ADR 0154). */
+  requests: () => request(z.array(RoutineRequest), '/api/routines/requests'),
+  /** Your press: the only answer a request takes. */
+  answerRequest: (id: string, approve: boolean) =>
+    request(RoutineRequest, `/api/routines/requests/${encodeURIComponent(id)}/answer`, {
+      method: 'POST',
+      body: { approve },
+    }),
+  /** What another agent needs to recreate it (Move to another agent). */
+  exportOne: (id: string) => request(RoutineExportView, `/api/routines/${id}/export`),
   /** A new secret for another app's address, shown once. */
   newSecret: (id: string) =>
     request(HookSecret, `/api/routines/${id}/secret`, { method: 'POST', body: {} }),

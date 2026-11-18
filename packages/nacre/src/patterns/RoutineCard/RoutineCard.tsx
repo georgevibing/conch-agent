@@ -56,6 +56,8 @@ export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title
   waitingText?: string;
   /** Its source can't look right now, in a sentence (signed out, a folder gone). */
   problem?: string;
+  /** Why it's paused, when someone said: “Moved to Hermes” (shown only while paused). */
+  pausedNote?: string;
   status: RoutineCardStatus;
   nextRunAt?: number;
   lastRun?: RoutineCardLastRun;
@@ -130,6 +132,7 @@ export function RoutineCard({
   scheduleText,
   waitingText,
   problem,
+  pausedNote,
   status,
   nextRunAt,
   lastRun,
@@ -308,7 +311,9 @@ export function RoutineCard({
           )}
           <span className={styles.dim}>
             {status === 'paused'
-              ? 'Paused'
+              ? pausedNote
+                ? `Paused: ${pausedNote}`
+                : 'Paused'
               : status === 'completed'
                 ? 'Finished'
                 : status === 'draft'

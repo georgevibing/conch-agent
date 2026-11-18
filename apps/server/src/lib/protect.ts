@@ -239,6 +239,9 @@ export const PROTECTED_MESSAGE =
  *   in, and from where;
  * - `dashboards send|prometheus|token`: where Conch's numbers go, and who may
  *   read them (ADR 0121). Looking (`dashboards`, `status`, `test`) and `off` are anyone's.
+ * - `routines pause|resume`: turning your routines on and off from the
+ *   terminal, as you (ADR 0154). The assistant has its own way to pause one,
+ *   and only you turn one back on; looking (`routines`, `export`) is anyone's.
  *
  * Whether it's typed `conch …` (the command the installer adds) or
  * `pnpm conch …`, the terminal commands open your keys the way the gateway
@@ -247,7 +250,7 @@ export const PROTECTED_MESSAGE =
  * behind it.
  */
 const CONCH_POWERS =
-  /\b(?:conch(?:\.cmd|\.exe|\.ps1)?|cli\.[cm]?[jt]s)["']?(?:\s+-\S*)*\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|dashboards\s+(?:send|prometheus|token)|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
+  /\b(?:conch(?:\.cmd|\.exe|\.ps1)?|cli\.[cm]?[jt]s)["']?(?:\s+-\S*)*\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|dashboards\s+(?:send|prometheus|token)|routines\s+(?:pause|resume)|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
 
 export function runsConchPower(toolName: string, input: unknown): boolean {
   if (toolName !== 'Bash') return false;
@@ -256,4 +259,4 @@ export function runsConchPower(toolName: string, input: unknown): boolean {
 }
 
 export const CONCH_POWER_MESSAGE =
-  'Signing skills, choosing whose skills to trust, deciding who may sign in and opening Conch as this computer are for the user to do in their own terminal, not for the assistant. Tell them the command to run instead.';
+  'Signing skills, choosing whose skills to trust, deciding who may sign in, turning routines on or off from the terminal and opening Conch as this computer are for the user to do in their own terminal, not for the assistant. Tell them the command to run instead.';

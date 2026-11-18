@@ -102,7 +102,7 @@ describe('your address, from Settings', () => {
 
   it('never lets a script’s access key change where Conch can be reached', async () => {
     const { app, services, set } = await setup();
-    const { key } = await services.access.addKey('Script');
+    const { key } = await services.access.addKey('Script', { signIn: true });
     const res = await remote(app, undefined, { authorization: `Bearer ${key}` }).put(
       '/api/address',
       { name: 'evil.example.com' },
@@ -125,7 +125,7 @@ describe('your address, from Settings', () => {
 
   it('keeps renewing (Let’s Encrypt’s limits) to the owner too', async () => {
     const { app, services } = await setup();
-    const { key } = await services.access.addKey('Script');
+    const { key } = await services.access.addKey('Script', { signIn: true });
     const res = await app.inject({
       method: 'POST',
       url: '/api/address/renew',

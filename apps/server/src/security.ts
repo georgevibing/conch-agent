@@ -298,6 +298,11 @@ export class Gatekeeper {
         this.limiter.fail(this.clientKey(request));
         return 'unauthorized';
       }
+      // Sign-in off means only this computer uses Conch, and a key doesn't change that
+      // (ADR 0153): it lets a script on this computer in, never one from elsewhere. Looking
+      // local isn't trust (ADR 0063), and isn't used as trust here: the key is the proof,
+      // this only keeps where it works as narrow as sign-in being off promises.
+      if (method === 'none' && !this.looksLocal(request)) return 'setup-required';
       if (await this.approvalApplies(request)) {
         const keyName =
           keyId === 'env'
@@ -324,11 +329,23 @@ export class Gatekeeper {
     return 'unauthorized';
   }
 
-  /** The id of the key this is, if it's a valid key. */
+  /**
+   * The id of the key this is, for a script (`Authorization: Bearer`): any
+   * access key that hasn't run out, however people sign in (ADR 0153).
+   */
   async checkKey(key: string): Promise<string | undefined> {
     if (this.config.CONCH_TOKEN && safeEqual(key.trim(), this.config.CONCH_TOKEN)) return 'env';
-    if ((await this.store.method()) !== 'key') return undefined;
     return (await this.store.verifyKey(key)).keyId;
+  }
+
+  /**
+   * The id of the key a person signs in with, or confirms it's them with:
+   * only while access keys are how people sign in (or `CONCH_TOKEN`). A key
+   * made for a script never turns into a browser's 30-day sign-in.
+   */
+  async checkSignInKey(key: string): Promise<string | undefined> {
+    if (this.config.CONCH_TOKEN && safeEqual(key.trim(), this.config.CONCH_TOKEN)) return 'env';
+    return (await this.store.verifyKey(key, { signIn: true })).keyId;
   }
 
   async status(request: FastifyRequest): Promise<AuthStatus> {

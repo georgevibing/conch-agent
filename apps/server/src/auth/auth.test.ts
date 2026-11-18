@@ -513,7 +513,7 @@ describe('access keys', () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/access/keys',
-      payload: { name: 'Laptop' },
+      payload: { name: 'Laptop', signIn: true },
     });
     const { key, info } = created.json();
     expect(key).toMatch(/^conch_[A-Za-z0-9_-]{43}$/);
@@ -532,10 +532,135 @@ describe('access keys', () => {
     const phone = cookieOf(signIn);
     expect(signIn.statusCode).toBe(200);
 
+    // The only key you sign in with stays until there's another way in (ADR 0153).
+    const only = await app.inject({
+      method: 'DELETE',
+      url: `/api/access/keys/${info.id}`,
+      headers: { cookie },
+    });
+    expect(only.statusCode).toBe(409);
+    expect(only.json().message).toContain('only way to sign in');
+    await app.inject({
+      method: 'POST',
+      url: '/api/access/keys',
+      headers: { cookie },
+      payload: { name: 'Spare', signIn: true },
+    });
     await app.inject({ method: 'DELETE', url: `/api/access/keys/${info.id}`, headers: { cookie } });
     expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(401);
     // Devices that signed in with it are signed out too.
     expect((await remote(app, '/api/state', { cookie: phone })).statusCode).toBe(401);
+  });
+});
+
+describe('access keys beside every way in (ADR 0153)', () => {
+  it('makes a key on a password Conch without signing anyone out or changing the password', async () => {
+    const { app, services } = await setup();
+    const owner = await withPassword(app);
+    const phoneIn = await remote(app, '/api/auth/sign-in', {
+      method: 'POST',
+      payload: { with: 'password', username: 'ada', password: PASSWORD },
+    });
+    const phone = cookieOf(phoneIn);
+    const closed = vi.fn();
+    services.gate.track('watching', { close: closed });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/access/keys',
+      headers: { cookie: owner },
+      payload: { name: 'Hermes handoff', expiresIn: 60 * 60 * 1000 },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().info).toMatchObject({ name: 'Hermes handoff' });
+    expect(created.json().info.expiresAt).toBeGreaterThan(Date.now());
+    expect(closed).not.toHaveBeenCalled();
+    expect((await remote(app, '/api/state', { cookie: phone })).statusCode).toBe(200);
+    expect((await app.inject('/api/auth')).json().method).toBe('password');
+    // The key works for a script from anywhere, but isn't a way for a browser to sign in.
+    const bearer = `Bearer ${created.json().key as string}`;
+    expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(200);
+    const asBrowser = await remote(app, '/api/auth/sign-in', {
+      method: 'POST',
+      payload: { with: 'key', key: created.json().key },
+    });
+    expect(asBrowser.statusCode).toBe(401);
+
+    // Revoking it changes nothing for anyone else either.
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/api/access/keys/${created.json().info.id as string}`,
+      headers: { cookie: owner },
+    });
+    expect(revoked.json().method).toBe('password');
+    expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(401);
+    expect((await remote(app, '/api/state', { cookie: phone })).statusCode).toBe(200);
+  });
+
+  it('never lets a key change who may sign in, or make a key', async () => {
+    const { app, services } = await setup();
+    await withPassword(app);
+    const before = (await services.access.get()).passwordHash;
+    const { key } = await services.access.addKey('Script');
+    const authorization = `Bearer ${key}`;
+    for (const [method, url, payload] of [
+      ['POST', '/api/access/keys', { name: 'Forever' }],
+      [
+        'PUT',
+        '/api/access/password',
+        { username: 'mallory', password: 'a whole new password here' },
+      ],
+      ['DELETE', '/api/access', undefined],
+      ['POST', '/api/access/pairing', undefined],
+    ] as const) {
+      const res = await remote(app, url, { method, authorization, ...(payload && { payload }) });
+      expect(res.statusCode, `${method} ${url}`).toBe(403);
+      expect(res.json().error).toBe('person-only');
+    }
+    expect(await services.access.keys()).toHaveLength(1);
+    expect(await services.access.method()).toBe('password');
+    expect((await services.access.get()).passwordHash).toBe(before);
+  });
+
+  it('with sign-in off, a key works for scripts on this computer only', async () => {
+    const { app, services } = await setup();
+    const { key } = await services.access.addKey('Script');
+    const bearer = `Bearer ${key}`;
+    expect((await app.inject('/api/auth')).json().method).toBe('none');
+    const here = await app.inject({
+      url: '/api/state',
+      headers: { authorization: bearer, [NOT_HERE]: '1' },
+    });
+    expect(here.statusCode).toBe(200);
+    expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(401);
+  });
+
+  it('stops a key made for a while once its time is up', async () => {
+    const { app, services } = await setup();
+    await withPassword(app);
+    const { key } = await services.access.addKey('Handoff', { expiresAt: Date.now() + 60_000 });
+    const bearer = `Bearer ${key}`;
+    expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(200);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 61_000);
+    try {
+      expect((await remote(app, '/api/state', { authorization: bearer })).statusCode).toBe(401);
+      await services.expireKeys();
+      expect((await services.access.get()).scriptKeys).toEqual([]);
+      expect((await app.inject('/api/auth')).json().method).toBe('password');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a key people sign in with that would run out', async () => {
+    const { app } = await setup();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/access/keys',
+      payload: { name: 'Mine', signIn: true, expiresIn: 60 * 60 * 1000 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((await app.inject('/api/auth')).json().method).toBe('none');
   });
 });
 

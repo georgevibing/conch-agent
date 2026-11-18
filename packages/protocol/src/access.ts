@@ -11,6 +11,8 @@
  * - `passkey`  — passkeys only: Touch ID, Windows Hello, Face ID (ADR 0065).
  *
  * Passkeys can also sit beside a password or keys: then either way works.
+ * Access keys for scripts and agents sit beside every way (ADR 0153): making
+ * one never changes how people sign in, and never signs anyone out.
  *
  * The password policy and generator live here so the web app, the gateway and
  * the `pnpm conch` CLI all agree on what is acceptable.
@@ -235,7 +237,68 @@ export const SetPasswordBody = z.object({
 });
 export type SetPasswordBody = z.infer<typeof SetPasswordBody>;
 
-export const CreateKeyBody = z.object({ name: z.string().trim().min(1).max(40) });
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+
+/** The shortest and longest a key made for a while may last (ADR 0153). */
+export const KEY_LIFETIME_MIN_MS = 5 * MINUTE_MS;
+export const KEY_LIFETIME_MAX_MS = 365 * DAY_MS;
+
+/** What Settings offers for a key that stops by itself. */
+export const KEY_LIFETIMES: readonly { label: string; ms: number }[] = [
+  { label: '1 hour', ms: 60 * MINUTE_MS },
+  { label: '1 day', ms: DAY_MS },
+  { label: '7 days', ms: 7 * DAY_MS },
+  { label: '30 days', ms: 30 * DAY_MS },
+];
+
+const UNITS: Record<string, number> = {
+  m: MINUTE_MS,
+  min: MINUTE_MS,
+  mins: MINUTE_MS,
+  minute: MINUTE_MS,
+  minutes: MINUTE_MS,
+  h: 60 * MINUTE_MS,
+  hr: 60 * MINUTE_MS,
+  hrs: 60 * MINUTE_MS,
+  hour: 60 * MINUTE_MS,
+  hours: 60 * MINUTE_MS,
+  d: DAY_MS,
+  day: DAY_MS,
+  days: DAY_MS,
+  w: 7 * DAY_MS,
+  week: 7 * DAY_MS,
+  weeks: 7 * DAY_MS,
+};
+
+/**
+ * How long a key should last, as typed after `conch key --for`: "30m", "1h",
+ * "2 days", "1w". `undefined` for anything else, or outside the bounds.
+ */
+export function readKeyLifetime(text: string): number | undefined {
+  const match = /^\s*(\d{1,4})\s*([a-z]+)\s*$/i.exec(text);
+  const unit = match?.[2] ? UNITS[match[2].toLowerCase()] : undefined;
+  if (!match || unit === undefined) return undefined;
+  const ms = Number(match[1]) * unit;
+  return ms >= KEY_LIFETIME_MIN_MS && ms <= KEY_LIFETIME_MAX_MS ? ms : undefined;
+}
+
+export const CreateKeyBody = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    /**
+     * Make access keys the way people sign in (Settings → Access → How you
+     * sign in → Access key). Without it a key is only an extra way in for
+     * scripts and agents: nothing else changes (ADR 0153).
+     */
+    signIn: z.boolean().optional(),
+    /** It stops working by itself this long after it's made. Never for a key people sign in with. */
+    expiresIn: z.number().int().min(KEY_LIFETIME_MIN_MS).max(KEY_LIFETIME_MAX_MS).optional(),
+  })
+  .refine((b) => !(b.signIn && b.expiresIn), {
+    message: 'A key you sign in with can’t run out: make it without a time limit.',
+  });
+export type CreateKeyBody = z.infer<typeof CreateKeyBody>;
 
 export const AccessKeyInfo = z.object({
   id: z.string(),
@@ -244,6 +307,10 @@ export const AccessKeyInfo = z.object({
   hint: z.string(),
   createdAt: z.number(),
   lastUsedAt: z.number().optional(),
+  /** It stops working by itself then (ADR 0153). */
+  expiresAt: z.number().optional(),
+  /** People sign in with it too (access keys are how you sign in); otherwise it's for scripts. */
+  signIn: z.boolean().optional(),
 });
 export type AccessKeyInfo = z.infer<typeof AccessKeyInfo>;
 

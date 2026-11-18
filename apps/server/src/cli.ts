@@ -38,6 +38,7 @@ import { Tailscale } from './network/tailscale';
 import { SERVER_VERSION, SERVER_LABEL } from './version';
 import { HostPolicy, exposure } from './auth/network';
 import { Devices } from './auth/devicesCli';
+import { listKeys, makeKey, revokeKey as revokeAccessKey } from './auth/keysCli';
 import { CLI_COMMANDS, type CliCommand, type CliCommandName, type CliGroup } from './cliCommands';
 import { AccessError, AccessStore } from './auth/store';
 import { BrowserStore } from './browser/store';
@@ -52,8 +53,11 @@ import { ImportService } from './import/service';
 import { MemoryStore } from './memory/store';
 import { probePort, runningGateway } from './port';
 import { ProviderKeys } from './providers/keys';
+import { routinesCommand } from './routines/cli';
 import { RoutineService } from './routines/service';
 import { RoutineStore } from './routines/store';
+import { answerAsk, askRunning, type RoutineAsk } from './routines/terminal';
+import { WhenStore } from './routines/triggers/store';
 import { SkillStore } from './skills/store';
 import { findRepository } from './updates/conch';
 import { PROVIDER_COPY } from './providers/catalog';
@@ -245,54 +249,22 @@ async function password() {
     );
   }
   ui.hint('Every other device was signed out, and signs in with it from now on.');
+  if ((await store.keys()).length) ui.hint('Your access keys still work for scripts.');
 }
 
+/** `conch key`, `keys` and `revoke` (ADR 0153): the words are in `auth/keysCli.ts`. */
+const keysIo = () => ({ store, ui, conch, now: () => Date.now() });
+
 async function key() {
-  const name =
-    process.argv
-      .slice(3)
-      .filter((a) => !a.startsWith('--'))
-      .join(' ') || 'Terminal';
-  const { key: value, info } = await store.addKey(name);
-  ui.ok(`Made the access key “${info.name}”. Sign-in with access keys is on.`);
-  ui.blank();
-  ui.box(
-    [
-      bold(value),
-      dim('Copy it now: it won’t be shown again.'),
-      dim(
-        `Paste it on the sign-in screen, or send it as Authorization: Bearer ${value.slice(0, 10)}…`,
-      ),
-    ],
-    { title: 'Access key', tone: 'accent' },
-  );
+  await makeKey(process.argv.slice(3), keysIo());
 }
 
 async function keys() {
-  const list = await store.keys();
-  if (!list.length) {
-    say('No access keys yet.');
-    ui.hint(`Make one for a script or another device: ${conch('key "My laptop"')}`);
-    return;
-  }
-  say(bold(plural(list.length, 'access key')));
-  ui.blank();
-  for (const k of list)
-    say(
-      `${ui.accent(k.name)}  ${dim(`…${k.hint}  ${k.id}  ${k.lastUsedAt ? `used ${ago(k.lastUsedAt)}` : 'never used'}`)}`,
-    );
+  await listKeys(keysIo());
 }
 
 async function revoke() {
-  const id = process.argv[3];
-  if (!id) {
-    say(`Which one? ${conch('revoke <key id>')}`);
-    ui.hint(`${conch('keys')} lists them with their ids.`);
-    process.exitCode = 1;
-    return;
-  }
-  const ended = await store.revokeKey(id);
-  ui.ok(`Revoked. ${plural(ended.length, 'device')} signed out.`);
+  await revokeAccessKey(process.argv.slice(3), keysIo());
 }
 
 /** `conch passkeys [remove <id>]` (ADR 0065). */
@@ -444,11 +416,12 @@ async function status() {
   }
   ui.blank();
   const signedIn = access.sessions.filter((s) => !s.pending).length;
+  const keyCount = (await store.keys()).length;
   ui.hint(
     [
       `${plural(signedIn, 'device')} signed in`,
       ...(access.passkeys.length ? [plural(access.passkeys.length, 'passkey')] : []),
-      ...(access.keys.length ? [plural(access.keys.length, 'access key')] : []),
+      ...(keyCount ? [plural(keyCount, 'access key')] : []),
       access.approval ? 'new devices need your OK' : 'new devices don’t need your OK',
     ].join(' · '),
   );
@@ -965,6 +938,55 @@ async function importFrom() {
   });
 }
 
+/**
+ * `conch routines` (ADR 0154): the running Conch does it, through a folder
+ * only this account can write; with none running, the files here are changed
+ * directly, as nothing else is writing them.
+ */
+async function routines() {
+  const ask = async (asked: RoutineAsk) => {
+    if (await runningGateway(config.CONCH_HOME)) {
+      const answer = await askRunning(config.CONCH_HOME, asked);
+      if (answer) return answer;
+      return {
+        ok: false as const,
+        error: `Conch is running but didn’t answer. Update it, or restart it with ${conch('quit')} and open it again, then try again.`,
+      };
+    }
+    const dir = join(config.CONCH_HOME, 'routines');
+    // No runs here, so nothing needs a provider.
+    const service = new RoutineService({
+      store: new RoutineStore(dir, heal),
+      conversations: undefined as never,
+      engine: () => undefined as never,
+      emit: () => undefined,
+    });
+    const when = new WhenStore(dir, heal);
+    return answerAsk(
+      {
+        // What starts a When… routine is in its own file (ADR 0056).
+        list: async () =>
+          Promise.all(
+            (await service.list()).map(async (r) => {
+              const file = await when.get(r.id).catch(() => undefined);
+              return file
+                ? { ...r, when: file.when, ...(file.onlyIf && { onlyIf: file.onlyIf }) }
+                : r;
+            }),
+          ),
+        update: (id, input, meta) => service.update(id, input, meta),
+      },
+      asked,
+    );
+  };
+  process.exitCode = await routinesCommand(process.argv.slice(3), {
+    ui,
+    print: (text) => ui.write(text.endsWith('\n') ? text : `${text}\n`),
+    conch,
+    ask,
+  });
+}
+
 async function skills() {
   process.exitCode = await skillsCommand(process.argv.slice(3), new SkillTrust(config.CONCH_HOME), {
     ui,
@@ -1112,6 +1134,7 @@ const commands: Record<CliCommandName | 'help', () => Promise<void> | void> = {
   tray,
   phone,
   import: importFrom,
+  routines,
   skills,
   dashboards,
   help,

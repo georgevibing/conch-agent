@@ -59,6 +59,7 @@ import {
   UsageBudgetBody,
   LimitBackBody,
   SwitchModelBody,
+  RoutineRequestAnswer,
   RoutineSpendingBody,
   UpdateConchBody,
   RestartBody,
@@ -92,6 +93,8 @@ import { googleRoutes } from './google/routes';
 import { slackRoutes } from './slack/routes';
 import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
+import { exportRoutines, exportText } from './routines/export';
+import { RoutineRequestError } from './routines/requests';
 import { RoutineError } from './routines/service';
 import { registerHereRoutes } from './auth/here-routes';
 import { registerAddressRoutes } from './address/routes';
@@ -274,6 +277,8 @@ export async function buildApp(services: Services) {
     store: services.mcp.store,
     agents: services.agents,
     chats: services.conversations,
+    // The one thing another agent can ask for: you pausing routines it took over (ADR 0154).
+    requests: services.routineRequests,
   });
   registerOutsideRoutes(app, { outside: services.outside, rounds: services.rounds });
   // Dashboards (ADR 0121): Settings → Dashboards, and `/metrics` for Prometheus.
@@ -880,6 +885,25 @@ export async function buildApp(services: Services) {
     await services.routineSpend.keepPaused();
     return services.routines.spending();
   });
+  // Someone else asked to pause routines (ADR 0154). Only this press, from
+  // your own sign-in, answers: nothing an agent writes reaches it.
+  app.get('/api/routines/requests', () => services.routineRequests.waiting());
+  app.post<{ Params: { id: string } }>(
+    '/api/routines/requests/:id/answer',
+    async (request, reply) => {
+      const body = parse(RoutineRequestAnswer, request.body, reply);
+      if (!body) return;
+      try {
+        return await services.routineRequests.answer(request.params.id, body.approve);
+      } catch (error) {
+        if (error instanceof RoutineRequestError)
+          return reply
+            .code(error.code === 'not-found' ? 404 : 409)
+            .send({ error: error.code, message: error.message });
+        return sendError(reply, error);
+      }
+    },
+  );
   app.post('/api/routines', async (request, reply) => {
     const body = parse(CreateRoutineBody, request.body, reply);
     if (!body) return;
@@ -900,7 +924,15 @@ export async function buildApp(services: Services) {
     const body = parse(UpdateRoutineBody, request.body, reply);
     if (!body) return;
     try {
-      return await services.routines.update(request.params.id, body);
+      // Why it's paused, in your words (ADR 0154): Move to another agent.
+      const { pausedReason, ...patch } = body;
+      return await services.routines.update(
+        request.params.id,
+        patch,
+        pausedReason && patch.status === 'paused'
+          ? { paused: { reason: pausedReason, by: 'you' } }
+          : {},
+      );
     } catch (error) {
       return sendError(reply, error);
     }
@@ -909,6 +941,18 @@ export async function buildApp(services: Services) {
     try {
       await services.routines.remove(request.params.id);
       return { ok: true };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // Move to another agent (ADR 0154): what it needs to recreate this one, never a secret.
+  app.get<{ Params: { id: string } }>('/api/routines/:id/export', async (request, reply) => {
+    try {
+      const { routine } = await services.routines.detail(request.params.id);
+      const exported = exportRoutines([routine]);
+      return reply
+        .header('cache-control', 'no-store')
+        .send({ export: exported, text: exportText(exported) });
     } catch (error) {
       return sendError(reply, error);
     }

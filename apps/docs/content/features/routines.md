@@ -103,6 +103,16 @@ For one that must go on time, choose **Always run this one** on its page, or tur
 
 Change the monthly limit in **Settings → Usage → Limits**, under **Routines**, or type "what routines may spend" in <kbd>mod+k</kbd>. Your assistant can't change any of these.
 
+## Move one to another agent
+
+Another agent can take a routine over, like Hermes on the same computer.
+
+- On a routine's page, **More → Move to another agent** shows what the other agent needs, with **Copy** and **Copy as JSON**. **Pause it here** pauses it so it doesn't run twice.
+- An agent in your terminal can do it itself: `conch routines export`, then `conch routines pause`. See [For other agents](../reference/for-agents.md).
+- An agent that asks your agent instead gets a card on the Routines page and a notification: **Pause it** or **Decline**. Nothing it writes counts as your answer.
+
+A paused routine says why: **Paused: Moved to Hermes**. Turning it back on clears that.
+
 ## Good to know
 
 - To hear only when something matters, give a [standing order](check-ins.md) instead: "always tell me if a flight changes".

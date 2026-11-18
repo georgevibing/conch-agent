@@ -25,6 +25,7 @@ import {
   type PushStatus,
   type PushSubscriptionJson,
   type PushTopic,
+  type RoutineRequest,
   type RoutineSpending,
   type ServerEvent,
   type Task,
@@ -580,6 +581,29 @@ export class PushService {
         tag: `reply-${e.conversationId}`,
       });
     }
+  }
+
+  /**
+   * Someone else asks to pause routines (ADR 0154). Never Allow from the lock
+   * screen: another agent's request is answered in Conch, where it's seen whole.
+   */
+  async routineRequest(request: RoutineRequest): Promise<void> {
+    const count = request.routines.length;
+    const first = request.routines[0]?.title ?? '';
+    await this.notify('approvals', {
+      title:
+        request.via === 'agent'
+          ? `${request.from} asks to pause ${count === 1 ? 'a routine' : `${count} routines`}`
+          : `A chat asks to pause ${count === 1 ? 'a routine' : `${count} routines`}`,
+      body:
+        count === 1
+          ? `“${first}”. Open Routines to answer.`
+          : `“${first}” and ${count - 1} more. Open Routines to answer.`,
+      quiet: 'Open Conch to see what it asks.',
+      url: `/routines?request=${encodeURIComponent(request.id)}`,
+      tag: `routine-request-${request.id}`,
+      requireInteraction: true,
+    });
   }
 
   /** A new device asks to sign in (ADR 0024): every device already in hears it. */

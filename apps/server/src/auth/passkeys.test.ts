@@ -326,10 +326,19 @@ describe('keeping passkeys', () => {
     expect(await store.method()).toBe('password');
   });
 
-  it('keeps passkeys beside a password, and falls back to them when the last key goes', async () => {
+  it('keeps passkeys as the way in when a key for a script is made and revoked (ADR 0153)', async () => {
     const { store, ceremonies } = await setup();
     await addOne(store, ceremonies);
     const { info } = await store.addKey('Laptop');
+    expect(await store.method()).toBe('passkey');
+    await store.revokeKey(info.id);
+    expect(await store.method()).toBe('passkey');
+  });
+
+  it('falls back to passkeys when the last key people sign in with goes', async () => {
+    const { store, ceremonies } = await setup();
+    await addOne(store, ceremonies);
+    const { info } = await store.addKey('Laptop', { signIn: true });
     expect(await store.method()).toBe('key');
     await store.revokeKey(info.id);
     expect(await store.method()).toBe('passkey');

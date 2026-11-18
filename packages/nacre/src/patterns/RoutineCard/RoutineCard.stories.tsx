@@ -304,3 +304,15 @@ export const PhoneSettled: Story = {
     </Stack>
   ),
 };
+
+/** Paused with a reason (ADR 0154): `conch routines pause … --reason`, or an agent's request you approved. */
+export const PausedWithReason: Story = {
+  args: {
+    title: 'Weekly fitness recap',
+    summary: 'Your week of workouts in one message.',
+    scheduleText: 'Every Sunday at 7:00 PM',
+    status: 'paused',
+    pausedNote: 'Moved to Hermes',
+    icon: <PersonStanding />,
+  },
+};

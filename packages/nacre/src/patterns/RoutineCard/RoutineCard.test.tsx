@@ -16,6 +16,17 @@ const base = {
 };
 
 describe('RoutineCard (list)', () => {
+  it('says why it’s paused, when someone said, and only while paused', () => {
+    const { rerender } = renderNacre(
+      <RoutineCard {...base} status="paused" pausedNote="Moved to Hermes" onOpen={() => {}} />,
+    );
+    expect(screen.getByText('Paused: Moved to Hermes')).toBeInTheDocument();
+    rerender(
+      <RoutineCard {...base} status="active" pausedNote="Moved to Hermes" onOpen={() => {}} />,
+    );
+    expect(screen.queryByText(/Moved to Hermes/)).not.toBeInTheDocument();
+  });
+
   it('shows schedule, next run and last outcome accessibly', async () => {
     const { container } = renderNacre(
       <RoutineCard

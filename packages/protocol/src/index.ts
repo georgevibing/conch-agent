@@ -54,7 +54,7 @@ import { LearnedItem } from './quiet-learning';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
-import { Routine, RoutineRun, RoutineSpending } from './routines';
+import { Routine, RoutineRequest, RoutineRun, RoutineSpending } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ConchVoiceId } from './speech';
@@ -1494,6 +1494,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),
+  /** Someone else asked to pause your routines, or you answered (ADR 0154). */
+  z.object({ type: z.literal('routine.request'), request: RoutineRequest }),
   /** What routines spent this month changed, or they paused at its limit (ADR 0057). */
   z.object({ type: z.literal('routines.spending'), spending: RoutineSpending }),
   z.object({ type: z.literal('integration.changed'), integration: Integration }),

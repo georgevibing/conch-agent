@@ -242,15 +242,19 @@ import { standingOrderTools } from './checkins/tools';
 import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
 import { SkillUsage, skillUsedIn } from './skills/usage';
+import { RoutineRequests } from './routines/requests';
 import { localTimezone, RoutineService } from './routines/service';
+import { RoutineAsks } from './routines/terminal';
 import { OfferDesk } from './offers/desk';
 import { offerTools } from './offers/tools';
 import {
+  atLimitFor,
   candidateOf,
   type ModelRef,
   resolveSwitch,
   switchCandidates,
   switchedLine,
+  windowAppliesTo,
 } from '@conch/protocol';
 import { PROVIDER_COPY } from './providers/catalog';
 import { perReply } from './usage/prices';
@@ -411,6 +415,10 @@ export class Services {
   /** A saved key put into a command's environment, unseen (ADR 0151). */
   readonly commandSecrets: CommandSecrets;
   readonly routines: RoutineService;
+  /** Someone else asks to pause your routines; you answer on Conch's own screen (ADR 0154). */
+  readonly routineRequests: RoutineRequests;
+  /** `conch routines` in this computer's terminal, through a folder only you can write (ADR 0154). */
+  readonly routineAsks: RoutineAsks;
   /** Standing orders and the check-in that watches for them (ADR 0107). */
   readonly standingOrders: StandingOrderStore;
   readonly checkins: CheckIns;
@@ -557,6 +565,7 @@ export class Services {
   #sweeper?: NodeJS.Timeout;
   #hereSweeper?: NodeJS.Timeout;
   #stopAsks?: () => void;
+  #stopRoutineAsks?: () => void;
   #vaultDoctor?: NodeJS.Timeout;
 
   constructor(
@@ -1455,6 +1464,19 @@ export class Services {
               ...this.waits.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
+              // Someone else wants your routines paused: ask you on Conch's own screen (ADR 0154).
+              ...(ctx.origin?.kind === 'routine' || ctx.origin?.kind === 'task'
+                ? []
+                : [
+                    this.routineRequests.tool(async () => ({
+                      from:
+                        (
+                          await this.conversations.detail(ctx.conversationId).catch(() => undefined)
+                        )?.conversation.title.slice(0, 80) || 'one of your chats',
+                      via: 'chat' as const,
+                      conversationId: ctx.conversationId,
+                    })),
+                  ]),
               // Offering a standing order (ADR 0107): a draft for a card, only where someone can press it.
               ...standingOrderTools(this.standingOrders, ctx),
               ...this.skills.tools(ctx),
@@ -1692,6 +1714,18 @@ export class Services {
       messaged: (conversationId) => this.channels.messaged(conversationId),
     });
     this.doctor.register(routinesWatchCheck(this.routines));
+    this.routineRequests = new RoutineRequests({
+      file: join(config.CONCH_HOME, 'routine-requests.json'),
+      routines: this.routines,
+      emit: (event) => this.broadcast.emit(event),
+      // Your devices hear it; answering takes Conch itself, never the lock screen.
+      notify: (request) => this.push.routineRequest(request),
+      note: (conversationId, event) =>
+        event.type === 'routine'
+          ? this.conversations.note(conversationId, event)
+          : Promise.resolve(),
+    });
+    this.routineAsks = new RoutineAsks({ home: config.CONCH_HOME, routines: this.routines });
     // The check-in (ADR 0107): the When-routines' own sources, routines' spending, no model until something's new.
     this.standingOrders = new StandingOrderStore(config.CONCH_HOME, {
       heal,
@@ -3451,14 +3485,32 @@ export class Services {
     return moved;
   }
 
+  /**
+   * Forget access keys that ran out (ADR 0153): what signed in with one is
+   * signed out, and the terminals a script opened with one end. A key that ran
+   * out already stopped working; this is the clean-up.
+   */
+  async expireKeys(): Promise<void> {
+    const gone = await this.access.expireKeys().catch(() => undefined);
+    if (!gone?.keys.length) return;
+    this.gate.disconnect(gone.sessions);
+    this.terminal.endOwnedBy(gone.keys.map((id) => `key:${id}`));
+  }
+
   async start() {
     this.#timezone = (await this.settings.get().catch(() => undefined))?.preferences.timezone;
     // This computer's key, and no launcher file a crash left behind (ADR 0063).
     await this.here.start().catch((error: unknown) => console.error('[here]', error));
-    this.#hereSweeper ??= setInterval(() => void this.here.sweep(), 30_000);
+    // … and access keys made for a while stop by themselves, with what they opened (ADR 0153).
+    this.#hereSweeper ??= setInterval(() => {
+      void this.here.sweep();
+      void this.expireKeys();
+    }, 30_000);
     this.#hereSweeper.unref();
     // Launchers ask for a link through a folder only you can write, never over the network.
     this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
+    // … and `conch routines` reaches your routines the same way (ADR 0154).
+    this.#stopRoutineAsks ??= this.routineAsks.watch();
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
     // So are the ones your Conch apps bring (ADR 0122), before a chat or a channel needs them.
@@ -3564,6 +3616,8 @@ export class Services {
     clearInterval(this.#hereSweeper);
     this.#stopAsks?.();
     this.#stopAsks = undefined;
+    this.#stopRoutineAsks?.();
+    this.#stopRoutineAsks = undefined;
     this.#sweeper = undefined;
     this.network.stop();
     this.updates.stop();
@@ -3690,9 +3744,14 @@ export class Services {
     // Refused for a limit Conch couldn't see coming (a key's `429`): passed over for a while.
     if (context.failed === 'limit' && !usage?.blocked) this.usage.refused(engine.id);
     const refused = this.usage.refusedUntil(engine.id);
+    // At the limit for this turn's model: another model's own limit ("Fable" used up while
+    // the chat is on Opus) never moves the chat to another provider.
+    const model = context.model ? { id: context.model } : undefined;
     // Said only when the provider told: a refusal's quarter of an hour is Conch's guess.
-    const until = usage?.blocked?.until;
-    const atLimit = context.failed === 'limit' || Boolean(usage?.blocked) || refused !== undefined;
+    const until =
+      usage?.blocked?.until ??
+      usage?.windows.find((w) => w.usedPercent >= 100 && windowAppliesTo(w, model))?.resetsAt;
+    const atLimit = context.failed === 'limit' || atLimitFor(usage, model) || refused !== undefined;
     const mode = preferences.limitFallback ?? 'auto';
     if (!atLimit || context.wait || mode === 'wait') return { kind: 'use', engine };
 

@@ -209,6 +209,11 @@ describe('Settings → Access and Security', () => {
     await user.click(await screen.findByRole('radio', { name: /Access key/ }));
     await user.click(screen.getByRole('button', { name: 'Create key & turn on' }));
     expect(await screen.findByText(key)).toBeInTheDocument();
+    // Choosing Access key under How you sign in is the one way keys become the way in.
+    expect(calls.find((c) => c.path === '/api/access/keys')?.body).toEqual({
+      name: 'My devices',
+      signIn: true,
+    });
     expect(screen.getByText(/won’t be shown again/)).toBeInTheDocument();
     // Sign-in just switched to keys: the key stays until you say you've saved it.
     await waitFor(() =>
@@ -218,6 +223,54 @@ describe('Settings → Access and Security', () => {
     expect(screen.getByText(key)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'I’ve saved it' }));
     expect(screen.queryByText(key)).toBeNull();
+  });
+
+  it('makes a key for a script beside passkeys, without changing how you sign in', async () => {
+    const user = userEvent.setup();
+    const key = `conch_${'y'.repeat(43)}`;
+    const now = Date.now();
+    const info = {
+      id: 'key_2',
+      name: 'Hermes',
+      hint: 'yyyy',
+      createdAt: now,
+      expiresAt: now + 60 * 60 * 1000,
+    };
+    const passkey = {
+      id: 'passkey-1',
+      name: 'iCloud Keychain',
+      rpId: 'localhost',
+      createdAt: now,
+      synced: true,
+      here: true,
+    };
+    let created = false;
+    const calls = mockFetch({
+      'GET /api/access': () =>
+        settings({ method: 'passkey', passkeys: [passkey], keys: created ? [info] : [] }),
+      'POST /api/access/keys': () => {
+        created = true;
+        return { key, info };
+      },
+      'GET /api/auth': () => status({ method: 'passkey', signedIn: true }),
+    });
+    renderApp(<AccessTab />);
+    const form = await screen.findByRole('form', { name: 'New access key' });
+    await user.type(within(form).getByRole('textbox', { name: 'Name' }), 'Hermes');
+    await user.click(within(form).getByRole('combobox', { name: 'How long it works' }));
+    await user.click(await screen.findByRole('option', { name: 'For 1 hour' }));
+    await user.click(within(form).getByRole('button', { name: 'Create key' }));
+    expect(await screen.findByText(key)).toBeInTheDocument();
+    expect(calls.find((c) => c.path === '/api/access/keys')?.body).toEqual({
+      name: 'Hermes',
+      expiresIn: 60 * 60 * 1000,
+    });
+    expect(
+      screen.getByText(/can’t change how you sign in, sign a device in, or make more keys/),
+    ).toBeInTheDocument();
+    // Passkeys are still the way in.
+    expect(screen.getByRole('radio', { name: /Passkeys only/ })).toBeChecked();
+    expect(await screen.findByText(/for scripts/)).toBeInTheDocument();
   });
 
   it('turns a risky setting off in one click, then the finding goes away', async () => {
@@ -355,8 +408,12 @@ describe('Settings → Access and Security', () => {
     cleanup();
     mockFetch({ 'GET /api/access': () => settings({ checkup }) });
     renderApp(<AccessTab />);
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus());
-    expect(screen.getByRole('radio', { name: /Access key/ })).toBeChecked();
+    // To Access keys, which make a key for a script without changing how you sign in.
+    const keyForm = await screen.findByRole('form', { name: 'New access key' });
+    await waitFor(() =>
+      expect(within(keyForm).getByRole('textbox', { name: 'Name' })).toHaveFocus(),
+    );
+    expect(screen.getByRole('radio', { name: /Access key/ })).not.toBeChecked();
 
     // A password's, to the password.
     act(() => useUi.setState({ settingsFocus: 'sign-in' }));

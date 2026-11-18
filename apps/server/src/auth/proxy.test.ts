@@ -34,8 +34,8 @@ it('keeps independent revocable key auth behind a host-preserving HTTPS proxy', 
   try {
     // Even a loopback proxy cannot use the local no-auth exception.
     expect((await app.inject({ url: '/api/state', headers })).statusCode).toBe(401);
-    const owner = await services.access.addKey('Owner');
-    const disposable = await services.access.addKey('Revocation probe');
+    const owner = await services.access.addKey('Owner', { signIn: true });
+    const disposable = await services.access.addKey('Revocation probe', { signIn: true });
     const signIn = async (key: string) => {
       const res = await app.inject({
         method: 'POST',

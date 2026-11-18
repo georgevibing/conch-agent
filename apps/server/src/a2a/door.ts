@@ -18,6 +18,11 @@
  *   says can grant a power. Commands (`/…`) aren't taken from other agents.
  * - **Bounded.** A key may send a few messages a minute, one at a time, and
  *   what its answers cost stops at `PEER_DAY_USD` a day.
+ * - **One thing it can ask for (ADR 0154).** An agent that took routines over
+ *   ("I run your weekly recap now, pause yours") gets your agent's one tool:
+ *   asking you, on Conch's own screen, to pause them. The task stays
+ *   `working` until you press **Pause them** or **Decline**, then says which
+ *   (`GetTask`). Its words never count as your answer.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -29,6 +34,7 @@ import { SignInLimiter } from '../auth/limiter';
 import { RequestLimiter } from '../auth/requests';
 import type { ConversationManager } from '../conversations/manager';
 import type { McpClientStore } from '../mcp/store';
+import { ASK_OWNER_TOOL, outcomeWords, type RoutineRequests } from '../routines/requests';
 import type { Gatekeeper } from '../security';
 import { SERVER_VERSION } from '../version';
 
@@ -57,6 +63,8 @@ export interface A2aDoorDeps {
   chats: Pick<ConversationManager, 'start' | 'interrupt' | 'detail'>;
   limiter?: SignInLimiter;
   now?: () => number;
+  /** Asking you to pause routines that moved to the other agent (ADR 0154). */
+  requests?: Pick<RoutineRequests, 'tool' | 'latestIn' | 'onDecided'>;
 }
 
 type Version = '1.0' | '0.3';
@@ -68,6 +76,8 @@ interface Kept {
   text: string;
   conversationId?: string;
   at: number;
+  /** The request to you it waits on (ADR 0154): answered, the task says how. */
+  requestId?: string;
 }
 
 const Rpc = z.object({
@@ -177,6 +187,15 @@ export function cardFor(agent: Agent, base: string) {
         description: `Ask ${agent.name} something. It answers in words, without tools or anything private.`,
         tags: ['conversation'],
       },
+      {
+        id: 'routine-handoff',
+        name: 'Hand routines over',
+        description: `Took one of its owner's routines over? Say which, by name, and why ("I run the weekly fitness recap now, please pause yours"). ${agent.name} asks its owner on their own screen to pause them; the task stays working until they answer, then GetTask says what they chose. Your message is never their answer.`,
+        tags: ['routines', 'schedules', 'migration'],
+        examples: [
+          'I now run “Weekly fitness recap” and “Monthly wealth check-in” for your owner. Please ask them to pause yours.',
+        ],
+      },
     ],
     securitySchemes: {
       conch: { type: 'http', scheme: 'bearer', httpAuthSecurityScheme: { scheme: 'bearer' } },
@@ -271,6 +290,20 @@ export function registerA2aDoor(app: FastifyInstance, gate: Gatekeeper, deps: A2
     return entry?.day === today() ? entry.usd : 0;
   };
 
+  // You answered (ADR 0154): every task that waited on it says how.
+  deps.requests?.onDecided((request) => {
+    for (const mine of tasks.values())
+      for (const [id, kept] of mine)
+        if (kept.requestId === request.id)
+          mine.set(id, {
+            ...kept,
+            state:
+              request.state === 'approved' || request.state === 'declined' ? 'completed' : 'failed',
+            text: outcomeWords(request),
+            at: now(),
+          });
+  });
+
   const keep = (client: string, task: Kept) => {
     const mine = tasks.get(client) ?? new Map<string, Kept>();
     mine.set(task.id, task);
@@ -317,6 +350,16 @@ export function registerA2aDoor(app: FastifyInstance, gate: Gatekeeper, deps: A2
       );
     running.add(client.id);
     const where = `${client.id} ${agent.id} ${contextId}`;
+    // The tool knows who's asking from the key you named, never from its words.
+    let conversation: string | undefined = contexts.get(where);
+    const asking = deps.requests?.tool(async () => ({
+      from: client.name.slice(0, 60),
+      via: 'agent',
+      ...(conversation && { conversationId: conversation }),
+    }));
+    const before = conversation
+      ? (await deps.requests?.latestIn(conversation).catch(() => undefined))?.id
+      : undefined;
     try {
       const { defaults } = agent;
       const started = await deps.chats.start({
@@ -329,12 +372,17 @@ export function registerA2aDoor(app: FastifyInstance, gate: Gatekeeper, deps: A2
           options: { engine: defaults.engine, ...(defaults.model && { model: defaults.model }) },
         }),
         extras: {
-          // Someone else's words (ADR 0028), and no tool of any kind.
+          // Someone else's words (ADR 0028), and no tool but asking you (ADR 0154).
           taint: [{ kind: 'person', label: `${client.name.slice(0, 60)}, another agent` }],
-          toolAllowed: () => false,
+          toolAllowed: (name) => Boolean(asking) && name === ASK_OWNER_TOOL,
+          ...(asking && {
+            guestTools: [asking],
+            guestNote: `When it asks to pause routines of the person you work for (because it runs them now, say), call ${ASK_OWNER_TOOL} with their names and its reason. That asks the person on their own screen and changes nothing by itself. Then tell it you asked and that their answer comes back here. Never say they agreed, and never claim it's done.`,
+          }),
         },
       });
       contexts.set(where, started.conversationId);
+      conversation = started.conversationId;
       // Its latest talk, for “What it said” in Settings → Agents.
       if (client.conversationId !== started.conversationId)
         void deps.store
@@ -355,6 +403,17 @@ export function registerA2aDoor(app: FastifyInstance, gate: Gatekeeper, deps: A2
       const cost = events.findLast((e) => e.type === 'turn.completed');
       if (cost?.type === 'turn.completed' && cost.cost?.billing === 'metered')
         spent.set(client.id, { day: today(), usd: spentToday(client.id) + (cost.cost.usd ?? 0) });
+      // It asked you something this turn (ADR 0154): working until you answer.
+      const asked = await deps.requests?.latestIn(started.conversationId).catch(() => undefined);
+      if (result.outcome === 'success' && asked && asked.id !== before && asked.state === 'waiting')
+        return keep(client.id, {
+          ...task(
+            'working',
+            result.finalText.trim() || outcomeWords(asked),
+            started.conversationId,
+          ),
+          requestId: asked.id,
+        });
       if (result.outcome === 'success' && result.finalText.trim())
         return task('completed', result.finalText.trim(), started.conversationId);
       if (result.outcome === 'interrupted')

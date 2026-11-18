@@ -1,4 +1,5 @@
 import {
+  KEY_LIFETIMES,
   checkPassword,
   isStaleKey,
   suggestPassword,
@@ -17,6 +18,7 @@ import {
   PasswordInput,
   RadioGroup,
   SecretReveal,
+  Select,
   Stack,
   StrengthMeter,
   Text,
@@ -47,7 +49,9 @@ import { usePasskeyPlatform } from './usePasskeyPlatform';
 
 /*
  * Settings → Access: the ways in — how you sign in (a password, access keys,
- * or none) and your passkeys. A checkup fix on Security brings you to them.
+ * or none), your passkeys, and access keys for scripts and agents, which sit
+ * beside every way of signing in (ADR 0153). A checkup fix on Security brings
+ * you to them.
  */
 
 /** A part of these sections a checkup fix can bring you to. */
@@ -72,7 +76,7 @@ const methods: { value: AccessMethod; label: string; description: string; icon: 
   {
     value: 'key',
     label: 'Access key',
-    description: 'Pasted once per device. Good for scripts, too.',
+    description: 'Pasted once per device, in place of a password.',
     icon: <KeyRound />,
   },
   {
@@ -179,7 +183,7 @@ function PasswordForm({
         </div>
         {switching && access.method === 'key' && (
           <Text size="sm" tone="muted">
-            Your access keys will stop working and other devices will be signed out.
+            Other devices will be signed out. Your access keys keep working for scripts.
           </Text>
         )}
       </Stack>
@@ -187,19 +191,56 @@ function PasswordForm({
   );
 }
 
-function NewKey({ access, guard }: { access: AccessSettings; guard: Guard }) {
+/** What a script's key may do, said where it's made. */
+const KEY_CAN_DO =
+  'It can do what you can do in Conch, through its API: chats, files, commands and settings. It can’t change how you sign in, sign a device in, or make more keys.';
+
+/** A key, shown once, until you say you've saved it. */
+function ShownOnce({ created, onDone }: { created: CreatedKey; onDone: () => void }) {
+  return (
+    <Stack gap={3}>
+      <SecretReveal secret={created.key} title={`Access key “${created.info.name}”`} />
+      <Text size="sm" tone="muted">
+        {created.info.signIn ? 'Paste it on the sign-in screen, or send' : 'Send'} it as{' '}
+        <code>Authorization: Bearer …</code>. {KEY_CAN_DO}
+      </Text>
+      <Button variant="surface" onClick={onDone} className={styles.end}>
+        I’ve saved it
+      </Button>
+    </Stack>
+  );
+}
+
+/**
+ * Make a key and, with `signIn`, make access keys how people sign in. Without
+ * it, a key for scripts: nothing else changes (ADR 0153).
+ */
+function NewKey({
+  access,
+  guard,
+  signIn,
+}: {
+  access: AccessSettings;
+  guard: Guard;
+  signIn: boolean;
+}) {
   const client = useQueryClient();
-  const [name, setName] = useState(access.keys.length ? '' : 'My devices');
+  const [name, setName] = useState(signIn && !access.keys.length ? 'My devices' : '');
+  const [lasts, setLasts] = useState('forever');
   const [created, setCreated] = useState<CreatedKey>();
   const [busy, setBusy] = useState(false);
-  const switching = access.method !== 'key';
+  const switching = signIn && access.method !== 'key';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
+      const expiresIn = KEY_LIFETIMES.find((l) => String(l.ms) === lasts)?.ms;
       await guard(async () => {
-        const key = await api.createKey(name.trim());
+        const key = await api.createKey(name.trim(), {
+          ...(switching && { signIn: true }),
+          ...(!signIn && expiresIn && { expiresIn }),
+        });
         setCreated(key);
         void client.invalidateQueries({ queryKey: keys.access });
         void client.invalidateQueries({ queryKey: keys.auth });
@@ -211,36 +252,47 @@ function NewKey({ access, guard }: { access: AccessSettings; guard: Guard }) {
     }
   };
 
-  if (created) {
-    return (
-      <Stack gap={3}>
-        <SecretReveal secret={created.key} title={`Access key “${created.info.name}”`} />
-        <Button variant="surface" onClick={() => setCreated(undefined)} className={styles.end}>
-          I’ve saved it
-        </Button>
-      </Stack>
-    );
-  }
+  if (created) return <ShownOnce created={created} onDone={() => setCreated(undefined)} />;
 
   return (
-    <form className={styles.inline} onSubmit={(e) => void submit(e)} aria-label="New access key">
+    <form
+      className={styles.inline}
+      onSubmit={(e) => void submit(e)}
+      aria-label={signIn ? 'New access key to sign in with' : 'New access key'}
+    >
       <Field className={styles.grow}>
         <Field.Label>Name</Field.Label>
         <Input
           name="key-name"
           value={name}
           maxLength={40}
-          placeholder="e.g. iPhone, work laptop"
+          placeholder={signIn ? 'e.g. iPhone, work laptop' : 'e.g. Backup script, Hermes'}
           onChange={(e) => setName(e.target.value)}
           required
         />
       </Field>
+      {!signIn && (
+        <Field>
+          <Field.Label>Works</Field.Label>
+          <Select value={lasts} onValueChange={setLasts} aria-label="How long it works">
+            <Select.Item value="forever">Until you revoke it</Select.Item>
+            {KEY_LIFETIMES.map((l) => (
+              <Select.Item key={l.ms} value={String(l.ms)}>
+                For {l.label}
+              </Select.Item>
+            ))}
+          </Select>
+        </Field>
+      )}
       <Button type="submit" leadingIcon={<Plus />} loading={busy} disabled={!name.trim()}>
         {switching ? 'Create key & turn on' : 'Create key'}
       </Button>
-      {switching && access.method === 'password' && (
+      {switching && (
         <Text size="sm" tone="muted" className={styles.full}>
-          Your password will stop working and other devices will be signed out.
+          {access.method === 'password'
+            ? 'Your password will stop working and other devices will be signed out.'
+            : 'Other devices will be signed out, and sign in with this key.'}
+          {access.passkeys.length > 0 && ' Your passkeys keep working.'}
         </Text>
       )}
     </form>
@@ -270,8 +322,14 @@ function KeyList({ access }: { access: AccessSettings }) {
               )}
             </Text>
             <Text as="p" size="xs" tone="subtle">
-              Created {relativeTime(key.createdAt)} ·{' '}
-              {key.lastUsedAt ? `last used ${relativeTime(key.lastUsedAt)}` : 'never used'}
+              {[
+                `Created ${relativeTime(key.createdAt)}`,
+                key.lastUsedAt ? `last used ${relativeTime(key.lastUsedAt)}` : 'never used',
+                key.expiresAt !== undefined && `stops ${relativeTime(key.expiresAt)}`,
+                key.signIn ? 'signs you in' : 'for scripts',
+              ]
+                .filter(Boolean)
+                .join(META_SEP)}
             </Text>
           </div>
           <IconButton
@@ -363,8 +421,7 @@ export function SignInSection({
     setChanging(false);
   }
   // A checkup fix asked for a form: show it first, then bring it into view.
-  const wanted: AccessMethod | undefined =
-    focus?.place === 'keys' ? 'key' : focus?.place === 'sign-in' ? 'password' : undefined;
+  const wanted: AccessMethod | undefined = focus?.place === 'sign-in' ? 'password' : undefined;
   if (wanted && choice !== wanted) {
     setChoice(wanted);
     setChanging(false);
@@ -373,16 +430,10 @@ export function SignInSection({
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (focus?.place !== 'sign-in' && focus?.place !== 'keys') return;
+    if (focus?.place !== 'sign-in') return;
     focus.done();
     const section = ref.current;
-    reveal(
-      section,
-      focus.place === 'keys'
-        ? (section?.querySelector<HTMLElement>('[data-stale] button') ??
-            section?.querySelector<HTMLElement>('input[name="key-name"]'))
-        : section?.querySelector<HTMLElement>('input[name="new-password"]'),
-    );
+    reveal(section, section?.querySelector<HTMLElement>('input[name="new-password"]'));
   }, [focus]);
 
   return (
@@ -448,8 +499,14 @@ export function SignInSection({
 
         {choice === 'key' && (
           <Stack gap={4}>
-            {current && <KeyList access={access} />}
-            <NewKey access={access} guard={guard} />
+            {current && (
+              <Text size="sm" tone="muted">
+                Each device signs in with an access key: make one for each, here. Your keys are
+                listed under Access keys.
+              </Text>
+            )}
+            {/* Stays put as the method changes: the new key is on screen, shown only once. */}
+            <NewKey access={access} guard={guard} signIn />
           </Stack>
         )}
 
@@ -460,6 +517,53 @@ export function SignInSection({
         )}
 
         {choice === 'none' && access.method !== 'none' && <TurnOff guard={guard} />}
+      </Stack>
+    </Section>
+  );
+}
+
+// ── Access keys (ADR 0153) ──────────────────────────────────────────────────
+
+/**
+ * Keys for scripts and agents: an extra way in beside however you sign in.
+ * Making one signs nobody out and changes nothing else; revoking one ends
+ * only what used it.
+ */
+export function KeysSection({
+  access,
+  guard,
+  focus,
+}: {
+  access: AccessSettings;
+  guard: Guard;
+  focus?: Focus;
+}) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focus?.place !== 'keys') return;
+    focus.done();
+    const section = ref.current;
+    reveal(
+      section,
+      section?.querySelector<HTMLElement>('[data-stale] button') ??
+        section?.querySelector<HTMLElement>('input[name="key-name"]'),
+    );
+  }, [focus]);
+
+  return (
+    <Section
+      ref={ref}
+      title="Access keys"
+      description={
+        access.method === 'none'
+          ? 'For scripts and agents on this computer that use Conch’s API. Making one changes nothing else.'
+          : 'For scripts and agents that use Conch’s API. Making one changes nothing else: you sign in as before, and nobody is signed out.'
+      }
+    >
+      <Stack gap={4}>
+        {access.keys.length > 0 && <KeyList access={access} />}
+        <NewKey access={access} guard={guard} signIn={false} />
       </Stack>
     </Section>
   );

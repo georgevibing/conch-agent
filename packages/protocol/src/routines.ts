@@ -215,6 +215,25 @@ export const RoutineRun = z.object({
 export type RoutineRun = z.infer<typeof RoutineRun>;
 
 /**
+ * Why a routine was paused, when whoever paused it said (ADR 0154): the
+ * Routines page shows it ("Paused: moved to Hermes"). Turning it back on
+ * clears it. An older Conch reads the file without it.
+ */
+export const RoutinePause = z.object({
+  /** In the words given: "Moved to Hermes". */
+  reason: z.string().min(1).max(200),
+  /**
+   * Who paused it: you in Conch (Move to another agent), in the terminal
+   * (`conch routines pause`), in a chat, or approving another agent's request.
+   */
+  by: z.enum(['you', 'terminal', 'chat', 'request']),
+  /** The agent whose request you approved, as you named it when you let it in. */
+  from: z.string().max(60).optional(),
+  at: z.number(),
+});
+export type RoutinePause = z.infer<typeof RoutinePause>;
+
+/**
  * When a routine needs permission while nobody is watching: its chat's mode
  * (ADR 0100). `edits` (Edit freely, before ADR 0119) reads as `auto`.
  */
@@ -264,6 +283,8 @@ export const Routine = z.object({
    * your own chats (a reminder that must go). Only a person sets it (ADR 0057).
    */
   runOnFullPlan: z.boolean().optional(),
+  /** Why it's paused, when someone said (ADR 0154). */
+  pausedBecause: RoutinePause.optional(),
   // Computed by the server:
   /** What it costs, in plain words (ADR 0057). */
   spend: RoutineSpend.optional(),
@@ -327,6 +348,8 @@ export const UpdateRoutineBody = z
   .object({
     ...editable,
     status: z.enum(['active', 'paused']),
+    /** With `status: 'paused'`: why, shown on the Routines page (ADR 0154). */
+    pausedReason: z.string().trim().min(1).max(200),
     // When… (ADR 0056). `null` makes it a time routine again; an empty `onlyIf` clears it.
     when: Trigger.nullable(),
     onlyIf: OnlyIf,
@@ -345,3 +368,103 @@ export const SchedulePreview = z.object({
   error: z.string().optional(),
 });
 export type SchedulePreview = z.infer<typeof SchedulePreview>;
+
+// ── Moving routines elsewhere (ADR 0154) ────────────────────────────────────
+
+/**
+ * Someone other than you asked to change your routines: another agent you let
+ * in (`agent`), or words in one of your chats that came from someone else
+ * (`chat`). Nothing changes until you answer on Conch's own screen; what they
+ * wrote never counts as your answer.
+ */
+export const RoutineRequest = z.object({
+  id: z.string(),
+  /**
+   * Who asked, in Conch's words, never in theirs: the name you gave the agent
+   * when you let it in, or the chat's title.
+   */
+  from: z.string().max(80),
+  via: z.enum(['agent', 'chat']),
+  /** Only pausing is asked for: it's undone by turning the routine back on. */
+  action: z.literal('pause'),
+  routines: z
+    .array(z.object({ id: z.string(), title: z.string().max(60) }))
+    .min(1)
+    .max(10),
+  /** Their reason, as they wrote it: shown as their words. */
+  reason: z.string().max(200),
+  /** Names they gave that match none of your routines. */
+  unmatched: z.array(z.string().max(80)).max(10).optional(),
+  /** The chat it was asked in, where the answer is told. */
+  conversationId: z.string().optional(),
+  state: z.enum(['waiting', 'approved', 'declined', 'expired']),
+  createdAt: z.number(),
+  decidedAt: z.number().optional(),
+});
+export type RoutineRequest = z.infer<typeof RoutineRequest>;
+
+/** `POST /api/routines/requests/:id/answer`: a person's press, never an agent's words. */
+export const RoutineRequestAnswer = z.object({ approve: z.boolean() });
+export type RoutineRequestAnswer = z.infer<typeof RoutineRequestAnswer>;
+
+/**
+ * A routine described for another agent to recreate (`conch routines export`):
+ * what it does, when, where the result goes and what it uses. Never a key, a
+ * secret or another app's address.
+ */
+export const ExportedRoutine = z.object({
+  id: z.string(),
+  name: z.string(),
+  summary: z.string(),
+  /** The instruction each run is given, whole. */
+  prompt: z.string(),
+  status: RoutineStatus,
+  pausedBecause: RoutinePause.optional(),
+  schedule: z.object({
+    /** Conch's words: "Every Monday at 7:00 AM". */
+    text: z.string(),
+    /** IANA timezone the times are in. */
+    timezone: z.string(),
+    /** Conch's own form; absent for a routine that starts when something happens. */
+    structured: Schedule.optional(),
+    /** The same as a five-field cron expression in `timezone`, when one says it exactly. */
+    cron: z.string().optional(),
+    /** The next few times it runs (ISO 8601), while it's on. */
+    next: z.array(z.string()).optional(),
+  }),
+  /** What starts it, for one that starts when something happens (ADR 0056). */
+  when: Trigger.optional(),
+  onlyIf: z.string().optional(),
+  delivery: z.object({
+    /** Each run's result is kept in Conch's history. */
+    conch: z.literal(true),
+    /** Chat apps its instructions say to send the result to ("telegram"). */
+    channels: z.array(z.string()),
+  }),
+  uses: z.object({
+    /** Files and folders its instructions or trigger name. */
+    paths: z.array(z.string()),
+    /** Web addresses its instructions or trigger name. */
+    urls: z.array(z.string()),
+    /** The provider and model it runs on, when one was chosen. */
+    engine: z.string().optional(),
+    model: z.string().optional(),
+  }),
+  /** How far a run may go without asking (`ask`, `auto`, `full`). */
+  trust: z.enum(['ask', 'auto', 'full']),
+  catchUp: z.boolean(),
+});
+export type ExportedRoutine = z.infer<typeof ExportedRoutine>;
+
+export const ROUTINE_EXPORT_FORMAT = 'conch.routines/1';
+
+export const RoutineExport = z.object({
+  format: z.literal(ROUTINE_EXPORT_FORMAT),
+  exportedAt: z.string(),
+  routines: z.array(ExportedRoutine),
+});
+export type RoutineExport = z.infer<typeof RoutineExport>;
+
+/** `GET /api/routines/:id/export`: the document, and the same in words to paste (Move to another agent). */
+export const RoutineExportView = z.object({ export: RoutineExport, text: z.string() });
+export type RoutineExportView = z.infer<typeof RoutineExportView>;

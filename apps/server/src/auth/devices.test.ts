@@ -512,19 +512,44 @@ describe('approve new devices', () => {
 });
 
 describe('approve new devices — scripts with an access key', () => {
-  async function withKey(app: App) {
+  /** Keys as the way in, made somewhere other than this computer: approval applies to it. */
+  async function withKey(app: App, store: AccessStore) {
     const owner = await withPassword(app);
+    const keep = (await owner.access()).sessions.find((s) => s.current)?.id;
+    const { key } = await store.addKey('Home server', {
+      signIn: true,
+      ...(keep && { keepSessionId: keep }),
+    });
+    // Access keys became the way in; this computer stays signed in.
+    return { owner, key };
+  }
+
+  it('lets a key made on this computer in from the start, in Settings or its terminal', async () => {
+    const { app, store } = await setup();
+    const owner = await withPassword(app);
+    await approvalOn(owner);
     const created = await owner.fetch('/api/access/keys', {
       method: 'POST',
-      payload: { name: 'Home server' },
+      payload: { name: 'Hermes handoff', expiresIn: 60 * 60 * 1000 },
     });
-    // Making a key switched sign-in to keys; this computer stays signed in.
-    return { owner, key: created.json().key as string };
-  }
+    expect(created.statusCode).toBe(200);
+    const fromTerminal = await store.addKey('Home server', { approvedHow: 'terminal' });
+    const script = new Browser(app, {
+      remoteAddress: '100.64.0.20',
+      host: 'conch.example',
+      userAgent: 'curl/8.9.1',
+    });
+    for (const key of [created.json().key as string, fromTerminal.key])
+      expect((await script.fetch('/api/state', { bearer: key })).statusCode).toBe(200);
+    expect((await owner.access()).requests).toEqual([]);
+    // Nothing else changed: the password still signs in, and this computer is still signed in.
+    expect(await store.method()).toBe('password');
+    expect((await owner.fetch('/api/state')).statusCode).toBe(200);
+  });
 
   it('asks once for a key used from another device, and says the code on every call', async () => {
     const { app, store } = await setup();
-    const { owner, key } = await withKey(app);
+    const { owner, key } = await withKey(app, store);
     await approvalOn(owner);
     const script = new Browser(app, {
       remoteAddress: '100.64.0.20',
@@ -554,8 +579,8 @@ describe('approve new devices — scripts with an access key', () => {
   });
 
   it('lets a key work on this computer without asking', async () => {
-    const { app } = await setup();
-    const { owner, key } = await withKey(app);
+    const { app, store } = await setup();
+    const { owner, key } = await withKey(app, store);
     await approvalOn(owner);
     const local = new Browser(app, {
       remoteAddress: '127.0.0.1',
@@ -567,20 +592,22 @@ describe('approve new devices — scripts with an access key', () => {
 
   it('a wrong key is still just unauthorized, and a revoked one forgets its approval', async () => {
     const { app, store } = await setup();
-    const { owner, key } = await withKey(app);
+    const { owner, key } = await withKey(app, store);
     await approvalOn(owner);
     const script = phone(app);
     expect((await script.fetch('/api/state', { bearer: 'conch_nope' })).statusCode).toBe(401);
     const code = (await script.fetch('/api/state', { bearer: key })).json().code as string;
     await store.approve(code, 'terminal');
     const keyId = (await store.keys())[0]?.id ?? '';
+    // Another way in first: the only key you sign in with can't go (ADR 0153).
+    await store.addKey('Spare', { signIn: true });
     await owner.fetch(`/api/access/keys/${keyId}`, { method: 'DELETE' });
     expect((await store.get()).devices.some((d) => d.keyId === keyId)).toBe(false);
   });
 
   it('a key signing a browser in on a new device waits like a password does', async () => {
-    const { app } = await setup();
-    const { owner, key } = await withKey(app);
+    const { app, store } = await setup();
+    const { owner, key } = await withKey(app, store);
     await approvalOn(owner);
     const iphone = phone(app);
     const res = await iphone.fetch('/api/auth/sign-in', {

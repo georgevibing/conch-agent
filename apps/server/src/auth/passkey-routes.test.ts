@@ -288,7 +288,14 @@ describe('passkeys, signed in', () => {
       const last = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
       expect(last.statusCode).toBe(409);
 
-      await laptop.post('/api/access/keys', { name: 'Spare' });
+      // A key for a script changes nothing: passkeys are still the only way in (ADR 0153).
+      await laptop.post('/api/access/keys', { name: 'Script' });
+      expect(await store.method()).toBe('passkey');
+      expect(
+        (await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' })).statusCode,
+      ).toBe(409);
+      expect(await phone.status()).toMatchObject({ signedIn: true });
+      await laptop.post('/api/access/keys', { name: 'Spare', signIn: true });
       expect(await store.method()).toBe('key');
       const removed = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
       expect(removed.statusCode).toBe(200);

@@ -163,6 +163,22 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     }
   };
 
+  /**
+   * Who may sign in is a person's to change, never a script's (ADR 0153): an
+   * access key sits beside your password or passkeys, so one handed to an
+   * agent for an hour mustn't be able to change them, turn sign-in off, sign a
+   * new device in, or make itself a key that lasts (§ Security engineering 7).
+   */
+  const personOnly = (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.access?.kind !== 'bearer') return true;
+    void reply.code(403).send({
+      error: 'person-only',
+      message:
+        'Only you can change how Conch is signed in to, in Conch itself or its terminal, not with an access key.',
+    });
+    return false;
+  };
+
   const requireVerified = (request: FastifyRequest, reply: FastifyReply) => {
     if (gate.verified(request.access)) return true;
     void reply.code(403).send({
@@ -260,7 +276,8 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     if (body.with === 'pairing') {
       ok = await store.consumePairing(body.code);
     } else if (body.with === 'key') {
-      keyId = await gate.checkKey(body.key);
+      // A browser signs in with a key only while keys are how people sign in (ADR 0153).
+      keyId = await gate.checkSignInKey(body.key);
       ok = keyId !== undefined;
     } else if (body.with === 'passkey') {
       passkeyId =
@@ -342,7 +359,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         : method === 'none'
           ? true
           : method === 'key'
-            ? (await gate.checkKey(body.secret)) !== undefined
+            ? (await gate.checkSignInKey(body.secret)) !== undefined
             : (await store.verify({ secret: body.secret })).ok;
     if (!ok) {
       gate.limiter.fail(client);
@@ -382,6 +399,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
   app.put('/api/access/password', async (request, reply) => {
     const body = parse(SetPasswordBody, request.body, reply);
     if (!body) return;
+    if (!personOnly(request, reply)) return;
     if (!requireVerified(request, reply)) return;
     const keep = currentSessionId(request);
     try {
@@ -397,16 +415,38 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
     return settings(request);
   });
 
+  /**
+   * Make an access key (ADR 0153). For scripts and agents it's only an extra
+   * way in: nobody is signed out and how people sign in stays as it is. Only
+   * `signIn` (choosing Access key under How you sign in) changes that. Made
+   * in a browser proven to be this computer, it's let in from the start, as
+   * one made in its terminal is; from anywhere else it waits for approval.
+   */
   app.post('/api/access/keys', async (request, reply) => {
     const body = parse(CreateKeyBody, request.body, reply);
     if (!body) return;
+    // A key can't make keys: one made for an hour would outlive itself (ADR 0153).
+    if (!personOnly(request, reply)) return;
     if (!requireVerified(request, reply)) return;
     const keep = currentSessionId(request);
-    const switching = (await store.method()) !== 'key';
-    const created = await store.addKey(body.name, keep);
-    if (switching) gate.disconnectAll(keep);
-    if (!keep) await startSession(request, reply, 'setup', created.info.id);
-    return created;
+    let created;
+    try {
+      created = await store.addKey(body.name, {
+        ...(body.signIn && { signIn: true }),
+        ...(body.expiresIn && { expiresAt: Date.now() + body.expiresIn }),
+        ...(gate.isLocal(request) && { approvedHow: 'settings' as const }),
+        ...(keep && { keepSessionId: keep }),
+      });
+    } catch (error) {
+      if (error instanceof AccessError)
+        return reply.code(400).send({ error: error.code, message: error.message });
+      throw error;
+    }
+    if (created.turnedOn) {
+      gate.disconnectAll(keep);
+      if (!keep) await startSession(request, reply, 'setup', created.info.id);
+    }
+    return { key: created.key, info: created.info };
   });
 
   app.delete<{ Params: { id: string } }>('/api/access/keys/:id', async (request, reply) => {
@@ -421,7 +461,9 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         reply.header('set-cookie', gate.clearCookies());
     } catch (error) {
       if (error instanceof AccessError)
-        return reply.code(404).send({ error: error.code, message: error.message });
+        return reply
+          .code(error.code === 'not-found' ? 404 : 409)
+          .send({ error: error.code, message: error.message });
       throw error;
     }
     return settings(request);
@@ -429,6 +471,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
 
   /** Turn sign-in off. Remote devices are then refused until it's turned back on. */
   app.delete('/api/access', async (request, reply) => {
+    if (!personOnly(request, reply)) return;
     if (!requireVerified(request, reply)) return;
     const ended = await store.disable();
     gate.disconnect(ended);
@@ -445,6 +488,8 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         message: 'Choose a password or access key first.',
       });
     }
+    // A sign-in link would let a key's holder sign a device in for 30 days: a person's to make.
+    if (!personOnly(request, reply)) return;
     if (!requireVerified(request, reply)) return;
     return store.createPairing();
   });

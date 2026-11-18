@@ -257,6 +257,16 @@ src/
   its first message (`brief.ts`). The trigger lives in `routines/when/<id>.json`; the
   routine's own file keeps a placeholder schedule an older Conch never runs.
   `doctor.ts` joins Repair everything.
+- **Moving routines** (ADR 0154): `conch routines` lists, pauses (with a reason kept as
+  `pausedBecause`), resumes and exports (`export.ts`, `conch.routines/1`: the instruction, the
+  schedule with its timezone and cron, where results go, what it uses, never a secret). The
+  terminal asks the running Conch through `here/routines/` (`terminal.ts`, as launchers do in
+  ADR 0063), or changes the files when none runs; Conch's own assistant may not run
+  `pause|resume` (`lib/protect.ts`). When someone else asks (another agent at the door, words in
+  a chat), `ask_owner_about_routines` makes a `RoutineRequest` (`requests.ts`,
+  `routine-requests.json`): a card on Routines and a notification, answered only by the owner's
+  `POST /api/routines/requests/:id/answer`. A peer chat gets that one tool through
+  `TurnExtras.guestTools`; its A2A task stays `working` until you answer.
 - **Integrations** (`integrations/`): MCP servers the user connects from a catalog
   (one-click OAuth, tokens, local programs) or adds by address/command. The service
   keeps health (probe → plain-language state + one fix action), refreshes tokens
@@ -946,7 +956,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0134 — Chats that know about each other](./docs/adr/0134-chats-that-know-about-each-other.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `standing-orders.json` + `checkin.json` (derived `checkin/state.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `past-chats/index.json` + `<id>.jsonl` (past chats from other apps, ADR 0111), `search.db`,
+  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`, `routine-requests.json`), `standing-orders.json` + `checkin.json` (derived `checkin/state.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `past-chats/index.json` + `<id>.jsonl` (past chats from other apps, ADR 0111), `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
@@ -1240,7 +1250,8 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   _passkeys_ (WebAuthn: discoverable, user verification required, checked with
   `@simplewebauthn/server`; ADR 0065), _password_ (scrypt, NIST SP 800-63B-4 rules),
   _access keys_ (`conch_…`, 256-bit, hashed, revocable) or _no sign-in_. Passkeys can
-  sit beside a password. Their challenges live in the gateway's memory for five
+  sit beside a password. Access keys for scripts and agents (`scriptKeys`, optionally
+  expiring) sit beside every way and never change it (ADR 0153). Their challenges live in the gateway's memory for five
   minutes, single use, bound to their purpose, session or hello code, and the address. With no sign-in, only this computer, proven, is let in
   (ADR 0063). The request must look local: a loopback socket **and** a loopback `Host`
   **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the cookie made with the key in

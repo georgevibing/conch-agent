@@ -322,6 +322,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your budget, and what you spent (chats you deleted included, so it can’t be rebuilt). Merged on restore: money already spent stays counted.',
   },
   {
+    match: 'routine-requests.json',
+    class: 'derived',
+    why: 'Other agents’ requests to pause your routines, waiting for your answer (ADR 0154): about this computer and this week, never restored.',
+  },
+  {
     match: 'routine-spend.json',
     class: 'kept',
     group: 'routines',

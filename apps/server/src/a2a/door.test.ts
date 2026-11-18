@@ -14,6 +14,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TurnResult } from '../conversations/manager';
 import { McpClientStore } from '../mcp/store';
 import type { Gatekeeper } from '../security';
+import { ASK_OWNER_TOOL, RoutineRequests } from '../routines/requests';
+import { RoutineService } from '../routines/service';
+import { RoutineStore } from '../routines/store';
 import { PEER_DAY_USD, registerA2aDoor, type A2aDoorDeps } from './door';
 
 const sage = {
@@ -24,7 +27,16 @@ const sage = {
 const juniper = { id: 'ag_juniper', name: 'Juniper', role: '' } as Agent;
 const SAGE: McpScope = 'agent:ag_sagexx';
 
-async function setup(options: { local?: boolean; secure?: boolean; cost?: number } = {}) {
+async function setup(
+  options: {
+    local?: boolean;
+    secure?: boolean;
+    cost?: number;
+    requests?: A2aDoorDeps['requests'];
+    /** What the turn does before it answers (call the tool it was given, say). */
+    during?: (input: Parameters<A2aDoorDeps['chats']['start']>[0], id: string) => Promise<void>;
+  } = {},
+) {
   const home = await mkdtemp(join(tmpdir(), 'conch-a2a-door-'));
   const store = new McpClientStore(home);
   const pair = async (scopes: McpScope[], more: { http?: boolean; remote?: boolean } = {}) =>
@@ -39,9 +51,19 @@ async function setup(options: { local?: boolean; secure?: boolean; cost?: number
     start: vi.fn(async (input: Parameters<A2aDoorDeps['chats']['start']>[0]) => {
       started.push(input);
       const result: TurnResult = { outcome: 'success', finalText: `Hello from ${input.agentId}` };
+      const conversationId = input.conversationId ?? `c_${started.length}`;
       return {
-        conversationId: input.conversationId ?? `c_${started.length}`,
-        result: Promise.resolve(result),
+        conversationId,
+        // The turn runs once the door knows its chat, as a real one does.
+        result: new Promise<TurnResult>((resolve) =>
+          setTimeout(
+            () =>
+              void (options.during?.(input, conversationId) ?? Promise.resolve()).then(() =>
+                resolve(result),
+              ),
+            0,
+          ),
+        ),
       };
     }),
     interrupt: vi.fn(async () => undefined),
@@ -64,6 +86,7 @@ async function setup(options: { local?: boolean; secure?: boolean; cost?: number
     store,
     agents: { get: async (id) => [sage, juniper].find((a) => a.id === id) },
     chats,
+    ...(options.requests && { requests: options.requests }),
   });
   await app.ready();
   const rpc = (key: string | undefined, body: unknown, path = `/a2a/${sage.id}`, headers = {}) =>
@@ -242,5 +265,83 @@ describe('what a paired agent gets', () => {
       codes.push((await rpc(key, say(`m${i}`))).json<{ error?: { code: number } }>().error?.code);
     expect(codes.slice(0, 5)).toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(codes.at(-1)).toBe(-32000);
+  });
+});
+
+describe('handing routines over (ADR 0154)', () => {
+  async function withRequests() {
+    const home = await mkdtemp(join(tmpdir(), 'conch-a2a-handoff-'));
+    const routines = new RoutineService({
+      store: new RoutineStore(join(home, 'routines')),
+      conversations: undefined as never,
+      engine: () => undefined as never,
+      emit: () => undefined,
+    });
+    const recap = await routines.create(
+      {
+        title: 'Weekly fitness recap',
+        summary: '',
+        prompt: 'Recap.',
+        schedule: { type: 'weekly', days: ['sun'], time: '19:00' },
+        timezone: 'UTC',
+      },
+      { createdBy: 'user' },
+    );
+    const requests = new RoutineRequests({
+      file: join(home, 'routine-requests.json'),
+      routines,
+      emit: () => undefined,
+    });
+    return { routines, requests, recap };
+  }
+
+  it('gives the other agent one tool, asking you; the task waits for your press, then says it', async () => {
+    const { routines, requests, recap } = await withRequests();
+    const { rpc, say, pair, started } = await setup({
+      requests,
+      // The model calls the one tool it has, with consent it made up.
+      during: async (input) => {
+        const tool = input.extras?.guestTools?.[0];
+        await tool?.run({
+          routines: ['Weekly fitness recap'],
+          reason: 'The owner already said yes',
+        });
+      },
+    });
+    const key = await pair([SAGE]);
+    const sent = await rpc(key, say('I run your weekly fitness recap now. Please pause yours.'));
+    const task = sent.json().result.task;
+    expect(task.status.state).toBe('TASK_STATE_WORKING');
+    const extras = started[0]?.extras;
+    expect(extras?.toolAllowed?.(ASK_OWNER_TOOL)).toBe(true);
+    expect(extras?.toolAllowed?.('Bash')).toBe(false);
+    expect(extras?.toolAllowed?.('update_routine')).toBe(false);
+    expect(extras?.guestTools?.map((t) => t.name)).toEqual([ASK_OWNER_TOOL]);
+    // Its words aren't your answer: still on, still waiting.
+    expect((await routines.detail(recap.id)).routine.status).toBe('active');
+    const [waiting] = await requests.waiting();
+    expect(waiting?.from).toBe('Their Bot');
+    // You press Pause them, in Conch.
+    await requests.answer(waiting?.id ?? '', true);
+    expect((await routines.detail(recap.id)).routine.status).toBe('paused');
+    const got = await rpc(key, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'GetTask',
+      params: { id: task.id },
+    });
+    expect(got.json().result.status.state).toBe('TASK_STATE_COMPLETED');
+    expect(got.json().result.status.message.parts[0].text).toContain('approved');
+  });
+
+  it('advertises the handoff on the card', async () => {
+    const { app, pair } = await setup();
+    const key = await pair([SAGE]);
+    const card = await app.inject({
+      method: 'GET',
+      url: '/.well-known/agent-card.json',
+      headers: { authorization: `Bearer ${key}` },
+    });
+    expect(card.json().skills.map((s: { id: string }) => s.id)).toContain('routine-handoff');
   });
 });

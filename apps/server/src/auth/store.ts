@@ -70,6 +70,22 @@ const KeyRecord = z.object({
   createdAt: z.number(),
   lastUsedAt: z.number().optional(),
 });
+type KeyRecord = z.infer<typeof KeyRecord>;
+
+/**
+ * A key for scripts and agents, beside however people sign in (ADR 0153).
+ * Its own list, not the `keys` the version before reads: that version takes
+ * `keys` to mean "access keys are how you sign in", and revoking the last one
+ * there would turn a password Conch's sign-in off. Here it never works and
+ * is dropped when that version writes the file, so a rollback only ever
+ * takes a key away (ADR 0051 § Data across versions), and a key made for an
+ * hour can't come back as one that lasts forever.
+ */
+const ScriptKeyRecord = KeyRecord.extend({
+  /** It stops working by itself then, and is forgotten. */
+  expiresAt: z.number().optional(),
+});
+type ScriptKeyRecord = z.infer<typeof ScriptKeyRecord>;
 
 const SessionRecord = z.object({
   id: z.string(),
@@ -165,7 +181,10 @@ const AccessFile = z.object({
   method: AccessMethod.default('none'),
   username: z.string().optional(),
   passwordHash: z.string().optional(),
+  /** Keys people sign in with: only while `method` is `key` (`tidy` keeps it so). */
   keys: z.array(KeyRecord).default([]),
+  /** Keys for scripts and agents, which never change how people sign in (ADR 0153). */
+  scriptKeys: z.array(ScriptKeyRecord).default([]),
   /** The owner's WebAuthn user handle: 16 random bytes, base64url, made with the first passkey. */
   ownerId: z.string().optional(),
   passkeys: z.array(PasskeyRecord).default([]),
@@ -212,6 +231,7 @@ const LOCKED: AccessFile = {
   version: 1,
   method: 'password',
   keys: [],
+  scriptKeys: [],
   passkeys: [],
   hellos: [],
   sessions: [],
@@ -268,9 +288,29 @@ function newApprovalCode(taken: Set<string>): string {
   }
 }
 
+/** A key that hasn't run out. Keys people sign in with never do. */
+const liveKey = (k: KeyRecord & { expiresAt?: number }, now: number) =>
+  k.expiresAt === undefined || k.expiresAt > now;
+
+/** Every key that works right now: those people sign in with, then those for scripts. */
+const liveKeys = (file: AccessFile, now: number): ScriptKeyRecord[] => [
+  ...file.keys,
+  ...file.scriptKeys.filter((k) => liveKey(k, now)),
+];
+
+/** A session that signed in with a key lasts only as long as the key (CONCH_TOKEN's is `env`). */
+const keyStillThere = (file: AccessFile, s: SessionRecord, now: number) =>
+  s.keyId === undefined || s.keyId === 'env' || liveKeys(file, now).some((k) => k.id === s.keyId);
+
 /** Drop what has run out, and what belonged to something that's gone. */
 function tidy(file: AccessFile, now: number) {
-  file.sessions = file.sessions.filter((s) => alive(s, now));
+  // Keys sign people in only while keys are how they sign in; otherwise they're for scripts.
+  if (file.method !== 'key' && file.keys.length) {
+    file.scriptKeys = [...file.keys, ...file.scriptKeys];
+    file.keys = [];
+  }
+  file.scriptKeys = file.scriptKeys.filter((k) => liveKey(k, now));
+  file.sessions = file.sessions.filter((s) => alive(s, now) && keyStillThere(file, s, now));
   file.pairings = file.pairings.filter((p) => p.expiresAt > now);
   // A hello link only means something while nobody has made Conch theirs.
   file.hellos = file.method === 'none' ? file.hellos.filter((h) => h.expiresAt > now) : [];
@@ -289,7 +329,7 @@ function tidy(file: AccessFile, now: number) {
     ...file.sessions.flatMap((s) => (s.deviceId ? [s.deviceId] : [])),
     ...file.requests.map((r) => r.deviceId),
   ]);
-  const keys = new Set(file.keys.map((k) => k.id));
+  const keys = new Set([...file.keys, ...file.scriptKeys].map((k) => k.id));
   file.devices = file.devices.filter(
     (d) =>
       (d.keyId === undefined || d.keyId === 'env' || keys.has(d.keyId)) &&
@@ -312,6 +352,28 @@ const deviceName = (d: DeviceRecord) => d.label ?? d.name;
 export interface SignInResult {
   ok: boolean;
   keyId?: string;
+}
+
+export interface NewKeyOptions {
+  /** Make access keys how people sign in. Otherwise it's for scripts and agents only. */
+  signIn?: boolean;
+  /** It stops working by itself then (ADR 0153). Never for a key people sign in with. */
+  expiresAt?: number;
+  /**
+   * Made on this computer (its terminal, or a browser proven to be here,
+   * ADR 0063): let in from the start where new devices need approving.
+   * Anything else waits for approval as before (ADR 0024).
+   */
+  approvedHow?: ApprovedHow;
+  /** The session that made it stays signed in, if access keys became the way in. */
+  keepSessionId?: string;
+}
+
+export interface NewKey extends CreatedKey {
+  /** How people sign in now. */
+  method: AccessMethod;
+  /** Access keys just became how people sign in, and every other session ended. */
+  turnedOn: boolean;
 }
 
 const alive = (s: SessionRecord, now: number) =>
@@ -430,59 +492,137 @@ export class AccessStore {
 
   // ── Credentials ───────────────────────────────────────────────────────
 
-  /** Switch to password sign-in. Keys are removed and other sessions end. */
+  /**
+   * Switch to password sign-in, or change the password. Every other session
+   * ends (OWASP ASVS 5.0 V7.4.3). Access keys stay: people stop signing in
+   * with them, and scripts keep using them (ADR 0153).
+   */
   async setPassword(username: string, password: string, keepSessionId?: string): Promise<void> {
     const check = checkPassword(password, { username });
     if (!check.ok) throw new AccessError('weak-password', check.message);
     const passwordHash = await this.#hashing.run(() => hashPassword(password));
     await this.#update(
       (file) => {
+        // While locked, the stand-in has no keys: this starts afresh, as it always did.
         file.method = 'password';
         file.username = username.trim();
         file.passwordHash = passwordHash;
-        file.keys = [];
         file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
       },
       { resets: true },
     );
   }
 
-  /** Add an access key (switching to key sign-in if needed). Returned once. */
-  async addKey(name: string, keepSessionId?: string): Promise<CreatedKey> {
+  /**
+   * Make an access key. Returned once; only its hash is kept (ASVS 5.0
+   * V11.4). It's an extra way in for scripts and agents (ADR 0153): how
+   * people sign in stays as it is, nobody is signed out and nothing is
+   * erased (only a person's choice replaces a way in, V6.4), unless
+   * `signIn` asks for access keys to become how people sign in. Then the password goes and other sessions end, as choosing any
+   * other way does. While sign-in is locked, a key is the way back in, so it
+   * always signs in then.
+   */
+  async addKey(name: string, options: NewKeyOptions = {}): Promise<NewKey> {
     const key = newAccessKey();
-    const record = {
+    const now = Date.now();
+    const record: ScriptKeyRecord = {
       id: newId('key'),
       name: name.trim(),
       hash: hashToken(key),
       hint: key.slice(-4),
-      createdAt: Date.now(),
+      createdAt: now,
+      ...(options.expiresAt !== undefined && { expiresAt: options.expiresAt }),
     };
-    await this.#update(
+    if (options.signIn && options.expiresAt !== undefined)
+      throw new AccessError('invalid', 'A key you sign in with can’t run out.');
+    if (options.expiresAt !== undefined && options.expiresAt <= now)
+      throw new AccessError('invalid', 'That time has already passed.');
+    return this.#update(
       (file) => {
-        if (file.method !== 'key') {
+        const before = file.method;
+        const signIn = options.signIn === true || (this.#locked && options.expiresAt === undefined);
+        if (this.#locked && !signIn) throw new AccessError('locked', lockedMessage());
+        if (signIn && file.method !== 'key') {
           file.method = 'key';
           delete file.username;
           delete file.passwordHash;
-          file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
+          file.sessions = file.sessions.filter((s) => s.id === options.keepSessionId);
         }
-        file.keys.push(record);
+        // A key that lasts, while keys are how people sign in, is one of those (the
+        // version before reads it the same way); every other key is for scripts.
+        if (file.method === 'key' && record.expiresAt === undefined) file.keys.push(record);
+        else file.scriptKeys.push(record);
+        // Made on this computer: its terminal, or a browser that proved it's here,
+        // is where approving happens anyway, so the key is let in from the start.
+        if (options.approvedHow)
+          file.devices.push({
+            id: newId('dev'),
+            hash: '',
+            name: scriptsUsing(record.name),
+            kind: 'other',
+            createdAt: now,
+            lastSeenAt: now,
+            keyId: record.id,
+            via: 'key',
+            approvedAt: now,
+            approvedHow: options.approvedHow,
+          });
+        return {
+          key,
+          info: keyInfo(record, file.method === 'key' && record.expiresAt === undefined),
+          turnedOn: before !== 'key' && file.method === 'key',
+          method: file.method,
+        };
       },
-      // While locked, the stand-in is "password", so this starts a fresh key list.
+      // While locked, the stand-in is "password" with no password: this starts a fresh key list.
       { resets: true },
     );
-    return { key, info: keyInfo(record) };
   }
 
-  /** Revoke a key and sign out every device that used it. */
+  /**
+   * Revoke a key and sign out every device that used it. How everyone else
+   * signs in never changes (ADR 0153): with access keys as the way people
+   * sign in, the last of those can't go while it's the only way in, and when
+   * passkeys are there too, they carry on as the way in.
+   */
   async revokeKey(id: string): Promise<string[]> {
     return this.#update((file) => {
-      if (!file.keys.some((k) => k.id === id)) throw new AccessError('not-found', 'No such key.');
-      file.keys = file.keys.filter((k) => k.id !== id);
+      const signInKey = file.keys.some((k) => k.id === id);
+      if (!signInKey && !file.scriptKeys.some((k) => k.id === id))
+        throw new AccessError('not-found', 'No such key.');
+      const rest = file.keys.filter((k) => k.id !== id);
+      if (signInKey && file.method === 'key' && rest.length === 0) {
+        if (!file.passkeys.length)
+          throw new AccessError(
+            'invalid',
+            `This key is your only way to sign in. Choose a password (${cliName()} password) or add a passkey first.`,
+          );
+        file.method = 'passkey';
+      }
+      file.keys = rest;
+      file.scriptKeys = file.scriptKeys.filter((k) => k.id !== id);
       const ended = file.sessions.filter((s) => s.keyId === id).map((s) => s.id);
       file.sessions = file.sessions.filter((s) => s.keyId !== id);
-      // The last key gone: passkeys still sign in, if there are any.
-      if (file.keys.length === 0) file.method = file.passkeys.length ? 'passkey' : 'none';
       return ended;
+    });
+  }
+
+  /**
+   * Forget keys that ran out, and say what they leave behind: the sessions
+   * they signed in, to disconnect, and the keys, whose terminals end. Writes
+   * only when one did.
+   */
+  async expireKeys(): Promise<{ keys: string[]; sessions: string[] }> {
+    const now = Date.now();
+    const file = await this.get();
+    if (this.#locked || file.scriptKeys.every((k) => liveKey(k, now)))
+      return { keys: [], sessions: [] };
+    return this.#update((f) => {
+      const gone = new Set(f.scriptKeys.filter((k) => !liveKey(k, now)).map((k) => k.id));
+      f.scriptKeys = f.scriptKeys.filter((k) => !gone.has(k.id));
+      const sessions = f.sessions.filter((s) => s.keyId && gone.has(s.keyId)).map((s) => s.id);
+      f.sessions = f.sessions.filter((s) => !(s.keyId && gone.has(s.keyId)));
+      return { keys: [...gone], sessions };
     });
   }
 
@@ -496,6 +636,7 @@ export class AccessStore {
         delete file.passwordHash;
         delete file.ownerId;
         file.keys = [];
+        file.scriptKeys = [];
         file.passkeys = [];
         file.hellos = [];
         file.sessions = [];
@@ -509,8 +650,14 @@ export class AccessStore {
     );
   }
 
+  /** Every key that works, those people sign in with first. */
   async keys(): Promise<AccessKeyInfo[]> {
-    return (await this.get()).keys.map(keyInfo);
+    const file = await this.get();
+    const now = Date.now();
+    return [
+      ...file.keys.map((k) => keyInfo(k, file.method === 'key')),
+      ...file.scriptKeys.filter((k) => liveKey(k, now)).map((k) => keyInfo(k, false)),
+    ];
   }
 
   /**
@@ -532,23 +679,30 @@ export class AccessStore {
       }
       return { ok };
     }
-    if (file.method === 'key') return this.verifyKey(input.secret);
+    if (file.method === 'key') return this.verifyKey(input.secret, { signIn: true });
     return { ok: false };
   }
 
-  async verifyKey(key: string): Promise<SignInResult> {
+  /**
+   * Check an access key. Any key that hasn't run out works for a script
+   * (`Authorization: Bearer`); with `signIn`, only one people sign in with
+   * (access keys are how they sign in), so a key made for a script never
+   * becomes a browser's sign-in, or confirms it's you.
+   */
+  async verifyKey(key: string, { signIn = false } = {}): Promise<SignInResult> {
     const file = await this.get();
     const hash = hashToken(key.trim());
+    const now = Date.now();
+    const candidates = signIn ? (file.method === 'key' ? file.keys : []) : liveKeys(file, now);
     let match: string | undefined;
     // Compare against every key so timing doesn't reveal how many there are or which matched.
-    for (const record of file.keys) if (safeEqual(record.hash, hash)) match = record.id;
+    for (const record of candidates) if (safeEqual(record.hash, hash)) match = record.id;
     if (!match) return { ok: false };
     const keyId = match;
-    const now = Date.now();
-    const record = file.keys.find((k) => k.id === keyId);
+    const record = candidates.find((k) => k.id === keyId);
     if (record && now - (record.lastUsedAt ?? 0) > TOUCH_EVERY_MS) {
       await this.#update((f) => {
-        const k = f.keys.find((x) => x.id === keyId);
+        const k = [...f.keys, ...f.scriptKeys].find((x) => x.id === keyId);
         if (k) k.lastUsedAt = now;
       });
     }
@@ -798,7 +952,8 @@ export class AccessStore {
     const hash = hashToken(token);
     const now = Date.now();
     const session = file.sessions.find((s) => safeEqual(s.hash, hash));
-    if (!session || session.pending || !alive(session, now)) return undefined;
+    if (!session || session.pending || !alive(session, now) || !keyStillThere(file, session, now))
+      return undefined;
     if (now - session.lastSeenAt > TOUCH_EVERY_MS) {
       await this.#update((f) => {
         const s = f.sessions.find((x) => x.id === session.id);
@@ -813,7 +968,10 @@ export class AccessStore {
   /** Is this session still signed in (and not waiting)? For closing sockets it opened. */
   async sessionActive(id: string): Promise<boolean> {
     const now = Date.now();
-    return (await this.get()).sessions.some((s) => s.id === id && !s.pending && alive(s, now));
+    const file = await this.get();
+    return file.sessions.some(
+      (s) => s.id === id && !s.pending && alive(s, now) && keyStillThere(file, s, now),
+    );
   }
 
   /**
@@ -1163,7 +1321,7 @@ export class AccessStore {
         d = {
           id: newId('dev'),
           hash: '',
-          name: `Scripts using “${input.keyName}”`,
+          name: scriptsUsing(input.keyName),
           kind: 'other',
           createdAt: now,
           lastSeenAt: now,
@@ -1338,7 +1496,7 @@ const NO_REQUEST =
 
 function requestInfo(file: AccessFile, r: RequestRecord): DeviceRequest {
   const device = file.devices.find((d) => d.id === r.deviceId);
-  const key = r.keyId && file.keys.find((k) => k.id === r.keyId);
+  const key = r.keyId && [...file.keys, ...file.scriptKeys].find((k) => k.id === r.keyId);
   return {
     code: formatApprovalCode(r.code),
     deviceId: r.deviceId,
@@ -1354,12 +1512,17 @@ function requestInfo(file: AccessFile, r: RequestRecord): DeviceRequest {
   };
 }
 
-function keyInfo(record: z.infer<typeof KeyRecord>): AccessKeyInfo {
+function keyInfo(record: ScriptKeyRecord, signIn: boolean): AccessKeyInfo {
   return {
     id: record.id,
     name: record.name,
     hint: record.hint,
     createdAt: record.createdAt,
     ...(record.lastUsedAt && { lastUsedAt: record.lastUsedAt }),
+    ...(record.expiresAt !== undefined && { expiresAt: record.expiresAt }),
+    ...(signIn && { signIn: true }),
   };
 }
+
+/** The "device" a script using a key is, in Settings → Access and `conch devices`. */
+const scriptsUsing = (keyName: string) => `Scripts using “${keyName}”`;

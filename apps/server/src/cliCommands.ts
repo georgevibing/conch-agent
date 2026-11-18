@@ -70,6 +70,19 @@ export const ADDRESS_SUBCOMMANDS = [
   { usage: 'off', summary: 'Stop answering at it' },
 ] as const satisfies readonly CliSubcommand[];
 
+export const ROUTINES_SUBCOMMANDS = [
+  { usage: '(nothing), list [--json]', summary: 'Each routine: its schedule, next run and status' },
+  {
+    usage: 'pause <id|name> [--reason "…"]',
+    summary: 'Pause one; the reason shows in Routines (“moved to Hermes”)',
+  },
+  { usage: 'resume <id|name>', summary: 'Turn a paused one back on' },
+  {
+    usage: 'export [id|name] [--json]',
+    summary: 'What another agent needs to recreate them: instructions, schedule, where results go',
+  },
+] as const satisfies readonly CliSubcommand[];
+
 export const DASHBOARDS_SUBCOMMANDS = [
   { usage: '(nothing), status', summary: 'Where Conch’s numbers go, and how sending is going' },
   {
@@ -133,29 +146,31 @@ export const CLI_COMMANDS = [
     summary: 'Choose a password (or have a strong one made)',
     group: 'Signing in',
     detail:
-      'Turns password sign-in on. Asks for a username and a password of at least 15 characters, typed twice; an empty line, or --generate, makes a strong one and shows it once. Every other signed-in device is signed out.',
+      'Turns password sign-in on. Asks for a username and a password of at least 15 characters, typed twice; an empty line, or --generate, makes a strong one and shows it once. Every other signed-in device is signed out. Access keys keep working for scripts.',
   },
   {
     name: 'key',
-    usage: 'key [name]',
-    summary: 'Create an access key',
+    usage: 'key [name] [--for <time>] [--sign-in]',
+    summary: 'Create an access key for a script or an agent',
     group: 'Signing in',
     detail:
-      'Makes a key for a script or another device and shows it once. Paste it on the sign-in screen, or send it as an Authorization: Bearer header.',
+      'Makes a key and shows it once: send it as an Authorization: Bearer header. It works at once, with no approving, and nothing else changes: you sign in as before and nobody is signed out. --for 1h (or 30m, 2d, 1w) makes one that stops by itself. --sign-in makes access keys how people sign in, in place of a password, and signs every other device out.',
   },
   {
     name: 'keys',
     usage: 'keys',
     summary: 'List access keys',
     group: 'Signing in',
-    detail: 'Each key’s name, its last characters, its id and when it was last used.',
+    detail:
+      'Each key’s name, its last characters, its id, when it was last used, when it stops if it was made for a while, and whether it signs you in or is for scripts.',
   },
   {
     name: 'revoke',
     usage: 'revoke <id>',
     summary: 'Revoke an access key',
     group: 'Signing in',
-    detail: 'The key stops working at once, and every device signed in with it is signed out.',
+    detail:
+      'The key stops working at once, and every device signed in with it is signed out. How everyone else signs in stays as it is; the last key you sign in with stays until you choose another way.',
   },
   {
     name: 'pair',
@@ -261,6 +276,15 @@ export const CLI_COMMANDS = [
     group: 'Your things',
     detail:
       'Brings memories, your persona, skills (off until you turn them on) and scheduled jobs (as draft routines) from openclaw or hermes. --dry-run only lists what would come over. Chat bots and keys come over in the app, where you can tick them.',
+  },
+  {
+    name: 'routines',
+    usage: 'routines [pause|resume|export]',
+    summary: 'Your routines: list, pause, resume, export (routines help)',
+    group: 'Your things',
+    detail:
+      'Lists your routines with when each runs next, pauses or resumes one by its id or name, and exports them for another agent to recreate: the instructions, the schedule with its timezone (and as cron), where the result goes and what it uses, never a key. --json prints one JSON document for programs (format conch.routines/1). It works with Conch running or not. An agent you run in this terminal can use it too; Conch’s own assistant can’t. A routine that was never turned on is turned on from its card in Conch.',
+    subcommands: ROUTINES_SUBCOMMANDS,
   },
   {
     name: 'skills',

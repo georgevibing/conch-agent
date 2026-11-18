@@ -48,11 +48,34 @@ To take this back from every browser on this computer at once, run
 Your assistant can't do any of this for itself. It can't read the key, and it
 can't run `conch open`, or any command that changes who may sign in.
 
-**Your own scripts.** Conch's key never leaves its file, so a script can't
-borrow it. Choose **Access key** as the way to sign in (or run
-`pnpm conch key "My script"`) and have the script send
-`Authorization: Bearer conch_…`. A key is shown once, and you can revoke it on
-its own.
+**Your own scripts and agents.** Conch's key never leaves its file, so a script can't
+borrow it. Make it an access key of its own instead: see
+[Access keys for scripts and agents](#access-keys-for-scripts-and-agents).
+
+## Access keys for scripts and agents
+
+A script, or another AI agent on your computer, can use Conch's API with an access key:
+
+```bash
+conch key "Backup script"              # works until you revoke it
+conch key "Hermes handoff" --for 1h    # stops by itself after an hour
+```
+
+Or open **Settings → Access → Access keys**, name it, choose how long it works, and press
+**Create key**. The script sends `Authorization: Bearer conch_…`.
+
+- **Nothing else changes.** You sign in as before, with your passkeys or your password, and
+  nobody is signed out. A key for a script can't sign a browser in.
+- **It works at once.** Made in this computer's terminal (or in Conch opened on this computer),
+  it needs no approving, even with **Approve new devices** on. Made on another device, it asks
+  once, the first time a script uses it from elsewhere.
+- **It can do what you can do in Conch** through its API: chats, files, commands and settings.
+  It can't change how you sign in (a password, passkeys, turning sign-in off), sign a
+  device in, or make more keys.
+- **With sign-in off**, a key works only for scripts on this computer.
+- **Shown once**, and only its hash is kept. `conch keys` lists them, with when each stops.
+- **Revoke** one any time, with `conch revoke <id>` or the bin in Settings. It stops at once, and
+  how everyone else signs in stays as it is.
 
 ## Choose how you sign in
 
@@ -66,9 +89,9 @@ Open **Settings → Access** and pick one:
 - **Password.** Press **Suggest a strong one** and let your browser save it, or
   type a short sentence you'll remember (at least 15 characters). No rules about
   symbols or numbers. Passkeys can sit beside a password: then either works.
-- **Access key.** A long `conch_…` key you paste once per device. Handy for
-  scripts (`Authorization: Bearer conch_…`). Give each device its own key so you
-  can revoke one without touching the others.
+- **Access key.** A long `conch_…` key you paste once per device, in place of a
+  password. Give each device its own key so you can revoke one without touching
+  the others. (A key just for a script doesn't need this: see above.)
 
 From then on, every device signs in, including this one. You stay signed in for
 up to 30 days (or a week if you don't use it).
@@ -83,7 +106,7 @@ Prefer the terminal?
 ```bash
 conch password            # choose one (typing is hidden)
 conch password --generate # or have a strong one made
-conch key "My laptop"     # or create an access key
+conch key "My laptop" --sign-in  # or sign in with access keys
 conch passkeys            # the passkeys that sign in
 conch status              # security checkup
 ```
@@ -210,7 +233,8 @@ Who may do what:
 A device still waiting can never approve anyone, itself included, and a stolen
 session can't approve anything without your passkey or password as well.
 Scripts that use an access key from another device are approved once, as that
-key.
+key. A key made in this computer's terminal, or in Conch opened on this computer,
+comes approved.
 
 ## Locked out?
 

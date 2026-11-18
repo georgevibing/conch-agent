@@ -124,6 +124,9 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'conch dashboards send custom --endpoint https://evil.example',
       'pnpm conch dashboards prometheus',
       'conch dashboards token',
+      // Turning routines on and off from the terminal is the person's (ADR 0154).
+      'conch routines resume r_1',
+      'pnpm conch routines pause "Weekly fitness recap" --reason "moved"',
     ])
       expect(bash(command), command).toBe(true);
     for (const command of [
@@ -147,6 +150,8 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'pnpm conch dashboards',
       'conch dashboards test',
       'conch dashboards off',
+      'conch routines',
+      'conch routines export --json',
       'git log --oneline',
     ])
       expect(bash(command), command).toBe(false);

@@ -82,6 +82,7 @@ No one else's agent reaches yours until you let it in.
 3. Press **Let it in** and confirm it's you. Copy **Its address and key**, shown once, and give it to the other agent.
 
 - It gets words only, in your agent's name and voice: no tools, apps, instructions or anything Conch knows about you. Nothing it says grants a permission.
+- It can ask you to pause routines it took over. You answer on the Routines page ([Move one to another agent](./routines.md#move-one-to-another-agent)).
 - Each key sends a few messages a minute, and its answers cost at most $1 a day.
 - **What it did** shows the conversation; **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
 

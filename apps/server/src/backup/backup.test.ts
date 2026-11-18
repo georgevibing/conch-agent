@@ -386,7 +386,8 @@ describe('back up, restore on another computer, undo', () => {
           method: 'POST',
           url: '/api/access/keys',
           headers: { cookie },
-          payload: { name },
+          // Keys people sign in with: a backup carries those (keys for scripts it never does).
+          payload: { name, signIn: true },
         }),
       ) as { key: string; info: { id: string } };
     const laptop = await addKey('Laptop');

@@ -11,7 +11,7 @@ This is the app's own API, at protocol version 7 today. It moves with the app: t
 curl -H "Authorization: Bearer conch_…" http://localhost:4317/api/state
 ```
 
-Make a key with `conch key`. Changes that grant trust also need a password or key entered in the last ten minutes.
+Make a key with `conch key "My script"`, or `conch key "Handoff" --for 1h` for one that stops by itself. It changes nothing else: you sign in as before, and nobody is signed out. A key can't make more keys. Changes that grant trust also need a password or key entered in the last ten minutes.
 
 ## Over HTTP
 

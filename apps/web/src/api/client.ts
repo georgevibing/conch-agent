@@ -165,8 +165,9 @@ export const api = {
       method: 'PUT',
       body: { username, password },
     }),
-  createKey: (name: string) =>
-    request(CreatedKey, '/api/access/keys', { method: 'POST', body: { name } }),
+  /** A key for scripts and agents (ADR 0153); `signIn` makes access keys how people sign in. */
+  createKey: (name: string, options: { signIn?: boolean; expiresIn?: number } = {}) =>
+    request(CreatedKey, '/api/access/keys', { method: 'POST', body: { name, ...options } }),
   revokeKey: (id: string) =>
     request(AccessSettings, `/api/access/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   disableSignIn: () => request(Ok, '/api/access', { method: 'DELETE' }),

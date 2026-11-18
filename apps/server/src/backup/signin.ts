@@ -14,6 +14,7 @@
  * - **A key id this Conch doesn't have is never brought back**, whatever the
  *   backup: on a new computer that means no keys, so they're made again
  *   (`pnpm conch key`). A key sign-in left with no key isn't brought back.
+ *   Keys for scripts (ADR 0153) are never in a backup; the ones made here stay.
  * - **An Undo copy** is this computer's own state from just before a restore,
  *   and goes back exactly: the sign-in a restore brought to a new computer
  *   is taken away again. Where there was sign-in before, it was kept by the
@@ -118,6 +119,8 @@ export function signInAfterRestore(
       ...(typeof incoming.username === 'string' && { username: incoming.username }),
       ...(typeof incoming.passwordHash === 'string' && { passwordHash: incoming.passwordHash }),
       keys,
+      // This Conch's own keys for scripts: a restore neither brings nor takes them (ADR 0153).
+      ...(Array.isArray(here?.scriptKeys) && { scriptKeys: here.scriptKeys }),
       sessions,
       pairings: [],
     },

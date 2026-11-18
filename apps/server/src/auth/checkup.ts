@@ -279,13 +279,36 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       id: 'sign-in',
       level: 'ok',
       title:
-        access.method === 'password' ? 'Protected by your password' : 'Protected by access keys',
+        access.method === 'password'
+          ? 'Protected by your password'
+          : access.method === 'passkey'
+            ? 'Protected by your passkeys'
+            : 'Protected by access keys',
       detail: 'Every device has to sign in, including this one.',
     });
   }
 
+  // Keys for scripts and agents sit beside every way of signing in (ADR 0153): say what they can do.
+  const now = Date.now();
+  const scriptKeys = input.accessLocked
+    ? []
+    : access.scriptKeys.filter((k) => k.expiresAt === undefined || k.expiresAt > now);
+  if (scriptKeys.length) {
+    const lasting = scriptKeys.filter((k) => k.expiresAt === undefined).length;
+    items.push({
+      id: 'script-keys',
+      level: 'info',
+      title:
+        scriptKeys.length === 1
+          ? `The access key “${scriptKeys[0]?.name ?? ''}” lets a script use Conch`
+          : `${scriptKeys.length} access keys let scripts use Conch`,
+      detail: `Whoever has ${scriptKeys.length === 1 ? 'it' : 'one'} can do what you can in Conch through its API${access.method === 'none' ? ', from this computer' : ''}. Nobody signs in with ${scriptKeys.length === 1 ? 'it' : 'them'}. ${lasting ? 'Revoke the ones you no longer need.' : 'Each stops by itself when its time is up.'}`,
+      command: `${cliName()} keys`,
+      fix: { kind: 'open', label: 'Review keys', place: 'keys' },
+    });
+  }
+
   if (!input.accessLocked && access.method !== 'none') {
-    const now = Date.now();
     const waiting = access.requests.filter((r) => r.rejectedAt === undefined && r.expiresAt > now);
     if (access.approval && waiting.length) {
       const first = access.devices.find((d) => d.id === waiting[0]?.deviceId);
@@ -674,7 +697,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
     });
   }
 
-  const stale = access.keys.filter((k) => isStaleKey(k));
+  const stale = [...access.keys, ...scriptKeys].filter((k) => isStaleKey(k));
   if (stale.length) {
     items.push({
       id: 'stale-keys',

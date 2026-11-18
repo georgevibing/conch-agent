@@ -5,3 +5,5 @@ export type {
   RoutineCardProps,
   RoutineCardStatus,
 } from './RoutineCard';
+export { RoutineRequestCard } from './RoutineRequestCard';
+export type { RoutineRequestCardProps } from './RoutineRequestCard';

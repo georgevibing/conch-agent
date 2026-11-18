@@ -972,6 +972,64 @@ describe('gateway WebSocket', () => {
     expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
   });
 
+  it('at one model’s own limit, only that model’s chats move on', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const mock = services.engine();
+    const other = {
+      ...mock,
+      id: 'openrouter' as const,
+      label: 'OpenRouter',
+      usage: undefined,
+      capabilities: () => mock.capabilities(),
+      detect: async () => ({
+        ...(await mock.detect()),
+        engine: 'openrouter' as const,
+        state: 'ready' as const,
+        auth: { method: 'api-key' as const, description: 'API key' },
+      }),
+    };
+    vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
+      id === 'openrouter' ? other : mock,
+    );
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([mock, other]);
+    vi.spyOn(services, 'localReady').mockResolvedValue(undefined);
+    await services.settings.update({ preferences: { limitPaid: true } });
+    const resetsAt = Date.now() + 7 * 3_600_000;
+    vi.spyOn(services.usage, 'known').mockReturnValue({
+      engine: mock.id,
+      kind: 'plan',
+      source: 'Claude Max',
+      windows: [
+        {
+          id: 'weekly',
+          label: 'This week',
+          scope: 'all models',
+          usedPercent: 67,
+          severity: 'normal',
+        },
+        {
+          id: 'model:fable',
+          label: 'This week',
+          scope: 'Fable',
+          usedPercent: 100,
+          resetsAt,
+          severity: 'exhausted',
+        },
+      ],
+      spend: { today: 0, month: 0 },
+      updatedAt: Date.now(),
+    });
+    // A chat on Opus, or on the plan's default, carries on with its own provider.
+    expect(await services.route(mock, { model: 'opus' })).toEqual({ kind: 'use', engine: mock });
+    expect(await services.route(mock, {})).toEqual({ kind: 'use', engine: mock });
+    // A chat on Fable is at its limit: the next with room answers, and says until when.
+    expect(await services.route(mock, { model: 'fable' })).toMatchObject({
+      engine: { id: 'openrouter' },
+      routed: { reason: 'limit', message: expect.stringContaining('reached its limit until') },
+    });
+  });
+
   it('lists who would carry on, in order, with room, cost and model (ADR 0126)', async () => {
     const { app, services } = await setup();
     close = () => app.close();

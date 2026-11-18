@@ -23,7 +23,15 @@ import {
   WatchStatus,
   META_SEP,
 } from '@conch/nacre';
-import { Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Copy,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -33,6 +41,7 @@ import { useUi, type SettingsTab } from '../../app/ui';
 import { routinesApi } from './api';
 import { routineIcon } from './icon';
 import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from './queries';
+import { MoveToAgent } from './MoveToAgent';
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
 import { moreRoom, runCostText, runLimitText } from './spendWords';
@@ -48,7 +57,8 @@ const trustLabels: Record<Routine['trust'], string> = {
 
 function statusLine(routine: Routine, now: number) {
   if (routine.status === 'draft') return 'Not on yet';
-  if (routine.status === 'paused') return 'Paused';
+  if (routine.status === 'paused')
+    return routine.pausedBecause ? `Paused: ${routine.pausedBecause.reason}` : 'Paused';
   if (routine.status === 'completed') return 'Finished';
   if (routine.when) return 'Free until something happens';
   return routine.nextRunAt
@@ -142,6 +152,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   const navigate = useNavigate();
   const openSettings = useUi((s) => s.openSettings);
   const [editing, setEditing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [now] = useState(Date.now);
   usePageTrail(
@@ -271,6 +282,11 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
               >
                 Copy instruction
               </DropdownMenu.Item>
+              {routine.status !== 'completed' && (
+                <DropdownMenu.Item icon={<ArrowRightLeft />} onSelect={() => setMoving(true)}>
+                  Move to another agent
+                </DropdownMenu.Item>
+              )}
               <DropdownMenu.Separator />
               <DropdownMenu.Item
                 icon={<Trash2 />}
@@ -516,6 +532,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
       </div>
 
       {editing && <RoutineEditor open routine={routine} onOpenChange={setEditing} />}
+      {moving && <MoveToAgent open routine={routine} onOpenChange={setMoving} />}
       <AlertDialog.Root open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialog.Content>
           <AlertDialog.Title>Delete “{routine.title}”?</AlertDialog.Title>

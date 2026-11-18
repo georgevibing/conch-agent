@@ -8,7 +8,7 @@ import { useAdvanced } from '../settings/useAdvanced';
 import { reveal, useAccess, type Focus } from './access';
 import { DevicesTab } from './DevicesTab';
 import { ADD_DEVICE_FOCUS, KEYS_FOCUS, PASSKEYS_FOCUS, SIGN_IN_FOCUS } from './focus';
-import { PasskeysSection, SignInSection, type SignInPlace } from './SignInSections';
+import { KeysSection, PasskeysSection, SignInSection, type SignInPlace } from './SignInSections';
 import { useVerify } from './useVerify';
 
 /** The parts of Access that ⌘K or a checkup fix ask for by name. */
@@ -20,7 +20,8 @@ const ASKED: Record<string, SignInPlace> = {
 
 /**
  * Settings → Access: every way into Conch, in one place — how you sign in
- * (a password, access keys), your passkeys, the devices signed in and your
+ * (a password, access keys), your passkeys, keys for scripts and agents
+ * (ADR 0153), the devices signed in and your
  * phone, and, under Advanced, the other apps on this computer that use Conch
  * (ADR 0073). Security keeps the checkup; this is who gets in, and how.
  */
@@ -79,6 +80,7 @@ export function AccessTab() {
         <>
           <SignInSection access={access.data} guard={guard} focus={focus} />
           <PasskeysSection access={access.data} guard={guard} focus={focus} />
+          <KeysSection access={access.data} guard={guard} focus={focus} />
         </>
       )}
       {/* Loading and a failure to load are said once, here. */}

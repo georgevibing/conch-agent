@@ -1,6 +1,7 @@
 import type {
   Routine,
   RoutineDetail,
+  RoutineRequest,
   RoutineRun,
   RoutineSpending,
   ServerEvent,
@@ -15,7 +16,46 @@ export const routineKeys = {
   all: ['routines'] as const,
   detail: (id: string) => ['routines', id] as const,
   spending: ['routines-spending'] as const,
+  requests: ['routines-requests'] as const,
 };
+
+/** Other agents' requests to pause routines, waiting for you (ADR 0154). */
+export function useRoutineRequests() {
+  return useQuery({
+    queryKey: routineKeys.requests,
+    queryFn: routinesApi.requests,
+    staleTime: 30_000,
+  });
+}
+
+/** Your answer to one: Pause them, or Decline. */
+export function useAnswerRequest() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (arg: { id: string; approve: boolean }) =>
+      routinesApi.answerRequest(arg.id, arg.approve),
+    onSuccess: (request) => {
+      putRequest(client, request);
+      void client.invalidateQueries({ queryKey: routineKeys.all });
+      const which =
+        request.routines.length === 1
+          ? `“${request.routines[0]?.title}”`
+          : `${request.routines.length} routines`;
+      if (request.state === 'approved') toast.success(`Paused ${which}`);
+      else toast(`Kept ${which} on`);
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : 'Couldn’t answer it.'),
+  });
+}
+
+/** A request changed: waiting ones stay listed, answered ones leave. */
+function putRequest(client: QueryClient, request: RoutineRequest) {
+  client.setQueryData<RoutineRequest[]>(routineKeys.requests, (list) => {
+    const rest = (list ?? []).filter((r) => r.id !== request.id);
+    return request.state === 'waiting' ? [...rest, request] : rest;
+  });
+}
 
 export function useRoutines() {
   return useQuery({ queryKey: routineKeys.all, queryFn: routinesApi.list, staleTime: 30_000 });
@@ -111,6 +151,7 @@ export function applyRoutineEvent(
     client.setQueryData(routineKeys.spending, event.spending);
     return;
   }
+  if (event.type === 'routine.request') return putRequest(client, event.request);
   if (event.type === 'routine.changed') {
     // Which runs wait for a plan (Room for your own chats) follows its routines.
     void client.invalidateQueries({ queryKey: routineKeys.spending });
