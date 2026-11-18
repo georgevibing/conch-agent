@@ -21,13 +21,24 @@ export interface UsageWindowValue {
   severity: UsageSeverity;
 }
 
+/**
+ * The model a chat is on, as its provider names it: an id (`fable`,
+ * `claude-opus-4-8`) and, when known, its name ("Fable 5.1"). A window
+ * scoped to one model ("Opus") limits only that model (`windowAppliesTo`).
+ */
+export interface UsageModel {
+  id?: string;
+  label?: string;
+}
+
 export interface UsageValue {
   kind: 'plan' | 'metered' | 'unknown';
   /** Who meters you: "Claude Max", "Amazon Bedrock", "Anthropic API". */
   source: string;
   /**
    * Stable display order (session, then weekly, then per-model) — not sorted
-   * by pressure. The headline is the most-used window (see `headline`).
+   * by pressure. The headline is the most-used window that limits the chat's
+   * model (see `headline`).
    * Empty for `metered`.
    */
   windows: UsageWindowValue[];

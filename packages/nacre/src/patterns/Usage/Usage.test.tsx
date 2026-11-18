@@ -11,10 +11,12 @@ import {
   meteredOverBudget,
   planExhausted,
   planHealthy,
+  planModelLow,
   planNoWindows,
   planWarning,
   planWeeklyLow,
   planWithExtra,
+  usageModels,
   usageNow,
   usageUnknown,
 } from './fixtures';
@@ -40,6 +42,32 @@ describe('ProviderMeter', () => {
     });
     expect(meter).toHaveTextContent('Codex39% left');
     await expectAccessible(container);
+  });
+
+  it("goes by the chat's model: another model's own limit doesn't turn it red", () => {
+    const provider = { label: 'Claude Code', logo: 'claude' } as const;
+    const { rerender } = renderNacre(
+      <ProviderMeter
+        provider={provider}
+        usage={planModelLow}
+        model={usageModels.opus}
+        now={usageNow}
+      />,
+    );
+    const meter = screen.getByRole('button', { name: /^Claude Code\. Usage: 33% left of weekly/ });
+    expect(meter).toHaveAttribute('data-severity', 'normal');
+    expect(meter).toHaveTextContent('33% left');
+    rerender(
+      <ProviderMeter
+        provider={provider}
+        usage={planModelLow}
+        model={usageModels.fable}
+        now={usageNow}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /Usage: 1% left of Fable weekly limit/ }),
+    ).toHaveAttribute('data-severity', 'critical');
   });
 
   it('shows only the name when there is nothing to run out of', () => {
@@ -170,6 +198,42 @@ describe('UsagePanel', () => {
     );
   });
 
+  it("leads with the chat's model and marks another model's limit as not this chat's", async () => {
+    const { container } = renderNacre(
+      <UsagePanel value={planModelLow} model={usageModels.opus} now={usageNow} {...tz} />,
+    );
+    const weekly = screen.getByRole('progressbar', { name: /This week\s*· all models/ });
+    expect(weekly.closest('[data-emphasis]')).not.toBeNull();
+    const fable = screen.getByRole('progressbar', { name: /This week\s*· Fable/ });
+    expect(fable).toHaveAttribute(
+      'aria-valuetext',
+      expect.stringMatching(/not this chat’s model$/),
+    );
+    expect(fable.closest('[data-applies="false"]')).not.toBeNull();
+    expect(screen.queryByText(/Other models have/)).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('offers other models when only the chat’s own model is short', async () => {
+    const onSwitchModel = vi.fn();
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <UsagePanel
+        value={planModelLow}
+        model={usageModels.fable}
+        onSwitchModel={onSwitchModel}
+        now={usageNow}
+        {...tz}
+      />,
+    );
+    const fable = screen.getByRole('progressbar', { name: /This week\s*· Fable/ });
+    expect(fable.closest('[data-emphasis]')).not.toBeNull();
+    expect(screen.getByText('Other models have 33% left while Fable is low.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Switch model' }));
+    expect(onSwitchModel).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
+
   it('shows spend and the budget for metered', async () => {
     const onSetBudget = vi.fn();
     const user = userEvent.setup();
@@ -267,6 +331,52 @@ describe('UsageNotice', () => {
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(onDismiss).toHaveBeenCalledOnce();
     await expectAccessible(container);
+  });
+
+  it("stays hidden when only another model's own limit is low", () => {
+    const { container } = renderNacre(
+      <>
+        <UsageNotice value={planModelLow} model={usageModels.opus} now={usageNow} />
+        <UsageNotice value={planModelLow} now={usageNow} />
+      </>,
+    );
+    expect(container.firstElementChild).toBeEmptyDOMElement();
+  });
+
+  it("names the model when it's the chat's, and offers switching", async () => {
+    const onSwitchModel = vi.fn();
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <UsageNotice
+        value={planModelLow}
+        model={usageModels.fable}
+        now={usageNow}
+        onSwitchModel={onSwitchModel}
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(container.querySelector('[data-length="long"]')).toHaveTextContent(
+      '1% of your Fable weekly limit left · resets in 7 h 10 min · other models have 33% left',
+    );
+    expect(container.querySelector('[data-length="short"]')).toHaveTextContent(
+      'Fable: 1% left · resets in 7 h',
+    );
+    await user.click(screen.getByRole('button', { name: 'Switch model' }));
+    expect(onSwitchModel).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
+
+  it('offers no switch when every model is short', () => {
+    renderNacre(
+      <UsageNotice
+        value={planWeeklyLow}
+        model={usageModels.opus}
+        now={usageNow}
+        onSwitchModel={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Switch model' })).not.toBeInTheDocument();
   });
 
   it('talks money for metered budgets', async () => {

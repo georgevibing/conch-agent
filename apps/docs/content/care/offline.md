@@ -26,6 +26,8 @@ When a provider reaches its limit, the next plan or key with room answers the sa
 
 Later messages go to the same provider. Once the limit resets, your usual provider answers again and is told what happened.
 
+Some plans also have a limit for one model, like "This week · Fable". It counts only for chats on that model. Chats on other models carry on with your provider as usual.
+
 ### Automatic
 
 On from the start, in **Settings → Providers → When one can't answer**, under **At a usage limit**. It shows what it would do right now. Each choice shows:
@@ -61,7 +63,7 @@ Background tasks carry on the same way. [Routines](../features/routines.md) don'
 
 ## The usage meter
 
-The chip at the top of a chat names its provider and what's left of its tightest limit: "Codex · 62% left". Pick another provider's model, and it switches at once.
+The chip at the top of a chat names its provider and what's left of its tightest limit for the chat's model: "Codex · 62% left". Pick another provider's model, and it switches at once.
 
 Click it to see who you're signed in as, and each limit with what's left and when it resets. If new chats start with another provider, **Use (provider)** changes that.
 
@@ -69,6 +71,7 @@ It says **Sign in** when a sign-in ended, and **Connect a provider** when none i
 
 - **Pay as you go:** the details show spend today and this month. Set a **Monthly budget** in **Settings → Usage** and the chip shows what's left. Near it, a chat says so once. At it, a chat asks before spending more ([What it costs](./what-it-costs.md)). Routines have [their own limit](../features/routines.md#it-wont-run-up-a-bill).
 - **Close to a limit:** a line appears above the message box. Close it with **×** and it stays away on every device until that limit resets.
+- **One model's own limit:** it shows in the details, marked "Not this chat's model" when the chat is on another model, and the chip and the line go by the limit all models share. On that model, the line names it and says what other models have left: "Fable: 1% left · resets in 7 h". **Switch model** opens the model picker.
 - `/usage` opens the chip's details. **Settings → Usage** shows every provider's limits.
 
 ## Good to know

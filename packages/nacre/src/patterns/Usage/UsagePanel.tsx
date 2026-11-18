@@ -6,21 +6,32 @@ import { Callout } from '../../components/Callout';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import {
+  blockedFor,
+  formatLeft,
   formatMoney,
   formatResetAt,
   formatResetIn,
   formatUpdated,
   headlineWindow,
+  otherModelsWindow,
   percentLeft,
   usageSeverityFor,
+  windowAppliesTo,
 } from './format';
-import type { UsageValue } from './types';
+import type { UsageModel, UsageValue } from './types';
 import { UsageBar, UsageGauge } from './UsageBar';
 import styles from './Usage.module.css';
 import { useNow } from './useNow';
 
 export interface UsagePanelProps extends Omit<ComponentProps<'div'>, 'children'> {
   value: UsageValue;
+  /**
+   * The chat's model: its limits lead, and another model's own limit is
+   * marked as not this chat's. Without one, only shared limits lead.
+   */
+  model?: UsageModel;
+  /** Offered when only the chat's model is short and other models have room. */
+  onSwitchModel?: () => void;
   now?: number;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -39,6 +50,8 @@ export interface UsagePanelProps extends Omit<ComponentProps<'div'>, 'children'>
  */
 export function UsagePanel({
   value,
+  model,
+  onSwitchModel,
   now,
   onRefresh,
   refreshing = false,
@@ -50,8 +63,11 @@ export function UsagePanel({
   ...props
 }: UsagePanelProps) {
   const current = useNow(30_000, now);
-  const lead = headlineWindow(value);
-  const until = value.blocked ? (value.blocked.until ?? lead?.resetsAt) : undefined;
+  const lead = headlineWindow(value, model);
+  const blocked = value.kind === 'plan' ? blockedFor(value, model) : Boolean(value.blocked);
+  const until = blocked ? (value.blocked?.until ?? lead?.resetsAt) : undefined;
+  // Only the chat's model is short: say what the others have, and offer them.
+  const others = otherModelsWindow(value, model);
   const subtitle =
     value.kind === 'plan'
       ? "Your plan's limits"
@@ -74,7 +90,7 @@ export function UsagePanel({
         )}
       </div>
 
-      {value.blocked && (
+      {blocked && (
         <Callout tone="danger" className={styles.blocked}>
           You&rsquo;ve reached your limit.{' '}
           {until != null
@@ -91,11 +107,25 @@ export function UsagePanel({
               window={w}
               now={current}
               emphasis={w === lead}
+              applies={model ? windowAppliesTo(w, model) : undefined}
               locale={locale}
               timeZone={timeZone}
             />
           ))}
           {value.extra?.enabled && <ExtraRow extra={value.extra} />}
+          {others && lead && (
+            <div className={styles.others}>
+              <p className={styles.hint}>
+                Other models have {formatLeft(others.usedPercent)}
+                {lead.scope ? ` while ${lead.scope.trim()} is low` : ''}.
+              </p>
+              {onSwitchModel && (
+                <Button size="sm" variant="ghost" tone="accent" onClick={onSwitchModel}>
+                  Switch model
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

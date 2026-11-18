@@ -1,5 +1,5 @@
 import type { EngineId, LimitFallback, PutAwayLimit } from '@conch/protocol';
-import { toast, UsageNotice } from '@conch/nacre';
+import { blockedFor, toast, UsageNotice, windowAppliesTo, type UsageModel } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
@@ -15,14 +15,24 @@ const NONE: never[] = [];
  * chat nears its end, and stays until it's put away. Put away (×), it stays
  * away for that limit on every device until the limit resets (`putAway.ts`);
  * the header's meter and its details keep the numbers. At the limit, it says
- * who carries on when you chose someone (ADR 0023).
+ * who carries on when you chose someone (ADR 0023). It goes by the chat's
+ * model: a limit of one model alone ("Fable") speaks only when the chat is on
+ * it, and then offers another model.
  */
-export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }) {
+export function UsageComposerNotice({
+  engine,
+  model,
+}: {
+  engine: EngineId | undefined;
+  /** The model answering the chat (`ModelInfo`: its id and name). */
+  model?: UsageModel;
+}) {
   const { data: app } = useAppState();
   const { data: providers } = useProviders();
   const ready = Boolean(providers?.providers.find((p) => p.id === engine)?.ready);
   const { data: usage } = useUsage(engine, ready);
   const setUsageOpen = useUi((s) => s.setUsageOpen);
+  const setPicker = useUi((s) => s.setPicker);
   const save = useUpdateSettings();
   const marks = app?.preferences.limitsPutAway ?? NONE;
   const forEngine = usage && usage.engine === engine ? usage : undefined;
@@ -40,7 +50,8 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
     mutate({ preferences: { limitsPutAway: JSON.parse(tidied) as PutAwayLimit[] } });
   }, [tidied, mutate]);
 
-  const limit = forEngine && forEngine.kind !== 'unknown' ? limitInView(forEngine, now) : undefined;
+  const limit =
+    forEngine && forEngine.kind !== 'unknown' ? limitInView(forEngine, now, model) : undefined;
   // A reading from before its reset is spent: the line waits for fresh numbers
   // (asked for right away) rather than saying "resets now" (`putAway.ts`).
   const spent = Boolean(limit && readBeforeReset(limit, now));
@@ -48,14 +59,18 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
   const shown = Boolean(limit && !spent && !isPutAway(marks, limit, now));
   // Who carries on is said only at the limit itself, so it's asked only then.
   const atLimit = Boolean(
-    forEngine?.blocked || forEngine?.windows.some((w) => w.usedPercent >= 100),
+    forEngine &&
+    (blockedFor(forEngine, model) ||
+      forEngine.windows.some((w) => w.usedPercent >= 100 && windowAppliesTo(w, model))),
   );
   const carryOn = useCarryOn(engine, shown && atLimit, app?.preferences.limitFallback);
   if (!forEngine || !limit || !shown) return null;
   return (
     <UsageNotice
       value={forEngine}
+      model={model}
       carryOn={carryOn}
+      onSwitchModel={() => setPicker('model')}
       onOpen={() => setUsageOpen(true)}
       // Away at once (`useUpdateSettings` is optimistic), and back if it didn't save.
       onDismiss={() =>

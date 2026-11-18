@@ -76,19 +76,36 @@ export interface UsageBarProps extends Omit<ComponentProps<'div'>, 'title'> {
   window: UsageWindowValue;
   now?: number;
   emphasis?: boolean;
+  /**
+   * Whether this window limits the chat's model. `false` (another model's own
+   * limit) says so in the caption and doesn't turn red. Unset: not known.
+   */
+  applies?: boolean;
   locale?: string;
   timeZone?: string;
 }
 
 /** One plan window: how much is left and when it refills. */
-export function UsageBar({ window: w, now, emphasis, locale, timeZone, ...props }: UsageBarProps) {
+export function UsageBar({
+  window: w,
+  now,
+  emphasis,
+  applies,
+  locale,
+  timeZone,
+  ...props
+}: UsageBarProps) {
   const current = useNow(30_000, now);
   const exhausted = w.severity === 'exhausted';
   const resetIn = w.resetsAt != null ? formatResetIn(w.resetsAt, current) : undefined;
-  const caption =
+  const resets =
     w.resetsAt != null
       ? `Resets ${resetIn} · ${formatResetAt(w.resetsAt, current, locale, timeZone)}`
       : undefined;
+  const elsewhere = applies === false;
+  const caption = elsewhere
+    ? ['Not this chat’s model', resets].filter(Boolean).join(' · ')
+    : resets;
   const reading = exhausted ? 'Used up' : formatLeft(w.usedPercent);
   return (
     <UsageGauge
@@ -96,10 +113,14 @@ export function UsageBar({ window: w, now, emphasis, locale, timeZone, ...props 
       scope={w.scope}
       reading={reading}
       percentLeft={exhausted ? 0 : percentLeft(w.usedPercent)}
-      severity={w.severity}
+      // Another model's limit is information here, not an alarm for this chat.
+      severity={elsewhere && w.severity !== 'normal' ? 'warning' : w.severity}
       caption={caption}
-      valueText={`${exhausted ? 'Used up' : reading}${resetIn ? `, resets ${resetIn}` : ''}`}
+      valueText={`${exhausted ? 'Used up' : reading}${resetIn ? `, resets ${resetIn}` : ''}${
+        elsewhere ? ', not this chat’s model' : ''
+      }`}
       emphasis={emphasis}
+      data-applies={elsewhere ? 'false' : undefined}
       {...props}
     />
   );

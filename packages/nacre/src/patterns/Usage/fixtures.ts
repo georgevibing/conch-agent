@@ -69,6 +69,36 @@ export const planWithExtra = plan([session(64, 3 * HOUR + 40 * MIN), weekly, wee
   extra: { enabled: true, used: 12.4, limit: 50, currency: 'USD' },
 });
 
+/**
+ * One model's own weekly limit nearly gone while the limit every model shares
+ * has room (Claude Max: "all models" 33% left, "Fable" 1% left, in 7 h).
+ */
+const weeklyShared = {
+  ...weekly,
+  usedPercent: 67,
+  resetsAt: usageNow + 7 * HOUR + 10 * MIN,
+} satisfies UsageWindowValue;
+const weeklyFable = (usedPercent: number): UsageWindowValue => ({
+  id: 'model:fable',
+  label: 'This week',
+  scope: 'Fable',
+  usedPercent,
+  resetsAt: weeklyShared.resetsAt,
+  severity: usedPercent >= 100 ? 'exhausted' : usedPercent >= 90 ? 'critical' : 'normal',
+});
+
+export const planModelLow = plan([session(12, 4 * HOUR), weeklyShared, weeklyFable(99)]);
+
+/** The same model's limit used up: that model waits; the others carry on. */
+export const planModelExhausted = plan([session(12, 4 * HOUR), weeklyShared, weeklyFable(100)]);
+
+/** Models as a chat names them (`ModelInfo`: id and label). */
+export const usageModels = {
+  fable: { id: 'fable', label: 'Fable 5.1' },
+  opus: { id: 'opus', label: 'Opus 5.5' },
+  default: { id: 'default', label: 'Default' },
+};
+
 export const planNoWindows = plan([], {
   message: 'Sign in again to let Conch see your plan’s limits.',
 });
@@ -100,6 +130,8 @@ export const usageFixtures = {
   planWeeklyLow,
   planExhausted,
   planWithExtra,
+  planModelLow,
+  planModelExhausted,
   planNoWindows,
   meteredNoBudget,
   meteredBudget,

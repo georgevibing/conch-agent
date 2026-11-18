@@ -1,4 +1,5 @@
 export {
+  blockedFor,
   describeUsage,
   formatLeft,
   formatMoney,
@@ -8,8 +9,11 @@ export {
   formatUpdated,
   headline,
   headlineWindow,
+  isModelScoped,
+  otherModelsWindow,
   percentLeft,
   usageSeverityFor,
+  windowAppliesTo,
 } from './format';
 export type { UsageHeadline } from './format';
 export { useNow } from './useNow';
@@ -25,4 +29,4 @@ export { UsagePanel } from './UsagePanel';
 export type { UsagePanelProps } from './UsagePanel';
 export { UsageNotice, usageNoticeShortText, usageNoticeText } from './UsageNotice';
 export type { UsageNoticeProps } from './UsageNotice';
-export type { UsageSeverity, UsageValue, UsageWindowValue } from './types';
+export type { UsageModel, UsageSeverity, UsageValue, UsageWindowValue } from './types';

@@ -1,5 +1,5 @@
 import type { PutAwayLimit, UsageSnapshot } from '@conch/protocol';
-import { headline } from '@conch/nacre';
+import { blockedFor, headline, type UsageModel } from '@conch/nacre';
 
 /*
  * When the line above the composer speaks (ADR 0005). It appears once a limit
@@ -28,19 +28,29 @@ export function readBeforeReset(limit: PutAwayLimit, now = Date.now()): boolean 
   return limit.resetsAt != null && limit.resetsAt <= now;
 }
 
-/** The limit the line would speak for right now, or `undefined` when it has nothing to say. */
-export function limitInView(usage: UsageSnapshot, now = Date.now()): PutAwayLimit | undefined {
+/**
+ * The limit the line would speak for right now, for the chat's model, or
+ * `undefined` when it has nothing to say. Another model's own limit ("Fable"
+ * while the chat is on Opus) is not this chat's to speak for.
+ */
+export function limitInView(
+  usage: UsageSnapshot,
+  now = Date.now(),
+  model?: UsageModel,
+): PutAwayLimit | undefined {
   if (usage.kind === 'unknown' || !usage.engine) return undefined;
-  const head = headline(usage);
-  if (head.severity === 'normal' && !usage.blocked) return undefined;
+  const head = headline(usage, model);
   const engine = usage.engine;
   if (usage.kind === 'plan') {
+    const blocked = blockedFor(usage, model) ? usage.blocked : undefined;
+    if (head.severity === 'normal' && !blocked) return undefined;
     const w = head.window;
-    const window = usage.blocked?.windowId ?? w?.id;
+    const window = blocked?.windowId ?? w?.id;
     if (!window) return undefined;
-    const resetsAt = (w?.id === window ? w.resetsAt : undefined) ?? usage.blocked?.until;
+    const resetsAt = (w?.id === window ? w.resetsAt : undefined) ?? blocked?.until;
     return { engine, window, ...(resetsAt != null && { resetsAt }) };
   }
+  if (head.severity === 'normal' && !usage.blocked) return undefined;
   // A budget is the calendar month's; a provider refusing sends says until when.
   if (usage.blocked) {
     const resetsAt = usage.blocked.until;

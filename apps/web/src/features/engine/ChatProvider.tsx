@@ -65,11 +65,14 @@ export function ChatProvider({
   const { data: list } = useProviders();
   // Who answers now: another provider carrying the chat on at its own one's limit shows its limits.
   const engine = turn.answering.engine;
+  // Its model too: a limit of one model alone ("Fable") counts only when the chat is on it.
+  const model = turn.answering.model;
   const provider = list?.providers.find((p) => p.id === engine);
   const { data: usage } = useUsage(engine, Boolean(provider?.ready));
   const open = useUi((s) => s.usageOpen);
   const setOpen = useUi((s) => s.setUsageOpen);
   const openSettings = useUi((s) => s.openSettings);
+  const setPicker = useUi((s) => s.setPicker);
   const { refresh, refreshing } = useUsageRefresh(engine);
   const makeDefault = useUseProvider();
   const [checking, setChecking] = useState(false);
@@ -99,6 +102,7 @@ export function ChatProvider({
           compact={compact}
           provider={{ label: provider.name, logo: providerLogo(provider.id) }}
           usage={usage}
+          model={model}
           attention={attention}
         />
       </Popover.Trigger>
@@ -160,6 +164,11 @@ export function ChatProvider({
           usage && (
             <UsagePanel
               value={usage}
+              model={model}
+              onSwitchModel={() => {
+                setOpen(false);
+                setPicker('model');
+              }}
               onRefresh={() => void refresh()}
               refreshing={refreshing}
               onSetBudget={

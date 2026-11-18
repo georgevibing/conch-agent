@@ -3,13 +3,15 @@ import type { ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
 import { describeUsage, headline } from './format';
-import type { UsageValue } from './types';
+import type { UsageModel, UsageValue } from './types';
 import styles from './Usage.module.css';
 import { UsageRing } from './UsageRing';
 import { useNow } from './useNow';
 
 export interface UsageMeterProps extends Omit<ComponentProps<'button'>, 'value' | 'children'> {
   value: UsageValue;
+  /** The chat's model: another model's own limit doesn't drive the gauge. */
+  model?: UsageModel;
   /** Freeze the clock (stories/tests). Defaults to a live 30 s tick. */
   now?: number;
 }
@@ -18,9 +20,9 @@ export interface UsageMeterProps extends Omit<ComponentProps<'button'>, 'value' 
  * The header fuel gauge: one ring and one number — what's left of the
  * tightest limit. Works as `Popover.Trigger asChild`.
  */
-export function UsageMeter({ value, now, className, ...props }: UsageMeterProps) {
+export function UsageMeter({ value, model, now, className, ...props }: UsageMeterProps) {
   const current = useNow(30_000, now);
-  const head = headline(value);
+  const head = headline(value, model);
   const unknown = value.kind === 'unknown';
   return (
     <button
@@ -28,7 +30,7 @@ export function UsageMeter({ value, now, className, ...props }: UsageMeterProps)
       data-lustre=""
       data-kind={value.kind}
       data-severity={head.severity}
-      aria-label={describeUsage(value, current)}
+      aria-label={describeUsage(value, current, model)}
       className={cx(styles.meter, className)}
       {...props}
     >

@@ -24,7 +24,7 @@ import { UsageComposerNotice } from './UsageComposerNotice';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useUi.setState({ usageOpen: false, draftOptions: {} });
+  useUi.setState({ usageOpen: false, draftOptions: {}, picker: null });
   useLiveStore.setState({ pending: {}, views: {}, startedWith: undefined });
 });
 
@@ -92,6 +92,14 @@ const catalog: ModelCatalog = {
           supportsFastMode: false,
           supportsAutoMode: false,
         },
+        {
+          id: 'fable',
+          label: 'Fable 5.1',
+          description: '',
+          efforts: [],
+          supportsFastMode: false,
+          supportsAutoMode: false,
+        },
       ],
       commands: [],
       permissionModes: ['default'],
@@ -123,9 +131,12 @@ function NewChat() {
   return (
     <>
       <ChatProvider />
-      <UsageComposerNotice engine={turn.options.engine} />
+      <UsageComposerNotice engine={turn.answering.engine} model={turn.answering.model} />
       <button type="button" onClick={() => turn.choose('codex-cli|gpt-6.1-sol')}>
         Pick GPT
+      </button>
+      <button type="button" onClick={() => turn.choose('claude-code|fable')}>
+        Pick Fable
       </button>
       <button type="button" onClick={() => live.send('Hello', undefined, turn.takeDraft())}>
         Send
@@ -252,6 +263,44 @@ describe('the chat’s provider in the header', () => {
     // The notice above the composer is about Codex now.
     expect(await screen.findByRole('status')).toHaveTextContent(/9% of your current session left/);
     expect(calls.some((c) => c.path.includes('engine=codex-cli'))).toBe(false);
+  });
+
+  it('goes by the chat’s model when one model has a limit of its own', async () => {
+    const fableLow = (): UsageSnapshot => {
+      const base = plan(10);
+      return {
+        ...base,
+        windows: [
+          ...base.windows.map((w) => (w.id === 'weekly' ? { ...w, usedPercent: 67 } : w)),
+          {
+            id: 'model:fable',
+            label: 'This week',
+            scope: 'Fable',
+            usedPercent: 99,
+            resetsAt: Date.now() + 7 * HOUR,
+            severity: 'critical',
+          },
+        ],
+      };
+    };
+    routes({ 'GET /api/usage': () => fableLow() });
+    const user = userEvent.setup();
+    renderApp(<NewChat />);
+    // On Sonnet, Fable's own 1% isn't this chat's: the chip says the shared 33%, calmly.
+    const meter = await screen.findByRole('button', { name: /^Claude Code\. Usage/ });
+    await waitFor(() => expect(meter).toHaveTextContent('Claude Code33% left'));
+    expect(meter).toHaveAttribute('data-severity', 'normal');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    // On Fable, its own limit speaks, names it, and offers another model.
+    await user.click(screen.getByRole('button', { name: 'Pick Fable' }));
+    await waitFor(() => expect(meter).toHaveTextContent('1% left'));
+    expect(meter).toHaveAttribute('data-severity', 'critical');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /1% of your Fable weekly limit left · resets in 7 h · other models have 33% left/,
+    );
+    await user.click(screen.getByRole('button', { name: 'Switch model' }));
+    expect(useUi.getState().picker).toBe('model');
   });
 
   it('stays on the chosen provider while a new chat is being made, never flashing the default’s limits', async () => {

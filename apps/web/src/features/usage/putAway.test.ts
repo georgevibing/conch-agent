@@ -55,6 +55,32 @@ describe('limitInView', () => {
     });
   });
 
+  it('speaks for another model’s own limit only when the chat is on that model', () => {
+    const base = plan(40);
+    const usage: UsageSnapshot = {
+      ...base,
+      windows: [
+        ...base.windows,
+        {
+          id: 'model:fable',
+          label: 'This week',
+          scope: 'Fable',
+          usedPercent: 100,
+          resetsAt: weeklyResets,
+          severity: 'exhausted',
+        },
+      ],
+      blocked: { until: weeklyResets, windowId: 'model:fable' },
+    };
+    expect(limitInView(usage, now, { id: 'opus', label: 'Opus 5.5' })).toBeUndefined();
+    expect(limitInView(usage, now)).toBeUndefined();
+    expect(limitInView(usage, now, { id: 'fable', label: 'Fable 5.1' })).toEqual({
+      engine: 'claude-code',
+      window: 'model:fable',
+      resetsAt: weeklyResets,
+    });
+  });
+
   it('names the month for a budget, and the refusal for a blocked key', () => {
     const metered: UsageSnapshot = {
       engine: 'anthropic',

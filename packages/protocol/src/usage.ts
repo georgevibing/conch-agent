@@ -104,3 +104,79 @@ export function severityFor(usedPercent: number): UsageSeverity {
   if (usedPercent >= 75) return 'warning';
   return 'normal';
 }
+
+/**
+ * The model a turn runs on, as its provider names it: the id it's sent with
+ * (`fable`, `claude-opus-4-8`, `opus[1m]`) and, when known, its name
+ * ("Fable 5.1").
+ */
+export interface UsageModelRef {
+  id?: string;
+  label?: string;
+}
+
+/** Words of a name, lowercased: "Opus 5.5 (1M context)" → opus, 5, 5, 1m, context. */
+const nameWords = (s: string | undefined) =>
+  (s ?? '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+
+/** Whether `part` appears in `whole` as a run of whole words. */
+function hasRun(whole: readonly string[], part: readonly string[]): boolean {
+  if (part.length === 0 || part.length > whole.length) return false;
+  for (let i = 0; i + part.length <= whole.length; i++)
+    if (part.every((word, j) => whole[i + j] === word)) return true;
+  return false;
+}
+
+/**
+ * Whether a window counts for one model only ("Opus", "Fable"), not for every
+ * model ("all models", or no scope). Nacre's `isModelScoped` mirrors this.
+ */
+export function isModelScoped(w: Pick<UsageWindow, 'scope'>): boolean {
+  const scope = w.scope?.trim();
+  return Boolean(scope) && !/^all\b/i.test(scope ?? '');
+}
+
+/**
+ * Whether a window limits this model. A window for every model always does;
+ * one for a single model only when the model is that one, by id or name, as
+ * whole words and case-insensitively. With no model known (`default`, or
+ * none), a model's own window limits nothing.
+ */
+export function windowAppliesTo(
+  w: Pick<UsageWindow, 'scope'>,
+  model: UsageModelRef | undefined,
+): boolean {
+  if (!isModelScoped(w)) return true;
+  const scope = nameWords(w.scope);
+  return hasRun(nameWords(model?.id), scope) || hasRun(nameWords(model?.label), scope);
+}
+
+/** The windows that limit this model, in display order. */
+export function windowsFor<W extends Pick<UsageWindow, 'scope'>>(
+  windows: readonly W[] | undefined,
+  model: UsageModelRef | undefined,
+): W[] {
+  return (windows ?? []).filter((w) => windowAppliesTo(w, model));
+}
+
+/**
+ * Whether a provider is at its limit for this model: refusing every send (a
+ * block that names no window, or a shared one), or this model's own window is
+ * used up. Another model's own limit ("Fable" while the turn is on Opus)
+ * doesn't count.
+ */
+export function atLimitFor(
+  snapshot: Pick<UsageSnapshot, 'windows' | 'blocked'> | undefined,
+  model: UsageModelRef | undefined,
+): boolean {
+  if (!snapshot) return false;
+  const { blocked, windows } = snapshot;
+  if (blocked) {
+    const w = blocked.windowId ? windows.find((x) => x.id === blocked.windowId) : undefined;
+    if (!w || windowAppliesTo(w, model)) return true;
+  }
+  return windows.some((w) => w.usedPercent >= 100 && windowAppliesTo(w, model));
+}

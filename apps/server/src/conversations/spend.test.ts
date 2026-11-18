@@ -537,6 +537,37 @@ describe('the arithmetic of limits', () => {
     });
   });
 
+  it('names the plan window of the turn’s own model, never another model’s', () => {
+    const usage = { inputTokens: 1_000, outputTokens: 100 };
+    const info = {
+      billing: 'plan' as const,
+      source: 'Claude Max',
+      usage: {
+        kind: 'plan' as const,
+        source: 'Claude Max',
+        windows: [
+          {
+            id: 'weekly',
+            label: 'This week',
+            scope: 'all models',
+            usedPercent: 67,
+            severity: 'normal' as const,
+          },
+          {
+            id: 'model:fable',
+            label: 'This week',
+            scope: 'Fable',
+            usedPercent: 99,
+            severity: 'critical' as const,
+          },
+        ],
+      },
+    };
+    expect(turnCost(usage, info, 'opus')?.plan?.window?.usedPercent).toBe(67);
+    expect(turnCost(usage, info, undefined)?.plan?.window?.usedPercent).toBe(67);
+    expect(turnCost(usage, info, 'fable')?.plan?.window?.usedPercent).toBe(99);
+  });
+
   it('counts what the cache saved net of what writing to it cost (ADR 0085)', () => {
     // Sonnet 5: $2 in, $0.20 cached, $2.50 to write. 500K read saves $0.90; 200K written costs $0.10 more.
     const usage = {

@@ -6,12 +6,16 @@ import {
   meteredOverBudget,
   planExhausted,
   planHealthy,
+  planModelExhausted,
+  planModelLow,
   planNoWindows,
   planWeeklyLow,
+  usageModels,
   usageNow,
   usageUnknown,
 } from './fixtures';
 import {
+  blockedFor,
   describeUsage,
   formatLeft,
   formatMoney,
@@ -20,7 +24,10 @@ import {
   formatResetInShort,
   formatUpdated,
   headline,
+  isModelScoped,
+  otherModelsWindow,
   usageSeverityFor,
+  windowAppliesTo,
   windowPhrase,
 } from './format';
 import type { UsageValue, UsageWindowValue } from './types';
@@ -140,13 +147,37 @@ describe('headline', () => {
       ...planHealthy,
       blocked: { windowId: 'weekly-opus' },
     };
-    expect(headline(blocked)).toMatchObject({
+    expect(headline(blocked, usageModels.opus)).toMatchObject({
       text: 'Limit reached',
       severity: 'exhausted',
       percentLeft: 0,
     });
-    expect(headline(blocked).window?.id).toBe('weekly-opus');
+    expect(headline(blocked, usageModels.opus).window?.id).toBe('weekly-opus');
     expect(headline(planExhausted).window?.id).toBe('session');
+  });
+
+  it("doesn't let another model's block or limit stop this chat", () => {
+    const blocked: UsageValue = { ...planHealthy, blocked: { windowId: 'weekly-opus' } };
+    expect(headline(blocked, usageModels.fable)).toMatchObject({ text: '39% left' });
+    expect(headline(blocked)).toMatchObject({ text: '39% left' });
+    // A block that names no window holds for every model.
+    expect(headline({ ...planHealthy, blocked: {} }, usageModels.fable).text).toBe('Limit reached');
+  });
+
+  it('leads with the shared limit when another model is nearly out', () => {
+    for (const model of [usageModels.opus, usageModels.default, undefined]) {
+      const h = headline(planModelLow, model);
+      expect(h).toMatchObject({ percentLeft: 33, text: '33% left', severity: 'normal' });
+      expect(h.window?.id).toBe('weekly');
+    }
+    expect(headline(planModelExhausted, usageModels.opus).severity).toBe('normal');
+  });
+
+  it("leads with the model's own limit when the chat is on it", () => {
+    const h = headline(planModelLow, usageModels.fable);
+    expect(h).toMatchObject({ percentLeft: 1, text: '1% left', severity: 'critical' });
+    expect(h.window?.id).toBe('model:fable');
+    expect(headline(planModelExhausted, usageModels.fable).severity).toBe('exhausted');
   });
 
   it('falls back to the source for plans without windows', () => {
@@ -173,6 +204,61 @@ describe('headline', () => {
   it('is quiet for unknown', () => {
     expect(headline(usageUnknown).severity).toBe('normal');
     expect(headline(usageUnknown).percentLeft).toBeUndefined();
+  });
+});
+
+describe('model scope', () => {
+  const scoped = (scope?: string): UsageWindowValue => ({
+    id: 'w',
+    label: 'This week',
+    ...(scope !== undefined && { scope }),
+    usedPercent: 50,
+    severity: 'normal',
+  });
+
+  it('tells a model’s own window from a shared one', () => {
+    expect(isModelScoped(scoped())).toBe(false);
+    expect(isModelScoped(scoped('all models'))).toBe(false);
+    expect(isModelScoped(scoped('All Models'))).toBe(false);
+    expect(isModelScoped(scoped(' '))).toBe(false);
+    expect(isModelScoped(scoped('Opus'))).toBe(true);
+  });
+
+  it('matches a model by its id or name, as whole words, whatever the case', () => {
+    const opus = scoped('Opus');
+    expect(windowAppliesTo(opus, { id: 'opus' })).toBe(true);
+    expect(windowAppliesTo(opus, { id: 'OPUS' })).toBe(true);
+    expect(windowAppliesTo(opus, { id: 'opus[1m]' })).toBe(true);
+    expect(windowAppliesTo(opus, { id: 'claude-opus-4-8' })).toBe(true);
+    expect(windowAppliesTo(opus, { id: 'default', label: 'Opus 5.5 (1M context)' })).toBe(true);
+    expect(windowAppliesTo(opus, { id: 'opusplan' })).toBe(false);
+    expect(windowAppliesTo(opus, { id: 'sonnet', label: 'Sonnet 5' })).toBe(false);
+    expect(windowAppliesTo(scoped('Fable'), usageModels.fable)).toBe(true);
+    expect(windowAppliesTo(scoped('Opus 4.8'), { id: 'claude-opus-4-8' })).toBe(true);
+    expect(windowAppliesTo(scoped('Opus 4.8'), { id: 'claude-opus-4-7' })).toBe(false);
+  });
+
+  it('treats a model’s own window as not binding when the model is unknown', () => {
+    expect(windowAppliesTo(scoped('Fable'), undefined)).toBe(false);
+    expect(windowAppliesTo(scoped('Fable'), {})).toBe(false);
+    expect(windowAppliesTo(scoped('Fable'), usageModels.default)).toBe(false);
+    expect(windowAppliesTo(scoped('all models'), undefined)).toBe(true);
+    expect(windowAppliesTo(scoped(), undefined)).toBe(true);
+  });
+
+  it('holds a block only for the models it names', () => {
+    const blocked: UsageValue = { ...planModelExhausted, blocked: { windowId: 'model:fable' } };
+    expect(blockedFor(blocked, usageModels.fable)).toBe(true);
+    expect(blockedFor(blocked, usageModels.opus)).toBe(false);
+    expect(blockedFor(planExhausted, usageModels.opus)).toBe(true);
+    expect(blockedFor(planHealthy, usageModels.opus)).toBe(false);
+  });
+
+  it('says what the other models have only when the chat’s own model is short', () => {
+    expect(otherModelsWindow(planModelLow, usageModels.fable)?.id).toBe('weekly');
+    expect(otherModelsWindow(planModelLow, usageModels.opus)).toBeUndefined();
+    expect(otherModelsWindow(planWeeklyLow, usageModels.opus)).toBeUndefined();
+    expect(otherModelsWindow(meteredBudget, usageModels.fable)).toBeUndefined();
   });
 });
 
@@ -218,6 +304,38 @@ describe('copy', () => {
         usageNow,
       ),
     ).toBe('$3.10 of $50 left');
+  });
+
+  it('stays quiet when only another model is short', () => {
+    expect(
+      usageNoticeText(planModelLow, usageNow, 'en-US', 'UTC', usageModels.opus),
+    ).toBeUndefined();
+    expect(
+      usageNoticeShortText(planModelLow, usageNow, undefined, usageModels.opus),
+    ).toBeUndefined();
+    expect(usageNoticeText(planModelExhausted, usageNow)).toBeUndefined();
+    expect(describeUsage(planModelLow, usageNow, usageModels.opus)).toBe(
+      'Usage: 33% left of weekly limit, resets in 7 h 10 min',
+    );
+  });
+
+  it('names the model when its own limit is short, and what the others have', () => {
+    const model = usageModels.fable;
+    expect(usageNoticeText(planModelLow, usageNow, 'en-US', 'UTC', model)).toBe(
+      '1% of your Fable weekly limit left · resets in 7 h 10 min · other models have 33% left',
+    );
+    expect(usageNoticeShortText(planModelLow, usageNow, undefined, model)).toBe(
+      'Fable: 1% left · resets in 7 h',
+    );
+    expect(plain(usageNoticeText(planModelExhausted, usageNow, 'en-US', 'UTC', model))).toBe(
+      "You've reached your Fable weekly limit · resets in 7 h 10 min (8:40 PM) · other models have 33% left",
+    );
+    expect(usageNoticeShortText(planModelExhausted, usageNow, undefined, model)).toBe(
+      'Fable limit reached · resets in 7 h',
+    );
+    expect(describeUsage(planModelLow, usageNow, model)).toBe(
+      'Usage: 1% left of Fable weekly limit, resets in 7 h 10 min',
+    );
   });
 
   it('writes notices only when tight', () => {

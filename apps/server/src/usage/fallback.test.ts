@@ -246,6 +246,39 @@ describe('who carries on at a limit (ADR 0126)', () => {
     expect(firstWithRoom(left)).toBeUndefined();
   });
 
+  it('goes by the model it would answer with: another model’s own limit leaves it room', async () => {
+    const base = world([claude, codex]);
+    const ownLimit = (scope: string) =>
+      world([claude, codex], {
+        snapshot: async (id) => {
+          const snap = await base.deps.snapshot(id);
+          if (id !== 'codex-cli' || !snap) return snap;
+          const window = {
+            id: `model:${scope.toLowerCase()}`,
+            label: 'This week',
+            scope,
+            usedPercent: 100,
+            resetsAt: NOW + 3_600_000,
+            severity: 'exhausted' as const,
+          };
+          return { ...snap, windows: [...snap.windows, window], blocked: { windowId: window.id } };
+        },
+      });
+    const other = ownLimit('Fable');
+    const roomy = (await fallbackChoices(other.of('claude-code'), other.deps)).map((c) => c.choice);
+    expect(roomy.find((c) => c.id === 'codex-cli')).toMatchObject({
+      room: 'room',
+      leftPercent: 70,
+    });
+    // Its own model's limit used up: no room.
+    const own = ownLimit('GPT');
+    const none = (await fallbackChoices(own.of('claude-code'), own.deps)).map((c) => c.choice);
+    expect(none.find((c) => c.id === 'codex-cli')).toMatchObject({
+      room: 'none',
+      skip: 'At its limit',
+    });
+  });
+
   it('a key that refused for a limit is passed over, and so is its twin', async () => {
     const refused = new Map<EngineId, number>([['codex-agent', NOW + 60_000]]);
     const { deps, of } = world([claude, codex, codexCli, openrouter], {

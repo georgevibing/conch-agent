@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import {
   BUDGET_NEAR_PERCENT,
+  isModelScoped,
   type EngineId,
   type TurnCost,
   type Usage,
@@ -343,8 +344,9 @@ export class UsageService {
     const usage = meter.usage ?? { kind: 'unknown', source: '', windows: [] };
     const spend = spendOf(await this.#load(), now);
 
-    // A window at 100% blocks just as surely as a rejected request does.
-    const full = usage.windows.find((w) => w.usedPercent >= 100);
+    // A window at 100% blocks just as surely as a rejected request does. One model's
+    // own window ("Fable") blocks only that model: routing asks per turn (`atLimitFor`).
+    const full = usage.windows.find((w) => w.usedPercent >= 100 && !isModelScoped(w));
     if (full) meter.blocked = { until: full.resetsAt, windowId: full.id };
     if (meter.blocked?.until !== undefined && meter.blocked.until <= now) meter.blocked = undefined;
     if (usage.kind !== 'plan') meter.blocked = undefined;

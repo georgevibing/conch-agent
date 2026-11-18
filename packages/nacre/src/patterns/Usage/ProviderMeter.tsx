@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 import { cx } from '../../utils/cx';
 import { ProviderLogo, type ProviderId } from '../ModelPicker/ProviderLogo';
 import { describeUsage, headline } from './format';
-import type { UsageValue } from './types';
+import type { UsageModel, UsageValue } from './types';
 import styles from './Usage.module.css';
 import { UsageRing } from './UsageRing';
 import { useNow } from './useNow';
@@ -14,6 +14,11 @@ export interface ProviderMeterProps extends Omit<ComponentProps<'button'>, 'valu
   provider?: { label: string; logo: ProviderId };
   /** Its limits. Shown when there's something to run out of. */
   usage?: UsageValue;
+  /**
+   * The chat's model. A limit for one model ("Fable") drives the ring only
+   * when the chat is on that model; otherwise the limits all models share do.
+   */
+  model?: UsageModel;
   /** What only the person can fix, in a word or two: "Sign in", "Not ready". */
   attention?: string;
   /** Freeze the clock (stories/tests). Defaults to a live 30 s tick. */
@@ -36,6 +41,7 @@ export interface ProviderMeterProps extends Omit<ComponentProps<'button'>, 'valu
 export function ProviderMeter({
   provider,
   usage,
+  model,
   attention,
   now,
   compact = false,
@@ -43,7 +49,7 @@ export function ProviderMeter({
   ...props
 }: ProviderMeterProps) {
   const current = useNow(30_000, now);
-  const head = usage ? headline(usage) : undefined;
+  const head = usage ? headline(usage, model) : undefined;
   // Pay-as-you-go without a budget has nothing to run out of, and unknown says nothing.
   const gauge =
     usage &&
@@ -56,7 +62,7 @@ export function ProviderMeter({
     : attention
       ? `${provider.label}: ${attention}`
       : gauge && usage
-        ? `${provider.label}. ${describeUsage(usage, current)}`
+        ? `${provider.label}. ${describeUsage(usage, current, model)}`
         : provider.label;
   return (
     <button

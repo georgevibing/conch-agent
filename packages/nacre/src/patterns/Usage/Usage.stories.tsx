@@ -6,7 +6,7 @@ import { Popover } from '../../components/Popover';
 import { Stack } from '../../components/Stack';
 import { Surface } from '../../components/Surface';
 import { Text } from '../../components/Text';
-import { usageFixtures, usageNow } from './fixtures';
+import { usageFixtures, usageModels, usageNow } from './fixtures';
 import type { UsageValue } from './types';
 import { ProviderMeter } from './ProviderMeter';
 import { UsageMeter } from './UsageMeter';
@@ -216,6 +216,114 @@ export const NoticeStates: Story = {
       </Text>
     </Stack>
   ),
+};
+
+/**
+ * Claude Max with "all models" 33% left and "Fable" 1% left: the chat's own
+ * model decides which one speaks.
+ */
+export const ModelLimits: Story = {
+  name: 'One model’s own limit',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A plan can have a limit for one model ("This week · Fable") next to the one every model shares. Only the chat’s model counts: on Opus, Fable at 1% is shown in the details as not this chat’s model, and the chip and notice go by the shared 33%. On Fable, the line names it, says what other models have, and offers **Switch model**. With no model known, a model’s own limit never leads.',
+      },
+    },
+  },
+  render: () => {
+    const provider = { label: 'Claude Code', logo: 'claude' } as const;
+    return (
+      <Stack gap={6} style={{ inlineSize: '46rem' }}>
+        <Stack gap={2}>
+          <Text size="xs" tone="subtle">
+            Chat on Opus: Fable’s limit doesn’t apply, so the notice stays away.
+          </Text>
+          <Stack direction="row" gap={3} align="center">
+            <ProviderMeter
+              provider={provider}
+              usage={usageFixtures.planModelLow}
+              model={usageModels.opus}
+              now={usageNow}
+            />
+            <ProviderMeter
+              compact
+              provider={provider}
+              usage={usageFixtures.planModelLow}
+              model={usageModels.opus}
+              now={usageNow}
+            />
+          </Stack>
+        </Stack>
+        <Stack gap={2}>
+          <Text size="xs" tone="subtle">
+            Chat on Fable: its own limit leads.
+          </Text>
+          <Stack direction="row" gap={3} align="center">
+            <ProviderMeter
+              provider={provider}
+              usage={usageFixtures.planModelLow}
+              model={usageModels.fable}
+              now={usageNow}
+            />
+            <ProviderMeter
+              compact
+              provider={provider}
+              usage={usageFixtures.planModelLow}
+              model={usageModels.fable}
+              now={usageNow}
+            />
+          </Stack>
+          <UsageNotice
+            value={usageFixtures.planModelLow}
+            model={usageModels.fable}
+            now={usageNow}
+            onSwitchModel={() => {}}
+            onOpen={() => {}}
+            onDismiss={() => {}}
+          />
+          <UsageNotice
+            value={usageFixtures.planModelExhausted}
+            model={usageModels.fable}
+            now={usageNow}
+            onSwitchModel={() => {}}
+            onOpen={() => {}}
+            onDismiss={() => {}}
+          />
+          <div style={{ inlineSize: 366 }}>
+            <UsageNotice
+              value={usageFixtures.planModelLow}
+              model={usageModels.fable}
+              now={usageNow}
+              onSwitchModel={() => {}}
+              onOpen={() => {}}
+              onDismiss={() => {}}
+            />
+          </div>
+        </Stack>
+        <Stack direction="row" gap={6} align="start" wrap>
+          <PanelBox caption="Details · chat on Opus">
+            <UsagePanel
+              value={usageFixtures.planModelLow}
+              model={usageModels.opus}
+              now={usageNow}
+              onRefresh={() => {}}
+            />
+          </PanelBox>
+          <PanelBox caption="Details · chat on Fable">
+            <UsagePanel
+              value={usageFixtures.planModelLow}
+              model={usageModels.fable}
+              onSwitchModel={() => {}}
+              now={usageNow}
+              onRefresh={() => {}}
+            />
+          </PanelBox>
+        </Stack>
+      </Stack>
+    );
+  },
 };
 
 /** A phone's composer column: 390 px less the page's padding. */

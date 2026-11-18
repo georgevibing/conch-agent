@@ -417,6 +417,14 @@
     text-wrap: pretty;
   }
 
+  /* Only the chat's model is short: what the others have, and the way to them. */
+  .others {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
   .budgetButton {
     align-self: flex-start;
     margin-block-start: calc(-1 * var(--nc-space-2));
@@ -527,6 +535,16 @@
     display: none;
   }
 
+  /* With Switch model beside it, Details is its chevron: the words go to the line. */
+  .notice[data-switchable] .noticeMoreLabel {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   /* A narrow line (a phone): a few words, and Details is its chevron. */
   @container usage-notice (max-width: 40rem) {
     .noticeText[data-length='long'] {
@@ -562,6 +580,7 @@
     block-size: 0.875rem;
   }
 
+  .noticeAction,
   .noticeDismiss {
     flex-shrink: 0;
   }

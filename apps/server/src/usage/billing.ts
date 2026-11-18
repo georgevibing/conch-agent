@@ -3,6 +3,7 @@
  * ADR 0079). Shared by routines and chats, so both say the same thing.
  */
 import type { Billing, EngineId, TurnCost, Usage, UsageWindow } from '@conch/protocol';
+import { windowsFor } from '@conch/protocol';
 
 import type { Engine, EngineUsage } from '../engines/types';
 import { costAt, priceOf } from './prices';
@@ -116,7 +117,11 @@ export function turnCost(
   if (info.billing === 'free') return { billing: 'free' };
   const priced = usage ? priceUsage(usage, model) : {};
   const saved = usage ? cacheSaving(usage, model) : undefined;
-  const window = info.billing === 'plan' ? tightest(info.usage?.windows) : undefined;
+  // The turn's own model's window, never another model's ("Fable" for a turn on Opus).
+  const window =
+    info.billing === 'plan'
+      ? tightest(windowsFor(info.usage?.windows, model ? { id: model } : undefined))
+      : undefined;
   return {
     billing: info.billing,
     ...(priced.usd !== undefined && { usd: round(priced.usd) }),

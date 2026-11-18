@@ -1,4 +1,4 @@
-import type { UsageSeverity, UsageValue, UsageWindowValue } from './types';
+import type { UsageModel, UsageSeverity, UsageValue, UsageWindowValue } from './types';
 
 /*
  * Pure formatting for the usage gauge. Everything that depends on the clock
@@ -127,19 +127,93 @@ export function formatUpdated(updatedAt: number, now: number): string {
   return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
+/** Words of a name, lowercased: "Opus 5.5 (1M context)" → opus, 5, 5, 1m, context. */
+const words = (s: string | undefined) =>
+  (s ?? '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+
+/** Whether `part` appears in `whole` as a run of whole words. */
+function hasRun(whole: string[], part: string[]): boolean {
+  if (part.length === 0 || part.length > whole.length) return false;
+  for (let i = 0; i + part.length <= whole.length; i++)
+    if (part.every((word, j) => whole[i + j] === word)) return true;
+  return false;
+}
+
 /**
- * The window that tells the story: the one named in `blocked`, else the most
- * used (ties keep display order).
+ * Whether a window counts for one model only ("Opus", "Fable"), not for every
+ * model ("all models", or no scope at all).
  */
-export function headlineWindow(value: UsageValue): UsageWindowValue | undefined {
+export function isModelScoped(w: UsageWindowValue): boolean {
+  return Boolean(w.scope?.trim()) && !/^all\b/i.test(w.scope?.trim() ?? '');
+}
+
+/**
+ * Whether a window limits the chat's model. A window for every model always
+ * does; one for a single model ("Fable") only when the chat's model is that
+ * one, by its id (`fable`, `claude-opus-4-8`, `opus[1m]`) or its name
+ * ("Fable 5.1"), as whole words and case-insensitively. With no model known,
+ * a model's own window limits nothing.
+ */
+export function windowAppliesTo(w: UsageWindowValue, model?: UsageModel): boolean {
+  if (!isModelScoped(w)) return true;
+  const scope = words(w.scope);
+  return hasRun(words(model?.id), scope) || hasRun(words(model?.label), scope);
+}
+
+/**
+ * Whether the provider's refusal holds for this model. One named for another
+ * model's own window ("Fable" used up while the chat is on Opus) doesn't.
+ */
+export function blockedFor(value: UsageValue, model?: UsageModel): boolean {
+  if (!value.blocked) return false;
+  const id = value.blocked.windowId;
+  const w = id ? value.windows.find((x) => x.id === id) : undefined;
+  return !w || windowAppliesTo(w, model);
+}
+
+/** The most used of `windows` (ties keep display order). */
+function mostUsed(windows: readonly UsageWindowValue[]): UsageWindowValue | undefined {
+  let top: UsageWindowValue | undefined;
+  for (const w of windows) if (!top || w.usedPercent > top.usedPercent) top = w;
+  return top;
+}
+
+/**
+ * The window that tells the story for the chat's model: the one named in
+ * `blocked` when that holds for it, else the most used of those that limit it
+ * (ties keep display order). Another model's own window never leads.
+ */
+export function headlineWindow(
+  value: UsageValue,
+  model?: UsageModel,
+): UsageWindowValue | undefined {
   const blockedId = value.blocked?.windowId;
-  if (blockedId) {
+  if (blockedId && blockedFor(value, model)) {
     const hit = value.windows.find((w) => w.id === blockedId);
     if (hit) return hit;
   }
-  let top: UsageWindowValue | undefined;
-  for (const w of value.windows) if (!top || w.usedPercent > top.usedPercent) top = w;
-  return top;
+  return mostUsed(value.windows.filter((w) => windowAppliesTo(w, model)));
+}
+
+/**
+ * When the chat's model leads on its own window ("Fable: 1% left"), the
+ * window every other model goes by, if it has more room: what switching
+ * model would give. Undefined otherwise.
+ */
+export function otherModelsWindow(
+  value: UsageValue,
+  model?: UsageModel,
+): UsageWindowValue | undefined {
+  if (value.kind !== 'plan') return undefined;
+  const lead = headlineWindow(value, model);
+  if (!lead || !isModelScoped(lead)) return undefined;
+  const others = mostUsed(value.windows.filter((w) => !isModelScoped(w)));
+  if (!others || others.severity === 'exhausted' || others.usedPercent >= lead.usedPercent)
+    return undefined;
+  return others;
 }
 
 export interface UsageHeadline {
@@ -152,10 +226,11 @@ export interface UsageHeadline {
   window?: UsageWindowValue;
 }
 
-/** The single number: what the header chip shows. */
-export function headline(value: UsageValue): UsageHeadline {
-  const window = value.kind === 'plan' ? headlineWindow(value) : undefined;
-  if (value.kind !== 'unknown' && value.blocked) {
+/** The single number: what the header chip shows, for the chat's model when given. */
+export function headline(value: UsageValue, model?: UsageModel): UsageHeadline {
+  const window = value.kind === 'plan' ? headlineWindow(value, model) : undefined;
+  const blocked = value.kind === 'plan' ? blockedFor(value, model) : Boolean(value.blocked);
+  if (value.kind !== 'unknown' && blocked) {
     return { percentLeft: 0, text: 'Limit reached', severity: 'exhausted', window };
   }
   if (value.kind === 'plan') {
@@ -208,12 +283,12 @@ export function windowTitle(w: UsageWindowValue): string {
 }
 
 /** One sentence for the meter's accessible name. */
-export function describeUsage(value: UsageValue, now: number): string {
-  const head = headline(value);
+export function describeUsage(value: UsageValue, now: number, model?: UsageModel): string {
+  const head = headline(value, model);
   const { window } = head;
   if (value.kind === 'unknown') return 'Usage: not available yet';
-  if (value.blocked) {
-    const until = value.blocked.until ?? window?.resetsAt;
+  if (value.kind === 'plan' ? blockedFor(value, model) : value.blocked) {
+    const until = value.blocked?.until ?? window?.resetsAt;
     return `Usage: limit reached${window ? ` for ${windowPhrase(window)}` : ''}${
       until != null ? `, sending works again ${formatResetIn(until, now)}` : ''
     }`;

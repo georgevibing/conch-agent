@@ -96,6 +96,28 @@ describe('UsageService', () => {
     expect(snap.windows[0]?.severity).toBe('exhausted');
   });
 
+  it('doesn’t block the provider when only one model’s own window is full', async () => {
+    const shared = plan(40);
+    const { engine } = fakeEngine({
+      ...shared,
+      windows: [
+        ...shared.windows,
+        {
+          id: 'model:fable',
+          label: 'This week',
+          scope: 'Fable',
+          usedPercent: 100,
+          resetsAt: NOW + 7 * HOUR,
+          severity: 'exhausted',
+        },
+      ],
+    });
+    const snap = await make(engine).snapshot();
+    // Every other model carries on; routing holds Fable's chats at its limit (`atLimitFor`).
+    expect(snap.blocked).toBeUndefined();
+    expect(snap.windows[1]?.severity).toBe('exhausted');
+  });
+
   it('blocks immediately on a rejected rate-limit hint, then re-reads', async () => {
     vi.useFakeTimers({
       now: NOW,

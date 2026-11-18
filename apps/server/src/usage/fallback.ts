@@ -14,7 +14,7 @@ import type {
   FallbackRoom,
   UsageSnapshot,
 } from '@conch/protocol';
-import { modelOf } from '@conch/protocol';
+import { atLimitFor, modelOf, windowsFor, type UsageModelRef } from '@conch/protocol';
 
 import type { Engine } from '../engines/types';
 import { tightest, type BillingInfo } from './billing';
@@ -139,16 +139,23 @@ function roomOf(
   info: BillingInfo,
   month: { usd: number; budgetUsd?: number } | undefined,
   refused: number | undefined,
+  model: UsageModelRef | undefined,
 ): Pick<Entry, 'room' | 'leftPercent' | 'resetsAt' | 'skip'> {
   if (refused !== undefined) return { room: 'none', resetsAt: refused, skip: 'At its limit' };
-  if (snapshot?.blocked)
+  // Its room for the model it would answer with: another model's own limit doesn't count.
+  if (
+    snapshot?.blocked &&
+    atLimitFor({ windows: snapshot.windows, blocked: snapshot.blocked }, model)
+  )
     return {
       room: 'none',
       ...(snapshot.blocked.until !== undefined && { resetsAt: snapshot.blocked.until }),
       skip: 'At its limit',
     };
   if (billing === 'plan') {
-    const window = tightest(snapshot?.windows?.length ? snapshot.windows : info.usage?.windows);
+    const window = tightest(
+      windowsFor(snapshot?.windows?.length ? snapshot.windows : info.usage?.windows, model),
+    );
     if (!window) return { room: 'unknown' };
     const left = Math.max(0, Math.min(100, 100 - window.usedPercent));
     const reset = window.resetsAt !== undefined ? { resetsAt: window.resetsAt } : {};
@@ -198,8 +205,8 @@ export async function fallbackChoices(
       const refused = twins
         .map((o) => deps.refusedUntil(o.id))
         .find((t): t is number => t !== undefined);
-      const room = roomOf(billing, snapshot, info, month, refused);
       const model = caps ? modelOf(caps, carried ? carried.model : undefined) : undefined;
+      const room = roomOf(billing, snapshot, info, month, refused, model);
       const account =
         status?.auth?.description ?? (hint ? `Key ${hint}` : (info.source ?? undefined));
       return {
