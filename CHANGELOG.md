@@ -2,6 +2,14 @@
 
 Every release, newest first. Conch shows the same notes in Settings → Health → Updates.
 
+## [0.1.0-alpha.21](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-11-18)
+
+### Fixed
+
+- The usage meter follows the limit for the chat's model
+- Give routine titles and controls room on phones
+- Making an access key no longer signs anyone out
+
 ## [0.1.0-alpha.20](https://github.com/georgevibing/conch-agent/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-27)
 
 ### New
