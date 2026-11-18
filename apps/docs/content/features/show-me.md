@@ -23,7 +23,7 @@ The panel has three tabs: **View** (**Use** for a page), **Code**, and **Changes
 
 To change it, ask in the chat: "add a total row". Each change is a new version, and the version picker goes back to any of them. Conch keeps up to 30, always including the first.
 
-At the top are **Copy**, **Download**, **Pin as an app** and **Full screen**, with **Delete…** under **More**. A chart switches between **Chart** and **Table**. A table sorts by any heading.
+At the top are **Copy**, **Download**, **Pin as an app** and **Full screen**, with **Delete…** under **More**. On a phone, or in a narrow panel, the name keeps the room: **Edit** and close stay, and the rest is under **More**. A chart switches between **Chart** and **Table**. A table sorts by any heading.
 
 ## Change it yourself
 

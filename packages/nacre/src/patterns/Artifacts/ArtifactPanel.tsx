@@ -1,4 +1,6 @@
 import {
+  Check,
+  Copy,
   Download,
   Maximize2,
   Minimize2,
@@ -10,7 +12,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useId, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '../../components/Button';
@@ -19,6 +30,8 @@ import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { Spinner } from '../../components/Spinner';
 import { Tabs } from '../../components/Tabs';
+import { toast } from '../../components/Toast';
+import { copyText } from '../../utils/clipboard';
 import { cx } from '../../utils/cx';
 import { CodeBlock } from '../CodeBlock';
 import { CopyButton } from '../CopyButton';
@@ -79,6 +92,37 @@ export interface ArtifactPanelProps extends Omit<ComponentProps<'section'>, 'tit
   standalone?: boolean;
 }
 
+/** Narrower than this (a phone's sheet, a thin dock), its header keeps to the essentials. */
+const NARROW_REM = 30;
+
+/**
+ * Whether the panel is narrow, and whether it sits in a dialog (a sheet on a
+ * phone, which full screen can't make any bigger). Measured before the first
+ * paint, so a phone never sees the wide header first; a panel that isn't laid
+ * out (hidden, or under jsdom) reads as wide, as it always did.
+ */
+function usePanelRoom(el: HTMLElement | null) {
+  const [room, setRoom] = useState({ narrow: false, inDialog: false });
+  useLayoutEffect(() => {
+    if (!el) return;
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const inDialog = Boolean(el.closest('[role="dialog"]'));
+    const fit = (width: number) => {
+      if (width <= 0) return;
+      const narrow = width < NARROW_REM * rem;
+      setRoom((r) => (r.narrow === narrow && r.inDialog === inDialog ? r : { narrow, inDialog }));
+    };
+    fit(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) fit(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el]);
+  return room;
+}
+
 /**
  * The thing beside the chat (ADR 0034): the thing itself, its code, and what
  * changed since the version before; every version kept, to copy, download,
@@ -121,6 +165,11 @@ export function ArtifactPanel({
   // Full screen lifts the panel to the page, unless it's in a dialog (a sheet on a
   // phone) whose focus it must stay inside: there it fills the dialog.
   const [lifted, setLifted] = useState(true);
+  const [panelEl, setPanelEl] = useState<HTMLElement | null>(null);
+  const { narrow, inDialog } = usePanelRoom(panelEl);
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const headingId = useId();
   const k = ARTIFACT_KINDS[kind];
   const current = versions.find((v) => v.n === version);
@@ -142,12 +191,52 @@ export function ArtifactPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [expanded]);
 
+  const download = () => {
+    if (!downloadHref) return;
+    // The server sends it as an attachment: it saves, it never opens.
+    const link = document.createElement('a');
+    link.href = downloadHref;
+    link.download = '';
+    link.click();
+  };
+  const copyFromMenu = async () => {
+    if (source === undefined) return;
+    try {
+      await copyText(source);
+    } catch {
+      toast.error('Couldn’t copy it here. Download it instead.');
+      return;
+    }
+    setCopied(true);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 1600);
+  };
+  const toggleFullScreen = (from: Element) => {
+    setLifted(!from.closest('[role="dialog"]'));
+    setExpanded((e) => !e);
+  };
+
+  // Narrow (a phone's sheet, a thin dock): the name and its kind keep the room.
+  // Edit and Close stay; the rest goes into More. In a dialog, full screen would
+  // only fill the dialog it already fills, so it isn't offered there.
+  const tucked = narrow && !editing;
+  const canFullScreen = !standalone && !(narrow && inDialog);
+  const canCopy = source !== undefined && !editing;
+  const canDownload = Boolean(downloadHref) && !editing;
+  const canPin = Boolean(onPinnedChange) && !editing;
+  const canRefresh = Boolean(onRefresh) && !editing;
+  const tuckedItems =
+    tucked && (canCopy || canDownload || canPin || canFullScreen || (standalone && canRefresh));
+  const hasMenu = !editing && Boolean(tuckedItems || (onRefresh && !standalone) || onDelete);
+
   const panel = (
     <section
+      ref={setPanelEl}
       aria-labelledby={headingId}
       className={cx(styles.panel, className)}
       data-expanded={expanded || undefined}
       data-standalone={standalone || undefined}
+      data-narrow={narrow || undefined}
       {...props}
     >
       <header className={styles.panelHead}>
@@ -159,7 +248,7 @@ export function ArtifactPanel({
             {title}
           </h2>
           <span className={styles.panelMeta}>
-            {k.label}
+            <span className={styles.panelKind}>{k.label}</span>
             {refreshing && (
               <span className={styles.refreshing} role="status">
                 <Spinner size="xs" label={null} /> Getting fresh data…
@@ -173,7 +262,7 @@ export function ArtifactPanel({
               Edit
             </Button>
           )}
-          {standalone && onRefresh && !editing && (
+          {standalone && canRefresh && !tucked && (
             <Button
               size="sm"
               variant="soft"
@@ -184,54 +273,72 @@ export function ArtifactPanel({
               Refresh
             </Button>
           )}
-          {source !== undefined && !editing && <CopyButton value={source} label="Copy" size="sm" />}
-          {downloadHref && !editing && (
-            <IconButton
-              label="Download"
-              size="sm"
-              onClick={() => {
-                // The server sends it as an attachment: it saves, it never opens.
-                const link = document.createElement('a');
-                link.href = downloadHref;
-                link.download = '';
-                link.click();
-              }}
-            >
+          {canCopy && !tucked && <CopyButton value={source} label="Copy" size="sm" />}
+          {canDownload && !tucked && (
+            <IconButton label="Download" size="sm" onClick={download}>
               <Download />
             </IconButton>
           )}
-          {onPinnedChange && !editing && (
+          {canPin && !tucked && (
             <IconButton
               label={pinned ? 'Unpin from the sidebar' : 'Pin as an app'}
               size="sm"
               aria-pressed={pinned ?? false}
-              onClick={() => onPinnedChange(!pinned)}
+              onClick={() => onPinnedChange?.(!pinned)}
             >
               {pinned ? <PinOff /> : <Pin />}
             </IconButton>
           )}
-          {!standalone && (
+          {canFullScreen && !tucked && (
             <IconButton
               label={expanded ? 'Leave full screen' : 'Full screen'}
               size="sm"
               aria-pressed={expanded}
-              onClick={(event) => {
-                setLifted(!event.currentTarget.closest('[role="dialog"]'));
-                setExpanded((e) => !e);
-              }}
+              onClick={(event) => toggleFullScreen(event.currentTarget)}
             >
               {expanded ? <Minimize2 /> : <Maximize2 />}
             </IconButton>
           )}
-          {((onRefresh && !standalone) || onDelete) && !editing && (
+          {hasMenu && (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <IconButton label="More" size="sm">
-                  <MoreHorizontal />
+                  {copied ? <Check /> : <MoreHorizontal />}
                 </IconButton>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="end">
-                {onRefresh && !standalone && (
+                {tucked && (
+                  <>
+                    {canCopy && (
+                      <DropdownMenu.Item icon={<Copy />} onSelect={() => void copyFromMenu()}>
+                        Copy
+                      </DropdownMenu.Item>
+                    )}
+                    {canDownload && (
+                      <DropdownMenu.Item icon={<Download />} onSelect={download}>
+                        Download
+                      </DropdownMenu.Item>
+                    )}
+                    {canPin && (
+                      <DropdownMenu.Item
+                        icon={pinned ? <PinOff /> : <Pin />}
+                        onSelect={() => onPinnedChange?.(!pinned)}
+                      >
+                        {pinned ? 'Unpin from the sidebar' : 'Pin as an app'}
+                      </DropdownMenu.Item>
+                    )}
+                    {canFullScreen && (
+                      <DropdownMenu.Item
+                        icon={expanded ? <Minimize2 /> : <Maximize2 />}
+                        // The item's gone by the time it's chosen: the panel tells.
+                        onSelect={() => panelEl && toggleFullScreen(panelEl)}
+                      >
+                        {expanded ? 'Leave full screen' : 'Full screen'}
+                      </DropdownMenu.Item>
+                    )}
+                  </>
+                )}
+                {canRefresh && (tucked || !standalone) && (
                   <DropdownMenu.Item
                     icon={<RefreshCw />}
                     disabled={refreshing}
@@ -241,9 +348,12 @@ export function ArtifactPanel({
                   </DropdownMenu.Item>
                 )}
                 {onDelete && (
-                  <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={onDelete}>
-                    Delete…
-                  </DropdownMenu.Item>
+                  <>
+                    {tuckedItems && <DropdownMenu.Separator />}
+                    <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={onDelete}>
+                      Delete…
+                    </DropdownMenu.Item>
+                  </>
                 )}
               </DropdownMenu.Content>
             </DropdownMenu.Root>
@@ -254,6 +364,9 @@ export function ArtifactPanel({
             </IconButton>
           )}
         </div>
+        <span className="nc-visually-hidden" aria-live="polite">
+          {copied ? 'Copied to clipboard' : ''}
+        </span>
       </header>
 
       {editing ? (
@@ -278,6 +391,7 @@ export function ArtifactPanel({
                 size="sm"
                 variant="ghost"
                 align="end"
+                className={styles.panelVersion}
                 aria-label="Version"
                 value={String(version)}
                 onValueChange={(v) => onVersionChange?.(Number(v))}
@@ -287,6 +401,8 @@ export function ArtifactPanel({
                     key={v.n}
                     value={String(v.n)}
                     description={[
+                      // Narrow, the bar shows just "Version 2"; which is newest is said here.
+                      narrow && v.n === versions.at(-1)?.n ? 'Latest' : undefined,
                       v.when,
                       v.refreshed ? 'fresh data' : v.edited ? 'edited by you' : v.note,
                     ]
@@ -294,7 +410,7 @@ export function ArtifactPanel({
                       .join(META_SEP)}
                   >
                     Version {v.n}
-                    {v.n === versions.at(-1)?.n ? ' (latest)' : ''}
+                    {!narrow && v.n === versions.at(-1)?.n ? ' (latest)' : ''}
                   </Select.Item>
                 ))}
               </Select>

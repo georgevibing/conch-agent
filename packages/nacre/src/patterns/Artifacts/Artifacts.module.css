@@ -211,19 +211,30 @@
     text-overflow: ellipsis;
   }
 
+  /* One line, whatever the room: the kind first, then what it's doing, each
+     giving way to an ellipsis rather than wrapping a letter at a time. */
   .panelMeta {
     display: flex;
     align-items: center;
     gap: var(--nc-space-2);
+    min-inline-size: 0;
     color: var(--nc-text-subtle);
     font-size: var(--nc-text-xs);
+    white-space: nowrap;
+  }
+
+  .panelKind {
+    flex: none;
   }
 
   .refreshing {
     display: inline-flex;
     align-items: center;
     gap: var(--nc-space-1);
+    min-inline-size: 0;
+    overflow: hidden;
     color: var(--nc-text-muted);
+    text-overflow: ellipsis;
   }
 
   .panelActions {
@@ -233,6 +244,30 @@
     gap: var(--nc-space-0-5);
   }
 
+  /* Fingers, not a pointer: every action in the header is a 44px target. */
+  @media (pointer: coarse) {
+    .panelHead {
+      padding-block: var(--nc-space-1-5);
+    }
+
+    .panel .panelActions > [data-size] {
+      --btn-h: var(--nc-control-lg);
+    }
+
+    .panel .panelActions > [data-shape] {
+      --btn-icon: 1.125rem;
+    }
+
+    /* And the bar under it: View, Code, Changes and the version. */
+    .panel .panelTabs[data-size] {
+      --tab-h: var(--nc-control-lg);
+    }
+
+    .panel .panelVersion[data-size] {
+      --h: var(--nc-control-lg);
+    }
+  }
+
   .panelBar {
     display: flex;
     align-items: center;
@@ -240,6 +275,15 @@
     gap: var(--nc-space-2);
     padding: 0 var(--nc-space-3);
     border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  /* The tabs never give way; the version does, to an ellipsis. */
+  .panelBar > [role='tablist'] {
+    flex: none;
+  }
+
+  .panelVersion {
+    min-inline-size: 0;
   }
 
   /* Beats the Tabs root's own gap: the bar and the body sit flush. */

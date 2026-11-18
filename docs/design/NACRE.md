@@ -525,6 +525,14 @@ plain text from outside, and only web links open, in a new tab. A row's next
 step is quiet (Reply waits for the pointer) and only ever fills the composer.
 An artifact's card shows a small, inert picture of a chart, table, diagram or
 picture above its line; pressing anywhere still opens it.
+Its panel (`ArtifactPanel`) gives its name and kind the room. Narrower than
+30rem (a phone's sheet, a thin dock), measured before the first paint, the
+header keeps **Edit** and close, and Copy, Download, Pin and Full screen move
+into **More**; the version picker says "Version 2", and which is latest is said
+in its list. In a sheet, Full screen
+isn't offered: it would only fill the sheet it already fills. The name and the
+kind are one line each and end in an ellipsis; on a touch screen every action
+in the header and the bar under it is a 44px target.
 
 ### Making a picture (chat)
 

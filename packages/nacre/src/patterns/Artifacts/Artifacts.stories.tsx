@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { userEvent, within } from 'storybook/test';
 
+import { Sheet } from '../../components/Sheet';
+import { Prose } from '../Prose';
 import { ArtifactCard } from './ArtifactCard';
 import { ArtifactChart, type ChartData } from './ArtifactChart';
 import { ArtifactPanel } from './ArtifactPanel';
@@ -161,6 +164,80 @@ export const RefreshingAPinnedApp: Story = {
     onRefresh: () => {},
     onPinnedChange: () => {},
   },
+};
+
+const plan = `# A weekend in Lisbon
+
+Friday evening: dinner in Alfama, then the viewpoint at Senhora do Monte.
+
+Saturday: Belém in the morning, the LX Factory after lunch.`;
+
+const lisbon = {
+  title: 'A weekend in Lisbon, with the trams and the viewpoints',
+  kind: 'markdown' as const,
+  version: 2,
+  versions: [
+    { n: 1, when: 'Today, 9:40 AM' },
+    { n: 2, when: 'Today, 9:41 AM', note: 'Added Saturday' },
+  ],
+  preview: (
+    <Prose>
+      <h1>A weekend in Lisbon</h1>
+      <p>Friday evening: dinner in Alfama, then the viewpoint at Senhora do Monte.</p>
+      <p>Saturday: Belém in the morning, the LX Factory after lunch.</p>
+    </Prose>
+  ),
+  source: plan,
+  previous: plan.split('\n\nSaturday')[0],
+  onEdit: () => {},
+  onDelete: () => {},
+  onPinnedChange: () => {},
+};
+
+/**
+ * On a phone it opens in a sheet. The name and its kind keep the room, on one
+ * line each; Edit and Close stay, and Copy, Download and Pin go into More. Full
+ * screen isn't offered: the sheet is already the screen.
+ */
+export const OnAPhone: Story = {
+  name: 'On a phone',
+  globals: { viewport: { value: 'mobile1' } },
+  decorators: [
+    (Story) => (
+      <Sheet.Root open>
+        <Sheet.Content side="right" size="lg" hideClose aria-label="Made for you">
+          <Sheet.Title className="nc-visually-hidden">Made for you</Sheet.Title>
+          <Story />
+        </Sheet.Content>
+      </Sheet.Root>
+    ),
+  ],
+  args: lisbon,
+};
+
+/** On a phone, More holds what the header gave up. */
+export const OnAPhoneMore: Story = {
+  ...OnAPhone,
+  name: 'On a phone, More open',
+  play: async ({ canvasElement }) => {
+    const more = within(canvasElement.ownerDocument.body).getByRole('button', { name: 'More' });
+    await userEvent.click(more);
+  },
+};
+
+/**
+ * A thin dock beside the chat, not a sheet: the header keeps to the
+ * essentials, and Full screen is in More, since there's a screen to fill.
+ */
+export const Narrow: Story = {
+  decorators: [
+    (Story) => (
+      <div style={{ blockSize: '100vh', maxInlineSize: 360, marginInlineStart: 'auto' }}>
+        <Story />
+      </div>
+    ),
+  ],
+  args: lisbon,
 };
 
 export const Card: Story = {

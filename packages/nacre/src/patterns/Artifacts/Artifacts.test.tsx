@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import { ArtifactCard } from './ArtifactCard';
@@ -347,6 +348,118 @@ describe('ArtifactCard and ArtifactPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe('on a narrow panel (a phone)', () => {
+    /** Every panel measures this wide. */
+    const width = (px: number) =>
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(private readonly report: ResizeObserverCallback) {}
+          observe() {
+            this.report(
+              [{ contentRect: { width: px } } as ResizeObserverEntry],
+              this as unknown as ResizeObserver,
+            );
+          }
+          unobserve() {}
+          disconnect() {}
+        },
+      );
+    afterEach(() => vi.unstubAllGlobals());
+
+    const panel = (props: Partial<ComponentProps<typeof ArtifactPanel>> = {}) => (
+      <ArtifactPanel
+        title="A weekend in Lisbon, with the trams and the viewpoints"
+        kind="markdown"
+        versions={[
+          { n: 1, when: '9:40 AM' },
+          { n: 2, when: '9:41 AM' },
+        ]}
+        version={2}
+        preview={<p>The plan</p>}
+        source={'# Lisbon\nFriday'}
+        previous="# Lisbon"
+        downloadHref="/download"
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onClose={() => {}}
+        {...props}
+      />
+    );
+
+    it('keeps Edit and Close, and puts copy, download, pin and full screen in More', async () => {
+      width(340);
+      const user = userEvent.setup();
+      const onPinned = vi.fn();
+      const { container } = renderNacre(panel({ onPinnedChange: onPinned }));
+      const header = within(container.querySelector('header') as HTMLElement);
+      expect(
+        header.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent),
+      ).toEqual(['Edit', 'More', 'Close']);
+      expect(screen.getByRole('region')).toHaveAttribute('data-narrow');
+      // "(latest)" is said in the list, not in the bar.
+      expect(screen.getByRole('combobox', { name: 'Version' })).toHaveTextContent(/^Version 2$/);
+      await expectAccessible(container);
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+        'Copy',
+        'Download',
+        'Pin as an app',
+        'Full screen',
+        'Delete…',
+      ]);
+      await user.click(screen.getByRole('menuitem', { name: 'Pin as an app' }));
+      expect(onPinned).toHaveBeenCalledWith(true);
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+      expect(await navigator.clipboard.readText()).toBe('# Lisbon\nFriday');
+      expect(await screen.findByText('Copied to clipboard')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Full screen' }));
+      expect(screen.getByRole('region')).toHaveAttribute('data-expanded');
+    });
+
+    it('offers no full screen in a sheet, which it already fills', async () => {
+      width(340);
+      const user = userEvent.setup();
+      renderNacre(
+        <div role="dialog" aria-label="Made for you">
+          {panel()}
+        </div>,
+      );
+      expect(screen.queryByRole('button', { name: 'Full screen' })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+        'Copy',
+        'Download',
+        'Delete…',
+      ]);
+    });
+
+    it('a wide panel keeps every action in its header, as it always did', () => {
+      width(640);
+      const { container } = renderNacre(panel({ onPinnedChange: () => {} }));
+      const header = within(container.querySelector('header') as HTMLElement);
+      for (const name of [
+        'Edit',
+        'Copy',
+        'Download',
+        'Pin as an app',
+        'Full screen',
+        'More',
+        'Close',
+      ])
+        expect(header.getByRole('button', { name })).toBeInTheDocument();
+      expect(screen.getByRole('region')).not.toHaveAttribute('data-narrow');
+      expect(screen.getByRole('combobox', { name: 'Version' })).toHaveTextContent(
+        'Version 2 (latest)',
+      );
+    });
   });
 
   it('the first version has no changes to show', () => {
